@@ -100,7 +100,7 @@ jobs:
           PYTHON: /usr/bin/python3
         run: |
           ./build.sh --release "$VERSION"
-          ./build.sh --web
+          ./build.sh --web --release "$VERSION"     # the emulator shows the version too
           /usr/bin/python3 base/tools/make_site.py app "app/build/choppah-$VERSION.fwsc" "$VERSION" site
 
       - uses: actions/upload-pages-artifact@v3

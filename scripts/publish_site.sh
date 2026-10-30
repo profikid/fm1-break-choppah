@@ -15,7 +15,7 @@ command -v emcc >/dev/null || { echo "publish_site: no emcc (install emsdk, or s
 PY="${PYTHON:-python3}"
 
 ./build.sh --release "$VER"
-./build.sh --web
+./build.sh --web --release "$VER"
 rm -rf build/site
 "$PY" base/tools/make_site.py app "app/build/choppah-$VER.fwsc" "$VER" build/site
 

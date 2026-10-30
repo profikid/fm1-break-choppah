@@ -889,6 +889,15 @@ static void title(int32_t y)             /* the name and the tagline, centred, i
             "AMEN CHOPPER  FOR THE FM-1", C_HI);
 }
 
+/* the version, as the screens show it: "V0.7" (a release), "DEV" (any other build) */
+static void version_text(char *t)
+{
+    t[0] = 0;
+    if (CH_VERSION[0] >= '0' && CH_VERSION[0] <= '9')
+        text_cat(t, "V");
+    text_cat(t, CH_VERSION);
+}
+
 /* fm1-base's first screen at power-on, while the breaks are decoded (APP_SPLASH): the mark and the name */
 void app_splash(void)
 {
@@ -899,9 +908,13 @@ void app_splash(void)
     cv_begin(240, 56, C_BLACK);
     title(0);
     cv_blit(0, 118);
-    cv_begin(240, 20, C_BLACK);
-    cv_text((240 - text_w(&FONT_T, CH_VERSION)) / 2, 2, &FONT_T, CH_VERSION, C_GRAY);
-    cv_blit(0, 210);
+    {
+        char t[16];
+        version_text(t);
+        cv_begin(240, 20, C_BLACK);
+        cv_text((240 - text_w(&FONT_T, t)) / 2, 2, &FONT_T, t, C_GRAY);
+        cv_blit(0, 210);
+    }
 }
 
 static void intro_draw(uint32_t now)
@@ -918,6 +931,10 @@ static void intro_draw(uint32_t now)
     }
     if (ui.redraw & RG_HEAD) {
         const brk_break_t *b = brk_get_break();
+        cv_begin(240, 20, C_BLACK);      /* the version, at the top */
+        version_text(t);
+        cv_text((240 - text_w(&FONT_T, t)) / 2, 2, &FONT_T, t, C_GRAY);
+        cv_blit(0, 16);
         cv_begin(240, 56, C_BLACK);
         title(0);
         cv_blit(0, 118);
