@@ -6,3 +6,5 @@ firmware/stock/
 __pycache__/
 .DS_Store
 app/web/
+app/bank_data.h
+breaks/

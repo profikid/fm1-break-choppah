@@ -1,0 +1,44 @@
+# CHOPPAH: every break in the bank plays (needs app/bank_data.h)
+wait 800
+shot b_boot.png
+wav breaks.wav
+tap PLAY
+wait 2000
+peakreset
+turn ALGO 1
+wait 300
+shot b_1.png
+wait 1500
+expect peak_db_max >-30
+turn ALGO 1
+wait 1800
+turn ALGO 1
+wait 1800
+shot b_3.png
+turn ALGO 1
+wait 1800
+turn ALGO 1
+wait 1800
+turn ALGO 1
+wait 1800
+shot b_6.png
+turn ALGO 1
+wait 1800
+turn ALGO 1
+wait 1800
+shot b_8.png
+turn ALGO 1
+wait 1800
+shot b_wrap.png
+key b1 down
+wait 600
+key b1 up
+key b3 down
+wait 800
+key b3 up
+wavstop
+tap SAVE
+wait 50
+reboot
+wait 800
+shot b_reboot.png

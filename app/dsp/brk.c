@@ -51,6 +51,7 @@ static float rat_pitch, step_pitch;
 static uint32_t step_in_len;             /* the length of the step playing, for the gate */
 static float step_age;
 static brk_status_t status;
+static volatile uint32_t n_renders;
 
 static inline float pcm_at(const brk_break_t *b, int32_t i)
 {
@@ -303,6 +304,7 @@ void brk_render(float *out, uint32_t n)
     uint32_t i, pads = p_pads;
     float sl = step_len(), inc, half, ratio, sw = brk_clampf(p_swing, 0.5f, 0.75f);
     int playing = p_playing;
+    n_renders++;
     if (!b || !b->len || !b->nslices) {
         for (i = 0; i < n; i++)
             out[i] = 0.0f;
@@ -494,4 +496,5 @@ void brk_randomize(void)
 }
 
 void brk_status(brk_status_t *st) { *st = status; }
+uint32_t brk_renders(void) { return n_renders; }
 uint32_t brk_step_len_samples(void) { return (uint32_t)step_len(); }

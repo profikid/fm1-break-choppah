@@ -24,7 +24,7 @@ enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_NOBJ };
 #define APP_STORE_MAP {0xFC000u, 0xDC000u}
 
 /* the pool: the break playing, decoded to 16-bit PCM (PRD 8.2). M1 has one buffer; M5 adds the second */
-#define CH_PCM_MAX 65536u                /* samples: 2.97 s at 22.05 kHz */
+#define CH_PCM_MAX 81920u                /* samples: 3.7 s at 22.05 kHz (2 bars at 137 BPM and up) */
 #define CH_RATE 22050u                   /* the built-in break's rate */
 
 /* the contract: the platform calls these */

@@ -87,6 +87,7 @@ void brk_randomize(void);                /* writes random slices into the patter
  * (brk_fx.h) */
 void brk_render(float *out, uint32_t n);
 void brk_status(brk_status_t *st);
+uint32_t brk_renders(void);              /* renders so far: two more since brk_set_break(0) = the old break let go */
 
 /* the host tests' view */
 uint32_t brk_step_len_samples(void);

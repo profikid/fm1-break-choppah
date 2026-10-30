@@ -4,8 +4,21 @@
  * (dsp/brk.c, dsp/brk_fx.c: their own -O2 units).
  *
  * M1 scope (PRD 13): the built-in break, 16 slices on the white keys, the 11 pads on the black keys, play / reset,
- * tempo and tap tempo, pitch on OCT-/OCT+, the generator, the four FX and the DJ filter, settings kept by SAVE. */
+ * tempo and tap tempo, pitch on OCT-/OCT+, the generator, the four FX and the DJ filter, settings kept by SAVE.
+ * Breaks: the synthesised one, then a bank built into the image when app/bank_data.h exists (tools/prep_breaks.py
+ * --header; git-ignored: recorded breaks stay out of public builds), chosen on ALGORITHM. */
+#include "adpcm.h"
+#include "brk_bank.h"
 #include "brk_synth.h"
+#if defined(__has_include)
+#if __has_include("bank_data.h")
+#include "bank_data.h"
+#define CH_HAVE_BANK 1
+#endif
+#endif
+#ifndef CH_HAVE_BANK
+#define CH_HAVE_BANK 0
+#endif
 
 /* ------------------------------------------------------------------ settings --- */
 #define SET_MAGIC 0x31504843u            /* "CHP1": another magic loads the defaults */
@@ -16,7 +29,8 @@ typedef struct {
     uint8_t swing;                       /* 50..75 % */
     brk_gen_t gen;
     brk_fx_t fx;
-    uint8_t rsv[16];
+    uint8_t brk;                         /* the break: 0 the synthesised one, 1.. the bank's slots */
+    uint8_t rsv[15];
 } settings_t;
 static settings_t set;
 static uint8_t set_dirty;
@@ -33,6 +47,7 @@ static void settings_defaults(void)
     set.gen.fill = 0.5f;
     set.gen.phrase_bars = 4u;
     brk_fx_defaults(&set.fx);
+    set.brk = CH_HAVE_BANK ? 1u : 0u;
 }
 
 static void settings_apply(void)
@@ -53,6 +68,8 @@ static void changed(void)
 /* ------------------------------------------------------------------- engine --- */
 static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 static brk_break_t brk0;
+static brk_break_t brk_cur;              /* the bank's break playing (pcm_a holds it) */
+static uint32_t n_breaks = 1u;           /* the synthesised one, then the bank's valid slots */
 static uint8_t wave_px[240];             /* the waveform's height per column, for the screen */
 static volatile uint8_t muted;
 
@@ -70,19 +87,71 @@ static void wave_build(const brk_break_t *b)
     }
 }
 
+/* the bank built into the image: its slot i (0..), or 0 when absent or not sane */
+static const bank_slot_t *bank_slot(uint32_t i)
+{
+#if CH_HAVE_BANK
+    const bank_header_t *h = (const bank_header_t *)CH_BANK;
+    const bank_slot_t *s;
+    if (h->magic != BANK_MAGIC || h->version != BANK_VERSION || i >= h->nslots || i >= BANK_SLOTS ||
+        16u + 168u * (i + 1u) > CH_BANK_SIZE)
+        return 0;
+    s = (const bank_slot_t *)(CH_BANK + 16u + 168u * i);
+    if (s->data_off + s->data_len > CH_BANK_SIZE || s->len > CH_PCM_MAX || s->data_len < (s->len + 1u) / 2u ||
+        !s->nslices || s->nslices > BANK_SLICES || !s->bars || s->slice[s->nslices] != s->len || !s->bpm_x100)
+        return 0;
+    return s;
+#else
+    (void)i;
+    return 0;
+#endif
+}
+
+/* break i into pcm_a (nothing may be playing from it: the render was given no break, see break_ask) */
+static void break_load(uint32_t i)
+{
+    const bank_slot_t *s = i ? bank_slot(i - 1u) : 0;
+    const brk_break_t *b = &brk0;
+    uint32_t k;
+    brk_set_break(0);
+    if (s) {
+        adpcm_state_t st = {0, 0, 0};
+#if CH_HAVE_BANK
+        adpcm_decode(&st, CH_BANK + s->data_off, pcm_a, s->len);
+#endif
+        brk_cur.pcm = pcm_a;
+        brk_cur.len = s->len;
+        brk_cur.rate = s->rate;
+        brk_cur.bpm_x100 = s->bpm_x100;
+        brk_cur.bars = s->bars;
+        brk_cur.nslices = s->nslices;
+        for (k = 0; k <= s->nslices; k++)
+            brk_cur.slice[k] = s->slice[k];
+        for (k = 0; k < 12u; k++)
+            brk_cur.name[k] = s->name[k];
+        brk_cur.name[12] = 0;
+        b = &brk_cur;
+    } else {
+        brk_synth_break(pcm_a, CH_RATE, 136.9f, 1u, &brk0);
+        i = 0u;
+    }
+    set.brk = (uint8_t)i;
+    wave_build(b);
+    brk_set_break(b);
+}
+
 void app_init(void)
 {
-    uint32_t n = brk_synth_len(CH_RATE, 136.9f, 1u);
     brk_init();
     brk_fx_init();
-    if (n <= CH_PCM_MAX) {
-        brk_synth_break(pcm_a, CH_RATE, 136.9f, 1u, &brk0);
-        brk_set_break(&brk0);
-        wave_build(&brk0);
-    }
+    while (n_breaks <= BANK_SLOTS && bank_slot(n_breaks - 1u))
+        n_breaks++;
     if (plat_store_load(OBJ_SETTINGS, &set, sizeof set) != (int)sizeof set || set.magic != SET_MAGIC ||
         set.tempo_x10 < 400u || set.tempo_x10 > 3000u || set.swing < 50u || set.swing > 75u)
         settings_defaults();
+    if (set.brk >= n_breaks)
+        set.brk = n_breaks > 1u ? 1u : 0u;
+    break_load(set.brk);                 /* boot: the audio isn't running yet */
     settings_apply();
 }
 
@@ -259,6 +328,29 @@ static void knob_turn(int k, int32_t d)
     changed();
 }
 
+/* a break change while running, without blocking: the render gets no break (silence), and once two renders have
+ * passed (it has let go of pcm_a) app_frame loads the new one */
+static int32_t brk_next = -1;
+static uint32_t brk_mark;
+static void break_ask(uint32_t i)
+{
+    set.brk = (uint8_t)i;                /* turning on fast just moves the target */
+    if (brk_next < 0) {
+        brk_set_break(0);
+        brk_mark = brk_renders();
+    }
+    brk_next = (int32_t)i;
+    set_dirty = 1u;
+}
+static void break_poll(void)
+{
+    if (brk_next >= 0 && brk_renders() - brk_mark >= 2u) {
+        break_load((uint32_t)brk_next);
+        brk_next = -1;
+        app_say("BREAK", brk_get_break()->name);
+    }
+}
+
 static void input(void)
 {
     uint32_t keys = plat_keys(), btn = plat_buttons(), now = plat_ms(), i;
@@ -352,8 +444,9 @@ static void input(void)
             if (ui.page == PG_FX) {
                 ui.fx_focus = (uint8_t)((ui.fx_focus + (d > 0 ? 1 : BRK_NFX - 1)) % BRK_NFX);
                 app_say(FX_NAME[ui.fx_focus], set.fx.on[ui.fx_focus] ? "ON" : "OFF");
-            } else
-                app_say("BREAK", brk0.name);
+            } else {                     /* the next or previous break */
+                break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
+            }
         } else if (k == EN_PRESET)
             app_say("PATTERN", "1");     /* patterns arrive in M2 */
         else
@@ -465,6 +558,7 @@ void app_frame(void)
     brk_status_t st;
     uint32_t now = plat_ms();
     input();
+    break_poll();
     brk_status(&st);
     if (st.step != ui.last_step) {       /* the playhead moves: draw again */
         ui.last_step = st.step;
