@@ -58,21 +58,23 @@ The slicer view, top to bottom:
 
 ## 4. The pads
 
-The black keys, left to right, act while held and combine:
+The black keys, left to right, act while held and combine. While a pad is held, the slice blocks give way to an
+animation of what it does, and **K1–K4 tune that pad** (the foot shows its settings; SAVE keeps them):
 
-| Pad | Does |
-| --- | --- |
-| R8 · R16 · R32 | Roll at 1/8, 1/16, 1/32 from the next 16th. R32 with R8 or R16: triplets |
-| REV | Reverse |
-| FRZ | Freeze: the slice sounding loops |
-| HLF | Half speed |
-| STP | Tape stop over a beat; let go and it spins back up |
-| GAT | Gate: the first half of every 16th |
-| RND | A random slice at every 16th |
-| FLT | Throws the DJ filter to low-pass |
-| DUB | (coming) dub delay throw |
+| Pad | Does | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- | --- |
+| R8 · R16 · R32 | Roll from the next 16th | Rate (1/4 … 1/64, triplets) | Decay | Pitch a repeat | |
+| REV | Reverse | Speed | | | |
+| FRZ | Freeze: the slice (or part of it) loops | Length (slice, 1/2, 1/4, 1/8) | Pitch | | |
+| HLF | Half speed | Speed | | | |
+| STP | Tape stop; let go and it spins back up | Stop time (beats) | Spin-up (16ths) | | |
+| GAT | Gate | Rate (1/8, 1/16, 1/32) | Length | | |
+| RND | Random slices | Amount | Random pitch | | |
+| FLT | Throws the DJ filter | Target (LP … HP) | Resonance | Speed | |
+| DUB | Sends the break into a tempo-synced dub delay; the echoes ring on | Time (1/8, 3/16, 1/4, 3/8) | Feedback | Tone | Mix |
 
-![A roll](img/screen-roll.png "ROLL 1/16 held")
+![ROLL held: the caught slice repeating, each copy quieter, RATE / DECAY / PITCH on K1-K3](img/pad-roll8.png "ROLL held")
+![TAPE STOP held: two reels slowing down](img/pad-stop.png "TAPE STOP held") ![DUB held: echoes marching out](img/pad-dub.png "DUB held")
 
 ## 5. Pages and knobs
 

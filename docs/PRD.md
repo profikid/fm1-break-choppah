@@ -221,6 +221,10 @@ on the keys, eyes on the crowd.
 | B11 | **DUB THROW** | Sends the current step into the dub delay at 100 % | P1 |
 
 - Pads combine (ROLL + REVERSE = reversed roll).
+- **While a pad is held, the screen shows its animation and K1–K4 tune it** (built 30 Oct 2026): rolls rate /
+  decay / pitch ramp, reverse speed, freeze length / pitch, half speed, tape stop and spin-up times, gate rate /
+  length, random amount / pitch, filter target / resonance / speed, dub time / feedback / tone / mix. Kept by SAVE.
+- B11 DUB THROW is a tempo-synced dub delay (64 KB line in the pool) whose echoes ring on after the pad.
 - Pad assignments are configurable in GLO (P2).
 - **SEL + black key** latches a pad until pressed again (P1).
 

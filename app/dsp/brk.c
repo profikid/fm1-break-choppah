@@ -16,7 +16,13 @@ static volatile uint32_t p_pads;         /* bit PAD_*: held */
 static volatile uint32_t p_reset;        /* a count: changed = reset at the next render */
 static volatile uint32_t p_len;          /* pattern length, 0 = the break's own */
 static brk_gen_t p_gen;
+static brk_padset_t p_ps;                /* the pads' settings (brk_padset) */
 static brk_step_t pat[BRK_MAX_STEPS];
+
+const char *const BRK_ROLL_DIV_NAME[BRK_ROLL_DIVS] = {"1/4", "1/8", "1/16", "1/32", "1/64", "1/8T", "1/16T", "1/32T"};
+const char *const BRK_GATE_DIV_NAME[BRK_GATE_DIVS] = {"1/8", "1/16", "1/32"};
+static const float ROLL_STEPS[BRK_ROLL_DIVS] = {4.0f, 2.0f, 1.0f, 0.5f, 0.25f, 4.0f / 3.0f, 2.0f / 3.0f, 1.0f / 3.0f};
+static const float GATE_STEPS[BRK_GATE_DIVS] = {2.0f, 1.0f, 0.5f};
 
 typedef struct { int8_t slice; uint8_t down; } kev_t;
 static kev_t q[QLEN];
@@ -43,6 +49,10 @@ static float gate_amp = 1.0f;
 static float roll_len, roll_left, roll_pos;
 static int32_t roll_slice = -1;
 static uint8_t roll_arm;                 /* a roll pressed while playing starts at the next step (quantised) */
+static int32_t roll_pad = -1;            /* the roll pad whose rate rolls (the last pressed) */
+static uint32_t roll_n;                  /* repeats since the roll began */
+static float roll_gain = 1.0f;           /* this repeat's level (the decay) */
+static float gate_pos;                   /* samples into the gate's cycle */
 static float rat_len, rat_left;
 static uint32_t rat_count;
 static int32_t rat_slice;
@@ -86,7 +96,7 @@ static uint32_t loop_steps(const brk_break_t *b)
     return n < 1u ? 1u : n > BRK_MAX_STEPS ? BRK_MAX_STEPS : n;
 }
 
-static void voice_start(const brk_break_t *b, int32_t s, int rev, float at)
+static void voice_start(const brk_break_t *b, int32_t s, int rev, float at, float gain)
 {
     voice_t *o = &v[cur], *n;
     if (o->active) {                     /* the old voice fades out */
@@ -106,8 +116,8 @@ static void voice_start(const brk_break_t *b, int32_t s, int rev, float at)
     } else
         n->pos = at >= 0.0f ? at : n->lo;
     n->amp = 0.0f;
-    n->amp_to = 1.0f;
-    n->amp_step = 1.0f / FADE_IN;
+    n->amp_to = gain;
+    n->amp_step = gain / FADE_IN;
     n->loop = 0;
     n->wrap = (uint8_t)(p_playing && !rev);
     n->active = 1;
@@ -118,7 +128,7 @@ static void trigger(const brk_break_t *b, int32_t s, int rev)
 {
     if (!b || s < 0 || (uint32_t)s >= b->nslices)
         return;
-    voice_start(b, s, rev, -1.0f);
+    voice_start(b, s, rev, -1.0f, 1.0f);
 }
 
 /* the slice the loop itself plays at step i, or -1 (no slice starts there) */
@@ -169,6 +179,8 @@ static void roll_begin(const brk_break_t *b)   /* the roll repeats the slice sou
     roll_slice = c->slice;
     roll_pos = c->dir > 0.0f ? (float)b->slice[c->slice] : (float)b->slice[c->slice + 1] - 1.0f;
     roll_left = roll_len;                /* this hit has just started: the next one a roll's length on */
+    roll_n = 0u;
+    roll_gain = 1.0f;
 }
 
 static void on_step(const brk_break_t *b)
@@ -183,6 +195,8 @@ static void on_step(const brk_break_t *b)
     step_age = 0.0f;
     rat_count = 0u;
     step_pitch = 0.0f;
+    if (p_ps.gate_div != 0u || !(step & 1))
+        gate_pos = 0.0f;                 /* the gate starts with the step (1/8: every other step) */
     if (suppressed())
         return;
     p = &pat[step];
@@ -193,9 +207,10 @@ static void on_step(const brk_break_t *b)
         s = 0;
         while (!((held_mask >> s) & 1u))
             s++;
-    } else if ((pads_now >> PAD_RANDOM) & 1u)
-        s = (int32_t)(brk_rand(&rng) % b->nslices);
-    else {
+    } else if (((pads_now >> PAD_RANDOM) & 1u) && brk_randf(&rng) < p_ps.rnd_amount) {
+        s = (int32_t)(brk_rand(&rng) % b->nslices);   /* a random slice, and a random pitch for it */
+        step_pitch = (float)(int32_t)((brk_randf(&rng) * 2.0f - 1.0f) * p_ps.rnd_pitch);
+    } else {
         int32_t f;
         if (!p->on)
             return;
@@ -220,7 +235,11 @@ static void on_step(const brk_break_t *b)
             rat_pitch = step_pitch;
         }
     }
-    trigger(b, s, rev);
+    {
+        float keep = step_pitch;         /* (trigger leaves it; the random step set its own) */
+        trigger(b, s, rev);
+        step_pitch = keep;
+    }
     if (roll_arm)
         roll_begin(b);
 }
@@ -230,13 +249,17 @@ static void pads_changed(const brk_break_t *b, uint32_t now, float sl)
 {
     uint32_t on = now & ~pads_now, off = pads_now & ~now;
     voice_t *c = &v[cur];
-    uint32_t rolls = now & (1u << PAD_ROLL8 | 1u << PAD_ROLL16 | 1u << PAD_ROLL32);
+    uint32_t rolls = now & (1u << PAD_ROLL8 | 1u << PAD_ROLL16 | 1u << PAD_ROLL32), k;
     pads_now = now;
-    if (rolls) {                         /* the roll's rate: 1/8, 1/16, 1/32; 1/32 with 1/8 or 1/16 is a triplet */
-        float r = (rolls & 1u << PAD_ROLL32) ? ((rolls & 1u << PAD_ROLL8) ? 4.0f / 3.0f
-                                               : (rolls & 1u << PAD_ROLL16) ? 2.0f / 3.0f : 0.5f)
-                  : (rolls & 1u << PAD_ROLL16) ? 1.0f : 2.0f;
-        roll_len = r * sl;
+    for (k = 0; k < 3u; k++)             /* the roll pad pressed last sets the rate */
+        if ((on >> k) & 1u)
+            roll_pad = (int32_t)k;
+    if (roll_pad < 0 || !((rolls >> roll_pad) & 1u))
+        for (roll_pad = -1, k = 0; k < 3u; k++)
+            if ((rolls >> k) & 1u)
+                roll_pad = (int32_t)k;
+    if (rolls) {
+        roll_len = ROLL_STEPS[p_ps.roll_div[roll_pad] % BRK_ROLL_DIVS] * sl;
         if (roll_slice < 0 && !roll_arm) {
             if (p_playing)
                 roll_arm = 1u;           /* on the grid: from the next step */
@@ -257,9 +280,9 @@ static void pads_changed(const brk_break_t *b, uint32_t now, float sl)
         c->dir = 1.0f;
         c->hi = (float)b->len;
     }
-    if (on & 1u << PAD_FREEZE && c->active) {   /* freeze: the slice playing loops until let go */
+    if (on & 1u << PAD_FREEZE && c->active) {   /* freeze: (part of) the slice playing loops until let go */
         c->lo = (float)b->slice[c->slice];
-        c->hi = (float)b->slice[c->slice + 1];
+        c->hi = c->lo + (float)((b->slice[c->slice + 1] - b->slice[c->slice]) >> (p_ps.frz_len & 3u));
         c->loop = 1;
     }
     if (off & 1u << PAD_FREEZE)
@@ -332,7 +355,17 @@ void brk_render(float *out, uint32_t n)
     }
     if (pads != pads_now)
         pads_changed(b, pads, sl);
-    half = (pads >> PAD_HALF) & 1u ? 0.5f : 1.0f;
+    if (roll_pad >= 0 && roll_slice >= 0)    /* the settings, followed while the pads are held */
+        roll_len = ROLL_STEPS[p_ps.roll_div[roll_pad] % BRK_ROLL_DIVS] * sl;
+    if (((pads_now >> PAD_FREEZE) & 1u) && v[cur].loop && v[cur].slice >= 0 && v[cur].dir > 0.0f) {
+        voice_t *c = &v[cur];
+        c->hi = c->lo + (float)((b->slice[c->slice + 1] - b->slice[c->slice]) >> (p_ps.frz_len & 3u));
+        if (c->pos >= c->hi)
+            c->pos = c->lo;
+    }
+    half = (pads >> PAD_HALF) & 1u ? brk_clampf(p_ps.half_speed, 0.25f, 0.75f) : 1.0f;
+    if ((pads >> PAD_REVERSE) & 1u)
+        half *= brk_clampf(p_ps.rev_speed, 0.5f, 2.0f);
     ratio = (float)b->rate / (float)BRK_SR * (p_tempo * 100.0f / (float)b->bpm_x100);
     for (i = 0; i < n; i++) {
         float acc = 0.0f, g;
@@ -360,24 +393,42 @@ void brk_render(float *out, uint32_t n)
             roll_left -= 1.0f;
             if (roll_left <= 0.0f) {
                 roll_left += roll_len;
-                voice_start(b, roll_slice, (pads_now >> PAD_REVERSE) & 1u, roll_pos);
+                roll_n++;                /* each repeat a little quieter (the decay) */
+                roll_gain *= 1.0f - brk_clampf(p_ps.roll_decay, 0.0f, 0.9f);
+                if (roll_gain < 0.02f)
+                    roll_gain = 0.02f;
+                voice_start(b, roll_slice, (pads_now >> PAD_REVERSE) & 1u, roll_pos, roll_gain);
             }
         }
-        /* tape stop: a beat down to nothing, a step back up */
+        /* tape stop: stop_beats down to nothing, spin_steps back up */
         if ((pads_now >> PAD_TAPESTOP) & 1u) {
-            tape -= 1.0f / (4.0f * sl);
+            tape -= 1.0f / (brk_clampf(p_ps.stop_beats, 0.25f, 4.0f) * 4.0f * sl);
             if (tape < 0.0f)
                 tape = 0.0f;
         } else if (tape < 1.0f) {
-            tape += 1.0f / sl;
+            tape += 1.0f / (brk_clampf(p_ps.spin_steps, 0.25f, 8.0f) * sl);
             if (tape > 1.0f)
                 tape = 1.0f;
         }
-        inc = ratio * brk_exp2f((p_pitch + step_pitch) * (1.0f / 12.0f)) * half * tape;
+        {
+            float fxp = 0.0f;            /* the pads' own pitch: the roll's ramp, the freeze's offset */
+            if (roll_slice >= 0)
+                fxp += brk_clampf((float)roll_n * p_ps.roll_pitch, -24.0f, 24.0f);
+            if ((pads_now >> PAD_FREEZE) & 1u)
+                fxp += p_ps.frz_pitch;
+            inc = ratio * brk_exp2f((p_pitch + step_pitch + fxp) * (1.0f / 12.0f)) * half * tape;
+        }
         voice_tick(b, &v[0], inc, &acc);
         voice_tick(b, &v[1], inc, &acc);
-        /* the gate pad: the first half of each 16th */
-        g = ((pads_now >> PAD_GATE) & 1u) && playing && step_age > 0.5f * (float)step_in_len ? 0.0f : 1.0f;
+        /* the gate pad: open for gate_len of each 1/8, 1/16 or 1/32 */
+        g = 1.0f;
+        gate_pos += 1.0f;
+        if (((pads_now >> PAD_GATE) & 1u) && playing) {
+            float per = GATE_STEPS[p_ps.gate_div % BRK_GATE_DIVS] * sl, ph = gate_pos;
+            while (ph >= per)
+                ph -= per;
+            g = ph < brk_clampf(p_ps.gate_len, 0.1f, 0.9f) * per ? 1.0f : 0.0f;
+        }
         gate_amp += (g - gate_amp) * 0.02f;
         out[i] = acc * (1.0f / 32768.0f) * gate_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
     }
@@ -387,6 +438,12 @@ void brk_render(float *out, uint32_t n)
     status.pos = v[cur].pos;
     status.pads = pads_now;
     status.playing = (uint8_t)playing;
+    status.roll_div = (uint8_t)(roll_pad >= 0 ? p_ps.roll_div[roll_pad] % BRK_ROLL_DIVS : 0u);
+    status.roll_n = (uint16_t)roll_n;
+    status.roll_slice = roll_slice;
+    status.tape = tape;
+    status.gate = gate_amp;
+    status.phase = step_in_len ? brk_clampf(step_age / (float)step_in_len, 0.0f, 1.0f) : 0.0f;
 }
 
 /* -------------------------------------------------------------- main loop --- */
@@ -419,6 +476,10 @@ void brk_init(void)
     tape = gate_amp = 1.0f;
     roll_slice = -1;
     roll_arm = 0u;
+    roll_pad = -1;
+    roll_n = 0u;
+    roll_gain = 1.0f;
+    gate_pos = 0.0f;
     rat_count = 0u;
     step_pitch = 0.0f;
     q_r = q_w;
@@ -427,7 +488,30 @@ void brk_init(void)
     p_gen.roll = 0.3f;
     p_gen.fill = 0.5f;
     p_gen.phrase_bars = 4u;
+    brk_padset_defaults(&p_ps);
 }
+
+void brk_padset_defaults(brk_padset_t *p)
+{
+    p->roll_div[0] = 1u;                 /* the three roll pads: 1/8, 1/16, 1/32 */
+    p->roll_div[1] = 2u;
+    p->roll_div[2] = 3u;
+    p->frz_len = 0u;
+    p->gate_div = 1u;
+    p->rsv[0] = p->rsv[1] = p->rsv[2] = 0u;
+    p->roll_decay = 0.0f;
+    p->roll_pitch = 0.0f;
+    p->rev_speed = 1.0f;
+    p->frz_pitch = 0.0f;
+    p->half_speed = 0.5f;
+    p->stop_beats = 1.0f;
+    p->spin_steps = 1.0f;
+    p->gate_len = 0.5f;
+    p->rnd_amount = 1.0f;
+    p->rnd_pitch = 0.0f;
+}
+
+void brk_padset(const brk_padset_t *p) { p_ps = *p; }
 
 void brk_set_break(const brk_break_t *b) { brk_now = b; }
 const brk_break_t *brk_get_break(void) { return brk_now; }

@@ -48,6 +48,28 @@ typedef struct {
     uint32_t phrase_bars;                     /* 0 off, 2, 4, 8, 16 */
 } brk_gen_t;
 
+/* the pads' own settings, tuned with K1-K4 while a pad is held (PRD 5.1) */
+#define BRK_ROLL_DIVS 8u                 /* 1/4 1/8 1/16 1/32 1/64 1/8T 1/16T 1/32T */
+#define BRK_GATE_DIVS 3u                 /* 1/8 1/16 1/32 */
+typedef struct {
+    uint8_t roll_div[3];                 /* each roll pad's rate (0..BRK_ROLL_DIVS-1): 1/8, 1/16, 1/32 by default */
+    uint8_t frz_len;                     /* freeze loop: 0 the whole slice, 1 half, 2 a quarter, 3 an eighth */
+    uint8_t gate_div;                    /* 0..BRK_GATE_DIVS-1 */
+    uint8_t rsv[3];
+    float roll_decay;                    /* 0..0.9: each repeat this much quieter */
+    float roll_pitch;                    /* -3..+3 semitones a repeat */
+    float rev_speed;                     /* 0.5..2 */
+    float frz_pitch;                     /* -12..+12 semitones */
+    float half_speed;                    /* 0.25..0.75 */
+    float stop_beats;                    /* tape stop: 0.25..4 beats down */
+    float spin_steps;                    /* and 0.25..8 16ths back up */
+    float gate_len;                      /* 0.1..0.9 of each gate */
+    float rnd_amount;                    /* 0..1: the chance a step plays a random slice */
+    float rnd_pitch;                     /* 0..12 semitones of random pitch */
+} brk_padset_t;
+extern const char *const BRK_ROLL_DIV_NAME[BRK_ROLL_DIVS];
+extern const char *const BRK_GATE_DIV_NAME[BRK_GATE_DIVS];
+
 /* what the UI shows (a copy, read any time) */
 typedef struct {
     int32_t step;                        /* in the pattern, -1 stopped before the first */
@@ -56,6 +78,12 @@ typedef struct {
     float pos;                           /* the playhead in the break's samples */
     uint32_t pads;                       /* bit PAD_*: active */
     uint8_t playing;
+    uint8_t roll_div;                    /* the roll's rate (BRK_ROLL_DIVS), while one is held */
+    uint16_t roll_n;                     /* repeats since the roll began */
+    int32_t roll_slice;                  /* the slice the roll repeats, -1 none */
+    float tape;                          /* tape speed: 1 running .. 0 stopped */
+    float gate;                          /* the gate's level now, 0..1 */
+    float phase;                         /* how far into the step, 0..1 */
 } brk_status_t;
 
 void brk_init(void);
@@ -74,6 +102,8 @@ void brk_swing(float s);                 /* 0.5 straight .. 0.75 */
 void brk_key(int slice, int down);
 void brk_pad(int pad, int down);
 void brk_gen(const brk_gen_t *g);
+void brk_padset_defaults(brk_padset_t *p);
+void brk_padset(const brk_padset_t *p);  /* main loop; the render follows it at once, also while a pad is held */
 void brk_seed(uint32_t seed);
 
 /* the pattern: steps 0..len-1 (len 0 = the break's own length in steps), all "follow, on" by default */

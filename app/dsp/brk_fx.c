@@ -16,6 +16,13 @@ static float hpf_hz_s = 20.0f, dj_s;     /* smoothed controls */
 static svf_t hpf_l, hpf_r, dj_l, dj_r;
 static float fl_buf[2][FL_LEN];
 static uint32_t fl_w;
+/* the dub delay: a 16-bit line the app hands over, its tone filter, the send's level */
+const char *const BRK_DUB_DIV_NAME[BRK_DUB_DIVS] = {"1/8", "3/16", "1/4", "3/8"};
+static const float DUB_STEPS[BRK_DUB_DIVS] = {2.0f, 3.0f, 4.0f, 6.0f};
+static int16_t *dub_buf;
+static uint32_t dub_n, dub_w;
+static float dub_lp, dub_send, dub_time_s;
+static volatile float p_bpm = 170.0f;
 
 static svf_c svf_coef(float hz, float res)
 {
@@ -81,7 +88,28 @@ void brk_fx_defaults(brk_fx_t *p)
     p->deg_rate = 11025.0f;
     p->deg_drive = 0.2f;
     p->dj = 0.0f;
+    p->flt_target = -0.92f;
+    p->flt_res = 0.35f;
+    p->flt_speed = 0.5f;
+    p->dub_div = 1u;                     /* 3/16: the dub classic */
+    p->rsv[0] = p->rsv[1] = p->rsv[2] = 0u;
+    p->dub_fb = 0.6f;
+    p->dub_tone = 0.5f;
+    p->dub_mix = 0.6f;
 }
+
+void brk_fx_delay_buffer(int16_t *buf, uint32_t n)
+{
+    uint32_t i;
+    dub_n = 0u;                          /* (the render skips the delay until the line is clear) */
+    for (i = 0; buf && i < n; i++)
+        buf[i] = 0;
+    dub_buf = buf;
+    dub_w = 0u;
+    dub_n = buf ? n : 0u;
+}
+void brk_fx_tempo(float bpm) { p_bpm = brk_clampf(bpm, 40.0f, 300.0f); }
+float brk_fx_dj_now(void) { return dj_s; }
 
 void brk_fx_init(void)
 {
@@ -99,19 +127,28 @@ void brk_fx_process(const float *in, float *l, float *r, uint32_t n, uint32_t pa
 {
     uint32_t i;
     svf_c hc_l, hc_r, djc;
-    float dj, dj_hz, ring_inc, fl_inc, deg_inc, q;
-    int dj_hp;
+    float dj, dj_hz, ring_inc, fl_inc, deg_inc, q, dub_want = 0.0f, dub_lpk = 0.0f, dub_fb = 0.0f;
+    int dj_hp, throw = (pads >> PAD_FILTER) & 1u, dub_on = (pads >> PAD_DUB) & 1u;
     fx = *(const brk_fx_t *)&p_fx;
     /* the controls glide once a block: no zipper noise (PRD A-41) */
     hpf_hz_s += (brk_clampf(fx.hpf_hz, 20.0f, 8000.0f) - hpf_hz_s) * 0.3f;
     hc_l = svf_coef(hpf_hz_s, fx.hpf_res);
     hc_r = svf_coef(brk_clampf(hpf_hz_s * (1.0f + 2.0f * fx.hpf_spread), 20.0f, 16000.0f), fx.hpf_res);
-    dj = (pads >> PAD_FILTER) & 1u ? -0.92f : brk_clampf(fx.dj, -1.0f, 1.0f);
-    dj_s += (dj - dj_s) * ((pads >> PAD_FILTER) & 1u ? 0.08f : 0.3f);
+    /* the FILTER pad throws the DJ filter to its target at its speed, with its resonance */
+    dj = throw ? brk_clampf(fx.flt_target, -1.0f, 1.0f) : brk_clampf(fx.dj, -1.0f, 1.0f);
+    dj_s += (dj - dj_s) * (throw ? 0.01f + 0.3f * brk_clampf(fx.flt_speed, 0.0f, 1.0f) : 0.3f);
     dj_hp = dj_s > 0.0f;
     /* -1 .. 0: low-pass 18 kHz down to 80 Hz; 0 .. 1: high-pass 20 Hz up to 6 kHz (exponential sweeps) */
     dj_hz = dj_hp ? 20.0f * brk_exp2f(dj_s * 8.2f) : 18000.0f * brk_exp2f(dj_s * 7.8f);
-    djc = svf_coef(dj_hz, 0.35f);
+    djc = svf_coef(dj_hz, throw ? brk_clampf(fx.flt_res, 0.0f, 0.95f) : 0.35f);
+    if (dub_n) {                         /* the dub delay's time (glides, a tape-ish pitch bend) and tone */
+        float want = DUB_STEPS[fx.dub_div % BRK_DUB_DIVS] * (float)BRK_SR * 60.0f / (p_bpm * 4.0f);
+        dub_want = brk_clampf(want, 64.0f, (float)(dub_n - 4u));
+        if (dub_time_s <= 0.0f)
+            dub_time_s = dub_want;
+        dub_lpk = 0.05f + 0.9f * brk_clampf(fx.dub_tone, 0.0f, 1.0f) * brk_clampf(fx.dub_tone, 0.0f, 1.0f);
+        dub_fb = brk_clampf(fx.dub_fb, 0.0f, 0.95f);
+    }
     ring_inc = brk_clampf(fx.ring_hz, 20.0f, 2000.0f) / (float)BRK_SR;
     fl_inc = brk_clampf(fx.fl_rate, 0.02f, 10.0f) / (float)BRK_SR;
     deg_inc = brk_clampf(fx.deg_rate, 500.0f, (float)BRK_SR) / (float)BRK_SR;
@@ -153,6 +190,28 @@ void brk_fx_process(const float *in, float *l, float *r, uint32_t n, uint32_t pa
                 deg_hold = (float)(int32_t)(soft(m * d) * q) / q;
             }
             xl = xr = deg_hold;
+        }
+        if (dub_n) {                     /* the dub delay: held, the pad sends the break in; the echoes ring on */
+            float d, rp, t, y;
+            int32_t i0;
+            dub_send += ((dub_on ? 1.0f : 0.0f) - dub_send) * 0.002f;
+            dub_time_s += (dub_want - dub_time_s) * 0.00005f;
+            d = dub_time_s;
+            rp = (float)dub_w - d;
+            while (rp < 0.0f)
+                rp += (float)dub_n;
+            i0 = (int32_t)rp;
+            t = rp - (float)i0;
+            y = ((float)dub_buf[(uint32_t)i0 % dub_n] * (1.0f - t) + (float)dub_buf[(uint32_t)(i0 + 1) % dub_n] * t)
+                * (1.0f / 32768.0f);
+            dub_lp += (y - dub_lp) * dub_lpk;    /* the tone: each echo darker */
+            {
+                float w = soft(0.5f * (xl + xr) * dub_send + dub_lp * dub_fb);
+                dub_buf[dub_w] = (int16_t)(w * 32000.0f);
+            }
+            dub_w = (dub_w + 1u) % dub_n;
+            xl += dub_lp * fx.dub_mix;
+            xr += dub_lp * fx.dub_mix * 0.92f;   /* (a touch of width) */
         }
         if (dj_s < -0.01f || dj_s > 0.01f) {   /* the master DJ filter */
             float hl = svf_run(&dj_l, &djc, xl, &lp);

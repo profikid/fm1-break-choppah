@@ -1,0 +1,89 @@
+# CHOPPAH: each pad held shows its animation; K1-K4 tune it while held
+#   app/build/host/choppah_host tests/scenarios/pads.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 800
+peakreset
+key b0 down
+wait 250
+turn K2 10 10
+wait 300
+wait 350
+shot p_roll8.png
+key b0 up
+wait 250
+key b1 down
+wait 250
+turn K1 -1 10
+wait 300
+wait 350
+shot p_roll16.png
+key b1 up
+wait 250
+key b3 down
+wait 250
+turn K1 6 10
+wait 300
+wait 350
+shot p_rev.png
+key b3 up
+wait 250
+key b4 down
+wait 250
+turn K1 2 10
+wait 300
+wait 350
+shot p_frz.png
+key b4 up
+wait 250
+key b5 down
+wait 250
+wait 350
+shot p_half.png
+key b5 up
+wait 250
+key b6 down
+wait 250
+turn K1 2 10
+wait 300
+wait 350
+shot p_stop.png
+key b6 up
+wait 250
+key b7 down
+wait 250
+turn K2 -4 10
+wait 300
+wait 350
+shot p_gate.png
+key b7 up
+wait 250
+key b8 down
+wait 250
+turn K2 5 10
+wait 300
+wait 350
+shot p_rnd.png
+key b8 up
+wait 250
+key b9 down
+wait 250
+turn K2 20 10
+wait 300
+wait 350
+shot p_flt.png
+key b9 up
+wait 250
+key b10 down
+wait 250
+turn K2 8 10
+wait 300
+wait 350
+shot p_dub.png
+key b10 up
+wait 250
+shot p_after.png
+expect peak_db_max >-30
+tap SAVE
+wait 50
+expect store_writes 1

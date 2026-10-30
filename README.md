@@ -7,6 +7,8 @@ ring modulator, hi-pass, flanger, degrader and a DJ filter on the way out. Built
 
 ![CHOPPAH's screens: the splash, the start screen, the slicer view, playing, a slice held, a roll](docs/img/screens.png)
 
+![Holding a pad shows its effect and puts its settings on K1-K4: roll, reverse, freeze, tape stop, gate, random, filter, dub](docs/img/pads.png)
+
 - **Try it in your browser** (no FM-1 needed): <https://profikid.github.io/fm1-break-choppah/emu/>
 - **Install it** (Chrome or Edge, with the FM-1 plugged in): <https://profikid.github.io/fm1-break-choppah/install/>
 - **Read the manual**: <https://profikid.github.io/fm1-break-choppah/manual/> (source: [app/docs/MANUAL.md](app/docs/MANUAL.md))
@@ -25,7 +27,7 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | Control | Does |
 | --- | --- |
 | White keys 1–16 | Slices: at the next 16th while playing, at once while stopped; hold to loop |
-| Black keys 1–11 | Pads, while held: ROLL 1/8 · 1/16 · 1/32 (with 1/8 or 1/16: triplets) · REVERSE · FREEZE · HALF · TAPE STOP · GATE · RANDOM · FILTER THROW · DUB (coming) |
+| Black keys 1–11 | Pads, while held: ROLL 1/8 · 1/16 · 1/32 · REVERSE · FREEZE · HALF · TAPE STOP · GATE · RANDOM · FILTER THROW · DUB DELAY. Each shows its own animation while held, and **K1–K4 tune it** (rate, decay, length, speed, feedback…) |
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
 | SELECT | Tempo (SEL held: 0.1 BPM) · tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |

@@ -331,6 +331,130 @@ static void test_adpcm(void)
     CHECK(n / 2u < 22000u, "a bar at 22.05 kHz is %u bytes of ADPCM", n / 2u);
 }
 
+/* the pads' settings, tuned while held (brk_padset) */
+static void test_pad_settings(void)
+{
+    brk_padset_t ps;
+    brk_status_t st;
+    uint32_t s = brk_step_len_samples(), i;
+    float pk[4], peak;
+    int32_t seen, sl[16];
+    /* roll rate: 1/4 repeats far less often than 1/32 in the same time */
+    uint32_t n4, n32;
+    fresh(1);
+    brk_padset_defaults(&ps);
+    ps.roll_div[0] = 0u;                 /* R8 pad set to 1/4 */
+    brk_padset(&ps);
+    brk_play(1);
+    render(buf, s * 2u + 10u, 0, 0, 0);
+    brk_pad(PAD_ROLL8, 1);
+    render(buf, s * 16u, 0, 0, 0);
+    brk_status(&st);
+    n4 = st.roll_n;
+    brk_pad(PAD_ROLL8, 0);
+    ps.roll_div[0] = 3u;                 /* now 1/32 */
+    brk_padset(&ps);
+    render(buf, s * 2u, 0, 0, 0);
+    brk_pad(PAD_ROLL8, 1);
+    render(buf, s * 16u, 0, 0, 0);
+    brk_status(&st);
+    n32 = st.roll_n;
+    brk_pad(PAD_ROLL8, 0);
+    CHECK(n4 >= 3u && n4 <= 4u && n32 >= 30u, "roll rate follows K1: 1/4 gave %u repeats, 1/32 gave %u", n4, n32);
+    /* roll decay: each repeat quieter */
+    fresh(1);
+    brk_padset_defaults(&ps);
+    ps.roll_div[1] = 1u;                 /* R16 pad at 1/8: one repeat every two steps */
+    ps.roll_decay = 0.5f;
+    brk_padset(&ps);
+    brk_play(1);
+    render(buf, s * 2u + 10u, 0, 0, 0);
+    brk_pad(PAD_ROLL16, 1);
+    render(buf, s, 0, 0, 0);             /* to the roll's first hit */
+    for (i = 0; i < 4u; i++)
+        pk[i] = render(buf, s * 2u, 0, 0, 0);
+    brk_pad(PAD_ROLL16, 0);
+    CHECK(pk[1] < pk[0] * 0.8f && pk[2] < pk[1] * 0.8f && pk[3] < pk[2] * 0.8f,
+          "roll decay: %.3f %.3f %.3f %.3f", pk[0], pk[1], pk[2], pk[3]);
+    /* tape stop time: a quarter beat stops within two steps */
+    fresh(1);
+    brk_padset_defaults(&ps);
+    ps.stop_beats = 0.25f;
+    brk_padset(&ps);
+    brk_play(1);
+    render(buf, s * 2u, 0, 0, 0);
+    brk_pad(PAD_TAPESTOP, 1);
+    render(buf, s + 64u, 0, 0, 0);
+    peak = render(buf, BLOCK, 0, 0, 0);
+    brk_pad(PAD_TAPESTOP, 0);
+    CHECK(peak < 0.01f, "tape stop at 1/4 beat: silent after a step (peak %.3f)", peak);
+    /* gate length: 10% open is mostly silence */
+    {
+        uint32_t loud = 0u, n = s * 8u;
+        fresh(1);
+        brk_padset_defaults(&ps);
+        ps.gate_len = 0.1f;
+        brk_padset(&ps);
+        brk_play(1);
+        render(buf, s, 0, 0, 0);
+        brk_pad(PAD_GATE, 1);
+        render(buf, n, 0, 0, 0);
+        for (i = 0; i < n; i++)
+            if (fabsf(buf[i]) > 0.02f)
+                loud++;
+        brk_pad(PAD_GATE, 0);
+        CHECK(loud < n / 4u, "gate 10%%: %u of %u samples sound", loud, n);
+    }
+    /* random amount 0: the loop as it is */
+    {
+        int ok = 1;
+        fresh(1);
+        brk_padset_defaults(&ps);
+        ps.rnd_amount = 0.0f;
+        brk_padset(&ps);
+        brk_play(1);
+        brk_pad(PAD_RANDOM, 1);
+        render(buf, s * 8u, &seen, sl, 16);
+        for (i = 0; i < (uint32_t)seen && i < 8u; i++)
+            if (sl[i] != (int32_t)i)
+                ok = 0;
+        brk_pad(PAD_RANDOM, 0);
+        CHECK(ok, "random at 0%% plays the loop");
+    }
+}
+
+/* the dub delay: echoes ring on after the pad and the break stop */
+static void test_dub(void)
+{
+    static int16_t line[32768];
+    brk_fx_t p;
+    uint32_t s = brk_step_len_samples(), n = s * 4u, i;
+    float tail = 0.0f;
+    fresh(1);
+    brk_fx_init();
+    brk_fx_defaults(&p);
+    brk_fx_set(&p);
+    brk_fx_delay_buffer(line, 32768u);
+    brk_fx_tempo(BPM);
+    brk_play(1);
+    render(buf, n, 0, 0, 0);
+    for (i = 0; i < n; i += BLOCK)
+        brk_fx_process(buf + i, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
+    brk_play(0);
+    brk_pad(PAD_DUB, 0);
+    for (i = 0; i < BLOCK; i++)
+        buf[i] = 0.0f;
+    for (i = 0; i < s * 8u; i += BLOCK) {    /* silence in, two bars of it */
+        uint32_t j;
+        brk_fx_process(buf, bl, br, BLOCK, 0u);
+        for (j = 0; j < BLOCK; j++)
+            if (fabsf(bl[j]) > tail)
+                tail = fabsf(bl[j]);
+    }
+    CHECK(tail > 0.01f, "dub echoes ring on after the pad (peak %.3f)", tail);
+    brk_fx_delay_buffer(0, 0u);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -344,6 +468,8 @@ int main(int argc, char **argv)
     test_pads();
     test_fx();
     test_adpcm();
+    test_pad_settings();
+    test_dub();
     printf("%d of %d checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;
 }
