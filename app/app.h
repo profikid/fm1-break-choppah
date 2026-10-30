@@ -9,6 +9,8 @@
 #define APP_NAME "CHOPPAH"
 #define APP_TAGLINE "AMEN CHOPPER"
 #define APP_SPLASH_RGB RGB(255, 184, 70)
+#define APP_SPLASH                       /* the first screen at power-on is the app's (app_splash) */
+void app_splash(void);
 #define APP_PALETTE 1u                   /* gfx.c's amber */
 #define APP_BLOCK 256u                   /* frames per audio block: 5.8 ms at 44.1 kHz */
 #define APP_CANVAS_PX (240u * 96u)       /* draw in strips of 96 rows at most: the pool goes to the breaks */
@@ -35,3 +37,7 @@ void app_ui_init(void);                  /* the first screen, after the splash *
 void app_frame(void);                    /* the UI: input and a redraw, about 60 times a second */
 void app_input_only(void);               /* between frames: input only */
 void app_say(const char *a, const char *b);   /* a short message on the screen */
+
+/* the host simulator's own commands (app_host_cmd in app.c) */
+#define APP_HOST_CMD
+int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d);

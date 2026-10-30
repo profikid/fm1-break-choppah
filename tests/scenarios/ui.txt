@@ -1,0 +1,31 @@
+# CHOPPAH's screens: the splash, the start screen, the slicer block view, playing
+#   app/build/host/choppah_host tests/scenarios/ui.txt app/build/scenarios
+splash
+shot u0_splash.png
+wait 120
+shot u1_intro_early.png
+wait 500
+shot u2_intro_mid.png
+wait 600
+shot u3_intro_full.png
+wait 1100
+shot u4_slicer_stopped.png
+peakreset
+wav ui.wav
+tap PLAY
+wait 60
+expect peak_db_max >-30
+wait 900
+shot u5_playing.png
+key w9 down
+wait 500
+shot u6_held.png
+key w9 up
+key b1 down
+wait 300
+shot u7_roll.png
+key b1 up
+turn K1 -30
+wait 200
+shot u8_filter.png
+wavstop

@@ -1,0 +1,7 @@
+# PLAY on the start screen opens the slicer and starts the loaded break at once
+wait 300
+peakreset
+tap PLAY
+wait 80
+expect peak_db_max >-30
+shot s1_skip_playing.png

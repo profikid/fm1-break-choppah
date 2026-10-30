@@ -34,6 +34,7 @@ typedef struct {
 } settings_t;
 static settings_t set;
 static uint8_t set_dirty;
+static uint8_t foot_dirty;               /* a setting changed: the slicer's foot shows the new value */
 
 static void settings_defaults(void)
 {
@@ -62,6 +63,7 @@ static void settings_apply(void)
 static void changed(void)
 {
     set_dirty = 1u;
+    foot_dirty = 1u;
     settings_apply();
 }
 
@@ -71,6 +73,10 @@ static brk_break_t brk0;
 static brk_break_t brk_cur;              /* the bank's break playing (pcm_a holds it) */
 static uint32_t n_breaks = 1u;           /* the synthesised one, then the bank's valid slots */
 static uint8_t wave_px[240];             /* the waveform's height per column, for the screen */
+#define BLK_N 16u                        /* the slicer view's blocks: one per white key */
+#define BLK_W 26u                        /* columns of waveform in a block */
+static uint8_t blk_px[BLK_N][BLK_W];     /* each slice's waveform, 0..19 */
+static uint8_t blk_n;                    /* blocks with a slice behind them */
 static volatile uint8_t muted;
 
 static void wave_build(const brk_break_t *b)
@@ -83,7 +89,20 @@ static void wave_build(const brk_break_t *b)
             if ((uint32_t)s > pk)
                 pk = (uint32_t)s;
         }
-        wave_px[x] = (uint8_t)(pk * 30u / 32768u);
+        wave_px[x] = (uint8_t)(pk * 24u / 32768u);
+    }
+    blk_n = (uint8_t)(b->nslices < BLK_N ? b->nslices : BLK_N);
+    for (x = 0; x < BLK_N; x++) {
+        uint32_t a = x < blk_n ? b->slice[x] : 0u, z = x < blk_n ? b->slice[x + 1] : 0u, c;
+        for (c = 0; c < BLK_W; c++) {
+            uint32_t i0 = a + (z - a) * c / BLK_W, i1 = a + (z - a) * (c + 1u) / BLK_W, pk = 0u;
+            for (i = i0; i < i1; i++) {
+                int32_t v = b->pcm[i] < 0 ? -b->pcm[i] : b->pcm[i];
+                if ((uint32_t)v > pk)
+                    pk = (uint32_t)v;
+            }
+            blk_px[x][c] = (uint8_t)(pk * 19u / 32768u);
+        }
     }
 }
 
@@ -195,9 +214,14 @@ static struct {
     uint32_t msg_until;
     uint32_t taps[4], ntaps;             /* tap tempo on SEL */
     uint32_t oct_t, oct_rep;             /* OCT- / OCT+ held: repeats that speed up */
-    int32_t last_step;
-    uint8_t redraw;
+    int32_t last_step, last_slice;
+    uint32_t last_pads, last_keys, last_hdr;
+    uint32_t intro_t0;                   /* the start screen: when it began (0: over) */
+    uint8_t intro, intro_drawn;          /* showing it; blocks drawn so far */
+    uint8_t touched;                     /* a key, button or encoder moved since app_frame last looked */
+    uint8_t redraw;                      /* RG_* bits: the regions to draw again */
 } ui;
+enum { RG_HEAD = 1, RG_WAVE = 2, RG_BLOCKS = 4, RG_FOOT = 8, RG_ALL = 15 };
 
 static void text_cat(char *d, const char *s)
 {
@@ -243,7 +267,7 @@ void app_say(const char *a, const char *b)
         ui.msg[1][i] = b[i];
     ui.msg[1][i] = 0;
     ui.msg_until = plat_ms() + 1300u;
-    ui.redraw = 1u;
+    ui.redraw |= 1u;               /* RG_HEAD: the message */
 }
 
 static void say_int(const char *what, int32_t v, const char *unit)
@@ -356,6 +380,8 @@ static void input(void)
     uint32_t keys = plat_keys(), btn = plat_buttons(), now = plat_ms(), i;
     uint32_t kdn = keys & ~ui.keys, kup = ui.keys & ~keys, bdn = btn & ~ui.btn;
     int k;
+    if (keys != ui.keys || btn != ui.btn)
+        ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
     for (i = 0; i < 16u; i++) {          /* white keys: slices */
         if (kdn >> WK[i] & 1u)
             brk_key((int)i, 1);
@@ -380,7 +406,7 @@ static void input(void)
     }
     if (bdn & 1u << B_HOME) {
         ui.page = PG_HOME;
-        ui.redraw = 1u;
+        ui.redraw |= 8u;               /* RG_FOOT: the page */
     }
     if (bdn & 1u << B_ARP) {
         if (btn & 1u << B_SEL) {         /* SEL + ARP: a random pattern */
@@ -388,7 +414,7 @@ static void input(void)
             app_say("RANDOMIZE", "");
         }
         ui.page = PG_GEN;
-        ui.redraw = 1u;
+        ui.redraw |= 8u;               /* RG_FOOT: the page */
     }
     if (bdn & 1u << B_FX) {              /* FX: the page; again: the focused effect on / off */
         if (ui.page == PG_FX) {
@@ -397,7 +423,7 @@ static void input(void)
             changed();
         }
         ui.page = PG_FX;
-        ui.redraw = 1u;
+        ui.redraw |= 8u;               /* RG_FOOT: the page */
     }
     if (bdn & 1u << B_SEL && ui.page == PG_HOME && !(btn & 1u << B_ARP))
         tap_tempo(now);
@@ -432,6 +458,7 @@ static void input(void)
         int32_t d = plat_enc(k);
         if (!d)
             continue;
+        ui.touched = 1u;
         if (k == EN_SELECT) {            /* tempo: 1 BPM a detent, 0.1 with SEL held */
             set.tempo_x10 = (uint16_t)clamp((int32_t)set.tempo_x10 + d * (btn & 1u << B_SEL ? 1 : 10), 400, 3000);
             changed();
@@ -452,8 +479,6 @@ static void input(void)
         else
             knob_turn(k, d);
     }
-    if (keys != ui.keys || btn != ui.btn)
-        ui.redraw = 1u;
     ui.keys = keys;
     ui.btn = btn;
 }
@@ -479,98 +504,321 @@ static void leds(void)
     plat_leds(b, k);
 }
 
-static void draw(void)
+/* ------------------------------------------------------------- start screen --- */
+#define C_BLOCK RGB(24, 24, 30)          /* a slice block's ground */
+#define C_BLOCK_HI RGB(255, 184, 70)     /* the block sounding */
+#define INTRO_STEP 55u                   /* ms between two blocks dropping in */
+#define INTRO_HOLD 900u                  /* ms the finished screen stays before the slicer opens */
+
+/* the mark: sixteen bars like a break's hits, two of them chopped out of line */
+static const uint8_t MARK_H[16] = {30, 12, 26, 10, 34, 14, 11, 20, 12, 22, 28, 24, 34, 10, 13, 22};
+static void mark(int32_t y0, uint32_t shown, const uint8_t (*px)[BLK_W])
 {
-    brk_status_t st;
-    const brk_break_t *b = brk_get_break();
+    uint32_t k, c;
+    for (k = 0; k < 16u && k < shown; k++) {
+        int32_t x = 8 + (int32_t)k * 14, lift = (k == 5u || k == 11u) ? -10 : 0;
+        uint16_t col = (k == 5u || k == 11u) ? C_WHITE : C_BLOCK_HI;
+        if (px) {                        /* the loaded break: each slice's own shape */
+            for (c = 0; c < 12u; c++) {
+                int32_t h = px[k][c * BLK_W / 12u] * 2 + 1;
+                cv_rect(x + (int32_t)c, y0 + lift + 20 - h / 2, 1, h, col);
+            }
+        } else                           /* the splash, before any break is in: the drawn mark */
+            cv_rect(x, y0 + lift + 20 - MARK_H[k] / 2, 12, MARK_H[k], col);
+    }
+}
+
+static void title(int32_t y)             /* the name and the tagline, centred, into the current strip */
+{
+    cv_text((240 - text_w(&FONT_L, APP_NAME)) / 2, y, &FONT_L, APP_NAME, C_WHITE);
+    cv_text((240 - text_w(&FONT_XS, "AMEN CHOPPER  FOR THE FM-1")) / 2, y + 36, &FONT_XS,
+            "AMEN CHOPPER  FOR THE FM-1", C_HI);
+}
+
+/* fm1-base's first screen at power-on, while the breaks are decoded (APP_SPLASH): the mark and the name */
+void app_splash(void)
+{
+    lcd_fill(0, 0, 240, 240, C_BLACK);
+    cv_begin(240, 60, C_BLACK);
+    mark(10, 16u, 0);
+    cv_blit(0, 50);
+    cv_begin(240, 56, C_BLACK);
+    title(0);
+    cv_blit(0, 118);
+    cv_begin(240, 20, C_BLACK);
+    cv_text((240 - text_w(&FONT_T, CH_VERSION)) / 2, 2, &FONT_T, CH_VERSION, C_GRAY);
+    cv_blit(0, 210);
+}
+
+static void intro_draw(uint32_t now)
+{
+    uint32_t shown = (now - ui.intro_t0) / INTRO_STEP + 1u;
+    char t[32];
+    if (shown > 16u)
+        shown = 16u;
+    if (shown != ui.intro_drawn) {       /* the loaded break drops in, slice by slice */
+        ui.intro_drawn = (uint8_t)shown;
+        cv_begin(240, 60, C_BLACK);
+        mark(10, shown, blk_n ? (const uint8_t (*)[BLK_W])blk_px : 0);
+        cv_blit(0, 50);
+    }
+    if (ui.redraw & RG_HEAD) {
+        const brk_break_t *b = brk_get_break();
+        cv_begin(240, 56, C_BLACK);
+        title(0);
+        cv_blit(0, 118);
+        cv_begin(240, 40, C_BLACK);
+        t[0] = 0;
+        text_cat(t, b ? b->name : "");
+        cv_text((240 - text_w(&FONT_XS, t)) / 2, 2, &FONT_XS, t, C_GRAY);
+        cv_text((240 - text_w(&FONT_T, "PRESS PLAY")) / 2, 22, &FONT_T, "PRESS PLAY", C_AMB);
+        cv_blit(0, 190);
+        ui.redraw = 0u;
+    }
+}
+
+static void intro_end(void)
+{
+    ui.intro = 0u;
+    lcd_fill(0, 0, 240, 240, C_BLACK);
+    ui.redraw = RG_ALL;
+}
+
+/* ------------------------------------------------------------ slicer view --- */
+static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown under its name */
+{
+    const brk_fx_t *f = &set.fx;
+    t[0] = 0;
+    if (ui.page == PG_HOME) {
+        if (i == 0) {
+            int32_t v = (int32_t)(f->dj * 100.0f);
+            if (v > -2 && v < 2) {
+                text_cat(t, "OFF");
+                return;
+            }
+            text_cat(t, v < 0 ? "LP " : "HP ");
+            int_text(v < 0 ? -v : v, t + 3);
+        } else if (i == 1) {
+            int_text(set.swing, t);
+            text_cat(t, "%");
+        } else if (i == 2) {
+            int_text((int32_t)(set.gen.complexity * 100.0f), t);
+            text_cat(t, "%");
+        } else {
+            int_text(f->on[FX_DEGRADE] ? (int32_t)((16.0f - f->deg_bits) * 100.0f / 14.0f) : 0, t);
+            text_cat(t, "%");
+        }
+    } else if (ui.page == PG_GEN) {
+        float v = i == 0 ? set.gen.complexity : i == 1 ? set.gen.anchor : i == 2 ? set.gen.roll : set.gen.fill;
+        int_text((int32_t)(v * 100.0f), t);
+        text_cat(t, "%");
+    } else {
+        static const char *const NONE = "-";
+        float v = 0.0f;
+        const char *unit = "%";
+        int pct = 1;
+        switch (ui.fx_focus * 4 + i) {
+        case FX_RING * 4 + 0: v = f->ring_hz; unit = "HZ"; pct = 0; break;
+        case FX_RING * 4 + 3: v = f->ring_mix; break;
+        case FX_HPF * 4 + 0: v = f->hpf_hz; unit = "HZ"; pct = 0; break;
+        case FX_HPF * 4 + 1: v = f->hpf_res; break;
+        case FX_HPF * 4 + 2: v = f->hpf_spread; break;
+        case FX_FLANGER * 4 + 0: v = f->fl_rate * 100.0f; unit = "CHZ"; pct = 0; break;
+        case FX_FLANGER * 4 + 1: v = f->fl_depth; break;
+        case FX_FLANGER * 4 + 2: v = f->fl_fb; break;
+        case FX_FLANGER * 4 + 3: v = f->fl_mix; break;
+        case FX_DEGRADE * 4 + 0: v = f->deg_bits; unit = "BIT"; pct = 0; break;
+        case FX_DEGRADE * 4 + 1: v = f->deg_rate; unit = "HZ"; pct = 0; break;
+        case FX_DEGRADE * 4 + 2: v = f->deg_drive; break;
+        default: text_cat(t, NONE); return;
+        }
+        int_text((int32_t)(pct ? v * 100.0f : v), t);
+        text_cat(t, unit);
+    }
+}
+
+/* the header: the break and the tempo, a play / stop mark; or a message for a moment */
+static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now)
+{
     char t[24];
-    uint32_t i, now = plat_ms();
-    brk_status(&st);
-    /* the header: name and tempo, or a message for a moment */
-    cv_begin(240, 32, C_BLACK);
+    cv_begin(240, 28, C_BLACK);
     if (now < ui.msg_until) {
         int32_t x = cv_text(8, 6, &FONT_B, ui.msg[0], C_WHITE);
         cv_text(x + 8, 6, &FONT_B, ui.msg[1], C_HI);
     } else {
-        cv_text(8, 6, &FONT_B, APP_NAME, C_WHITE);
+        if (st->playing) {               /* a play triangle, or a stop square */
+            int32_t r;
+            for (r = 0; r < 6; r++)
+                cv_rect(8 + r, 8 + r, 1, 13 - 2 * r, C_HI);
+        } else
+            cv_rect(8, 9, 10, 10, C_DIM);
+        cv_text(24, 6, &FONT_B, b ? b->name : "NO BREAK", C_WHITE);
         tenths_text(set.tempo_x10, t);
         cv_text(232 - text_w(&FONT_B, t), 6, &FONT_B, t, C_HI);
-        cv_text(200 - text_w(&FONT_B, t), 10, &FONT_XS, "BPM", C_GRAY);
+        cv_text(228 - text_w(&FONT_B, t) - text_w(&FONT_T, "BPM"), 10, &FONT_T, "BPM", C_GRAY);
     }
+    cv_rect(0, 27, 240, 1, C_LINE);
     cv_blit(0, 0);
-    /* the break: its waveform, the slices, the one sounding lit, the playhead */
-    cv_begin(240, 80, C_BLACK);
+}
+
+/* the whole break: its waveform, the slice markers, the slice sounding lit, the playhead */
+static void draw_wave(const brk_status_t *st, const brk_break_t *b)
+{
+    uint32_t i;
+    cv_begin(240, 54, C_BLACK);
     if (b && b->len) {
         int32_t lit_a = -1, lit_z = -1;
-        if (st.slice >= 0) {
-            lit_a = (int32_t)(b->slice[st.slice] * 240u / b->len);
-            lit_z = (int32_t)(b->slice[st.slice + 1] * 240u / b->len);
+        if (st->slice >= 0) {
+            lit_a = (int32_t)(b->slice[st->slice] * 240u / b->len);
+            lit_z = (int32_t)(b->slice[st->slice + 1] * 240u / b->len);
+            cv_rect(lit_a, 2, lit_z - lit_a, 50, C_BLOCK);
         }
         for (i = 0; i < 240u; i++) {
             int32_t h = wave_px[i];
-            cv_rect((int32_t)i, 40 - h, 1, 2 * h + 1, (int32_t)i >= lit_a && (int32_t)i < lit_z ? C_HI : C_DIM);
+            cv_rect((int32_t)i, 27 - h, 1, 2 * h + 1, (int32_t)i >= lit_a && (int32_t)i < lit_z ? C_HI : C_DIM);
         }
         for (i = 1; i < b->nslices; i++)
-            cv_rect((int32_t)(b->slice[i] * 240u / b->len), 0, 1, 6, C_LINE);
-        if (st.slice >= 0)
-            cv_rect((int32_t)((uint32_t)st.pos * 240u / b->len), 0, 1, 80, C_WHITE);
+            cv_rect((int32_t)(b->slice[i] * 240u / b->len), 0, 1, 5, C_GRAY);
+        if (st->slice >= 0)
+            cv_rect((int32_t)((uint32_t)st->pos * 240u / b->len), 0, 1, 54, C_WHITE);
     }
-    cv_blit(0, 40);
-    /* the pads, then the page and its four knobs */
-    cv_begin(240, 96, C_BLACK);
+    cv_blit(0, 30);
+}
+
+/* the slicer: sixteen blocks, one per white key, each with its slice's waveform and number; the one sounding is lit
+ * and a key held is outlined */
+static void draw_blocks(const brk_status_t *st, uint32_t keys)
+{
+    uint32_t row, k, c;
+    char t[4];
+    for (row = 0; row < 2u; row++) {
+        cv_begin(240, 52, C_BLACK);
+        for (k = row * 8u; k < row * 8u + 8u; k++) {
+            int32_t x = 1 + (int32_t)(k % 8u) * 30, held = (keys >> WK[k]) & 1u;
+            int on = st->slice == (int32_t)k, have = k < blk_n;
+            uint16_t ground = on ? C_BLOCK_HI : C_BLOCK, ink = on ? C_BLACK : have ? C_GRAY : C_LINE;
+            cv_rect(x, 0, 28, 50, held ? C_WHITE : ground);
+            if (held)
+                cv_rect(x + 2, 2, 24, 46, ground);
+            if (have)
+                for (c = 0; c < BLK_W - 4u; c++) {   /* the slice's shape, 22 columns of its 26 */
+                    int32_t h = blk_px[k][c * BLK_W / (BLK_W - 4u)];
+                    cv_rect(x + 3 + (int32_t)c, 19 - h / 2, 1, h + 1, ink);
+                }
+            int_text((int32_t)k + 1, t);
+            cv_text(x + 3, 35, &FONT_T, t, on ? C_BLACK : have ? C_AMB : C_LINE);
+        }
+        cv_blit(0, 88u + row * 52u);
+    }
+}
+
+/* the foot: the pads, then the page and its knobs with their values */
+static void draw_foot(const brk_status_t *st)
+{
+    static const char *const KN[NPAGES][4] = {{"FILTER", "SWING", "CMPLX", "CRUNCH"},
+                                              {"CMPLX", "ANCHOR", "ROLL", "FILL"},
+                                              {"P1", "P2", "P3", "MIX"}};
+    uint32_t i;
+    char t[16];
+    cv_begin(240, 48, C_BLACK);
     for (i = 0; i < 11u; i++) {
-        int on = (st.pads >> i) & 1u;
+        int on = (st->pads >> i) & 1u;
         int32_t x = 2 + (int32_t)i * 21;
-        cv_rect(x, 2, 20, 16, on ? C_HI : C_LINE);
-        cv_text(x + (20 - text_w(&FONT_T, PAD_NAME[i])) / 2, 5, &FONT_T, PAD_NAME[i], on ? C_BLACK : C_GRAY);
+        cv_rect(x, 0, 20, 14, on ? C_HI : C_BLOCK);
+        cv_text(x + (20 - text_w(&FONT_T, PAD_NAME[i])) / 2, 1, &FONT_T, PAD_NAME[i], on ? C_BLACK : C_GRAY);
     }
-    cv_text(8, 28, &FONT_XS, ui.page == PG_FX ? FX_NAME[ui.fx_focus] : PAGE_NAME[ui.page], C_AMB);
-    if (ui.page == PG_FX)
-        cv_text(120, 28, &FONT_XS, set.fx.on[ui.fx_focus] ? "ON" : "OFF", set.fx.on[ui.fx_focus] ? C_HI : C_DIM);
-    {
-        static const char *const KN[NPAGES][4] = {{"FILTER", "SWING", "CMPLX", "CRUNCH"},
-                                                  {"CMPLX", "ANCHOR", "ROLL", "FILL"},
-                                                  {"P1", "P2", "P3", "MIX"}};
-        for (i = 0; i < 4u; i++)
-            cv_text(8 + (int32_t)i * 58, 50, &FONT_XS, KN[ui.page][i], C_GRAY);
+    for (i = 0; i < 4u; i++) {
+        const char *name = KN[ui.page][i];
+        if (ui.page == PG_FX && i == 0u)
+            name = FX_NAME[ui.fx_focus];
+        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.page == PG_FX && i == 0u
+                ? (set.fx.on[ui.fx_focus] ? C_HI : C_DIM) : C_GRAY);
+        knob_value((int)i, t);
+        cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
     }
-    int_text(st.playing ? (int32_t)st.bar : 0, t);
-    text_cat(t, ".");
-    {
-        char s[8];
-        int_text(st.step < 0 ? 1 : st.step / 4 + 1, s);
-        text_cat(t, s);
-    }
-    cv_text(8, 72, &FONT_B, t, st.playing ? C_WHITE : C_DIM);
-    cv_text(120, 76, &FONT_XS, b ? b->name : "NO BREAK", C_GRAY);
-    cv_blit(0, 136);
+    cv_blit(0, 192);
 }
 
 void app_ui_init(void)
 {
     lcd_fill(0, 0, 240, 240, C_BLACK);
-    ui.last_step = -2;
-    ui.redraw = 1u;
+    ui.last_step = ui.last_slice = -2;
+    ui.intro = 1u;                       /* the start screen first */
+    ui.intro_t0 = plat_ms();
+    ui.intro_drawn = 0u;
+    ui.touched = 0u;
+    ui.redraw = RG_HEAD;
 }
 
 void app_frame(void)
 {
     brk_status_t st;
-    uint32_t now = plat_ms();
+    const brk_break_t *b;
+    uint32_t now = plat_ms(), hdr;
     input();
     break_poll();
+    leds();
+    if (ui.intro) {                      /* any key or button opens the slicer (PLAY also starts the break) */
+        if (ui.touched || now - ui.intro_t0 > 16u * INTRO_STEP + INTRO_HOLD)
+            intro_end();
+        else {
+            intro_draw(now);
+            return;
+        }
+    }
+    ui.touched = 0u;
     brk_status(&st);
-    if (st.step != ui.last_step) {       /* the playhead moves: draw again */
+    b = brk_get_break();
+    if (st.step != ui.last_step || st.slice != ui.last_slice) {   /* the playhead moved */
         ui.last_step = st.step;
-        ui.redraw = 1u;
+        ui.last_slice = st.slice;
+        ui.redraw |= RG_WAVE | RG_BLOCKS;
+    }
+    if (ui.keys != ui.last_keys) {
+        ui.last_keys = ui.keys;
+        ui.redraw |= RG_BLOCKS;
+    }
+    if (foot_dirty) {
+        foot_dirty = 0u;
+        ui.redraw |= RG_FOOT;
+    }
+    if (st.pads != ui.last_pads) {
+        ui.last_pads = st.pads;
+        ui.redraw |= RG_FOOT;
     }
     if (ui.msg_until && now >= ui.msg_until) {
         ui.msg_until = 0u;
-        ui.redraw = 1u;
+        ui.redraw |= RG_HEAD;
     }
-    leds();
-    if (ui.redraw) {
-        ui.redraw = 0u;
-        draw();
+    /* the header's own state: playing, the tempo, the break */
+    hdr = (uint32_t)st.playing | (uint32_t)set.tempo_x10 << 1 | (uint32_t)set.brk << 13 | (b ? 1u : 0u) << 20;
+    if (hdr != ui.last_hdr) {
+        ui.last_hdr = hdr;
+        ui.redraw |= RG_HEAD;
     }
+    if (!ui.redraw)
+        return;
+    if (ui.redraw & RG_HEAD)
+        draw_head(&st, b, now);
+    if (ui.redraw & RG_WAVE)
+        draw_wave(&st, b);
+    if (ui.redraw & RG_BLOCKS)
+        draw_blocks(&st, ui.keys);
+    if (ui.redraw & RG_FOOT)
+        draw_foot(&st);
+    ui.redraw = 0u;
 }
+
+#ifdef PLAT_HOST
+/* the host simulator's commands: "splash" draws the power-on screen (the device draws it before app_init; the
+ * simulator never does) */
+int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
+{
+    (void)a; (void)b; (void)c; (void)d;
+    if (!strcmp(cmd, "splash")) {
+        app_splash();
+        return 1;
+    }
+    return 0;
+}
+#endif
