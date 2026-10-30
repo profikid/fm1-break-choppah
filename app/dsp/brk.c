@@ -75,6 +75,13 @@ static float key_left;                   /* samples to the next repeat */
 static float key_lo, key_w;              /* its window in the break's samples */
 static float key_pitch;                  /* semitones, while a key's sound plays */
 static uint32_t key_n;                   /* repeats since the key went down */
+/* MIDI clock */
+#define CLK_MAX 32u
+static uint16_t clk_off[CLK_MAX];        /* the last render's ticks: their sample offsets */
+static uint32_t clk_cnt;
+static float clk_left;                   /* samples to the next tick */
+static uint32_t clk_k = 12u;             /* ticks given in this pair of 16ths (12: done until the next pair) */
+static uint32_t steps_total;             /* steps begun since the reset (the outside clock counts from its start) */
 static volatile uint32_t n_renders;
 
 static inline float pcm_at(const brk_break_t *b, int32_t i)
@@ -433,7 +440,9 @@ void brk_render(float *out, uint32_t n)
         step = -1;
         bar = 0u;
         to_next = 0.0f;
+        steps_total = 0u;
     }
+    clk_cnt = 0u;
     while (q_r != q_w) {                 /* the keys */
         kev_t e = q[q_r % QLEN];
         q_r++;
@@ -505,7 +514,21 @@ void brk_render(float *out, uint32_t n)
                 float len = 2.0f * sl * ((((uint32_t)(step + 1)) & 1u) ? 1.0f - sw : sw);
                 step_in_len = (uint32_t)len;
                 on_step(b);
+                steps_total++;
                 to_next += len;
+                if (!(step & 1)) {       /* MIDI clock: twelve straight ticks over each pair of 16ths */
+                    clk_left = 0.0f;
+                    clk_k = 0u;
+                }
+            }
+            if (clk_k < 12u) {
+                if (clk_left <= 0.0f) {
+                    if (clk_cnt < CLK_MAX)
+                        clk_off[clk_cnt++] = (uint16_t)i;
+                    clk_left += sl / 6.0f;
+                    clk_k++;
+                }
+                clk_left -= 1.0f;
             }
             step_age += 1.0f;
             if (rat_count) {             /* the step's ratchet hits */
@@ -651,6 +674,9 @@ void brk_init(void)
     key_slice = -1;
     key_pitch = 0.0f;
     key_n = 0u;
+    steps_total = 0u;
+    clk_cnt = 0u;
+    clk_k = 12u;
     {
         brk_keyset_t d;
         uint32_t k;
@@ -775,4 +801,34 @@ void brk_randomize(void)
 
 void brk_status(brk_status_t *st) { *st = status; }
 uint32_t brk_renders(void) { return n_renders; }
+
+uint32_t brk_clock_ticks(uint16_t *off, uint32_t max)
+{
+    uint32_t i, n = clk_cnt < max ? clk_cnt : max;
+    for (i = 0; i < n; i++)
+        off[i] = clk_off[i];
+    return n;
+}
+
+void brk_sync(uint32_t n16, float age)
+{
+    float sl = step_len(), len, pos, err;
+    if (!p_playing || !steps_total || !step_in_len)
+        return;
+    len = (float)step_in_len;
+    pos = (float)(steps_total - 1u) + (len - to_next) / len;   /* where the loop is, in 16ths since its start */
+    err = pos - ((float)n16 + age / sl);                        /* > 0: the loop is ahead */
+    if (err > 1.5f || err < -1.5f) {     /* far off (a start missed, a tempo jump): the next step is the clock's */
+        uint32_t n = loop_steps(brk_now);
+        uint32_t want = n16 + (uint32_t)(age / sl) + 1u;   /* the 16th that begins next */
+        step = (int32_t)((want + n - 1u) % n);   /* on_step's +1 makes it want's place in the pattern */
+        steps_total = want;              /* and the ++ after it makes the count want + 1 (number want playing) */
+        to_next = 1.0f;
+        clk_k = 12u;
+        return;
+    }
+    to_next += err * sl * 0.3f;          /* near: eased, a third of the way a beat */
+    if (to_next < 1.0f)
+        to_next = 1.0f;
+}
 uint32_t brk_step_len_samples(void) { return (uint32_t)step_len(); }

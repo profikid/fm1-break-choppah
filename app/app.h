@@ -20,10 +20,21 @@ void app_splash(void);
 #define CH_VERSION "DEV"
 #endif
 
+/* MIDI and Bluetooth (PRD N-1, N-2, N-5): the GLOBAL page's clock in / out and Bluetooth MIDI. The platform calls
+ * app_loop every pass of the main loop (MIDI in), app_tick at 1 kHz (clock out on time); Bluetooth starts at
+ * power-on as the saved setting says, advertising as "CHOPPAH XXXX" */
+#define APP_LOOP
+void app_loop(void);
+#define APP_TICK
+void app_tick(void);
+int app_ble_at_boot(void);
+#define APP_BLE_AT_BOOT (app_ble_at_boot())
+#define BLE_DEVICE_NAME "CHOPPAH"
+
 /* the store (PRD 8.4): settings in Felucca's settings pair, the panel calibration where every fm1-base firmware
  * keeps it. The break bank will take 0x97000..0xD9FFF and PLAT_XDATA1 (M5), patterns 0xDA000 (M2). */
-enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_NOBJ };
-#define APP_STORE_MAP {0xFC000u, 0xDC000u}
+enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_BLE, OBJ_NOBJ };   /* OBJ_BLE: Bluetooth's address and pairing */
+#define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xDE000u}
 
 /* the pool: the break playing, decoded to 16-bit PCM (PRD 8.2). M1 has one buffer; M5 adds the second */
 #define CH_PCM_MAX 81920u                /* samples: 3.7 s at 22.05 kHz (2 bars at 137 BPM and up) */

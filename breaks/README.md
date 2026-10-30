@@ -9,7 +9,7 @@
 16-bit 44.1 kHz WAV, mono or stereo, as published.
 
 [`breaks.txt`](breaks.txt) lists every WAV with its tempo, its bars and a name, and marks with `*` the ones that go into
-the firmware (13 at 2 bars fill ~410 KB of the ~448 KB the firmware has for breaks). `./build.sh` turns those into
+the firmware (12 at 2 bars fill ~395 KB of the 400 KB the firmware has for breaks beside Bluetooth MIDI). `./build.sh` turns those into
 `app/bank_data.h` (generated, git-ignored): mono, 22.05 kHz, IMA ADPCM, 16 slices a break with the markers on the
 drum hits. To change the set, move the `*`s and build; `./build.sh bank` makes the bank on its own and says whether
 it fits. All paths here are relative to this folder.

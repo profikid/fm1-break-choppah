@@ -1,0 +1,38 @@
+# CHOPPAH: the GLOBAL page. Clock out (start, 24 a beat, stop), clock in (follows an outside clock's tempo and its
+# start / stop), Bluetooth MIDI on and off
+#   app/build/host/choppah_host tests/scenarios/midi.txt app/build/scenarios
+wait 2600
+tap GLO
+wait 300
+shot m_global.png
+turn K2 1 10
+wait 200
+out
+tap PLAY
+wait 1000
+expect_out USB FA 00 00
+expect clocks_out >60
+shot m_clock_out.png
+tap PLAY
+wait 200
+expect_out USB FC 00 00
+turn K4 1 10
+turn K2 -1 10
+wait 200
+turn K1 1 10
+wait 200
+midi USB FA 00 00
+clock 120 21
+expect_bpm 117 121
+shot m_clock_in.png
+midi USB FC 00 00
+wait 300
+ble connect
+wait 300
+shot m_ble.png
+turn K3 -1 10
+wait 300
+expect ble 0
+shot m_ble_off.png
+turn K3 1 10
+wait 600

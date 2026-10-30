@@ -678,6 +678,73 @@ static void test_key_loops(void)
     }
 }
 
+/* MIDI clock: 24 straight ticks a beat out (swing or not); in, the loop eases onto an outside clock's 16ths */
+static void test_clock(void)
+{
+    uint16_t off[64];
+    uint32_t sl = brk_step_len_samples(), t, n, total, k, last = 0, bad = 0;
+    int pass;
+    for (pass = 0; pass < 2; pass++) {
+        fresh(1);
+        brk_swing(pass ? 0.66f : 0.5f);
+        brk_play(1);
+        total = 0;
+        for (t = 0; t < sl * 16u; t += 64u) {   /* one bar */
+            brk_render(buf, 64);
+            n = brk_clock_ticks(off, 64);
+            for (k = 0; k < n; k++) {
+                uint32_t at = t + off[k];
+                if (at >= sl * 16u)
+                    break;               /* (the next bar's first) */
+                if (total && (at - last > sl / 6u + 2u || at - last < sl / 6u - 2u))
+                    bad++;
+                last = at;
+                total++;
+            }
+        }
+        CHECK(total == 96u && !bad, "clock out: %u ticks a bar (96), %u uneven%s", total, bad, pass ? ", with swing" : "");
+    }
+    /* in: the clock's 16ths begin 0.4 of a step after the loop's; synced every beat, the loop moves onto them */
+    {
+        uint32_t ext0 = sl * 2u / 5u, beat = sl * 4u, nb = 0;
+        int32_t last_step = -9, d = 99999;
+        brk_status_t st;
+        fresh(1);
+        brk_play(1);
+        for (t = 0; t < beat * 12u; t += 16u) {
+            if (t >= ext0 && (t - ext0) / beat >= nb) {   /* a beat of the outside clock began in the last block */
+                uint32_t at = ext0 + nb * beat;
+                brk_sync(nb * 4u, (float)(t - at));
+                nb++;
+            }
+            brk_render(buf, 16);
+            brk_status(&st);
+            if (st.step != last_step) {
+                last_step = st.step;
+                if (t > beat * 10u) {    /* the loop's step boundary against the clock's nearest */
+                    int32_t rel = (int32_t)((t + 16u - ext0) % sl);
+                    if (rel > (int32_t)sl / 2)
+                        rel -= (int32_t)sl;
+                    if (rel < 0 ? -rel < (d < 0 ? -d : d) : rel < (d < 0 ? -d : d))
+                        d = rel;
+                }
+            }
+        }
+        CHECK(d > -48 && d < 48, "clock in: the loop's steps land on the clock's (%d samples off, was %u)", d, ext0);
+    }
+    /* far off: it jumps to where the clock is */
+    {
+        brk_status_t st;
+        fresh(1);
+        brk_play(1);
+        render(buf, sl * 3u + sl / 2u, 0, 0, 0);
+        brk_sync(40u, 0.0f);
+        render(buf, sl / 2u, 0, 0, 0);
+        brk_status(&st);
+        CHECK(st.step == 41 % 16, "clock in, far off: the loop jumps to the clock's 16th (step %d, want %d)", st.step, 41 % 16);
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -688,6 +755,7 @@ int main(int argc, char **argv)
     test_quantised_key();
     test_hold_loops();
     test_key_loops();
+    test_clock();
     test_generator();
     test_pads();
     test_fx();

@@ -1,7 +1,7 @@
 # CHOPPAH's breaks: every WAV in this folder, and which of them go into the firmware.
 # ./build.sh turns the lines marked * into the bank built into the firmware (app/bank_data.h, generated),
 # in this order, after the five built-in synth breaks. Swap breaks in or out by moving the *; the firmware
-# has room for about 13 at 2 bars (./build.sh says if they don't fit; tools/prep_breaks.py --list ... --dry-run).
+# has room for about 12 at 2 bars (./build.sh says if they don't fit; tools/prep_breaks.py --list ... --dry-run).
 #
 #   file:  relative to this folder   bpm:   the loop's tempo   bars: how many bars go into the firmware
 #   (the WAV holds 'of' bars)        name:  on the screen, up to 12 characters
@@ -45,7 +45,7 @@
 -   cw/cw_amen19_172.wav           172     2     4   AMEN19 172
 -   huge/cw_amen_onbreak.wav       172     1     1   ONBREAK
 -   huge/cw_amen_highpass.wav      172.01  2     2   HIGHPASS
-*   huge/cw_amen_distorted.wav     172.94  1     1   DISTORTED
+-   huge/cw_amen_distorted.wav     172.94  1     1   DISTORTED
 -   cw/cw_amen13_173.wav           173     2     4   AMEN13 173
 -   cw/cw_amen15_174.wav           174     2     4   AMEN15 174
 -   huge/cw_amen_stretch.wav       174     2     2   STRETCH

@@ -52,7 +52,7 @@ The slicer view, top to bottom:
 | White keys | Slices 1–16. Playing: at the next 16th. Stopped: at once. Held: the key loops (below), playing or stopped |
 | SELECT | Tempo, 1 BPM a detent (0.1 with SEL held). Tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
-| ALGORITHM | The next or previous break: five built-in styles (SYNTH AMEN, SYNTH THINK, SYNTH APACHE, SYNTH FUNKY, JUNGLE ROLL), then 13 recorded Amens (Cyberworm's loops: AMEN10 135 … VINYL, slowest first) |
+| ALGORITHM | The next or previous break: five built-in styles (SYNTH AMEN, SYNTH THINK, SYNTH APACHE, SYNTH FUNKY, JUNGLE ROLL), then 12 recorded Amens (Cyberworm's loops: AMEN10 135 … VINYL, slowest first) |
 | MASTER | Volume |
 
 ![A slice held](img/screen-held.png "Slice 10 held")
@@ -122,23 +122,43 @@ animation of what it does, and **K1–K4 tune that pad** (the foot shows its set
 K1 level · K2 pitch · K3 **echo** (how much goes into the dub delay: sirens ringing out) · K4 length. All sixteen are
 synthesised on the FM-1, so nothing is sampled. HOME goes back to the slicer.
 
-## 6. Pages and knobs
+## 6. GLOBAL: MIDI clock and Bluetooth
+
+**GLO** opens the GLOBAL page: the slice blocks give way to the state of MIDI, and K1–K4 set it (SAVE keeps it).
+
+![GLOBAL, following a 119 BPM clock over USB](img/screen-global.png "The GLOBAL page")
+
+| Knob | Sets | |
+| --- | --- | --- |
+| K1 CLOCK IN | OFF · FOLLOW | Following, MIDI clock from USB, the TRS jack or Bluetooth sets the tempo (the header says EXT; SELECT and tap tempo wait), START plays from bar 1, STOP stops, and the loop eases onto the clock's beat every beat |
+| K2 CLOCK OUT | OFF · ON | While playing, 24 clocks a beat (straight, whatever the swing); PLAY sends START, stopping sends STOP, HOME + PLAY sends START again |
+| K3 BLUETOOTH | ON · OFF | Bluetooth MIDI: the FM-1 shows up as **CHOPPAH XXXX** in a computer's, phone's or tablet's Bluetooth MIDI settings. Off ends the link and stops advertising; at power-on it starts as saved |
+| K4 MIDI TO | USB+BT · USB · BT | Where the clock goes |
+
+The panel shows Bluetooth's state (ready to pair, connected), the clock coming in (its tempo, where from, running or
+stopped), the clock going out, and a light for MIDI in and out on each port. The FM-1 has no MIDI out jack: MIDI goes
+out over USB and Bluetooth only.
+
+## 7. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
 | HOME (perform) | DJ filter (left low-pass, right high-pass) | Swing | Complexity | Crunch |
 | ARP (generator) | Complexity | Anchor | Roll | Fill |
 | FX | the focused effect's settings and mix (ALGORITHM picks the effect, FX again turns it on or off) | | | |
+| ENV (soundboard) | Level | Pitch | Echo | Length |
+| GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 
 The generator rearranges the break as it plays: **complexity** is how often it jumps, **anchor** keeps the kick and
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
 of a phrase. SEL + ARP writes a random pattern.
 
-## 7. Saving
+## 8. Saving
 
-SAVE keeps the tempo, pitch, swing, generator, effects and the break chosen; SAVE is lit when something changed.
+SAVE keeps the tempo, pitch, swing, generator, effects, the break chosen, each key's loop and the GLOBAL settings;
+SAVE is lit when something changed.
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 - **No sound:** turn MASTER up; press PLAY.
 - **A crash screen:** press a key to restart. Two failed starts in a row start safe mode, which the installer can

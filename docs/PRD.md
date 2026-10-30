@@ -30,7 +30,7 @@ a safe mode and a route back to stock firmware.
 
 - A general-purpose sampler or multitrack groovebox (X0X, LOOM-8 and zp12 already do that).
 - Synth engines (FM, 303, reese). A bass layer is listed under Future (§12).
-- Bluetooth or Wi-Fi. The radio stays off, which frees RAM and flash for audio.
+- Wi-Fi. (Bluetooth MIDI came in 30 Oct 2026, A-71: its ~40 KB of flash cost one recorded break.)
 - Recording audio from a microphone. The FM-1 has no audio input.
 
 ### 1.3 Target users
@@ -55,7 +55,7 @@ a safe mode and a route back to stock firmware.
 | Buttons (14) | FX, SEL, ENV, LFO, EDIT, GLO, HOME, SAVE, ARP, SEQ, PLAY (red/green), REC, OCT−, OCT+ | |
 | Encoders (7) | SELECT, ALGORITHM, PRESETS, K1–K4 (detented, endless) | |
 | Pot | MASTER volume | |
-| MIDI | USB-MIDI in/out, TRS MIDI **in only** | clock out over USB only |
+| MIDI | USB-MIDI in/out, TRS MIDI **in only**, Bluetooth MIDI in/out | clock out over USB and Bluetooth |
 | USB audio | FM-1 as a USB audio input (the master output, recordable in any DAW) | covers "record to WAV" (§4.6) |
 | Store | Torn-write-safe objects of ≤ 3840 bytes each (A/B sectors) | patterns split across objects |
 | Update | USB-MIDI SysEx OTA; single bank; fm1-base safe mode after two failed boots; stock restore from the web installer | §10 |
@@ -183,7 +183,8 @@ ABG's four, plus the master section a live unit needs.
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| A-70 | Transport: Start/Stop/Continue in; **MIDI clock in** (USB and TRS) with tempo follow; clock out over USB | P0 | Locks to CDJ/DAW clock in < 2 beats; follows tempo changes |
+| A-70 | Transport: Start/Stop/Continue in; **MIDI clock in** (USB and TRS) with tempo follow; clock out over USB | P0 | Locks to CDJ/DAW clock in < 2 beats; follows tempo changes. *Done 30 Oct 2026 on the GLOBAL page: clock in follows the tempo (a beat of ticks, smoothed), START/STOP/CONTINUE (continue starts again: no song position yet), phase eased every beat (`brk_sync`, jumps when > 1.5 steps off); clock out 24 ppqn sample-marked by the engine, sent on the 1 kHz tick, START/STOP with PLAY; MIDI TO picks USB / Bluetooth / both. Engine tests: 96 ticks a bar with and without swing, easing onto a clock 0.4 step off, jumping. Host scenario midi.txt* |
+| A-71 | **Bluetooth MIDI** (fm1-base's own stack): on/off on the GLOBAL page, at power-on as saved, advertised as "CHOPPAH XXXX"; clock in and out over it | P1 | *Done 30 Oct 2026 (~40 KB of flash)* |
 | A-71 | Slice triggering by notes (default C2 = slice 1, chromatic up) | P0 | |
 | A-72 | Break select by notes (separate octave) and Program Change; pattern select by Program Change | P1 | |
 | A-73 | CC map for K1–K4 and all FX parameters; CC out on knob turns | P1 | Map documented in the manual |
@@ -396,7 +397,7 @@ data first, header last, so a cut upload leaves the old header valid or nothing 
 
 | # | Question | Default if not decided |
 | --- | --- | --- |
-| Q1 | **Built-in breaks.** The Amen and other recorded breaks are copyrighted recordings; X0X ships none. Ship user-loaded only, plus a synthesised "Amen-like" break played by an internal kit? | **Decided 30 Oct 2026:** five synthesised styles plus 13 recorded Amens built in: Cyberworm's loops, which he offers royalty free. All 60 WAVs live in `breaks/`; `breaks/breaks.txt` picks the 13 (all 60 at 2 bars would need ~1.9 MB, the firmware has ~448 KB for breaks) |
+| Q1 | **Built-in breaks.** The Amen and other recorded breaks are copyrighted recordings; X0X ships none. Ship user-loaded only, plus a synthesised "Amen-like" break played by an internal kit? | **Decided 30 Oct 2026:** five synthesised styles plus 12 recorded Amens built in (13 until Bluetooth MIDI took ~40 KB): Cyberworm's loops, which he offers royalty free. All 60 WAVs live in `breaks/`; `breaks/breaks.txt` picks the 12 (all 60 at 2 bars would need ~1.9 MB, the firmware has 400 KB for breaks) |
 | Q2 | Name: CHOPPAH / BREAK CHOPPAH / AMEN-1? | CHOPPAH |
 | Q3 | Licence: MPL-2.0 (like fm1-base) or GPL-3.0 (needed if we port GPL code such as X0X's BB Gen port)? | MPL-2.0, write the generator from scratch |
 | Q4 | Default sample rate 22.05 kHz (more breaks, crunchier) or 32 kHz (cleaner)? | 22.05 kHz, per-break override |
@@ -411,7 +412,7 @@ ENV opens a soundboard: the white keys fire 16 synthesised sound-system effects 
 dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank,
 scratch, rewind). Four voices; siren and riser sustain while held; REWIND also pulls the break up (spins back up to
 10x, then restarts from the top of the bar). K1 level, K2 pitch, K3 echo (send into the dub delay), K4 length.
-Sounds join after the four effects, before the DJ filter and limiter. Built-in breaks are now five synthesised styles and 13 recorded Amens,
+Sounds join after the four effects, before the DJ filter and limiter. Built-in breaks are now five synthesised styles and 12 recorded Amens,
 so public builds have several breaks to choose from.
 
 ## 12. Future (post v1)

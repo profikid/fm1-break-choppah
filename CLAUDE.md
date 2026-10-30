@@ -14,10 +14,11 @@ E-*, N-*; milestones M0–M8). Keep the PRD in step when scope changes.
   allocation. Main loop → render through `brk_*` setters (single words) and the key queue.
 - Pool RAM budget (PRD 8.2): canvas 240×96 (45 KB) + PCM buffers; stay under 336 KB total.
 - Flash writes stall audio: only on SAVE or while stopped.
-- Radio stays off (`ble = false`).
+- Bluetooth MIDI is on (`ble = true`, `ble_stack = "own"`: fm1-base's own stack, nothing of JieLi's); the GLOBAL
+  page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash.
 - Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;
-  `./build.sh` regenerates `app/bank_data.h` (never commit it, never edit it). The bank has ~448 KB (`IMAGE_CAPACITY`
-  in `tools/prep_breaks.py`) and 16 slots.
+  `./build.sh` regenerates `app/bank_data.h` (never commit it, never edit it). The bank has 400 KB (`IMAGE_CAPACITY`
+  in `tools/prep_breaks.py`) and 16 slots; the image is ~560 KB of the 581 KB app slot.
 - Releases are automatic: every push to main is the last `vX.Y` tag + 1 minor (`scripts/next_version.sh`, floor
   `VERSION`). Don't tag by hand or bump `VERSION` for a minor; raise `VERSION` only for a new major.
 

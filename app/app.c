@@ -32,7 +32,11 @@ typedef struct {
     brk_gen_t gen;
     brk_fx_t fx;
     uint8_t brk;                         /* the break: 0 the synthesised one, 1.. the bank's slots */
-    uint8_t rsv[15];
+    uint8_t clk_in;                      /* MIDI clock in: 0 off, 1 follow (the tempo, start / stop) */
+    uint8_t clk_out;                     /* MIDI clock out: 0 off, 1 on (24 a beat while playing, start / stop) */
+    uint8_t ble_off;                     /* Bluetooth MIDI: 0 on (the default), 1 off */
+    uint8_t midi_to;                     /* where MIDI goes: 0 USB and Bluetooth, 1 USB, 2 Bluetooth */
+    uint8_t rsv[11];                     /* (zero in older saves: so these load as off, off, on, both) */
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
@@ -205,14 +209,127 @@ void app_init(void)
     settings_apply();
 }
 
+/* ------------------------------------------------------- MIDI clock, Bluetooth --- */
+#define PKT_RT(b) (0x0Fu | (uint32_t)(b) << 8)   /* a real-time byte as a USB-MIDI packet (CIN 0xF) */
+#define MS_PER_SAMPLE (1000.0f / (float)BRK_SR)
+#define CLKQ 64u
+/* (times in plat_ms: the 1 kHz tick sends at that grain anyway, a beat of ticks averages the tempo, and the host
+ * simulator keeps plat_ms in its own time) */
+static volatile uint32_t clkq_due[CLKQ]; /* clock out: when each tick is due (plat_ms); the render writes them */
+static volatile uint32_t clkq_w, clkq_r; /* and the 1 kHz tick sends them */
+static volatile uint32_t sync_n16, sync_ms, sync_c;   /* clock in: the outside 16th begun, when, and a count */
+static uint32_t sync_seen;
+static struct {
+    uint32_t ring[24], i;                /* the last 24 ticks' times: a beat */
+    uint32_t last, n;                    /* the last tick; ticks since the start (FA) */
+    float bpm;                           /* the tempo they give, smoothed */
+    uint8_t run, port;                   /* started (FA / FB, not yet FC); where they come from */
+} ext;
+
+static uint32_t midi_dest(void)
+{
+    return set.midi_to == 1u ? TO_USB : set.midi_to == 2u ? TO_BLE : TO_USB | TO_BLE;
+}
+
+static int ext_active(void)              /* following an outside clock: on, and ticks in the last half second */
+{
+    return set.clk_in && ext.i && plat_ms() - ext.last < 500u;
+}
+
+/* PLAY: the transport, and with clock out on, MIDI start / stop after it. HOME + PLAY (restart): back to bar 1,
+ * and while playing a start again */
+static void transport(int on, int restart)
+{
+    if (restart)
+        brk_reset();
+    else
+        brk_play(on);
+    if (set.clk_out && (on || !restart))
+        plat_midi_send(PKT_RT(on ? 0xFAu : 0xFCu), midi_dest());
+}
+
+int app_ble_at_boot(void) { return !set.ble_off; }
+
+/* main loop, every pass: MIDI in. With clock in on, ticks set the tempo (a beat's worth, smoothed) and every beat
+ * the loop's phase (brk_sync, in the render); start, continue and stop drive the transport */
+void app_loop(void)
+{
+    uint32_t pkt;
+    int port;
+    while (plat_midi_in(&pkt, &port)) {
+        uint32_t st = pkt >> 8 & 0xFFu, t = plat_ms();
+        if (!set.clk_in)
+            continue;
+        if (st == 0xF8u) {
+            uint32_t old = ext.ring[ext.i % 24u];
+            ext.ring[ext.i % 24u] = t;
+            ext.i++;
+            ext.last = t;
+            ext.port = (uint8_t)port;
+            if (ext.i > 24u && t != old) {
+                float bpm = 60000.0f / (float)(t - old);   /* 24 ticks: a beat */
+                if (bpm >= 40.0f && bpm <= 300.0f) {
+                    ext.bpm = ext.bpm > 0.0f ? ext.bpm + (bpm - ext.bpm) * 0.25f : bpm;
+                    brk_tempo(ext.bpm);
+                    brk_fx_tempo(ext.bpm);
+                    set.tempo_x10 = (uint16_t)(ext.bpm * 10.0f + 0.5f);   /* (shown; not a change to save) */
+                }
+            }
+            if (ext.run) {               /* each beat: where the outside clock is, for the render */
+                if (ext.n % 24u == 0u) {
+                    sync_n16 = ext.n / 6u;
+                    sync_ms = t;
+                    sync_c++;
+                }
+                ext.n++;
+            }
+        } else if (st == 0xFAu || st == 0xFBu) {   /* start (continue starts again too: no song position yet) */
+            ext.n = 0u;
+            ext.run = 1u;
+            brk_play(0);
+            brk_play(1);
+            muted = 0u;
+        } else if (st == 0xFCu) {
+            ext.run = 0u;
+            brk_play(0);
+        }
+    }
+}
+
+/* 1 kHz: the clock ticks the render marked, each sent at its moment */
+void app_tick(void)
+{
+    uint32_t now = plat_ms();
+    while (clkq_r != clkq_w && (int32_t)(now - clkq_due[clkq_r % CLKQ]) >= 0) {
+        plat_midi_send(PKT_RT(0xF8u), midi_dest());
+        clkq_r++;
+    }
+}
+
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float mono[APP_BLOCK], fx[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK];
     float gain = muted ? 0.0f : (float)master_q12 * (1.0f / 4096.0f) * 8300000.0f;
     brk_status_t st;
+    uint32_t t0 = plat_ms(), done = 0u, total = n;
+    if (sync_c != sync_seen) {           /* the outside clock's beat, and how long ago it came */
+        float age = (float)(t0 - sync_ms) / MS_PER_SAMPLE;
+        sync_seen = sync_c;
+        if (age < (float)BRK_SR * 0.25f)
+            brk_sync(sync_n16, age);
+    }
     while (n) {
         uint32_t m = n < APP_BLOCK ? n : APP_BLOCK, i;
         brk_render(mono, m);
+        if (set.clk_out) {               /* clock out: each tick due as its sample plays (a block from now) */
+            uint16_t off[16];
+            uint32_t k, nt = brk_clock_ticks(off, 16u);
+            for (k = 0; k < nt && clkq_w - clkq_r < CLKQ; k++) {
+                clkq_due[clkq_w % CLKQ] = t0 + (uint32_t)((float)(done + off[k] + total) * MS_PER_SAMPLE + 0.5f);
+                clkq_w++;
+            }
+        }
+        done += m;
         sfx_render(fx, m);               /* the soundboard, over the break, into the delay at its echo */
         brk_status(&st);
         brk_fx_process(mono, fx, sfx_echo(), l, r, m, st.pads);
@@ -232,8 +349,8 @@ void app_panic(void)
 }
 
 /* ----------------------------------------------------------------------- UI --- */
-enum { PG_HOME, PG_GEN, PG_FX, PG_SOUND, NPAGES };
-static const char *const PAGE_NAME[NPAGES] = {"PERFORM", "GENERATOR", "FX", "SOUNDBOARD"};
+enum { PG_HOME, PG_GEN, PG_FX, PG_SOUND, PG_GLOBAL, NPAGES };
+static const char *const PAGE_NAME[NPAGES] = {"PERFORM", "GENERATOR", "FX", "SOUNDBOARD", "GLOBAL"};
 static const char *const FX_NAME[BRK_NFX] = {"RING MOD", "HI-PASS", "FLANGER", "DEGRADER"};
 static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
                                                 "FLT", "DUB"};
@@ -347,9 +464,48 @@ static void tap_tempo(uint32_t now)
     }
 }
 
+/* the GLOBAL page's knobs: clock in, clock out, Bluetooth, where MIDI goes */
+static const char *const MIDI_TO_NAME[3] = {"USB+BT", "USB", "BT"};
+static void global_value(int i, char *t)
+{
+    t[0] = 0;
+    text_cat(t, i == 0 ? (set.clk_in ? "FOLLOW" : "OFF") : i == 1 ? (set.clk_out ? "ON" : "OFF")
+                : i == 2 ? (set.ble_off ? "OFF" : "ON") : MIDI_TO_NAME[set.midi_to % 3u]);
+}
+
+static void global_turn(int i, int32_t d)
+{
+    static const char *const NAME[4] = {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"};
+    char t[16];
+    if (i == 0) {
+        set.clk_in = d > 0;
+        if (!set.clk_in) {               /* the tempo is the knob's again */
+            ext.i = ext.n = 0u;
+            ext.run = 0u;
+            ext.bpm = 0.0f;
+        }
+    } else if (i == 1)
+        set.clk_out = d > 0;
+    else if (i == 2) {
+        uint8_t off = d < 0;
+        if (off != set.ble_off) {
+            set.ble_off = off;
+            plat_ble_enable(!off);       /* off ends the link and stops advertising */
+        }
+    } else
+        set.midi_to = (uint8_t)clamp((int32_t)set.midi_to + (d > 0 ? 1 : -1), 0, 2);
+    global_value(i, t);
+    app_say(NAME[i], t);
+    changed();
+}
+
 static void knob_turn(int k, int32_t d)
 {
     brk_fx_t *f = &set.fx;
+    if (ui.page == PG_GLOBAL) {
+        global_turn(k - EN_K1, d);
+        return;
+    }
     if (ui.page == PG_SOUND) {           /* the soundboard's level, pitch, echo and length */
         sfx_set_t *x = &set.sfx;
         char t[16];
@@ -733,15 +889,20 @@ static void input(void)
         brk_status_t st;
         brk_status(&st);
         if (btn & 1u << B_HOME) {        /* HOME + PLAY: back to bar 1 */
-            brk_reset();
+            transport(st.playing, 1);
             app_say("RESET", "");
         } else
-            brk_play(!st.playing);
+            transport(!st.playing, 0);
         muted = 0u;
     }
     if (bdn & 1u << B_HOME) {
         ui.page = PG_HOME;
         ui.redraw |= 8u;               /* RG_FOOT: the page */
+    }
+    if (bdn & 1u << B_GLO) {             /* GLOBAL: MIDI clock and Bluetooth */
+        ui.page = PG_GLOBAL;
+        ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
+        app_say("GLOBAL", "");
     }
     if (bdn & 1u << B_ENV) {             /* ENV: the soundboard */
         ui.page = PG_SOUND;
@@ -770,7 +931,7 @@ static void input(void)
         ui.key_turned = 1u;
         changed();
         app_say("KEY", "RESET");
-    } else if (bdn & 1u << B_SEL && ui.page == PG_HOME && !(btn & 1u << B_ARP))
+    } else if (bdn & 1u << B_SEL && ui.page == PG_HOME && !(btn & 1u << B_ARP) && !ext_active())
         tap_tempo(now);
     if (bdn & 1u << B_SAVE) {
         app_say("SAVE", plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 ? "DONE" : "FAILED");
@@ -804,7 +965,9 @@ static void input(void)
         if (!d)
             continue;
         ui.touched = 1u;
-        if (k == EN_SELECT) {            /* tempo: 1 BPM a detent, 0.1 with SEL held */
+        if (k == EN_SELECT && ext_active()) {
+            app_say("TEMPO", "EXT CLOCK");   /* the outside clock has the tempo */
+        } else if (k == EN_SELECT) {     /* tempo: 1 BPM a detent, 0.1 with SEL held */
             set.tempo_x10 = (uint16_t)clamp((int32_t)set.tempo_x10 + d * (btn & 1u << B_SEL ? 1 : 10), 400, 3000);
             changed();
             {
@@ -841,7 +1004,8 @@ static void leds(void)
     brk_status(&st);
     if (st.playing)
         b |= 1u << B_PLAY;
-    b |= 1u << (ui.page == PG_HOME ? B_HOME : ui.page == PG_GEN ? B_ARP : ui.page == PG_SOUND ? B_ENV : B_FX);
+    b |= 1u << (ui.page == PG_HOME ? B_HOME : ui.page == PG_GEN ? B_ARP : ui.page == PG_SOUND ? B_ENV :
+                ui.page == PG_GLOBAL ? B_GLO : B_FX);
     if (set_dirty)
         b |= 1u << B_SAVE;
     if (ui.page == PG_SOUND) {           /* the soundboard: the sounds playing */
@@ -960,6 +1124,10 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
 {
     const brk_fx_t *f = &set.fx;
     t[0] = 0;
+    if (ui.page == PG_GLOBAL) {
+        global_value(i, t);
+        return;
+    }
     if (ui.page == PG_SOUND) {
         const sfx_set_t *x = &set.sfx;
         if (i == 1) {
@@ -1037,7 +1205,8 @@ static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now
         cv_text(24, 6, &FONT_B, b ? b->name : "NO BREAK", C_WHITE);
         tenths_text(set.tempo_x10, t);
         cv_text(232 - text_w(&FONT_B, t), 6, &FONT_B, t, C_HI);
-        cv_text(228 - text_w(&FONT_B, t) - text_w(&FONT_T, "BPM"), 10, &FONT_T, "BPM", C_GRAY);
+        cv_text(228 - text_w(&FONT_B, t) - text_w(&FONT_T, ext_active() ? "EXT" : "BPM"), 10, &FONT_T,
+                ext_active() ? "EXT" : "BPM", ext_active() ? C_AMB : C_GRAY);
     }
     cv_rect(0, 27, 240, 1, C_LINE);
     cv_blit(0, 0);
@@ -1095,6 +1264,60 @@ static void draw_sounds(uint32_t keys, uint32_t now)
     }
 }
 
+/* the GLOBAL page's panel: Bluetooth, the clock coming in, the clock going out, MIDI through each port */
+static void draw_global(const brk_status_t *st)
+{
+    static const char *const PORT_NAME[NPORTS] = {"USB", "BT", "TRS"};
+    char t[32], v[16];
+    uint32_t p;
+    int bs = plat_ble_state();
+    cv_begin(240, 52, C_BLACK);          /* Bluetooth, and the clock in */
+    cv_text(6, 2, &FONT_T, "BLUETOOTH", C_GRAY);
+    t[0] = 0;
+    text_cat(t, set.ble_off ? "OFF" : bs == BLE_STARTING ? "STARTING" : bs == BLE_FAILED ? "FAILED"
+                : plat_ble_connected() ? "CONNECTED" : plat_ble_linked() ? "LINKING" : bs == BLE_READY
+                ? "READY TO PAIR" : "OFF");
+    cv_text(96, 2, &FONT_T, t, plat_ble_connected() ? C_HI : set.ble_off ? C_DIM : C_WHITE);
+    if (!set.ble_off && !plat_ble_connected())
+        cv_text(96, 14, &FONT_XS, "NAME: CHOPPAH ....", C_DIM);
+    cv_text(6, 30, &FONT_T, "CLOCK IN", C_GRAY);
+    t[0] = 0;
+    if (!set.clk_in)
+        text_cat(t, "OFF");
+    else if (!ext_active())
+        text_cat(t, "WAITING FOR CLOCK");
+    else {
+        tenths_text((int32_t)(ext.bpm * 10.0f + 0.5f), v);
+        text_cat(t, v);
+        text_cat(t, " BPM ");
+        text_cat(t, PORT_NAME[ext.port % NPORTS]);
+        text_cat(t, ext.run ? "  RUNNING" : "  STOPPED");
+    }
+    cv_text(96, 30, &FONT_T, t, ext_active() ? C_HI : set.clk_in ? C_WHITE : C_DIM);
+    cv_blit(0, 88);
+    cv_begin(240, 52, C_BLACK);          /* the clock out, and MIDI through each port (lit: in the last 0.3 s) */
+    cv_text(6, 2, &FONT_T, "CLOCK OUT", C_GRAY);
+    t[0] = 0;
+    if (!set.clk_out)
+        text_cat(t, "OFF");
+    else {
+        text_cat(t, "TO ");
+        text_cat(t, MIDI_TO_NAME[set.midi_to % 3u]);
+        text_cat(t, st->playing ? "  SENDING" : "  (WHILE PLAYING)");
+    }
+    cv_text(96, 2, &FONT_T, t, set.clk_out && st->playing ? C_HI : set.clk_out ? C_WHITE : C_DIM);
+    cv_text(6, 30, &FONT_T, "MIDI", C_GRAY);
+    for (p = 0; p < NPORTS; p++) {
+        int32_t x = 96 + (int32_t)p * 48;
+        int in = plat_midi_ago((int)p, 0) < 300u, out = p != PORT_TRS && plat_midi_ago((int)p, 1) < 300u;
+        cv_rect(x, 28, 44, 18, C_BLOCK);
+        cv_text(x + 4, 30, &FONT_T, PORT_NAME[p], in || out ? C_WHITE : C_DIM);
+        cv_rect(x + 34, 31, 4, 4, in ? C_HI : C_LINE);       /* in */
+        cv_rect(x + 34, 38, 4, 4, out ? C_HI : C_LINE);      /* out */
+    }
+    cv_blit(0, 140);
+}
+
 static void draw_blocks(const brk_status_t *st, uint32_t keys)
 {
     uint32_t row, k, c;
@@ -1128,7 +1351,8 @@ static void draw_foot(const brk_status_t *st)
     static const char *const KN[NPAGES][4] = {{"FILTER", "SWING", "CMPLX", "CRUNCH"},
                                               {"CMPLX", "ANCHOR", "ROLL", "FILL"},
                                               {"P1", "P2", "P3", "MIX"},
-                                              {"LEVEL", "PITCH", "ECHO", "LENGTH"}};
+                                              {"LEVEL", "PITCH", "ECHO", "LENGTH"},
+                                              {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"}};
     uint32_t i;
     char t[16];
     cv_begin(240, 48, C_BLACK);
@@ -1495,6 +1719,8 @@ void app_frame(void)
         ui.last_keys = ui.keys;
         ui.redraw |= RG_BLOCKS;
     }
+    if (ui.page == PG_GLOBAL && now - ui.sfx_drawn >= 200u)   /* the GLOBAL page's panel: five times a second */
+        ui.redraw |= RG_BLOCKS;
     if (ui.page == PG_SOUND) {           /* the soundboard's fuses burn at about 20 frames a second */
         uint32_t m = sfx_playing();
         if (m != ui.sfx_mask || (m && now - ui.sfx_drawn >= 50u) ||
@@ -1538,7 +1764,8 @@ void app_frame(void)
         ui.redraw |= RG_HEAD;
     }
     /* the header's own state: playing, the tempo, the break */
-    hdr = (uint32_t)st.playing | (uint32_t)set.tempo_x10 << 1 | (uint32_t)set.brk << 13 | (b ? 1u : 0u) << 20;
+    hdr = (uint32_t)st.playing | (uint32_t)set.tempo_x10 << 1 | (uint32_t)set.brk << 13 | (b ? 1u : 0u) << 20 |
+          (uint32_t)ext_active() << 21;
     if (hdr != ui.last_hdr) {
         ui.last_hdr = hdr;
         ui.redraw |= RG_HEAD;
@@ -1560,6 +1787,9 @@ void app_frame(void)
         if (ui.page == PG_SOUND) {
             draw_sounds(ui.keys, now);
             ui.sfx_drawn = now;
+        } else if (ui.page == PG_GLOBAL) {
+            draw_global(&st);
+            ui.sfx_drawn = now;
         } else
             draw_blocks(&st, ui.keys);
     }
@@ -1576,6 +1806,11 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
     (void)a; (void)b; (void)c; (void)d;
     if (!strcmp(cmd, "splash")) {
         app_splash();
+        return 1;
+    }
+    if (!strcmp(cmd, "expect_bpm")) {    /* expect_bpm LO HI (whole BPM): the tempo the engine plays at */
+        int32_t x100 = (int32_t)(brk_get_tempo() * 100.0f + 0.5f), bad = x100 < atoi(a) * 100 || x100 > atoi(b) * 100;
+        printf("%s tempo %d.%02d BPM (%s..%s)\n", bad ? "FAIL" : "  ok", (int)(x100 / 100), (int)(x100 % 100), a, b);
         return 1;
     }
     return 0;

@@ -139,6 +139,14 @@ void brk_step_get(uint32_t i, brk_step_t *s);
 void brk_pattern_clear(void);
 void brk_randomize(void);                /* writes random slices into the pattern (PRD A-11) */
 
+/* MIDI clock (PRD N-1, N-2). Out: while playing, the render marks MIDI's 24 ticks a beat (straight, whatever the
+ * swing; the first on step 0): brk_clock_ticks, called after brk_render in the same context, gives the sample offsets
+ * of the last render's. In: brk_sync, called from the render before brk_render, says the outside clock's 16th n16
+ * (counted from its start) began age samples ago; the loop eases its steps onto it (or jumps, when far off). The
+ * tempo itself comes from brk_tempo. */
+uint32_t brk_clock_ticks(uint16_t *off, uint32_t max);
+void brk_sync(uint32_t n16, float age);
+
 /* audio interrupt: n mono frames into out[] (-1..1 floats). The FX and the output stage are the caller's
  * (brk_fx.h) */
 void brk_render(float *out, uint32_t n);

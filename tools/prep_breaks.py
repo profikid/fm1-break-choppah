@@ -35,9 +35,9 @@ SLOT_FMT = "<12sIIIIIBBH33I"      # brk_bank.h bank_slot_t
 HDR_FMT = "<IHHII"
 # flash for breaks (PRD 8.2): 0x97000..0xD9FFF and PLAT_XDATA1 0xE5000..0xFBFFF, less a sector of headroom
 BANK_CAPACITY = (0xDA000 - 0x97000) + (0xFC000 - 0xE5000) - 0x1000
-# a bank built into the firmware (--header) shares fm1-base's app slot (581,564 B) with the code (~110 KB): 448 KB
-# keeps ~20 KB for the code to grow. The build checks the image against the slot as well.
-IMAGE_CAPACITY = 0x70000
+# a bank built into the firmware (--header) shares fm1-base's app slot (581,564 B) with the code (~155 KB with
+# Bluetooth MIDI): 400 KB keeps ~20 KB for the code to grow. The build checks the image against the slot as well.
+IMAGE_CAPACITY = 0x64000
 # a break decodes into the firmware's PCM buffer (app.h CH_PCM_MAX): no break longer than that
 BANK_MAX_LEN = 81920
 
