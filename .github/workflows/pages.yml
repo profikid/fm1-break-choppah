@@ -19,6 +19,9 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  EMSDK_VERSION: 3.1.74
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -65,10 +68,29 @@ jobs:
           BOOTSTRAP_USB: 0               # mido / python-rtmidi only install over USB, not needed here
         run: sh scripts/bootstrap.sh
 
-      - uses: mymindstorm/setup-emsdk@v14
+      # Emscripten for the browser emulator. setup-emsdk@v14's own cache uses GitHub's retired cache service (400)
+      # and its install spends ~20 s unpacking .tar.xz, so emsdk is installed by hand and kept with actions/cache.
+      # A new Emscripten: change EMSDK_VERSION (the key follows it).
+      - uses: actions/cache@v4
+        id: emsdk
         with:
-          version: 3.1.74
-          actions-cache-folder: emsdk-cache
+          path: ~/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}-${{ runner.os }}
+
+      - name: Emscripten ${{ env.EMSDK_VERSION }}
+        run: |
+          if [ "${{ steps.emsdk.outputs.cache-hit }}" != true ]; then
+            git clone -q --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+            "$HOME/emsdk/emsdk" install "$EMSDK_VERSION"
+            "$HOME/emsdk/emsdk" activate "$EMSDK_VERSION"
+            rm -rf "$HOME/emsdk/downloads"           # the archives: not worth caching
+          fi
+          . "$HOME/emsdk/emsdk_env.sh" >/dev/null 2>&1   # PATH, EMSDK, EMSDK_NODE: kept for the later steps
+          echo "$EMSDK" >> "$GITHUB_PATH"
+          echo "$EMSDK/upstream/emscripten" >> "$GITHUB_PATH"
+          echo "EMSDK=$EMSDK" >> "$GITHUB_ENV"
+          echo "EMSDK_NODE=$EMSDK_NODE" >> "$GITHUB_ENV"
+          emcc --version | head -1
 
       - name: Engine tests
         run: ./build.sh test
