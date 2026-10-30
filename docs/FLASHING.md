@@ -53,5 +53,11 @@ python3 base/tools/fm1_install.py firmware/stock/FM-1.fwsc
 
 ## From this project's cloud sessions
 
-The sandboxed shell on the Mac can't see USB devices, so flashing always runs in **macOS's own Terminal**:
-`./build.sh flash` from this folder.
+The sandboxed shell on the Mac can't see USB devices. Two routes work:
+
+- **macOS Terminal:** `./build.sh flash` from this folder.
+- **Chrome (Web MIDI), driven by Claude in Chrome:** on fm1-base's published installer page
+  (`charlesvestal.github.io/fm1-base/install/`, where MIDI SysEx is allowed), the package goes into a file input and
+  a small module reuses the page's own `Updater` (fm1ota.js) to run `install()`. First done 30 Oct 2026: X0X was
+  replaced by CHOPPAH dev `FM-1_8600` (package sha256 `ad17360c…`), about 75 s end to end.
+  macOS keeps showing the old MIDI port name ("X0X FM-1") from its cache; the identity handshake is what counts.

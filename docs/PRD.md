@@ -415,7 +415,7 @@ data first, header last, so a cut upload leaves the old header valid or nothing 
 | Milestone | Scope | Exit criteria |
 | --- | --- | --- |
 | **M0 Pipeline** | fm1-base bootstrapped, app builds, flashes, restores to stock | App boots on the FM-1 showing CHOPPAH; stock restore tested once |
-| **M1 Break player** | Bank format, ADPCM decode to pool, 1 built-in break, 16 slices on white keys, play/stop, tempo, repitch, fades | A-1, A-3, A-4, A-6, A-37 pass on device. *Built and simulator-tested 30 Oct 2026 (image 352 KB, pool 210 KB): engine, all pads, 4 FX + DJ filter + limiter, plus an 8-break Amen bank built into the image (Cyberworm's royalty-free cw_amen loops from archive.org, 22.05 kHz ADPCM, 16 slices each) chosen on ALGORITHM. Not yet flashed.* |
+| **M1 Break player** | Bank format, ADPCM decode to pool, 1 built-in break, 16 slices on white keys, play/stop, tempo, repitch, fades | A-1, A-3, A-4, A-6, A-37 pass on device. *Built and simulator-tested 30 Oct 2026 (image 352 KB, pool 210 KB): engine, all pads, 4 FX + DJ filter + limiter, plus an 8-break Amen bank built into the image (Cyberworm's royalty-free cw_amen loops from archive.org, 22.05 kHz ADPCM, 16 slices each) chosen on ALGORITHM. Flashed to the FM-1 30 Oct 2026 (FM-1_8600); on-device acceptance checks still to run.* |
 | **M2 Sequencer + generator** | Steps, swing, generator, randomize, tap tempo, patterns, persistence | A-7, A-10, A-11, A-38, B-14, B-20, B-21 |
 | **M3 Remix FX + looper** | Freeze, reverse gate, retrigger, RMX, step random, pitch ±, looper with overdub | §4.3, §4.4 P0 rows |
 | **M4 DSP** | Ring mod, stereo HPF, flanger, degrader, master DJ filter + limiter; overload guard | §4.5 P0 rows, N-1, N-2 |
