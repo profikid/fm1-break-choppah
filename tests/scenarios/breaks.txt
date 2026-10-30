@@ -1,4 +1,4 @@
-# CHOPPAH: ALGORITHM steps through every break, and each one sounds (6 styles + the bank's 8 when built in)
+# CHOPPAH: ALGORITHM steps through every break, and each one sounds (6 synth styles + the 13 Amens of breaks/breaks.txt), round to the first again
 wait 2600
 tap PLAY
 wait 600
@@ -92,3 +92,33 @@ peakreset
 wait 1200
 expect peak_db_max >-30
 shot a_14.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_15.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_16.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_17.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_18.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_19.png

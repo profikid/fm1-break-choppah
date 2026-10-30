@@ -5,10 +5,15 @@
     tools/prep_breaks.py amen.wav:136.9:4 think.wav --bars 2 -o build/bank.bin
     tools/prep_breaks.py --dry-run loops/*.wav           # what fits, without writing anything
     tools/prep_breaks.py --header app/bank_data.h ...    # the bank as a C array, built into the firmware
+    tools/prep_breaks.py --list breaks/breaks.txt --header app/bank_data.h   # what ./build.sh does
 
 Each input is FILE[:BPM[:BARS[:NAME]]]. Without a BPM, the tempo comes from the length and --bars (the file is taken to be
 whole bars). Slices are an equal grid (--slices 16 a bar by default, at most 32 a break) or, with --transients,
 the grid's markers moved to the nearest drum hit. Python 3 standard library only.
+
+--list reads a catalogue (breaks/breaks.txt): one WAV a line, "IN FILE BPM BARS OF NAME", FILE relative to the
+catalogue; the lines whose IN is * become the bank, in order. Paths in the manifest stay relative, so nothing generated
+points outside the repo.
 
 The bank layout is app/dsp/brk_bank.h's. Uploading it to the FM-1 arrives in milestone M5 (tools/fm1_breaks.py).
 """
@@ -24,12 +29,17 @@ from pathlib import Path
 
 BANK_MAGIC = 0x31424843          # "CHB1"
 BANK_VERSION = 1
-BANK_SLOTS = 8
+BANK_SLOTS = 16
 BANK_SLICES = 32
 SLOT_FMT = "<12sIIIIIBBH33I"      # brk_bank.h bank_slot_t
 HDR_FMT = "<IHHII"
 # flash for breaks (PRD 8.2): 0x97000..0xD9FFF and PLAT_XDATA1 0xE5000..0xFBFFF, less a sector of headroom
 BANK_CAPACITY = (0xDA000 - 0x97000) + (0xFC000 - 0xE5000) - 0x1000
+# a bank built into the firmware (--header) shares fm1-base's app slot (581,564 B) with the code (~110 KB): 448 KB
+# keeps ~20 KB for the code to grow. The build checks the image against the slot as well.
+IMAGE_CAPACITY = 0x70000
+# a break decodes into the firmware's PCM buffer (app.h CH_PCM_MAX): no break longer than that
+BANK_MAX_LEN = 81920
 
 STEP = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
         107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796,
@@ -154,7 +164,23 @@ def adpcm_decode(data, n):
     return out
 
 
-def prepare(spec, args):
+def read_list(path):
+    """the catalogue's lines marked *, as specs FILE:BPM:BARS:NAME (FILE resolved) and the FILE as written"""
+    specs = []
+    for n, line in enumerate(Path(path).read_text().splitlines(), 1):
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        f = line.split(None, 5)
+        if len(f) < 6 or f[0] not in ("*", "-"):
+            raise SystemExit(f"{path}:{n}: expected IN FILE BPM BARS OF NAME, IN * or -")
+        if f[0] == "*":
+            specs.append((f"{Path(path).parent / f[1]}:{f[2]}:{f[3]}:{f[5].strip()}", f[1]))
+    if not specs:
+        raise SystemExit(f"{path}: no line marked *")
+    return specs
+
+
+def prepare(spec, args, shown=None):
     parts = spec.split(":")
     path = Path(parts[0])
     bpm = float(parts[1]) if len(parts) > 1 and parts[1] else None
@@ -170,11 +196,14 @@ def prepare(spec, args):
     peak = max(1e-9, max(abs(v) for v in x))
     x = [v * (0.98 / peak) for v in x]       # normalise
     x = resample(x, rate, args.rate)
-    nslices = min(BANK_SLICES, args.slices * bars)
+    if len(x) > BANK_MAX_LEN:
+        raise SystemExit(f"{shown or path}: {bars} bar(s) at {bpm:.2f} BPM are {len(x)} samples, the firmware's buffer "
+                         f"holds {BANK_MAX_LEN} (fewer bars)")
+    nslices = min(BANK_SLICES, args.break_slices or args.slices * bars)
     pts = slice_points(x, args.rate, nslices, args.transients)
     data = adpcm_encode(x)
     name = (given or (args.name_prefix + path.stem)).upper()[:11]
-    return {"name": name, "file": str(path), "bpm": round(bpm, 2), "bars": bars, "rate": args.rate,
+    return {"name": name, "file": shown or str(path), "bpm": round(bpm, 2), "bars": bars, "rate": args.rate,
             "len": len(x), "nslices": nslices, "slices": pts, "data": data, "pcm": x}
 
 
@@ -195,9 +224,12 @@ def build_bank(slots):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("inputs", nargs="+", help="FILE[:BPM[:BARS[:NAME]]]")
+    ap.add_argument("inputs", nargs="*", help="FILE[:BPM[:BARS[:NAME]]]")
+    ap.add_argument("--list", type=Path, help="a catalogue (breaks/breaks.txt): its lines marked * instead of inputs")
     ap.add_argument("--bars", type=int, default=1, help="bars per break when not given (default 1)")
     ap.add_argument("--slices", type=int, default=16, help="slices a bar (default 16)")
+    ap.add_argument("--break-slices", type=int, default=0,
+                    help="slices a break whatever its bars (16: one per white key) instead of --slices a bar")
     ap.add_argument("--rate", type=int, default=22050, help="sample rate in the bank (default 22050, PRD Q4)")
     ap.add_argument("--transients", action="store_true", help="move markers to the nearest hit")
     ap.add_argument("--name-prefix", default="", help="put before each name")
@@ -206,9 +238,13 @@ def main():
     ap.add_argument("--header", type=Path, help="also write the bank as a C header (CH_BANK[]) for the firmware")
     ap.add_argument("--verify", action="store_true", help="decode again and report the ADPCM's SNR")
     args = ap.parse_args()
-    if len(args.inputs) > BANK_SLOTS:
-        raise SystemExit(f"at most {BANK_SLOTS} breaks")
-    slots = [prepare(s, args) for s in args.inputs]
+    specs = read_list(args.list) if args.list else [(i, None) for i in args.inputs]
+    if not specs:
+        ap.error("inputs or --list")
+    if len(specs) > BANK_SLOTS:
+        raise SystemExit(f"{len(specs)} breaks: at most {BANK_SLOTS}")
+    slots = [prepare(s, args, shown) for s, shown in specs]
+    capacity = IMAGE_CAPACITY if args.header else BANK_CAPACITY
     bank = build_bank(slots)
     for s in slots:
         line = (f"{s['name']:<12} {s['bpm']:7.2f} BPM  {s['bars']} bar(s)  {s['nslices']:2} slices  "
@@ -219,9 +255,9 @@ def main():
             err = sum((v * 32767.0 - q) ** 2 for v, q in zip(s["pcm"], d)) + 1.0
             line += f"  SNR {10 * math.log10(sig / err):5.1f} dB"
         print(line)
-    print(f"bank: {len(bank) / 1024:.1f} KB of {BANK_CAPACITY / 1024:.0f} KB "
-          f"({100 * len(bank) / BANK_CAPACITY:.0f} %)")
-    if len(bank) > BANK_CAPACITY:
+    print(f"bank: {len(bank) / 1024:.1f} KB of {capacity / 1024:.0f} KB "
+          f"({100 * len(bank) / capacity:.0f} %){' (built into the firmware)' if args.header else ''}")
+    if len(bank) > capacity:
         raise SystemExit("does not fit: fewer bars, a lower --rate, or fewer breaks")
     if args.dry_run:
         return
@@ -234,8 +270,8 @@ def main():
         rows = ",\n".join("    " + ",".join(f"0x{b:02x}" for b in bank[i:i + 24]) for i in range(0, len(bank), 24))
         names = ", ".join(s["name"] for s in slots)
         args.header.write_text(
-            "/* Generated by tools/prep_breaks.py: don't edit. Recorded breaks belong to their makers: this file is\n"
-            f" * git-ignored and stays out of public builds. Slots: {names} */\n"
+            "/* Generated by tools/prep_breaks.py: don't edit (./build.sh makes it again from breaks/breaks.txt, and\n"
+            f" * git ignores it). Slots: {names} */\n"
             "#pragma once\n#include <stdint.h>\n"
             f"#define CH_BANK_SIZE {len(bank)}u\n"
             "static const uint8_t CH_BANK[CH_BANK_SIZE] __attribute__((aligned(4))) = {\n" + rows + "\n};\n")

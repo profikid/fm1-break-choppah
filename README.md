@@ -31,7 +31,7 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
 | SELECT | Tempo (SEL held: 0.1 BPM) · tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
-| ALGORITHM | The next break (six built-in styles, then your own) |
+| ALGORITHM | The next break (six synth styles, then 13 recorded Amens) |
 | ENV | SOUNDBOARD: the white keys fire 16 sound-system effects over the break: air horn, dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank, scratch, rewind (pull-up). K1 level · K2 pitch · K3 echo into the dub delay · K4 length |
 | HOME | PERFORM: K1 DJ filter · K2 swing · K3 complexity · K4 crunch |
 | ARP | GENERATOR: complexity · anchor · roll · fill · SEL + ARP: random pattern |
@@ -40,15 +40,14 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 
 ## Breaks
 
-The public build has six built-in breaks played by a small drum synth when chosen (Amen, Think, Apache and
-Funky-drummer-style grooves, a jungle roller and a reggae one drop): no recording ships with it. To build your own firmware with recorded breaks (the bank goes into the image, up to 8):
+CHOPPAH has 19 breaks on ALGORITHM: six played by a small drum synth when chosen (Amen, Think, Apache and
+Funky-drummer-style grooves, a jungle roller and a reggae one drop), then 13 recorded Amens, 2 bars each.
 
-```
-python3 tools/prep_breaks.py amen.wav:136.9:2:"AMEN" think.wav::2 --slices 8 --transients --header app/bank_data.h
-./build.sh
-```
-
-`app/bank_data.h` is git-ignored and left out of every published build: recorded breaks belong to whoever made them.
+The recordings are in [`breaks/`](breaks/): 60 Amen loops by Dmitriy "Cyberworm" Vasilyev, royalty free.
+[`breaks/breaks.txt`](breaks/breaks.txt) lists them all and marks with `*` the 13 that go into the firmware (the
+firmware has room for about that many). `./build.sh` builds the marked ones into `app/bank_data.h` (generated,
+git-ignored) whenever the list or a WAV changes; to use other breaks, move the `*`s, or add WAVs and lines, and
+build. `./build.sh bank` builds just the bank and says whether it fits ([breaks/README.md](breaks/README.md)).
 Uploading breaks over USB without rebuilding is milestone M5.
 
 ## Building
@@ -71,7 +70,8 @@ Clone with `--recursive` (fm1-base is a submodule in `base/`).
 | `app/docs/`, `app/site/` | The manual and the site's front page |
 | `tests/engine/` | Engine tests (plain cc), with WAV renders |
 | `tests/scenarios/` | Host-simulator scripts: keys in, audio and screenshots out |
-| `tools/prep_breaks.py` | WAV → slices → IMA ADPCM bank |
+| `breaks/` | The recorded breaks (WAV) and `breaks.txt`, which of them go into the firmware |
+| `tools/prep_breaks.py` | WAV → slices → IMA ADPCM bank (`--list breaks/breaks.txt`, as `./build.sh` runs it) |
 | `docs/` | [PRD](docs/PRD.md), [flashing and recovery](docs/FLASHING.md) |
 
 ## Publishing

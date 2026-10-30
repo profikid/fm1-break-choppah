@@ -5,7 +5,7 @@
 #     VERSION  X.Y[.Z]: the release (identity FM-1_86XXYYZZ)
 #     DEST     where the site goes: a local folder (/var/www/choppa) or user@host:/path (rsync over SSH)
 # Needs scripts/bootstrap.sh done (fm1-base, JieLi toolchain, SDK files) and Emscripten (emcc on PATH, or
-# EMSDK=~/emsdk) for the emulator. The public build never includes app/bank_data.h: recorded breaks stay private.
+# EMSDK=~/emsdk) for the emulator. ./build.sh builds the breaks marked in breaks/breaks.txt into both.
 set -e
 cd "$(dirname "$0")/.."
 VER="${1:?usage: scripts/publish_site.sh VERSION DEST}"
@@ -14,19 +14,10 @@ DEST="${2:?usage: scripts/publish_site.sh VERSION DEST}"
 command -v emcc >/dev/null || { echo "publish_site: no emcc (install emsdk, or set EMSDK)"; exit 1; }
 PY="${PYTHON:-python3}"
 
-HELD=""
-if [ -f app/bank_data.h ]; then            # the private Amen bank out of the way for the public build
-    HELD="$(mktemp -d)"
-    mv app/bank_data.h "$HELD/"
-fi
-restore() { [ -n "$HELD" ] && mv "$HELD/bank_data.h" app/bank_data.h && rmdir "$HELD"; HELD=""; }
-trap restore EXIT
-
 ./build.sh --release "$VER"
 ./build.sh --web
 rm -rf build/site
 "$PY" base/tools/make_site.py app "app/build/choppah-$VER.fwsc" "$VER" build/site
-restore
 
 case "$DEST" in
     *:*) rsync -az --delete build/site/ "$DEST/" ;;

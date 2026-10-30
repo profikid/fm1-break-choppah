@@ -10,7 +10,7 @@
 
 #define BANK_MAGIC 0x31424843u           /* "CHB1" */
 #define BANK_VERSION 1u
-#define BANK_SLOTS 8u
+#define BANK_SLOTS 16u
 #define BANK_SLICES 32u
 
 typedef struct {

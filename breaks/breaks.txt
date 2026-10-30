@@ -1,0 +1,69 @@
+# CHOPPAH's breaks: every WAV in this folder, and which of them go into the firmware.
+# ./build.sh turns the lines marked * into the bank built into the firmware (app/bank_data.h, generated),
+# in this order, after the six built-in synth breaks. Swap breaks in or out by moving the *; the firmware
+# has room for about 13 at 2 bars (./build.sh says if they don't fit; tools/prep_breaks.py --list ... --dry-run).
+#
+#   file:  relative to this folder   bpm:   the loop's tempo   bars: how many bars go into the firmware
+#   (the WAV holds 'of' bars)        name:  on the screen, up to 12 characters
+#
+# in  file                           bpm     bars  of  name
+-   huge/cw_amen_beasty.wav        127.27  2     4   BEASTY
+*   cw/cw_amen10_135.wav           135     2     2   AMEN10 135
+*   cw/cw_amen12_137.wav           137     2     2   AMEN12 137
+-   huge/cw_amen_nuskool.wav       139.99  2     4   NUSKOOL
+-   huge/cw_amen_comp.wav          140     2     4   COMP
+-   huge/cw_amen_negative.wav      140     2     4   NEGATIVE
+-   huge/cw_amen_reride.wav        140     2     4   RERIDE
+*   huge/cw_amen_tape.wav          140     2     4   TAPE
+*   cw/cw_amen11_145.wav           145     2     2   AMEN11 145
+-   huge/cw_amen_overlimit.wav     147.37  2     4   OVERLIMIT
+-   huge/cw_amen_freak.wav         150.3   2     2   FREAK
+-   huge/cw_amen_apache.wav        157.19  2     4   APACHE
+-   cw/cw_amen05_158.wav           158     2     4   AMEN05 158
+*   huge/cw_amen_oldskool.wav      159.56  2     2   OLDSKOOL
+*   huge/cw_amen_classic.wav       160     2     3   CLASSIC
+-   huge/cw_amen_hype.wav          160     2     2   HYPE
+-   huge/cw_amen_tube.wav          163.81  2     3   TUBE
+-   cw/cw_amen20_164.wav           164     2     2   AMEN20 164
+-   huge/cw_amen_replay.wav        164.92  2     6   REPLAY
+-   huge/cw_amen_deeptouch.wav     164.94  2     6   DEEPTOUCH
+-   cw/cw_amen02_165.wav           165     2     2   AMEN02 165
+-   cw/cw_amen08_165.wav           165     2     2   AMEN08 165
+-   huge/cw_amen_updown.wav        165     2     2   UPDOWN
+-   huge/cw_amen_lo-fi.wav         165.06  1     1   LO-FI
+-   huge/cw_amen_tick.wav          165.55  2     4   TICK
+-   huge/cw_amen_italian.wav       166.49  2     4   ITALIAN
+-   cw/cw_amen03_167.wav           167     2     2   AMEN03 167
+-   cw/cw_amen16_167.wav           167     2     4   AMEN16 167
+-   cw/cw_amen06_169.wav           169     2     2   AMEN06 169
+-   huge/cw_amen_idm.wav           169     2     4   IDM
+*   cw/cw_amen04_170.wav           170     2     2   AMEN04 170
+-   huge/cw_amen_early.wav         170     2     2   EARLY
+*   huge/cw_amen_finger.wav        170     2     2   FINGER
+*   huge/cw_amen_chopper.wav       171.78  2     2   CHOPPER
+-   cw/cw_amen07_172.wav           172     2     2   AMEN07 172
+-   cw/cw_amen19_172.wav           172     2     4   AMEN19 172
+-   huge/cw_amen_onbreak.wav       172     1     1   ONBREAK
+-   huge/cw_amen_highpass.wav      172.01  2     2   HIGHPASS
+*   huge/cw_amen_distorted.wav     172.94  1     1   DISTORTED
+-   cw/cw_amen13_173.wav           173     2     4   AMEN13 173
+-   cw/cw_amen15_174.wav           174     2     4   AMEN15 174
+-   huge/cw_amen_stretch.wav       174     2     2   STRETCH
+-   huge/cw_amen_decay.wav         174.78  2     4   DECAY
+-   huge/cw_amen_funk1.wav         174.92  2     2   FUNK1
+-   huge/cw_amen_equil.wav         174.98  2     2   EQUIL
+*   cw/cw_amen01_175.wav           175     2     2   AMEN01 175
+-   cw/cw_amen09_175.wav           175     2     2   AMEN09 175
+-   cw/cw_amen14_175.wav           175     2     2   AMEN14 175
+-   cw/cw_amen17_175.wav           175     2     4   AMEN17 175
+-   huge/cw_amen_breaking.wav      175     2     2   BREAKING
+-   huge/cw_amen_funk2.wav         175     2     2   FUNK2
+*   huge/cw_amen_jungle.wav        175     2     2   JUNGLE
+-   huge/cw_amen_rough.wav         175     2     3   ROUGH
+-   huge/cw_amen_zinc.wav          175     2     2   ZINC
+-   cw/cw_amen18_178.wav           178     2     4   AMEN18 178
+-   huge/cw_amen_downstratch.wav   179.22  2     3   DOWNSTRATCH
+*   huge/cw_amen_vinyl.wav         179.81  2     6   VINYL
+-   huge/cw_amen_downtempo.wav     180     2     3   DOWNTEMPO
+-   huge/cw_amen_drumroll.wav      181.32  2     2   DRUMROLL
+-   huge/cw_amen_downshift.wav     183.96  2     3   DOWNSHIFT

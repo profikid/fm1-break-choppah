@@ -5,8 +5,8 @@
  *
  * M1 scope (PRD 13): the built-in break, 16 slices on the white keys, the 11 pads on the black keys, play / reset,
  * tempo and tap tempo, pitch on OCT-/OCT+, the generator, the four FX and the DJ filter, settings kept by SAVE.
- * Breaks: the synthesised one, then a bank built into the image when app/bank_data.h exists (tools/prep_breaks.py
- * --header; git-ignored: recorded breaks stay out of public builds), chosen on ALGORITHM. */
+ * Breaks: the synthesised styles, then the bank built into the image (app/bank_data.h, which ./build.sh generates
+ * from breaks/breaks.txt), chosen on ALGORITHM. */
 #include "adpcm.h"
 #include "brk_bank.h"
 #include "brk_math.h"

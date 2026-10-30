@@ -99,7 +99,6 @@ jobs:
         env:
           PYTHON: /usr/bin/python3
         run: |
-          rm -f app/bank_data.h        # public builds never carry recorded breaks
           ./build.sh --release "$VERSION"
           ./build.sh --web
           /usr/bin/python3 base/tools/make_site.py app "app/build/choppah-$VERSION.fwsc" "$VERSION" site

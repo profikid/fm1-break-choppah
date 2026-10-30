@@ -15,6 +15,9 @@ E-*, N-*; milestones M0–M8). Keep the PRD in step when scope changes.
 - Pool RAM budget (PRD 8.2): canvas 240×96 (45 KB) + PCM buffers; stay under 336 KB total.
 - Flash writes stall audio: only on SAVE or while stopped.
 - Radio stays off (`ble = false`).
+- Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;
+  `./build.sh` regenerates `app/bank_data.h` (never commit it, never edit it). The bank has ~448 KB (`IMAGE_CAPACITY`
+  in `tools/prep_breaks.py`) and 16 slots.
 - Releases are automatic: every push to main is the last `vX.Y` tag + 1 minor (`scripts/next_version.sh`, floor
   `VERSION`). Don't tag by hand or bump `VERSION` for a minor; raise `VERSION` only for a new major.
 
