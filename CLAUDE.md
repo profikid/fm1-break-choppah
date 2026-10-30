@@ -15,6 +15,8 @@ E-*, N-*; milestones M0–M8). Keep the PRD in step when scope changes.
 - Pool RAM budget (PRD 8.2): canvas 240×96 (45 KB) + PCM buffers; stay under 336 KB total.
 - Flash writes stall audio: only on SAVE or while stopped.
 - Radio stays off (`ble = false`).
+- Releases are automatic: every push to main is the last `vX.Y` tag + 1 minor (`scripts/next_version.sh`, floor
+  `VERSION`). Don't tag by hand or bump `VERSION` for a minor; raise `VERSION` only for a new major.
 
 ## Commands
 

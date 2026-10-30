@@ -1,11 +1,12 @@
 # Build CHOPPAH and publish its site (front page, web installer, browser emulator, manual, firmware download) to
-# GitHub Pages. A tag vX.Y also attaches the firmware to a GitHub release. The version comes from ./VERSION.
+# GitHub Pages. Every push (merge) to main is a release: one minor up from the last vX.Y tag, never below ./VERSION
+# (scripts/next_version.sh), tagged and attached to a GitHub release. A re-run keeps its commit's version; a manual run
+# of an unreleased commit builds X.Y-dev and releases nothing.
 name: Build and publish
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
   workflow_dispatch:
 
 permissions:
@@ -13,9 +14,10 @@ permissions:
   pages: write
   id-token: write
 
+# one release at a time, in order: a run is never cancelled halfway through tagging
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -26,7 +28,18 @@ jobs:
           submodules: recursive
 
       - name: Version
-        run: echo "VERSION=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
+        run: |
+          TAGS="$(git ls-remote --tags origin 'v*')"
+          # already released (a re-run of this commit): the same version again, never a second bump
+          V="$(printf '%s\n' "$TAGS" | grep "^$GITHUB_SHA" | sed 's|.*refs/tags/v||; s|\^{}$||' \
+               | grep -E '^[0-9]+\.[0-9]+$' | head -1)"
+          if [ -z "$V" ] && [ "$GITHUB_EVENT_NAME" = push ]; then
+            V="$(sh scripts/next_version.sh)"            # this merge's release
+          elif [ -z "$V" ]; then
+            V="$(sh scripts/next_version.sh)-dev"        # a manual rebuild of unreleased code: not a release
+          fi
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          echo "CHOPPAH $V" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Packages (Pillow with libraqm for the fonts)
         run: |
@@ -56,10 +69,15 @@ jobs:
         with:
           path: site
 
-      - name: Release (tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Release
+        if: github.ref == 'refs/heads/main' && !endsWith(env.VERSION, '-dev')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ env.VERSION }}
+          target_commitish: ${{ github.sha }}
+          name: CHOPPAH ${{ env.VERSION }}
+          generate_release_notes: true
+          make_latest: true
           files: app/build/choppah-${{ env.VERSION }}.fwsc
 
   deploy:

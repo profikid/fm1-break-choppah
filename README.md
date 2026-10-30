@@ -18,7 +18,7 @@ Installing is at your own risk; the installer can put M-VAVE's own firmware back
 twice comes up in a safe mode the installer can still reach. If your FM-1 runs M-VAVE's FM1 Open firmware, restore
 M-VAVE's original firmware first ([docs/FLASHING.md](docs/FLASHING.md)).
 
-**Status: 0.1, early.** The engine, the slicer, the pads, the generator and the effects work on the device. Saved
+**Status: early (0.x).** The engine, the slicer, the pads, the generator and the effects work on the device. Saved
 patterns, the step sequencer, the looper, MIDI sync and loading your own breaks are next: see the
 [PRD](docs/PRD.md) for the whole plan.
 
@@ -76,10 +76,19 @@ Clone with `--recursive` (fm1-base is a submodule in `base/`).
 
 ## Publishing
 
-Every push to `main` builds the firmware, the emulator and the site in GitHub Actions
-([.github/workflows/pages.yml](.github/workflows/pages.yml)) and publishes it to GitHub Pages. A tag `vX.Y`
-(matching `VERSION`) also attaches the firmware to a release. `scripts/publish_site.sh VERSION DEST` does the same
-to any folder or server.
+Every merge (push) to `main` is a release. GitHub Actions ([.github/workflows/pages.yml](.github/workflows/pages.yml))
+takes the last `vX.Y` tag up one minor (`v0.4` → `0.5`), builds the firmware, the emulator and the site with that
+version, tags the commit, attaches `choppah-X.Y.fwsc` to a GitHub release with notes from the commits, and publishes
+the site to GitHub Pages. No tags or version edits by hand:
+
+- `VERSION` is the floor, not the current release: set it to `1.0` to start 1.x (the next merge releases 1.0, then
+  1.1, …). The first release, with no tags yet, is `VERSION` itself. After 0.99 comes 1.0 (two digits each, the
+  package identity `FM-1_86XXYYZZ`).
+- Re-running a build keeps its commit's version. A manual run (*Run workflow*) of an unreleased commit builds
+  `X.Y-dev` and releases nothing.
+- `scripts/next_version.sh` prints the version the next merge gets.
+
+`scripts/publish_site.sh VERSION DEST` builds and publishes the same site to any folder or server.
 
 ## Licence and credits
 
