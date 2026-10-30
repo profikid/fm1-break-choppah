@@ -31,7 +31,8 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
 | SELECT | Tempo (SEL held: 0.1 BPM) · tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
-| ALGORITHM | The next break |
+| ALGORITHM | The next break (six built-in styles, then your own) |
+| ENV | SOUNDBOARD: the white keys fire 16 sound-system effects over the break: air horn, dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank, scratch, rewind (pull-up). K1 level · K2 pitch · K3 echo into the dub delay · K4 length |
 | HOME | PERFORM: K1 DJ filter · K2 swing · K3 complexity · K4 crunch |
 | ARP | GENERATOR: complexity · anchor · roll · fill · SEL + ARP: random pattern |
 | FX | FX: ALGORITHM picks the effect, K1–K4 its settings, FX again turns it on or off |
@@ -39,8 +40,8 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 
 ## Breaks
 
-The public build plays a synthesised Amen-style break, made by a small drum synth at boot: no recording ships with
-it. To build your own firmware with recorded breaks (the bank goes into the image, up to 8):
+The public build has six built-in breaks played by a small drum synth when chosen (Amen, Think, Apache and
+Funky-drummer-style grooves, a jungle roller and a reggae one drop): no recording ships with it. To build your own firmware with recorded breaks (the bank goes into the image, up to 8):
 
 ```
 python3 tools/prep_breaks.py amen.wav:136.9:2:"AMEN" think.wav::2 --slices 8 --transients --header app/bank_data.h

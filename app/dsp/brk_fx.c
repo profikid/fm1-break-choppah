@@ -123,7 +123,8 @@ void brk_fx_set(const brk_fx_t *p)
     *(brk_fx_t *)&p_fx = *p;             /* written whole from the main loop; the render copies it per block */
 }
 
-void brk_fx_process(const float *in, float *l, float *r, uint32_t n, uint32_t pads)
+void brk_fx_process(const float *in, const float *aux, float aux_send, float *l, float *r, uint32_t n,
+                    uint32_t pads)
 {
     uint32_t i;
     svf_c hc_l, hc_r, djc;
@@ -191,6 +192,11 @@ void brk_fx_process(const float *in, float *l, float *r, uint32_t n, uint32_t pa
             }
             xl = xr = deg_hold;
         }
+        {
+            float a = aux ? aux[i] : 0.0f;   /* the soundboard joins here: clean, then the delay and the filter */
+            xl += a;
+            xr += a;
+        }
         if (dub_n) {                     /* the dub delay: held, the pad sends the break in; the echoes ring on */
             float d, rp, t, y;
             int32_t i0;
@@ -206,7 +212,7 @@ void brk_fx_process(const float *in, float *l, float *r, uint32_t n, uint32_t pa
                 * (1.0f / 32768.0f);
             dub_lp += (y - dub_lp) * dub_lpk;    /* the tone: each echo darker */
             {
-                float w = soft(0.5f * (xl + xr) * dub_send + dub_lp * dub_fb);
+                float w = soft(0.5f * (xl + xr) * dub_send + (aux ? aux[i] * aux_send : 0.0f) + dub_lp * dub_fb);
                 dub_buf[dub_w] = (int16_t)(w * 32000.0f);
             }
             dub_w = (dub_w + 1u) % dub_n;

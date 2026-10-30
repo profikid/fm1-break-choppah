@@ -30,5 +30,7 @@ void brk_fx_set(const brk_fx_t *p);
 void brk_fx_delay_buffer(int16_t *buf, uint32_t n);
 void brk_fx_tempo(float bpm);
 float brk_fx_dj_now(void);               /* where the DJ filter is right now, -1..1 (for the screen) */
-/* pads: brk_status_t.pads (PAD_FILTER throws the DJ filter to low-pass) */
-void brk_fx_process(const float *in, float *l, float *r, uint32_t n, uint32_t pads);
+/* in: the break (through every effect); aux: the soundboard (0 for none), joined after the four effects, into the
+ * DJ filter and the limiter, and sent into the dub delay at aux_send. pads: brk_status_t.pads */
+void brk_fx_process(const float *in, const float *aux, float aux_send, float *l, float *r, uint32_t n,
+                    uint32_t pads);

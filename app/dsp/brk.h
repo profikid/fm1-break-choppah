@@ -84,6 +84,7 @@ typedef struct {
     float tape;                          /* tape speed: 1 running .. 0 stopped */
     float gate;                          /* the gate's level now, 0..1 */
     float phase;                         /* how far into the step, 0..1 */
+    float rewind;                        /* a rewind's progress, 0..1 (0: none) */
 } brk_status_t;
 
 void brk_init(void);
@@ -92,6 +93,8 @@ const brk_break_t *brk_get_break(void);
 
 void brk_play(int on);
 void brk_reset(void);                    /* to the pattern's first step (the next step played is step 0) */
+void brk_rewind(void);                   /* the pull-up: the break spins back, faster and faster, then starts again
+                                          * from the top of the bar */
 void brk_tempo(float bpm);               /* 40..300 */
 float brk_get_tempo(void);
 void brk_pitch(float semitones);         /* -24..+24, on top of the tempo's repitch */

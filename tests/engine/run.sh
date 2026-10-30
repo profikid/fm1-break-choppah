@@ -10,9 +10,9 @@ CC="${CC:-cc}"
 # the device build rejects double precision: warn here on any float that gets promoted
 "$CC" -std=c99 -O2 -Wall -Wextra -Werror -Wdouble-promotion -Wfloat-conversion -Wno-unused-parameter \
     -Iapp/dsp -c app/dsp/brk.c -o "$OUT/brk.o"
-for f in brk_fx brk_synth adpcm; do
+for f in brk_fx brk_synth adpcm sfx; do
     "$CC" -std=c99 -O2 -Wall -Wextra -Werror -Wdouble-promotion -Wfloat-conversion -Iapp/dsp -c app/dsp/$f.c -o "$OUT/$f.o"
 done
 "$CC" -std=c99 -O2 -Wall -Iapp/dsp tests/engine/test_engine.c "$OUT"/brk.o "$OUT"/brk_fx.o "$OUT"/brk_synth.o \
-    "$OUT"/adpcm.o -lm -o "$OUT/test_engine"
+    "$OUT"/adpcm.o "$OUT"/sfx.o -lm -o "$OUT/test_engine"
 "$OUT/test_engine" "$OUT"

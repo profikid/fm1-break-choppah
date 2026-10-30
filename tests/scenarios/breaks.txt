@@ -1,44 +1,94 @@
-# CHOPPAH: every break in the bank plays (needs app/bank_data.h)
-wait 800
-shot b_boot.png
-wav breaks.wav
+# CHOPPAH: ALGORITHM steps through every break, and each one sounds (6 styles + the bank's 8 when built in)
+wait 2600
 tap PLAY
-wait 2000
-peakreset
-turn ALGO 1
-wait 300
-shot b_1.png
-wait 1500
-expect peak_db_max >-30
-turn ALGO 1
-wait 1800
-turn ALGO 1
-wait 1800
-shot b_3.png
-turn ALGO 1
-wait 1800
-turn ALGO 1
-wait 1800
-turn ALGO 1
-wait 1800
-shot b_6.png
-turn ALGO 1
-wait 1800
-turn ALGO 1
-wait 1800
-shot b_8.png
-turn ALGO 1
-wait 1800
-shot b_wrap.png
-key b1 down
 wait 600
-key b1 up
-key b3 down
-wait 800
-key b3 up
-wavstop
-tap SAVE
-wait 50
-reboot
-wait 800
-shot b_reboot.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_00.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_01.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_02.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_03.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_04.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_05.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_06.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_07.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_08.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_09.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_10.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_11.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_12.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_13.png
+turn ALGO 1
+wait 400
+peakreset
+wait 1200
+expect peak_db_max >-30
+shot a_14.png

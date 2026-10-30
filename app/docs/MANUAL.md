@@ -13,9 +13,10 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 2. The screens
 3. Playing
 4. The pads
-5. Pages and knobs
-6. Saving
-7. Troubleshooting
+5. The soundboard
+6. Pages and knobs
+7. Saving
+8. Troubleshooting
 
 ---
 
@@ -51,7 +52,7 @@ The slicer view, top to bottom:
 | White keys | Slices 1–16. Playing: at the next 16th. Stopped: at once. Held: that slice at every 16th |
 | SELECT | Tempo, 1 BPM a detent (0.1 with SEL held). Tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
-| ALGORITHM | The next or previous break |
+| ALGORITHM | The next or previous break: six built-in styles (SYNTH AMEN, SYNTH THINK, SYNTH APACHE, SYNTH FUNKY, JUNGLE ROLL, ONE DROP), then any built into your own firmware |
 | MASTER | Volume |
 
 ![A slice held](img/screen-held.png "Slice 10 held")
@@ -76,7 +77,28 @@ animation of what it does, and **K1–K4 tune that pad** (the foot shows its set
 ![ROLL held: the caught slice repeating, each copy quieter, RATE / DECAY / PITCH on K1-K3](img/pad-roll8.png "ROLL held")
 ![TAPE STOP held: two reels slowing down](img/pad-stop.png "TAPE STOP held") ![DUB held: echoes marching out](img/pad-dub.png "DUB held")
 
-## 5. Pages and knobs
+## 5. The soundboard
+
+**ENV** opens the soundboard: the white keys fire sixteen sound-system effects over the break, which keeps playing
+(the black-key pads still work). Each tile burns down like a fuse while its sound plays.
+
+![The soundboard: sixteen tiles, BOOM and RISER playing](img/screen-soundboard.png "The soundboard")
+
+| Key | Sound | Key | Sound |
+| --- | --- | --- | --- |
+| 1 | HORN: air horn, BAAP BAAP BAAAAP | 9 | HEY: a shout |
+| 2 | SIREN: dub siren, wails while held | 10 | RISER: noise sweeping up while held |
+| 3 | WHOOP | 11 | REVCYM: reverse cymbal |
+| 4 | LASER | 12 | SUBDRP: sub drop |
+| 5 | ZAP | 13 | STAB: horn stab |
+| 6 | BOOM: gunshot | 14 | SKANK: the offbeat guitar chop |
+| 7 | BRAP: five shots | 15 | SCRTCH: scratch |
+| 8 | FYAH: a "FYAH!" shout | 16 | REWIND: the pull-up; the break spins back and drops in again from the top |
+
+K1 level · K2 pitch · K3 **echo** (how much goes into the dub delay: sirens ringing out) · K4 length. All sixteen are
+synthesised on the FM-1, so nothing is sampled. HOME goes back to the slicer.
+
+## 6. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
@@ -88,11 +110,11 @@ The generator rearranges the break as it plays: **complexity** is how often it j
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
 of a phrase. SEL + ARP writes a random pattern.
 
-## 6. Saving
+## 7. Saving
 
 SAVE keeps the tempo, pitch, swing, generator, effects and the break chosen; SAVE is lit when something changed.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 - **No sound:** turn MASTER up; press PLAY.
 - **A crash screen:** press a key to restart. Two failed starts in a row start safe mode, which the installer can

@@ -9,6 +9,7 @@
 #include "brk.h"
 #include "brk_fx.h"
 #include "brk_synth.h"
+#include "sfx.h"
 
 #define RATE 22050u
 #define BPM 136.9f
@@ -270,7 +271,7 @@ static void test_fx(void)
             p.on[i] = (uint8_t)(f == BRK_NFX || i == f);
         brk_fx_set(&p);
         for (i = 0; i < n; i += BLOCK)
-            brk_fx_process(buf + i, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
+            brk_fx_process(buf + i, 0, 0.0f, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
         for (i = 0; i < n; i++) {
             if (!(fabsf(bl[i]) <= 1.0f) || !(fabsf(br[i]) <= 1.0f))
                 ok = 0;
@@ -439,19 +440,144 @@ static void test_dub(void)
     brk_play(1);
     render(buf, n, 0, 0, 0);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
+        brk_fx_process(buf + i, 0, 0.0f, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
     brk_play(0);
     brk_pad(PAD_DUB, 0);
     for (i = 0; i < BLOCK; i++)
         buf[i] = 0.0f;
     for (i = 0; i < s * 8u; i += BLOCK) {    /* silence in, two bars of it */
         uint32_t j;
-        brk_fx_process(buf, bl, br, BLOCK, 0u);
+        brk_fx_process(buf, 0, 0.0f, bl, br, BLOCK, 0u);
         for (j = 0; j < BLOCK; j++)
             if (fabsf(bl[j]) > tail)
                 tail = fabsf(bl[j]);
     }
     CHECK(tail > 0.01f, "dub echoes ring on after the pad (peak %.3f)", tail);
+    brk_fx_delay_buffer(0, 0u);
+}
+
+/* the built-in styles: each one loads, has 16 slices and plays them in order straight */
+static void test_styles(void)
+{
+    uint32_t k, bad = 0u;
+    for (k = 0; k < brk_synth_count(); k++) {
+        int32_t seen, sl[20], i, ok = 1;
+        brk_init();
+        brk_synth_style(pcm, RATE, k, &brk);
+        brk_set_break(&brk);
+        brk_tempo((float)brk.bpm_x100 / 100.0f);
+        brk_play(1);
+        render(buf, brk_step_len_samples() * 16u, &seen, sl, 20);
+        for (i = 0; i < 16 && i < seen; i++)
+            if (sl[i] != i)
+                ok = 0;
+        if (!ok || seen < 16 || brk.nslices != 16u || brk.len > 81920u)
+            bad++;
+    }
+    CHECK(!bad && brk_synth_count() >= 6u, "%u styles, %u bad", brk_synth_count(), bad);
+}
+
+/* the soundboard: every sound sounds, stays inside -1..1 and ends; the siren holds until let go */
+static void test_sfx(void)
+{
+    static float o[BRK_SR * 5u];
+    sfx_set_t set;
+    uint32_t id, silent = 0u, stuck = 0u, wild = 0u, i;
+    char name[64];
+    sfx_init();
+    sfx_defaults(&set);
+    set.level = 1.0f;
+    sfx_set(&set);
+    for (id = 0; id < SFX_N; id++) {
+        uint32_t n = BRK_SR * 3u;
+        float pk = 0.0f;
+        sfx_trigger((int)id);
+        for (i = 0; i < n; i += BLOCK) {
+            uint32_t j;
+            if (i / BLOCK == (BRK_SR / 2u) / BLOCK)
+                sfx_release((int)id);    /* the held ones let go after half a second */
+            sfx_render(o + i, BLOCK);
+            for (j = 0; j < BLOCK; j++) {
+                if (!(fabsf(o[i + j]) <= 1.0f))
+                    wild++;
+                if (fabsf(o[i + j]) > pk)
+                    pk = fabsf(o[i + j]);
+            }
+        }
+        if (pk < 0.05f) {
+            silent++;
+            printf("  silent: %s (peak %.3f)\n", SFX_NAME[id], pk);
+        }
+        if (sfx_playing())
+            stuck++;
+        snprintf(name, sizeof name, "sfx_%02u_%s.wav", id, SFX_NAME[id]);
+        wav(name, o, 0, BRK_SR * 2u);
+    }
+    CHECK(!silent, "every soundboard sound sounds (%u silent)", silent);
+    CHECK(!stuck, "every sound ends (%u still playing after 3 s)", stuck);
+    CHECK(!wild, "soundboard output stays inside -1..1 (%u samples outside)", wild);
+    /* the siren goes on while held */
+    sfx_init();
+    sfx_trigger(SFX_SIREN);
+    for (i = 0; i < BRK_SR * 2u; i += BLOCK)
+        sfx_render(o, BLOCK);
+    CHECK(sfx_playing() >> SFX_SIREN & 1u, "the siren still wails after 2 s held");
+    sfx_release(SFX_SIREN);
+    for (i = 0; i < BRK_SR; i += BLOCK)
+        sfx_render(o, BLOCK);
+    CHECK(!(sfx_playing() >> SFX_SIREN & 1u), "and stops once let go");
+}
+
+/* the pull-up: the break spins back, then starts again from step 0 */
+static void test_rewind(void)
+{
+    brk_status_t st;
+    uint32_t s = brk_step_len_samples();
+    float pk;
+    fresh(1);
+    brk_play(1);
+    render(buf, s * 6u, 0, 0, 0);
+    brk_rewind();
+    render(buf, BLOCK, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.rewind > 0.0f, "a rewind starts (%.2f)", st.rewind);
+    pk = render(buf, BRK_SR / 2u, 0, 0, 0);
+    CHECK(pk > 0.05f, "and is heard (peak %.3f)", pk);
+    render(buf, BRK_SR / 4u, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.rewind == 0.0f && st.step >= 0 && st.step < 4, "then the break starts again from the top (step %d)",
+          st.step);
+}
+
+/* the soundboard through the dub delay: echoes after the sound has stopped */
+static void test_sfx_echo(void)
+{
+    static int16_t line[32768];
+    static float a[BLOCK], z[BLOCK];
+    brk_fx_t p;
+    sfx_set_t ss;
+    uint32_t i, j;
+    float tail = 0.0f;
+    brk_fx_init();
+    brk_fx_defaults(&p);
+    brk_fx_set(&p);
+    brk_fx_delay_buffer(line, 32768u);
+    brk_fx_tempo(170.0f);
+    sfx_init();
+    sfx_defaults(&ss);
+    sfx_set(&ss);
+    for (j = 0; j < BLOCK; j++)
+        z[j] = 0.0f;
+    sfx_trigger(SFX_LASER);
+    for (i = 0; i < BRK_SR * 2u; i += BLOCK) {
+        sfx_render(a, BLOCK);
+        brk_fx_process(z, a, 0.8f, bl, br, BLOCK, 0u);
+        if (i > BRK_SR)                  /* the laser is long over by now */
+            for (j = 0; j < BLOCK; j++)
+                if (fabsf(bl[j]) > tail)
+                    tail = fabsf(bl[j]);
+    }
+    CHECK(tail > 0.005f, "soundboard echoes ring on in the dub delay (peak %.3f)", tail);
     brk_fx_delay_buffer(0, 0u);
 }
 
@@ -470,6 +596,10 @@ int main(int argc, char **argv)
     test_adpcm();
     test_pad_settings();
     test_dub();
+    test_styles();
+    test_sfx();
+    test_rewind();
+    test_sfx_echo();
     printf("%d of %d checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;
 }

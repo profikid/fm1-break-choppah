@@ -11,6 +11,7 @@
 #include "brk_bank.h"
 #include "brk_math.h"
 #include "brk_synth.h"
+#include "sfx.h"
 #if defined(__has_include)
 #if __has_include("bank_data.h")
 #include "bank_data.h"
@@ -22,7 +23,7 @@
 #endif
 
 /* ------------------------------------------------------------------ settings --- */
-#define SET_MAGIC 0x32504843u            /* "CHP2" (CHP1 + the pads' settings): another magic loads the defaults */
+#define SET_MAGIC 0x33504843u            /* "CHP3" (+ the pads' settings, the soundboard): another magic loads defaults */
 typedef struct {
     uint32_t magic;
     uint16_t tempo_x10;                  /* 400..3000 */
@@ -33,6 +34,7 @@ typedef struct {
     uint8_t brk;                         /* the break: 0 the synthesised one, 1.. the bank's slots */
     uint8_t rsv[15];
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
+    sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
 } settings_t;
 static settings_t set;
 static uint8_t set_dirty;
@@ -50,8 +52,9 @@ static void settings_defaults(void)
     set.gen.fill = 0.5f;
     set.gen.phrase_bars = 4u;
     brk_fx_defaults(&set.fx);
-    set.brk = CH_HAVE_BANK ? 1u : 0u;
+    set.brk = 0u;                        /* the first break: the bank's first when there is one (app_init) */
     brk_padset_defaults(&set.pads);
+    sfx_defaults(&set.sfx);
 }
 
 static void settings_apply(void)
@@ -63,6 +66,7 @@ static void settings_apply(void)
     brk_fx_set(&set.fx);
     brk_fx_tempo((float)set.tempo_x10 * 0.1f);
     brk_padset(&set.pads);
+    sfx_set(&set.sfx);
 }
 
 static void changed(void)
@@ -78,7 +82,8 @@ static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 static int16_t dub_line[CH_DUB_LEN] PLAT_POOL;
 static brk_break_t brk0;
 static brk_break_t brk_cur;              /* the bank's break playing (pcm_a holds it) */
-static uint32_t n_breaks = 1u;           /* the synthesised one, then the bank's valid slots */
+static uint32_t n_synth;                 /* the built-in styles come first (brk_synth.c) */
+static uint32_t n_breaks;                /* then the bank's valid slots */
 static uint8_t wave_px[240];             /* the waveform's height per column, for the screen */
 #define BLK_N 16u                        /* the slicer view's blocks: one per white key */
 #define BLK_W 26u                        /* columns of waveform in a block */
@@ -136,7 +141,7 @@ static const bank_slot_t *bank_slot(uint32_t i)
 /* break i into pcm_a (nothing may be playing from it: the render was given no break, see break_ask) */
 static void break_load(uint32_t i)
 {
-    const bank_slot_t *s = i ? bank_slot(i - 1u) : 0;
+    const bank_slot_t *s = i >= n_synth ? bank_slot(i - n_synth) : 0;
     const brk_break_t *b = &brk0;
     uint32_t k;
     brk_set_break(0);
@@ -157,9 +162,11 @@ static void break_load(uint32_t i)
             brk_cur.name[k] = s->name[k];
         brk_cur.name[12] = 0;
         b = &brk_cur;
-    } else {
-        brk_synth_break(pcm_a, CH_RATE, 136.9f, 1u, &brk0);
-        i = 0u;
+    } else {                             /* a built-in style, played into RAM now */
+        if (i >= n_synth)
+            i = 0u;
+        if (brk_synth_style_len(i, CH_RATE) <= CH_PCM_MAX)
+            brk_synth_style(pcm_a, CH_RATE, i, &brk0);
     }
     set.brk = (uint8_t)i;
     wave_build(b);
@@ -171,27 +178,33 @@ void app_init(void)
     brk_init();
     brk_fx_init();
     brk_fx_delay_buffer(dub_line, CH_DUB_LEN);
-    while (n_breaks <= BANK_SLOTS && bank_slot(n_breaks - 1u))
+    sfx_init();
+    n_synth = n_breaks = brk_synth_count();
+    while (n_breaks - n_synth < BANK_SLOTS && bank_slot(n_breaks - n_synth))
         n_breaks++;
     if (plat_store_load(OBJ_SETTINGS, &set, sizeof set) != (int)sizeof set || set.magic != SET_MAGIC ||
-        set.tempo_x10 < 400u || set.tempo_x10 > 3000u || set.swing < 50u || set.swing > 75u)
+        set.tempo_x10 < 400u || set.tempo_x10 > 3000u || set.swing < 50u || set.swing > 75u) {
         settings_defaults();
+        if (n_breaks > n_synth)
+            set.brk = (uint8_t)n_synth;  /* the bank's first break */
+    }
     if (set.brk >= n_breaks)
-        set.brk = n_breaks > 1u ? 1u : 0u;
+        set.brk = 0u;
     break_load(set.brk);                 /* boot: the audio isn't running yet */
     settings_apply();
 }
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
-    static float mono[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK];
+    static float mono[APP_BLOCK], fx[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK];
     float gain = muted ? 0.0f : (float)master_q12 * (1.0f / 4096.0f) * 8300000.0f;
     brk_status_t st;
     while (n) {
         uint32_t m = n < APP_BLOCK ? n : APP_BLOCK, i;
         brk_render(mono, m);
+        sfx_render(fx, m);               /* the soundboard, over the break, into the delay at its echo */
         brk_status(&st);
-        brk_fx_process(mono, l, r, m, st.pads);
+        brk_fx_process(mono, fx, sfx_echo(), l, r, m, st.pads);
         for (i = 0; i < m; i++) {
             lr[2u * i] = (int32_t)(l[i] * gain);
             lr[2u * i + 1u] = (int32_t)(r[i] * gain);
@@ -208,8 +221,8 @@ void app_panic(void)
 }
 
 /* ----------------------------------------------------------------------- UI --- */
-enum { PG_HOME, PG_GEN, PG_FX, NPAGES };
-static const char *const PAGE_NAME[NPAGES] = {"PERFORM", "GENERATOR", "FX"};
+enum { PG_HOME, PG_GEN, PG_FX, PG_SOUND, NPAGES };
+static const char *const PAGE_NAME[NPAGES] = {"PERFORM", "GENERATOR", "FX", "SOUNDBOARD"};
 static const char *const FX_NAME[BRK_NFX] = {"RING MOD", "HI-PASS", "FLANGER", "DEGRADER"};
 static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
                                                 "FLT", "DUB"};
@@ -227,6 +240,8 @@ static struct {
     uint32_t intro_t0;                   /* the start screen: when it began (0: over) */
     uint8_t intro, intro_drawn;          /* showing it; blocks drawn so far */
     uint8_t touched;                     /* a key, button or encoder moved since app_frame last looked */
+    int8_t sfx_hit;                      /* the soundboard key pressed last, and when */
+    uint32_t sfx_hit_t, sfx_drawn, sfx_mask;
     int8_t pad_focus;                    /* the pad held last (its animation, K1-K4 tune it); -1 none */
     int8_t pad_shown;                    /* the pad the screen shows now */
     uint32_t pad_since, fx_drawn;        /* when it was pressed; the animation's last frame */
@@ -321,6 +336,27 @@ static void tap_tempo(uint32_t now)
 static void knob_turn(int k, int32_t d)
 {
     brk_fx_t *f = &set.fx;
+    if (ui.page == PG_SOUND) {           /* the soundboard's level, pitch, echo and length */
+        sfx_set_t *x = &set.sfx;
+        char t[16];
+        if (k == EN_K1) {
+            x->level = knob_f(x->level, d, 0.02f, 0.0f, 1.0f);
+            say_int("LEVEL", (int32_t)(x->level * 100.0f), "%");
+        } else if (k == EN_K2) {
+            x->pitch = knob_f(x->pitch, d, 1.0f, -12.0f, 12.0f);
+            int_text((int32_t)x->pitch, t);
+            text_cat(t, " ST");
+            app_say("PITCH", t);
+        } else if (k == EN_K3) {
+            x->echo = knob_f(x->echo, d, 0.02f, 0.0f, 1.0f);
+            say_int("ECHO", (int32_t)(x->echo * 100.0f), "%");
+        } else {
+            x->length = knob_f(x->length, d, 0.05f, 0.5f, 2.0f);
+            say_int("LENGTH", (int32_t)(x->length * 100.0f), "%");
+        }
+        changed();
+        return;
+    }
     if (ui.page == PG_HOME) {
         if (k == EN_K1) {                /* the DJ filter: left low-pass, right high-pass */
             f->dj = knob_f(f->dj, d, 0.02f, -1.0f, 1.0f);
@@ -541,7 +577,20 @@ static void input(void)
     int k;
     if (keys != ui.keys || btn != ui.btn)
         ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
-    for (i = 0; i < 16u; i++) {          /* white keys: slices */
+    for (i = 0; i < 16u; i++) {          /* white keys: slices, or on the soundboard its sounds */
+        if (ui.page == PG_SOUND) {
+            if (kdn >> WK[i] & 1u) {
+                sfx_trigger((int)i);
+                if (i == SFX_REWIND)
+                    brk_rewind();        /* the pull-up: the break spins back and starts again */
+                ui.sfx_hit = (int8_t)i;
+                ui.sfx_hit_t = now;
+                app_say(SFX_NAME[i], "");
+            }
+            if (kup >> WK[i] & 1u)
+                sfx_release((int)i);
+            continue;
+        }
         if (kdn >> WK[i] & 1u)
             brk_key((int)i, 1);
         if (kup >> WK[i] & 1u)
@@ -575,6 +624,11 @@ static void input(void)
     if (bdn & 1u << B_HOME) {
         ui.page = PG_HOME;
         ui.redraw |= 8u;               /* RG_FOOT: the page */
+    }
+    if (bdn & 1u << B_ENV) {             /* ENV: the soundboard */
+        ui.page = PG_SOUND;
+        ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
+        app_say("SOUNDBOARD", "");
     }
     if (bdn & 1u << B_ARP) {
         if (btn & 1u << B_SEL) {         /* SEL + ARP: a random pattern */
@@ -662,10 +716,15 @@ static void leds(void)
     brk_status(&st);
     if (st.playing)
         b |= 1u << B_PLAY;
-    b |= 1u << (ui.page == PG_HOME ? B_HOME : ui.page == PG_GEN ? B_ARP : B_FX);
+    b |= 1u << (ui.page == PG_HOME ? B_HOME : ui.page == PG_GEN ? B_ARP : ui.page == PG_SOUND ? B_ENV : B_FX);
     if (set_dirty)
         b |= 1u << B_SAVE;
-    if (st.slice >= 0 && st.slice < 16)
+    if (ui.page == PG_SOUND) {           /* the soundboard: the sounds playing */
+        uint32_t m = sfx_playing();
+        for (i = 0; i < 16u; i++)
+            if (m >> i & 1u)
+                k |= 1u << WK[i];
+    } else if (st.slice >= 0 && st.slice < 16)
         k |= 1u << WK[st.slice];
     for (i = 0; i < 11u; i++)
         if (st.pads >> i & 1u)
@@ -759,6 +818,17 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
 {
     const brk_fx_t *f = &set.fx;
     t[0] = 0;
+    if (ui.page == PG_SOUND) {
+        const sfx_set_t *x = &set.sfx;
+        if (i == 1) {
+            int_text((int32_t)x->pitch, t);
+            text_cat(t, " ST");
+        } else {
+            int_text((int32_t)((i == 0 ? x->level : i == 2 ? x->echo : x->length) * 100.0f), t);
+            text_cat(t, "%");
+        }
+        return;
+    }
     if (ui.page == PG_HOME) {
         if (i == 0) {
             int32_t v = (int32_t)(f->dj * 100.0f);
@@ -857,6 +927,32 @@ static void draw_wave(const brk_status_t *st, const brk_break_t *b)
 
 /* the slicer: sixteen blocks, one per white key, each with its slice's waveform and number; the one sounding is lit
  * and a key held is outlined */
+/* the soundboard: sixteen tiles in key order, 4 x 4; a sound playing fills its tile, burning down like a fuse */
+static void draw_sounds(uint32_t keys, uint32_t now)
+{
+    uint32_t row, k, m = sfx_playing();
+    char t[4];
+    for (row = 0; row < 2u; row++) {
+        cv_begin(240, 52, C_BLACK);
+        for (k = row * 8u; k < row * 8u + 8u; k++) {
+            int32_t x = 1 + (int32_t)(k % 4u) * 60, y = (int32_t)((k / 4u) % 2u) * 26;
+            int on = (m >> k) & 1u, held = (keys >> WK[k]) & 1u;
+            int fresh = ui.sfx_hit == (int8_t)k && now - ui.sfx_hit_t < 120u;
+            cv_rect(x, y, 58, 24, held || fresh ? C_WHITE : C_BLOCK);
+            if (held || fresh)
+                cv_rect(x + 2, y + 2, 54, 20, C_BLOCK);
+            if (on) {                    /* the fuse: what is left of the sound */
+                int32_t w = (int32_t)((1.0f - sfx_progress((int)k)) * 54.0f);
+                cv_rect(x + 2, y + 2, w < 2 ? 2 : w, 20, C_HI);
+            }
+            int_text((int32_t)k + 1, t);
+            cv_text(x + 4, y + 6, &FONT_T, t, on ? C_BLACK : C_AMB);
+            cv_text(x + 18, y + 5, &FONT_XS, SFX_NAME[k], on ? C_BLACK : C_WHITE);
+        }
+        cv_blit(0, 88u + row * 52u);
+    }
+}
+
 static void draw_blocks(const brk_status_t *st, uint32_t keys)
 {
     uint32_t row, k, c;
@@ -887,7 +983,8 @@ static void draw_foot(const brk_status_t *st)
 {
     static const char *const KN[NPAGES][4] = {{"FILTER", "SWING", "CMPLX", "CRUNCH"},
                                               {"CMPLX", "ANCHOR", "ROLL", "FILL"},
-                                              {"P1", "P2", "P3", "MIX"}};
+                                              {"P1", "P2", "P3", "MIX"},
+                                              {"LEVEL", "PITCH", "ECHO", "LENGTH"}};
     uint32_t i;
     char t[16];
     cv_begin(240, 48, C_BLACK);
@@ -1119,6 +1216,7 @@ void app_ui_init(void)
     ui.intro_drawn = 0u;
     ui.touched = 0u;
     ui.pad_focus = ui.pad_shown = -1;
+    ui.sfx_hit = -1;
     ui.redraw = RG_HEAD;
 }
 
@@ -1149,6 +1247,13 @@ void app_frame(void)
     if (ui.keys != ui.last_keys) {
         ui.last_keys = ui.keys;
         ui.redraw |= RG_BLOCKS;
+    }
+    if (ui.page == PG_SOUND) {           /* the soundboard's fuses burn at about 20 frames a second */
+        uint32_t m = sfx_playing();
+        if (m != ui.sfx_mask || (m && now - ui.sfx_drawn >= 50u) ||
+            (ui.sfx_hit >= 0 && now - ui.sfx_hit_t < 200u && now - ui.sfx_drawn >= 50u))
+            ui.redraw |= RG_BLOCKS;
+        ui.sfx_mask = m;
     }
     if (foot_dirty) {
         foot_dirty = 0u;
@@ -1193,8 +1298,13 @@ void app_frame(void)
         draw_fx(ui.pad_focus, &st, now);
         ui.fx_drawn = now;
     }
-    if (ui.redraw & RG_BLOCKS)
-        draw_blocks(&st, ui.keys);
+    if (ui.redraw & RG_BLOCKS) {
+        if (ui.page == PG_SOUND) {
+            draw_sounds(ui.keys, now);
+            ui.sfx_drawn = now;
+        } else
+            draw_blocks(&st, ui.keys);
+    }
     if (ui.redraw & RG_FOOT)
         draw_foot(&st);
     ui.redraw = 0u;

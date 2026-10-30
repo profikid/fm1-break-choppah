@@ -1,0 +1,34 @@
+# CHOPPAH: the soundboard (ENV): sounds over the break, the fuses, the rewind
+wait 2600
+tap PLAY
+wait 500
+tap ENV
+wait 200
+shot s_board.png
+peakreset
+tapkey w0
+wait 300
+shot s_horn.png
+expect peak_db_max >-20
+key w1 down
+wait 600
+shot s_siren.png
+key w1 up
+tapkey w7
+wait 250
+shot s_fyah.png
+tapkey w5
+tapkey w9
+wait 150
+shot s_multi.png
+turn K2 5
+turn K3 10
+wait 300
+shot s_knobs.png
+tapkey w15
+wait 300
+shot s_rewind.png
+wait 800
+tap HOME
+wait 300
+shot s_home.png

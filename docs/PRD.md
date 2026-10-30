@@ -404,6 +404,15 @@ data first, header last, so a cut upload leaves the old header valid or nothing 
 
 ---
 
+## 11a. Soundboard (built 30 Oct 2026)
+
+ENV opens a soundboard: the white keys fire 16 synthesised sound-system effects over the playing break (air horn,
+dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank,
+scratch, rewind). Four voices; siren and riser sustain while held; REWIND also pulls the break up (spins back up to
+10x, then restarts from the top of the bar). K1 level, K2 pitch, K3 echo (send into the dub delay), K4 length.
+Sounds join after the four effects, before the DJ filter and limiter. Built-in breaks are now six synthesised styles,
+so public builds have several breaks to choose from.
+
 ## 12. Future (post v1)
 
 - Bass layer: sub / reese with 16-step note lane, sidechained to the kick slices.
