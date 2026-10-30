@@ -233,6 +233,7 @@ on the keys, eyes on the crowd.
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
 | B-10 | **Hold a slice key = loop it** at the step grid until released; release rejoins in phase | P0 | |
+| B-10a | **Key loops (done 30 Oct 2026):** each white key has its own loop, tuned with K1–K4 while held: LENGTH 1/8–16 slices, PITCH ±12, START 0–15/16 of the slice, MODE loop / ping-pong / reverse / one shot; SEL resets. Held ≥160 ms (or a knob turned) the strip shows the key's window zoomed, the played part lit, the playhead, repeat dots; a dot marks keys with settings. Works stopped too. Saved with SAVE | P0 | The loop restarts on the tempo grid (engine test); one shot turned back to loop loops again |
 | B-11 | **Two slice keys held = ping-pong** between them each step | P1 | |
 | B-12 | **Scratch scrub:** turning SELECT on HOME scrubs the playhead (vinyl-style), with momentum; release returns to the loop | P1 | Scrub audio is continuous (no gaps) |
 | B-13 | **Choke / mute group:** slices cut each other (mono) or overlap (poly, 4 voices) | P0 | Default mono, like a classic sampler |

@@ -581,6 +581,103 @@ static void test_sfx_echo(void)
     brk_fx_delay_buffer(0, 0u);
 }
 
+/* the white keys' own loops (brk_keyset): length, ping-pong, one shot, pitch, and the loop back after */
+static void test_key_loops(void)
+{
+    brk_keyset_t k;
+    brk_status_t st;
+    uint32_t sl = brk_step_len_samples(), i;
+    float peak, p0;
+    int rev_seen[2] = {0, 0};
+    /* 4 slices (= 4 16ths of a 1-bar break), stopped: it restarts every 4 steps on the tempo */
+    fresh(1);
+    brk_keyset_defaults(&k);
+    k.len = 5u;
+    brk_keyset(2u, &k);
+    brk_key(2, 1);
+    render(buf, sl * 9u / 2u, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.key == 2 && st.key_n == 1u, "a held key loops (key %d, %u repeats after 4.5 steps)", st.key, st.key_n);
+    CHECK(st.key_phase > 0.05f && st.key_phase < 0.25f, "and is an eighth into its second repeat (%.2f)", st.key_phase);
+    CHECK(st.slice == 2 && st.pos >= (float)brk.slice[2] && st.pos < (float)brk.slice[6], "inside its 4-slice window");
+    brk_key(2, 0);
+    render(buf, sl * 5u, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.key == -1 && render(buf, BLOCK, 0, 0, 0) == 0.0f, "let go (stopped): it ends with its window");
+    /* ping-pong: every other repeat backwards */
+    fresh(1);
+    brk_keyset_defaults(&k);
+    k.mode = KEY_PINGPONG;
+    brk_keyset(5u, &k);
+    brk_key(5, 1);
+    for (i = 0; i < 6u; i++) {
+        render(buf, sl / 2u, 0, 0, 0);
+        brk_status(&st);
+        rev_seen[st.key_rev ? 1 : 0] |= 1 << (st.key_n & 1u);
+        render(buf, sl / 2u, 0, 0, 0);
+    }
+    CHECK(rev_seen[0] == 1 && rev_seen[1] == 2, "ping-pong: even repeats forwards, odd ones backwards (%d %d)",
+          rev_seen[0], rev_seen[1]);
+    brk_key(5, 0);
+    /* one shot: once through, then quiet while still held */
+    fresh(1);
+    brk_keyset_defaults(&k);
+    k.mode = KEY_ONESHOT;
+    brk_keyset(4u, &k);
+    brk_key(4, 1);
+    peak = render(buf, sl, 0, 0, 0);
+    render(buf, sl / 4u, 0, 0, 0);
+    CHECK(peak > 0.05f && render(buf, sl * 2u, 0, 0, 0) < 0.001f, "one shot: plays (%.2f), then quiet while held", peak);
+    k.mode = KEY_LOOP;                   /* turned back to a loop while held: it loops again */
+    brk_keyset(4u, &k);
+    render(buf, sl, 0, 0, 0);
+    CHECK(render(buf, sl, 0, 0, 0) > 0.05f, "a one shot turned back to a loop while held loops again");
+    brk_key(4, 0);
+    /* pitch: +12 runs through the break twice as fast */
+    fresh(1);
+    brk_key(0, 1);
+    render(buf, BLOCK, 0, 0, 0);
+    brk_status(&st);
+    p0 = st.pos;
+    render(buf, BLOCK * 4u, 0, 0, 0);
+    brk_status(&st);
+    p0 = st.pos - p0;
+    brk_key(0, 0);
+    fresh(1);
+    brk_keyset_defaults(&k);
+    k.pitch = 12;
+    brk_keyset(0u, &k);
+    brk_key(0, 1);
+    render(buf, BLOCK, 0, 0, 0);
+    brk_status(&st);
+    peak = st.pos;
+    render(buf, BLOCK * 4u, 0, 0, 0);
+    brk_status(&st);
+    CHECK(fabsf((st.pos - peak) / p0 - 2.0f) < 0.05f, "a key's +12 plays at twice the speed (%.2f)", (st.pos - peak) / p0);
+    brk_key(0, 0);
+    /* playing: a whole-bar loop from slice 8 owns the voice; let go, the loop takes over at the next slice */
+    {
+        int32_t seen, sls[40], ok = 1;
+        fresh(1);
+        brk_keyset_defaults(&k);
+        k.len = 7u;                      /* 16 slices: the whole bar */
+        brk_keyset(8u, &k);
+        brk_play(1);
+        render(buf, sl / 2u, 0, 0, 0);
+        brk_key(8, 1);
+        render(buf, sl * 20u, &seen, sls, 40);
+        brk_status(&st);
+        for (i = 1; i < (uint32_t)seen; i++)
+            if (sls[i] != 8)
+                ok = 0;
+        CHECK(ok && st.key == 8 && st.key_n == 1u, "playing, a 1-bar key loop holds for 20 steps (repeats %u)", st.key_n);
+        brk_key(8, 0);
+        render(buf, sl * 2u, &seen, sls, 40);
+        brk_status(&st);
+        CHECK(st.key == -1 && st.slice != 8, "let go, the loop plays on (slice %d)", st.slice);
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -590,6 +687,7 @@ int main(int argc, char **argv)
     test_free_play();
     test_quantised_key();
     test_hold_loops();
+    test_key_loops();
     test_generator();
     test_pads();
     test_fx();

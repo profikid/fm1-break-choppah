@@ -40,7 +40,7 @@ The slicer view, top to bottom:
 - **Header:** play or stop, the break's name, the tempo.
 - **The break:** its waveform, the slice markers, the slice sounding lit, the playhead.
 - **Slice blocks:** sixteen blocks, one per white key, each with its slice's waveform. The slice sounding is lit;
-  a key held is outlined.
+  a key held is outlined; a dot marks a key with a loop of its own (§3, key loops).
 - **Pads:** the eleven black-key pads, lit while held.
 - **Knobs:** the page's four knobs and their values.
 
@@ -49,13 +49,37 @@ The slicer view, top to bottom:
 | Control | Does |
 | --- | --- |
 | PLAY | Play / stop. HOME + PLAY: back to bar 1 |
-| White keys | Slices 1–16. Playing: at the next 16th. Stopped: at once. Held: that slice at every 16th |
+| White keys | Slices 1–16. Playing: at the next 16th. Stopped: at once. Held: the key loops (below), playing or stopped |
 | SELECT | Tempo, 1 BPM a detent (0.1 with SEL held). Tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
 | ALGORITHM | The next or previous break: five built-in styles (SYNTH AMEN, SYNTH THINK, SYNTH APACHE, SYNTH FUNKY, JUNGLE ROLL), then 13 recorded Amens (Cyberworm's loops: AMEN10 135 … VINYL, slowest first) |
 | MASTER | Volume |
 
 ![A slice held](img/screen-held.png "Slice 10 held")
+
+### Key loops
+
+Hold a white key and it loops: a window that starts in its slice plays again and again in time, until you let go
+(playing, the break carries on from there; stopped, it ends with the window). Held for a moment, the slice blocks
+give way to **the key's view**: its window zoomed to the screen's width, the part this repeat has played lit (from
+the right when it runs backwards), the playhead, the slice lines inside the window, this repeat's progress and a dot
+for each repeat. A quick tap plays the slice once and keeps the blocks.
+
+While the key is held, **K1–K4 set its loop**, for that key only (SAVE keeps them; a key with a loop of its own has a
+dot on its block):
+
+| Knob | Sets | Range |
+| --- | --- | --- |
+| K1 LENGTH | How long the window is, shown as music for this break | 1/8 of a slice … 16 slices (2-bar breaks: 1/64 … 2 BAR) |
+| K2 PITCH | The key's own pitch, on top of OCT | −12 … +12 semitones |
+| K3 START | Where in the slice the window starts | 0 … 94 % of the slice |
+| K4 MODE | LOOP · PING-PONG (every other repeat backwards) · REVERSE · ONE SHOT (once, then quiet while held) | |
+
+SEL while a key is held puts its loop back to one slice, no pitch, from the start, LOOP. With several keys held the
+last one pressed loops; let it go and the lowest still held takes over. Pads still work on top: REV turns the loop
+round, ROLL and FREEZE take it over while held.
+
+![A key held: a half-bar ping-pong loop](img/screen-keyloop.png "Key 5 held, 1/2 bar, ping-pong")
 
 ## 4. The pads
 

@@ -26,7 +26,7 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 
 | Control | Does |
 | --- | --- |
-| White keys 1–16 | Slices: at the next 16th while playing, at once while stopped; hold to loop |
+| White keys 1–16 | Slices: at the next 16th while playing, at once while stopped. **Hold to loop**: the key's view shows its window and playhead, and **K1–K4 set that key's loop**: length (1/64 … 2 bars), pitch, start, mode (loop, ping-pong, reverse, one shot); SEL resets it |
 | Black keys 1–11 | Pads, while held: ROLL 1/8 · 1/16 · 1/32 · REVERSE · FREEZE · HALF · TAPE STOP · GATE · RANDOM · FILTER THROW · DUB DELAY. Each shows its own animation while held, and **K1–K4 tune it** (rate, decay, length, speed, feedback…) |
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
 | SELECT | Tempo (SEL held: 0.1 BPM) · tap SEL four times: tap tempo |

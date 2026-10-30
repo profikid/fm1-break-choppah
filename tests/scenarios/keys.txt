@@ -1,0 +1,51 @@
+# CHOPPAH: a white key held loops its slice and shows it; K1-K4 set its loop (length, pitch, start, mode), SEL
+# puts it back; a quick tap keeps the blocks
+#   app/build/host/choppah_host tests/scenarios/keys.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 800
+tapkey w2
+wait 120
+shot k_tap.png
+wait 400
+key w4 down
+wait 700
+peakreset
+wait 400
+expect peak_db_max >-30
+shot k_hold.png
+turn K1 2 10
+wait 900
+shot k_len_quarter.png
+turn K4 1 10
+wait 900
+shot k_pingpong.png
+turn K2 5 10
+turn K3 4 10
+wait 700
+shot k_pitch_start.png
+key w4 up
+wait 500
+shot k_dot.png
+key w9 down
+wait 300
+turn K4 3 10
+wait 600
+shot k_oneshot.png
+tap SEL
+wait 500
+shot k_reset.png
+key w9 up
+wait 400
+tap PLAY
+wait 600
+key w12 down
+wait 300
+turn K1 2 10
+wait 1200
+peakreset
+wait 300
+expect peak_db_max >-30
+shot k_stopped.png
+key w12 up
+wait 600

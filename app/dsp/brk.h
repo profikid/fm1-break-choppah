@@ -68,6 +68,21 @@ typedef struct {
     float rnd_pitch;                     /* 0..12 semitones of random pitch */
 } brk_padset_t;
 extern const char *const BRK_ROLL_DIV_NAME[BRK_ROLL_DIVS];
+
+/* the white keys' own settings, tuned with K1-K4 while a key is held (PRD B-10a). Held, a key loops a window that
+ * starts in its slice: LENGTH slices long (1/8 .. 16 of them), from START sixteenths into the slice, at PITCH, in
+ * MODE. The loop restarts every LENGTH on the tempo's grid, playing or stopped. */
+#define BRK_KEYS 16u
+#define BRK_KEY_LENS 8u                  /* 1/8 1/4 1/2 1 2 4 8 16 slices */
+enum { KEY_LOOP, KEY_PINGPONG, KEY_REVERSE, KEY_ONESHOT, BRK_KEY_MODES };
+typedef struct {
+    uint8_t len;                         /* 0..BRK_KEY_LENS-1: 3 = one slice */
+    int8_t pitch;                        /* -12..+12 semitones */
+    uint8_t start;                       /* 0..15: sixteenths of the slice in */
+    uint8_t mode;                        /* KEY_* */
+} brk_keyset_t;                          /* 4 bytes: written to the render as one word */
+extern const float BRK_KEY_SLICES[BRK_KEY_LENS];
+extern const char *const BRK_KEY_MODE_NAME[BRK_KEY_MODES];
 extern const char *const BRK_GATE_DIV_NAME[BRK_GATE_DIVS];
 
 /* what the UI shows (a copy, read any time) */
@@ -85,6 +100,12 @@ typedef struct {
     float gate;                          /* the gate's level now, 0..1 */
     float phase;                         /* how far into the step, 0..1 */
     float rewind;                        /* a rewind's progress, 0..1 (0: none) */
+    int32_t key;                         /* the white key looping (its slice), -1 none */
+    float key_lo, key_w;                 /* its window: from key_lo, key_w samples of the break (it may run on round
+                                          * the break's end) */
+    float key_phase;                     /* how far into this repeat, 0..1 */
+    uint16_t key_n;                      /* repeats since the key went down */
+    uint8_t key_rev;                     /* this repeat plays backwards */
 } brk_status_t;
 
 void brk_init(void);
@@ -100,9 +121,11 @@ float brk_get_tempo(void);
 void brk_pitch(float semitones);         /* -24..+24, on top of the tempo's repitch */
 void brk_swing(float s);                 /* 0.5 straight .. 0.75 */
 
-/* the white keys: a press plays slice s at the next step (or at once when stopped: free play); held, it plays at
- * every step until released (hold to loop) */
+/* the white keys: a press plays slice s at the next step (or at once when stopped: free play); held, it loops its
+ * window (brk_keyset) until released, the last key pressed winning */
 void brk_key(int slice, int down);
+void brk_keyset_defaults(brk_keyset_t *k);   /* one slice, no pitch, from the slice's start, LOOP */
+void brk_keyset(uint32_t key, const brk_keyset_t *k);   /* main loop; the next repeat follows it */
 void brk_pad(int pad, int down);
 void brk_gen(const brk_gen_t *g);
 void brk_padset_defaults(brk_padset_t *p);

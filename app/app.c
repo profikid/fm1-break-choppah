@@ -23,7 +23,7 @@
 #endif
 
 /* ------------------------------------------------------------------ settings --- */
-#define SET_MAGIC 0x33504843u            /* "CHP3" (+ the pads' settings, the soundboard): another magic loads defaults */
+#define SET_MAGIC 0x34504843u            /* "CHP4" (+ the white keys' loops): another magic loads defaults */
 typedef struct {
     uint32_t magic;
     uint16_t tempo_x10;                  /* 400..3000 */
@@ -35,6 +35,7 @@ typedef struct {
     uint8_t rsv[15];
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
+    brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
 } settings_t;
 static settings_t set;
 static uint8_t set_dirty;
@@ -55,6 +56,11 @@ static void settings_defaults(void)
     set.brk = 0u;                        /* the first break: the bank's first when there is one (app_init) */
     brk_padset_defaults(&set.pads);
     sfx_defaults(&set.sfx);
+    {
+        uint32_t k;
+        for (k = 0; k < BRK_KEYS; k++)
+            brk_keyset_defaults(&set.keys[k]);
+    }
 }
 
 static void settings_apply(void)
@@ -67,6 +73,11 @@ static void settings_apply(void)
     brk_fx_tempo((float)set.tempo_x10 * 0.1f);
     brk_padset(&set.pads);
     sfx_set(&set.sfx);
+    {
+        uint32_t k;
+        for (k = 0; k < BRK_KEYS; k++)
+            brk_keyset(k, &set.keys[k]);
+    }
 }
 
 static void changed(void)
@@ -243,7 +254,10 @@ static struct {
     int8_t sfx_hit;                      /* the soundboard key pressed last, and when */
     uint32_t sfx_hit_t, sfx_drawn, sfx_mask;
     int8_t pad_focus;                    /* the pad held last (its animation, K1-K4 tune it); -1 none */
-    int8_t pad_shown;                    /* the pad the screen shows now */
+    int8_t key_focus;                    /* the white key held that loops (its view, K1-K4 tune it); -1 none */
+    uint8_t key_turned;                  /* a knob turned while it is held: its view at once */
+    uint32_t key_since;                  /* when it was pressed */
+    int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
     uint32_t pad_since, fx_drawn;        /* when it was pressed; the animation's last frame */
     float reel;                          /* the tape stop's reels, turns */
     uint8_t redraw;                      /* RG_* bits: the regions to draw again */
@@ -570,6 +584,97 @@ static void pad_knob_turn(int pad, int k, int32_t d)
     changed();
 }
 
+/* ------------------------------------------------- the white keys' own loops --- */
+static const char *const KEY_KNOB[4] = {"LENGTH", "PITCH", "START", "MODE"};
+#define KEY_SHOW_MS 160u                 /* a key held this long (or a knob turned) takes the strip: taps don't */
+
+/* the key K1-K4 tune: the white key held, unless a pad was pressed after it */
+static int key_tuned(void)
+{
+    if (ui.key_focus < 0 || ui.page == PG_SOUND)
+        return -1;
+    return ui.pad_focus >= 0 && ui.pad_since > ui.key_since ? -1 : ui.key_focus;
+}
+
+static float key_sps(const brk_break_t *b)   /* 16ths in a slice of this break */
+{
+    return b && b->nslices ? (float)(b->bars * BRK_STEPS_PER_BAR) / (float)b->nslices : 1.0f;
+}
+
+/* a length in 16ths as music: 0.5 -> "1/32", 2 -> "1/8", 16 -> "1 BAR", 24 -> "1.5 BAR" */
+static void sixteenths_text(float steps, char *t)
+{
+    static const uint32_t DEN[7] = {2u, 4u, 8u, 16u, 32u, 64u, 128u};
+    uint32_t i;
+    t[0] = 0;
+    if (steps >= 16.0f) {
+        tenths_text((int32_t)(steps / 16.0f * 10.0f + 0.5f), t);
+        if (t[1] == '.' && t[2] == '0')
+            t[1] = 0;                    /* "1.0" -> "1" */
+        else if (t[2] == '.' && t[3] == '0')
+            t[2] = 0;
+        text_cat(t, " BAR");
+        return;
+    }
+    for (i = 0; i < 7u; i++) {           /* the smallest denominator it is a whole number of */
+        float n = steps * (float)DEN[i] / 16.0f;
+        if (n - (float)(int32_t)(n + 0.001f) < 0.01f && n >= 0.99f) {
+            char d[8];
+            int_text((int32_t)(n + 0.5f), t);
+            text_cat(t, "/");
+            int_text((int32_t)DEN[i], d);
+            text_cat(t, d);
+            return;
+        }
+    }
+    text_cat(t, "1/128");
+}
+
+static void key_knob_value(int key, int k, char *t)
+{
+    const brk_keyset_t *ks = &set.keys[key & 15];
+    t[0] = 0;
+    if (k == 0)
+        sixteenths_text(BRK_KEY_SLICES[ks->len % BRK_KEY_LENS] * key_sps(brk_get_break()), t);
+    else if (k == 1) {
+        t[0] = ks->pitch > 0 ? '+' : 0;
+        t[1] = 0;
+        int_text(ks->pitch, t + (ks->pitch > 0));
+        text_cat(t, " ST");
+    } else if (k == 2)
+        pct_text((float)ks->start / 16.0f, t);
+    else
+        text_cat(t, BRK_KEY_MODE_NAME[ks->mode % BRK_KEY_MODES]);
+}
+
+static void key_knob_turn(int key, int k, int32_t d)
+{
+    brk_keyset_t *ks = &set.keys[key & 15];
+    char t[16], n[16];
+    if (k == 0)
+        ks->len = (uint8_t)clamp((int32_t)ks->len + d, 0, BRK_KEY_LENS - 1);
+    else if (k == 1)
+        ks->pitch = (int8_t)clamp((int32_t)ks->pitch + d, -12, 12);
+    else if (k == 2)
+        ks->start = (uint8_t)clamp((int32_t)ks->start + d, 0, 15);
+    else if (k == 3)
+        ks->mode = (uint8_t)clamp((int32_t)ks->mode + d, 0, BRK_KEY_MODES - 1);
+    else
+        return;
+    ui.key_turned = 1u;
+    key_knob_value(key, k, t);
+    n[0] = 0;
+    text_cat(n, KEY_KNOB[k]);
+    app_say(n, t);
+    changed();
+}
+
+static int key_custom(int key)           /* the key has settings of its own (a dot on its block) */
+{
+    const brk_keyset_t *ks = &set.keys[key & 15];
+    return ks->len != 3u || ks->pitch || ks->start || ks->mode != KEY_LOOP;
+}
+
 static void input(void)
 {
     uint32_t keys = plat_keys(), btn = plat_buttons(), now = plat_ms(), i;
@@ -591,10 +696,23 @@ static void input(void)
                 sfx_release((int)i);
             continue;
         }
-        if (kdn >> WK[i] & 1u)
+        if (kdn >> WK[i] & 1u) {
             brk_key((int)i, 1);
+            ui.key_focus = (int8_t)i;    /* the engine loops the key pressed last */
+            ui.key_since = now;
+            ui.key_turned = 0u;
+        }
         if (kup >> WK[i] & 1u)
             brk_key((int)i, 0);
+    }
+    if (ui.key_focus >= 0 && (ui.page == PG_SOUND || !(keys >> WK[ui.key_focus] & 1u))) {
+        ui.key_focus = -1;               /* let go: the lowest key still held loops (as in the engine), or none */
+        if (ui.page != PG_SOUND)
+            for (i = 16u; i-- > 0u;)
+                if (keys >> WK[i] & 1u) {
+                    ui.key_focus = (int8_t)i;
+                    ui.key_since = now;
+                }
     }
     for (i = 0; i < 11u; i++) {          /* black keys: the pads, held; the last one pressed has the screen */
         if (kdn >> BK[i] & 1u) {
@@ -647,7 +765,12 @@ static void input(void)
         ui.page = PG_FX;
         ui.redraw |= 8u;               /* RG_FOOT: the page */
     }
-    if (bdn & 1u << B_SEL && ui.page == PG_HOME && !(btn & 1u << B_ARP))
+    if (bdn & 1u << B_SEL && key_tuned() >= 0) {   /* SEL while a key is held: its loop back to the defaults */
+        brk_keyset_defaults(&set.keys[key_tuned()]);
+        ui.key_turned = 1u;
+        changed();
+        app_say("KEY", "RESET");
+    } else if (bdn & 1u << B_SEL && ui.page == PG_HOME && !(btn & 1u << B_ARP))
         tap_tempo(now);
     if (bdn & 1u << B_SAVE) {
         app_say("SAVE", plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 ? "DONE" : "FAILED");
@@ -698,6 +821,8 @@ static void input(void)
             }
         } else if (k == EN_PRESET)
             app_say("PATTERN", "1");     /* patterns arrive in M2 */
+        else if (key_tuned() >= 0)       /* a white key held: K1-K4 tune its loop */
+            key_knob_turn(key_tuned(), k - EN_K1, d);
         else if (ui.pad_focus >= 0)      /* a pad held: K1-K4 tune it */
             pad_knob_turn(ui.pad_focus, k - EN_K1, d);
         else
@@ -973,6 +1098,8 @@ static void draw_blocks(const brk_status_t *st, uint32_t keys)
                 }
             int_text((int32_t)k + 1, t);
             cv_text(x + 3, 35, &FONT_T, t, on ? C_BLACK : have ? C_AMB : C_LINE);
+            if (have && key_custom((int)k))  /* a loop of its own: a dot */
+                cv_rect(x + 21, 39, 4, 4, on ? C_BLACK : C_HI);
         }
         cv_blit(0, 88u + row * 52u);
     }
@@ -996,12 +1123,18 @@ static void draw_foot(const brk_status_t *st)
     }
     for (i = 0; i < 4u; i++) {
         const char *name = KN[ui.page][i];
-        if (ui.pad_focus >= 0) {         /* a pad held: its own settings */
-            name = PAD_KNOB[ui.pad_focus][i];
+        if (ui.shown >= 100) {           /* a white key held: its loop */
+            cv_text(4 + (int32_t)i * 60, 18, &FONT_T, KEY_KNOB[i], C_HI);
+            key_knob_value(ui.shown - 100, (int)i, t);
+            cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
+            continue;
+        }
+        if (ui.shown >= 0) {             /* a pad held: its own settings */
+            name = PAD_KNOB[ui.shown][i];
             if (!name)
                 continue;
             cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, C_HI);
-            pad_knob_value(ui.pad_focus, (int)i, t);
+            pad_knob_value(ui.shown, (int)i, t);
             cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
             continue;
         }
@@ -1207,6 +1340,102 @@ static void draw_fx(int pad, const brk_status_t *st, uint32_t now)
     cv_blit(0, FX_Y);
 }
 
+/* the held key's view: its loop window zoomed to the strip's width, the part this repeat has played lit, the
+ * playhead, the slice lines inside it, and a counter of repeats along the bottom */
+#define KW_X 4
+#define KW_N 232                         /* columns of waveform */
+static uint8_t key_px[KW_N];             /* the window's shape (cached: it changes with the key or its settings) */
+static uint32_t key_px_sig;
+
+static void key_window(const brk_break_t *b, int key, float *lo, float *w)   /* (as the engine's key_begin) */
+{
+    const brk_keyset_t *ks = &set.keys[key & 15];
+    uint32_t s = (uint32_t)key < b->nslices ? (uint32_t)key : 0u;
+    *lo = (float)b->slice[s] + (float)(ks->start & 15u) / 16.0f * (float)(b->slice[s + 1] - b->slice[s]);
+    *w = BRK_KEY_SLICES[ks->len % BRK_KEY_LENS] * key_sps(b) * (float)b->len / (float)(b->bars * BRK_STEPS_PER_BAR);
+    if (*w < 32.0f)
+        *w = 32.0f;
+}
+
+static void draw_key(int key, const brk_status_t *st, uint32_t now)
+{
+    const brk_break_t *b = brk_get_break();
+    const brk_keyset_t *ks = &set.keys[key & 15];
+    char t[24], v[16];
+    float lo, w, ph;
+    uint32_t c, sig, len;
+    int32_t px = -1, x, live;
+    (void)now;
+    cv_begin(240, 96, C_BLACK);
+    if (!b || !b->len || !b->pcm) {
+        cv_blit(0, FX_Y);
+        return;
+    }
+    len = b->len;
+    key_window(b, key, &lo, &w);
+    sig = (uint32_t)lo ^ (uint32_t)w << 9 ^ len << 3 ^ (uint32_t)key << 27;
+    if (sig != key_px_sig) {             /* the window's shape: the peak of each column (wrapping round the end) */
+        key_px_sig = sig;
+        for (c = 0; c < KW_N; c++) {
+            uint32_t i0 = (uint32_t)(lo + w * (float)c / (float)KW_N), i1 = (uint32_t)(lo + w * (float)(c + 1u) / (float)KW_N);
+            uint32_t i, stp = (i1 - i0) / 24u + 1u, pk = 0u;
+            for (i = i0; i <= i1; i += stp) {
+                int32_t a = b->pcm[i % len];
+                uint32_t m = (uint32_t)(a < 0 ? -a : a);
+                if (m > pk)
+                    pk = m;
+            }
+            key_px[c] = (uint8_t)(pk * 28u / 32768u);
+        }
+    }
+    live = st->key == key;
+    ph = live ? st->key_phase : 0.0f;
+    if (live) {                          /* the playhead, while it is inside the window */
+        float rel = st->pos - lo;
+        if (rel < 0.0f)
+            rel += (float)len;
+        if (rel >= 0.0f && rel < w)
+            px = (int32_t)(rel / w * (float)KW_N);
+    }
+    /* the title: KEY 5, its length and mode; on the right its pitch */
+    t[0] = 0;
+    text_cat(t, "KEY ");
+    int_text(key + 1, v);
+    text_cat(t, v);
+    text_cat(t, " ");
+    sixteenths_text(BRK_KEY_SLICES[ks->len % BRK_KEY_LENS] * key_sps(b), v);
+    text_cat(t, v);
+    x = cv_text(6, 0, &FONT_B, t, C_HI);
+    cv_text(x + 8, 4, &FONT_XS, BRK_KEY_MODE_NAME[ks->mode % BRK_KEY_MODES], C_GRAY);
+    if (ks->pitch) {
+        key_knob_value(key, 1, v);
+        cv_text(234 - text_w(&FONT_T, v), 2, &FONT_T, v, C_AMB);
+    }
+    /* the window: played this repeat lit (from the right when backwards), the rest dim */
+    for (c = 0; c < KW_N; c++) {
+        int32_t h = key_px[c];
+        int lit = live && (st->key_rev ? (int32_t)c >= px : (int32_t)c <= px) && px >= 0;
+        cv_rect(KW_X + (int32_t)c, FX_MID - 4 - h, 1, 2 * h + 1, lit ? C_HI : C_DIM);
+    }
+    for (c = 1; c <= b->nslices; c++) {  /* the slice lines inside the window */
+        float rel = (float)b->slice[c % b->nslices] - lo;
+        if (rel <= 0.0f)
+            rel += (float)len;
+        if (rel > 0.0f && rel < w)
+            cv_rect(KW_X + (int32_t)(rel / w * (float)KW_N), 22, 1, 5, C_GRAY);
+    }
+    if (px >= 0)
+        cv_rect(KW_X + px, 20, 2, 70, C_WHITE);
+    /* the bottom: this repeat's progress, then a dot for each repeat (sixteen, then round again) */
+    cv_rect(KW_X, 88, (int32_t)(ph * 120.0f), 3, live ? C_HI : C_LINE);
+    cv_rect(KW_X + (int32_t)(ph * 120.0f), 88, 120 - (int32_t)(ph * 120.0f), 3, C_BLOCK);
+    for (c = 0; c < 16u; c++) {
+        int on = live && c <= (uint32_t)(st->key_n % 16u);
+        cv_rect(132 + (int32_t)c * 7, 86, 5, 6, on ? (c == st->key_n % 16u ? C_WHITE : C_AMB) : C_BLOCK);
+    }
+    cv_blit(0, FX_Y);
+}
+
 void app_ui_init(void)
 {
     lcd_fill(0, 0, 240, 240, C_BLACK);
@@ -1215,7 +1444,8 @@ void app_ui_init(void)
     ui.intro_t0 = plat_ms();
     ui.intro_drawn = 0u;
     ui.touched = 0u;
-    ui.pad_focus = ui.pad_shown = -1;
+    ui.pad_focus = ui.key_focus = -1;
+    ui.shown = -1;
     ui.sfx_hit = -1;
     ui.redraw = RG_HEAD;
 }
@@ -1259,16 +1489,24 @@ void app_frame(void)
         foot_dirty = 0u;
         ui.redraw |= RG_FOOT;
     }
-    if (ui.pad_focus != ui.pad_shown) {  /* a pad taken or let go: the animation, or the blocks back */
-        if (ui.pad_focus >= 0 && ui.pad_shown < 0)
-            lcd_fill(0, 86, 240, 106, C_BLACK);
-        ui.pad_shown = ui.pad_focus;
-        ui.redraw |= RG_FOOT | (ui.pad_focus >= 0 ? RG_FX : RG_BLOCKS);
-        if (ui.pad_focus < 0)
-            lcd_fill(0, 86, 240, 106, C_BLACK);
+    {                                    /* the strip: a held key's loop, a held pad's animation, or the blocks */
+        int16_t want = -1;
+        int kt = key_tuned();
+        if (kt >= 0 && (ui.key_turned || now - ui.key_since >= KEY_SHOW_MS))
+            want = (int16_t)(100 + kt);
+        else if (ui.pad_focus >= 0)
+            want = ui.pad_focus;
+        if (want != ui.shown) {
+            if (want >= 0 && ui.shown < 0)
+                lcd_fill(0, 86, 240, 106, C_BLACK);
+            ui.shown = want;
+            ui.redraw |= RG_FOOT | (want >= 0 ? RG_FX : RG_BLOCKS);
+            if (want < 0)
+                lcd_fill(0, 86, 240, 106, C_BLACK);
+        }
     }
-    if (ui.pad_focus >= 0) {             /* the animation runs at about 30 frames a second */
-        if (ui.pad_focus == PAD_TAPESTOP)
+    if (ui.shown >= 0) {                 /* the animation runs at about 30 frames a second */
+        if (ui.shown == PAD_TAPESTOP)
             ui.reel += 0.06f * st.tape;
         if (now - ui.fx_drawn >= 33u)
             ui.redraw |= RG_FX;
@@ -1295,7 +1533,10 @@ void app_frame(void)
     if (ui.redraw & RG_WAVE)
         draw_wave(&st, b);
     if (ui.redraw & RG_FX) {
-        draw_fx(ui.pad_focus, &st, now);
+        if (ui.shown >= 100)
+            draw_key(ui.shown - 100, &st, now);
+        else if (ui.shown >= 0)
+            draw_fx(ui.shown, &st, now);
         ui.fx_drawn = now;
     }
     if (ui.redraw & RG_BLOCKS) {
