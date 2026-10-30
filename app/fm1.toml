@@ -1,0 +1,16 @@
+# CHOPPAH's build settings (fm1-base's tools/build.py: ./build.sh)
+name = "CHOPPAH"               # the build's files: choppah.fwsc, choppah-X.Y.fwsc
+id_prefix = "FM-1_86"          # package identity: dev FM-1_8600, releases FM-1_86XXYYZZ (PRD Q5: check it is free)
+usb_manufacturer = "CHOPPAH"
+usb_product = "CHOPPAH FM-1"
+ble = false                    # the radio stays off: its RAM and flash go to the breaks (PRD N-8)
+usb_audio_in = true            # the FM-1 recordable over USB (PRD A-50)
+usb_audio_out = false
+words = "words.tsv"
+include = ["dsp"]
+o2 = ["dsp/*.c"]               # the engine, at -O2
+# the site (tools/make_site.py)
+tagline = "An Amen chopper for the FM-1"
+repo = "https://github.com/profikid/fm1-break-choppah"
+licence = "MPL-2.0"
+credits = "Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita (Hügelton Instruments)."

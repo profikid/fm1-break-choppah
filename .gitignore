@@ -1,0 +1,7 @@
+build/
+app/build/
+firmware/stock/
+*.fwsc
+*.rfm1
+__pycache__/
+.DS_Store
