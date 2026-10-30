@@ -474,7 +474,7 @@ static void test_styles(void)
         if (!ok || seen < 16 || brk.nslices != 16u || brk.len > 81920u)
             bad++;
     }
-    CHECK(!bad && brk_synth_count() >= 6u, "%u styles, %u bad", brk_synth_count(), bad);
+    CHECK(!bad && brk_synth_count() >= 5u, "%u styles, %u bad", brk_synth_count(), bad);
 }
 
 /* the soundboard: every sound sounds, stays inside -1..1 and ends; the siren holds until let go */

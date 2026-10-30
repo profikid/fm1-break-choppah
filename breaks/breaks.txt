@@ -1,6 +1,6 @@
 # CHOPPAH's breaks: every WAV in this folder, and which of them go into the firmware.
 # ./build.sh turns the lines marked * into the bank built into the firmware (app/bank_data.h, generated),
-# in this order, after the six built-in synth breaks. Swap breaks in or out by moving the *; the firmware
+# in this order, after the five built-in synth breaks. Swap breaks in or out by moving the *; the firmware
 # has room for about 13 at 2 bars (./build.sh says if they don't fit; tools/prep_breaks.py --list ... --dry-run).
 #
 #   file:  relative to this folder   bpm:   the loop's tempo   bars: how many bars go into the firmware

@@ -31,7 +31,7 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
 | SELECT | Tempo (SEL held: 0.1 BPM) · tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
-| ALGORITHM | The next break (six synth styles, then 13 recorded Amens) |
+| ALGORITHM | The next break (five synth styles, then 13 recorded Amens) |
 | ENV | SOUNDBOARD: the white keys fire 16 sound-system effects over the break: air horn, dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank, scratch, rewind (pull-up). K1 level · K2 pitch · K3 echo into the dub delay · K4 length |
 | HOME | PERFORM: K1 DJ filter · K2 swing · K3 complexity · K4 crunch |
 | ARP | GENERATOR: complexity · anchor · roll · fill · SEL + ARP: random pattern |
@@ -40,8 +40,8 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 
 ## Breaks
 
-CHOPPAH has 19 breaks on ALGORITHM: six played by a small drum synth when chosen (Amen, Think, Apache and
-Funky-drummer-style grooves, a jungle roller and a reggae one drop), then 13 recorded Amens, 2 bars each.
+CHOPPAH has 18 breaks on ALGORITHM: five played by a small drum synth when chosen (Amen, Think, Apache and
+Funky-drummer-style grooves and a jungle roller), then 13 recorded Amens, 2 bars each.
 
 The recordings are in [`breaks/`](breaks/): 60 Amen loops by Dmitriy "Cyberworm" Vasilyev, royalty free.
 [`breaks/breaks.txt`](breaks/breaks.txt) lists them all and marks with `*` the 13 that go into the firmware (the

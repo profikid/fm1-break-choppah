@@ -2,7 +2,7 @@
 /* CHOPPAH's built-in breaks: a small drum synth plays one bar of a style into RAM when the break is chosen, so the
  * firmware has breaks to chop with no recording on board (PRD Q1). The styles are drawn after the shapes of
  * well-known breaks and grooves (the Amen's kicks and ghost snares, Think's open hats, Apache's toms, a funky
- * drummer's syncopation, a jungle roller, a reggae one drop); they are new patterns, not samples. */
+ * drummer's syncopation, a jungle roller); they are new patterns, not samples. */
 #include "brk_synth.h"
 #include "brk_math.h"
 
@@ -23,7 +23,6 @@ static const style_t STYLE[] = {
     {"SYNTH APACHE", 112.0f, "K.T.S.TTK.T.S.Ts", "h.h.h.h.h.h.h.h.", 120.0f, 230.0f, 0.9978f},
     {"SYNTH FUNKY", 100.0f, "K.K.S..sK.Ks.S.s", "HhHhHhHOHhHhHhHh", 140.0f, 200.0f, 0.9981f},
     {"JUNGLE ROLL", 172.0f, "K.....S..KK...S.", "h.h.h.h.h.h.h.hO", 160.0f, 180.0f, 0.9975f},
-    {"ONE DROP", 76.0f, "..R.....B.....R.", "h.hHh.hHh.hHh.hH", 110.0f, 260.0f, 0.9985f},
 };
 #define NSTYLES (sizeof STYLE / sizeof STYLE[0])
 

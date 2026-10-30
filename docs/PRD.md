@@ -395,7 +395,7 @@ data first, header last, so a cut upload leaves the old header valid or nothing 
 
 | # | Question | Default if not decided |
 | --- | --- | --- |
-| Q1 | **Built-in breaks.** The Amen and other recorded breaks are copyrighted recordings; X0X ships none. Ship user-loaded only, plus a synthesised "Amen-like" break played by an internal kit? | **Decided 30 Oct 2026:** six synthesised styles plus 13 recorded Amens built in: Cyberworm's loops, which he offers royalty free. All 60 WAVs live in `breaks/`; `breaks/breaks.txt` picks the 13 (all 60 at 2 bars would need ~1.9 MB, the firmware has ~448 KB for breaks) |
+| Q1 | **Built-in breaks.** The Amen and other recorded breaks are copyrighted recordings; X0X ships none. Ship user-loaded only, plus a synthesised "Amen-like" break played by an internal kit? | **Decided 30 Oct 2026:** five synthesised styles plus 13 recorded Amens built in: Cyberworm's loops, which he offers royalty free. All 60 WAVs live in `breaks/`; `breaks/breaks.txt` picks the 13 (all 60 at 2 bars would need ~1.9 MB, the firmware has ~448 KB for breaks) |
 | Q2 | Name: CHOPPAH / BREAK CHOPPAH / AMEN-1? | CHOPPAH |
 | Q3 | Licence: MPL-2.0 (like fm1-base) or GPL-3.0 (needed if we port GPL code such as X0X's BB Gen port)? | MPL-2.0, write the generator from scratch |
 | Q4 | Default sample rate 22.05 kHz (more breaks, crunchier) or 32 kHz (cleaner)? | 22.05 kHz, per-break override |
@@ -410,7 +410,7 @@ ENV opens a soundboard: the white keys fire 16 synthesised sound-system effects 
 dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank,
 scratch, rewind). Four voices; siren and riser sustain while held; REWIND also pulls the break up (spins back up to
 10x, then restarts from the top of the bar). K1 level, K2 pitch, K3 echo (send into the dub delay), K4 length.
-Sounds join after the four effects, before the DJ filter and limiter. Built-in breaks are now six synthesised styles,
+Sounds join after the four effects, before the DJ filter and limiter. Built-in breaks are now five synthesised styles and 13 recorded Amens,
 so public builds have several breaks to choose from.
 
 ## 12. Future (post v1)

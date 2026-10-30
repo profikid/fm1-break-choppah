@@ -52,7 +52,7 @@ The slicer view, top to bottom:
 | White keys | Slices 1–16. Playing: at the next 16th. Stopped: at once. Held: that slice at every 16th |
 | SELECT | Tempo, 1 BPM a detent (0.1 with SEL held). Tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
-| ALGORITHM | The next or previous break: six built-in styles (SYNTH AMEN, SYNTH THINK, SYNTH APACHE, SYNTH FUNKY, JUNGLE ROLL, ONE DROP), then 13 recorded Amens (Cyberworm's loops: AMEN10 135 … VINYL, slowest first) |
+| ALGORITHM | The next or previous break: five built-in styles (SYNTH AMEN, SYNTH THINK, SYNTH APACHE, SYNTH FUNKY, JUNGLE ROLL), then 13 recorded Amens (Cyberworm's loops: AMEN10 135 … VINYL, slowest first) |
 | MASTER | Volume |
 
 ![A slice held](img/screen-held.png "Slice 10 held")

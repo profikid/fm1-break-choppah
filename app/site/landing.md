@@ -7,7 +7,7 @@ rearranges the break as it plays, and ring modulator, hi-pass, flanger, degrader
 ![CHOPPAH playing: the break's waveform with the slice sounding lit, sixteen slice blocks below, the pads and the knobs](manual/img/screen-slicer.png "CHOPPAH's slicer view")
 
 Version {{VERSION}}. Installing is at your own risk; the installer can put M-VAVE's own firmware back. The public
-build has 19 breaks: six synthesised grooves and 13 recorded Amens (Cyberworm's royalty-free loops).
+build has 18 breaks: five synthesised grooves and 13 recorded Amens (Cyberworm's royalty-free loops).
 
 - [Try it in the browser](emu/): the same code the FM-1 runs, with sound. No FM-1 needed.
 - [Install](install/): from Chrome or Edge, with the FM-1 connected by USB.
