@@ -1,0 +1,73 @@
+# Build CHOPPAH and publish its site (front page, web installer, browser emulator, manual, firmware download) to
+# GitHub Pages. A tag vX.Y also attaches the firmware to a GitHub release. The version comes from ./VERSION.
+name: Build and publish
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Version
+        run: echo "VERSION=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
+
+      - name: Packages (Pillow with libraqm for the fonts)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq python3-pil libraqm0 rsync
+
+      - name: JieLi toolchain and AC79 SDK files
+        run: sh scripts/bootstrap.sh
+
+      - uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.74
+
+      - name: Engine tests
+        run: ./build.sh test
+
+      - name: Firmware, emulator and site
+        env:
+          PYTHON: /usr/bin/python3
+        run: |
+          rm -f app/bank_data.h        # public builds never carry recorded breaks
+          ./build.sh --release "$VERSION"
+          ./build.sh --web
+          /usr/bin/python3 base/tools/make_site.py app "app/build/choppah-$VERSION.fwsc" "$VERSION" site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Release (tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app/build/choppah-${{ env.VERSION }}.fwsc
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

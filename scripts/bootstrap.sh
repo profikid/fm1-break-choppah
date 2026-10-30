@@ -60,7 +60,8 @@ fetch cfg/eq_cfg_hw.bin 41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85
 say "4/4 Python packages"
 PY="${PYTHON:-python3}"
 "$PY" -c 'import PIL, mido, rtmidi' 2>/dev/null && echo "ok   Pillow, mido, python-rtmidi" ||
-    "$PY" -m pip install --user Pillow mido python-rtmidi || "$PY" -m pip install --break-system-packages Pillow mido python-rtmidi
+    "$PY" -m pip install --user Pillow mido python-rtmidi || "$PY" -m pip install --break-system-packages Pillow mido python-rtmidi ||
+    echo "pip could not install them: the build needs Pillow; mido and python-rtmidi are only for installing over USB"
 
 if [ "$(uname -s)" = "Darwin" ]; then
     say "macOS: the JieLi toolchain is Linux x86-64; fm1-base's build runs it in a linux/amd64 container"
