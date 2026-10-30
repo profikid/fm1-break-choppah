@@ -61,3 +61,12 @@ The sandboxed shell on the Mac can't see USB devices. Two routes work:
   a small module reuses the page's own `Updater` (fm1ota.js) to run `install()`. First done 30 Oct 2026: X0X was
   replaced by CHOPPAH dev `FM-1_8600` (package sha256 `ad17360c…`), about 75 s end to end.
   macOS keeps showing the old MIDI port name ("X0X FM-1") from its cache; the identity handshake is what counts.
+
+### From M-VAVE's FM1 Open back to CHOPPAH
+
+FM1 Open (`FM-1_80000xx`) only accepts M-VAVE's own packages. Put stock back with M-VAVE's workbench
+(`open.m-vave.com/fm1-workbench` → Device update → Recovery & force update → **Restore original V15**, which
+installs `FM-1_015` and its 128 factory voices), then install CHOPPAH over stock as above. Done this way on
+30 Oct 2026. The `FM-1.fwsc` on M-VAVE's file server (21 Oct 2026, md5-verified) fails fm1-base's `checkUfw` on
+three small parts (types 52, 251, 161), so fm1-base's own stock restore refuses it; the workbench route works.
+
