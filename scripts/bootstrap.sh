@@ -8,6 +8,7 @@
 # Re-running is safe: each step is skipped when it is already done.
 #   scripts/bootstrap.sh            everything
 #   FM1_BASE_REF=<commit> scripts/bootstrap.sh    another fm1-base commit
+#   BOOTSTRAP_USB=0 scripts/bootstrap.sh          without mido / python-rtmidi (CI: build only)
 set -e
 cd "$(dirname "$0")/.."
 ROOT="$(pwd)"
@@ -59,8 +60,13 @@ fetch cfg/eq_cfg_hw.bin 41167491bffed4651750719c973d2758adeb9021a5670d02d6a53c85
 
 say "4/4 Python packages"
 PY="${PYTHON:-python3}"
-"$PY" -c 'import PIL, mido, rtmidi' 2>/dev/null && echo "ok   Pillow, mido, python-rtmidi" ||
-    "$PY" -m pip install --user Pillow mido python-rtmidi || "$PY" -m pip install --break-system-packages Pillow mido python-rtmidi ||
+if [ "${BOOTSTRAP_USB:-1}" = 0 ]; then       # CI: the build only, nothing installs over USB
+    MODS="PIL"; PKGS="Pillow"
+else
+    MODS="PIL, mido, rtmidi"; PKGS="Pillow mido python-rtmidi"
+fi
+"$PY" -c "import $MODS" 2>/dev/null && echo "ok   $PKGS" ||
+    "$PY" -m pip install --user $PKGS || "$PY" -m pip install --break-system-packages $PKGS ||
     echo "pip could not install them: the build needs Pillow; mido and python-rtmidi are only for installing over USB"
 
 if [ "$(uname -s)" = "Darwin" ]; then

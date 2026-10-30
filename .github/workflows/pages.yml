@@ -41,17 +41,34 @@ jobs:
           echo "VERSION=$V" >> "$GITHUB_ENV"
           echo "CHOPPAH $V" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Packages (Pillow with libraqm for the fonts)
+      # Pillow's wheel carries raqm (the fonts' layout), which needs only libfribidi from the system: a pip
+      # install in place of apt-get update + install. apt is the fallback if the runner image lacks libfribidi.
+      - name: Pillow with raqm (the build's fonts)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq python3-pil libraqm0 rsync
+          raqm() { /usr/bin/python3 -c 'from PIL import features; raise SystemExit(not features.check("raqm"))' 2>/dev/null; }
+          raqm || /usr/bin/python3 -m pip install -q --user --break-system-packages Pillow
+          raqm || { sudo apt-get update -qq && sudo apt-get install -y -qq libfribidi0; }
+          raqm && /usr/bin/python3 -c 'import PIL; print("Pillow", PIL.__version__, "with raqm")'
 
-      - name: JieLi toolchain and AC79 SDK files
+      # JieLi's toolchain (pkgman.jieliapp.com) and the SDK files (gitee) are pinned in bootstrap.sh: cached until
+      # bootstrap.sh changes, which also spares the build those two slow, now-and-then flaky servers
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.jieli
+            ~/fw-AC79_AIoT_SDK
+          key: jieli-${{ runner.os }}-${{ hashFiles('scripts/bootstrap.sh') }}
+
+      - name: fm1-base, JieLi toolchain and AC79 SDK files
+        env:
+          PYTHON: /usr/bin/python3
+          BOOTSTRAP_USB: 0               # mido / python-rtmidi only install over USB, not needed here
         run: sh scripts/bootstrap.sh
 
       - uses: mymindstorm/setup-emsdk@v14
         with:
           version: 3.1.74
+          actions-cache-folder: emsdk-cache
 
       - name: Engine tests
         run: ./build.sh test
