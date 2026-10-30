@@ -115,8 +115,8 @@ void app_panic(void)
 enum { PG_HOME, PG_GEN, PG_FX, NPAGES };
 static const char *const PAGE_NAME[NPAGES] = {"PERFORM", "GENERATOR", "FX"};
 static const char *const FX_NAME[BRK_NFX] = {"RING MOD", "HI-PASS", "FLANGER", "DEGRADER"};
-static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HALF", "STOP", "GATE", "RND",
-                                                "FILT", "DUB"};
+static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
+                                                "FLT", "DUB"};
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
 
 static struct {
@@ -429,7 +429,7 @@ static void draw(void)
         int on = (st.pads >> i) & 1u;
         int32_t x = 2 + (int32_t)i * 21;
         cv_rect(x, 2, 20, 16, on ? C_HI : C_LINE);
-        cv_text(x + (20 - text_w(&FONT_XS, PAD_NAME[i])) / 2, 4, &FONT_XS, PAD_NAME[i], on ? C_BLACK : C_GRAY);
+        cv_text(x + (20 - text_w(&FONT_T, PAD_NAME[i])) / 2, 5, &FONT_T, PAD_NAME[i], on ? C_BLACK : C_GRAY);
     }
     cv_text(8, 28, &FONT_XS, ui.page == PG_FX ? FX_NAME[ui.fx_focus] : PAGE_NAME[ui.page], C_AMB);
     if (ui.page == PG_FX)

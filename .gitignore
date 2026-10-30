@@ -5,3 +5,4 @@ firmware/stock/
 *.rfm1
 __pycache__/
 .DS_Store
+app/web/
