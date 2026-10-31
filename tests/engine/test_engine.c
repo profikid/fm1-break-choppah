@@ -375,8 +375,40 @@ static void test_pad_settings(void)
     for (i = 0; i < 4u; i++)
         pk[i] = render(buf, s * 2u, 0, 0, 0);
     brk_pad(PAD_ROLL16, 0);
-    CHECK(pk[1] < pk[0] * 0.8f && pk[2] < pk[1] * 0.8f && pk[3] < pk[2] * 0.8f,
-          "roll decay: %.3f %.3f %.3f %.3f", pk[0], pk[1], pk[2], pk[3]);
+    CHECK(pk[1] > pk[0] * 0.9f && pk[2] < pk[1] * 0.8f && pk[3] < pk[2] * 0.8f,
+          "roll decay: the first repeat at the level, then quieter: %.3f %.3f %.3f %.3f", pk[0], pk[1], pk[2], pk[3]);
+    /* roll level: ghost notes, a quarter as loud; and a swell (decay < 0) from there up */
+    {
+        float full = pk[1], g[4];
+        fresh(1);
+        brk_padset_defaults(&ps);
+        ps.roll_div[1] = 1u;
+        ps.roll_level = 25u;
+        brk_padset(&ps);
+        brk_play(1);
+        render(buf, s * 2u + 10u, 0, 0, 0);
+        brk_pad(PAD_ROLL16, 1);
+        render(buf, s, 0, 0, 0);
+        for (i = 0; i < 2u; i++)
+            g[i] = render(buf, s * 2u, 0, 0, 0);
+        brk_pad(PAD_ROLL16, 0);
+        CHECK(g[1] > full * 0.18f && g[1] < full * 0.32f, "roll level 25%%: the repeats a quarter as loud (%.3f of %.3f)",
+              g[1], full);
+        fresh(1);
+        ps.roll_decay = -0.5f;
+        brk_padset(&ps);
+        brk_play(1);
+        render(buf, s * 2u + 10u, 0, 0, 0);
+        brk_pad(PAD_ROLL16, 1);
+        render(buf, s, 0, 0, 0);
+        for (i = 0; i < 4u; i++)
+            g[i] = render(buf, s * 2u, 0, 0, 0);
+        brk_pad(PAD_ROLL16, 0);
+        CHECK(g[1] < full * 0.32f && g[2] > g[1] * 1.3f && g[3] > g[2] * 1.1f,
+              "roll swell: from the level up: %.3f %.3f %.3f", g[1], g[2], g[3]);
+        brk_padset_defaults(&ps);
+        brk_padset(&ps);
+    }
     /* tape stop time: a quarter beat stops within two steps */
     fresh(1);
     brk_padset_defaults(&ps);
@@ -745,6 +777,51 @@ static void test_clock(void)
     }
 }
 
+/* pitch, KEEP LENGTH: a 1 kHz tone pitched +12 plays at 2 kHz, but the voice runs at its own speed */
+static void test_keep_length(void)
+{
+    static brk_break_t tone;
+    uint32_t i, n = 22050u, zc[2], mode;
+    float adv[2];
+    for (i = 0; i < n; i++)
+        pcm[i] = (int16_t)(12000.0f * sinf(6.2831853f * (float)i * (1000.0f / 22050.0f)));
+    for (mode = 0; mode < 2u; mode++) {
+        brk_status_t st;
+        float p0;
+        uint32_t k;
+        brk_init();
+        tone.pcm = pcm;
+        tone.len = n;
+        tone.rate = 22050u;
+        tone.bpm_x100 = 12000u;
+        tone.bars = 1u;
+        tone.nslices = 1u;
+        tone.slice[0] = 0u;
+        tone.slice[1] = n;
+        brk_set_break(&tone);
+        brk_tempo(120.0f);
+        brk_pitch(12.0f);
+        brk_pitch_mode((int)mode, 30.0f);
+        brk_key(0, 1);
+        render(buf, 4096u, 0, 0, 0);
+        brk_status(&st);
+        p0 = st.pos;
+        render(buf, 8192u, 0, 0, 0);
+        brk_status(&st);
+        adv[mode] = (st.pos - p0) / (8192.0f * 0.5f);   /* 1: the voice at its own speed (22.05 kHz into 44.1) */
+        for (k = 1, zc[mode] = 0; k < 8192u; k++)
+            if ((buf[k - 1] < 0.0f) != (buf[k] < 0.0f))
+                zc[mode]++;
+        brk_key(0, 0);
+    }
+    brk_pitch(0.0f);
+    brk_pitch_mode(0, 30.0f);
+    CHECK(adv[0] > 1.9f && adv[0] < 2.1f && zc[0] > 700u && zc[0] < 790u,
+          "pitch SPEED: +12 runs twice as fast (%.2f) at 2 kHz (%u crossings)", adv[0], zc[0]);
+    CHECK(adv[1] > 0.95f && adv[1] < 1.05f && zc[1] > 690u && zc[1] < 800u,
+          "pitch KEEP LENGTH: +12 runs at its own speed (%.2f) but sounds at 2 kHz (%u crossings)", adv[1], zc[1]);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -756,6 +833,7 @@ int main(int argc, char **argv)
     test_hold_loops();
     test_key_loops();
     test_clock();
+    test_keep_length();
     test_generator();
     test_pads();
     test_fx();

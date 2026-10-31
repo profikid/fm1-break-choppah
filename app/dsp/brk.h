@@ -55,8 +55,11 @@ typedef struct {
     uint8_t roll_div[3];                 /* each roll pad's rate (0..BRK_ROLL_DIVS-1): 1/8, 1/16, 1/32 by default */
     uint8_t frz_len;                     /* freeze loop: 0 the whole slice, 1 half, 2 a quarter, 3 an eighth */
     uint8_t gate_div;                    /* 0..BRK_GATE_DIVS-1 */
-    uint8_t rsv[3];
-    float roll_decay;                    /* 0..0.9: each repeat this much quieter */
+    uint8_t roll_level;                  /* the roll's repeats, % of full: 5..100, ghost notes low (0, in older saves:
+                                          * 100) */
+    uint8_t rsv[2];
+    float roll_decay;                    /* -0.9..0.9: > 0 each repeat this much quieter, < 0 louder (a swell up to
+                                          * full) */
     float roll_pitch;                    /* -3..+3 semitones a repeat */
     float rev_speed;                     /* 0.5..2 */
     float frz_pitch;                     /* -12..+12 semitones */
@@ -119,6 +122,11 @@ void brk_rewind(void);                   /* the pull-up: the break spins back, f
 void brk_tempo(float bpm);               /* 40..300 */
 float brk_get_tempo(void);
 void brk_pitch(float semitones);         /* -24..+24, on top of the tempo's repitch */
+/* how pitch sounds (PRD E-9): SPEED, the classic repitch (up is shorter, down longer), or KEEP LENGTH: the voices
+ * run at the tempo's speed and two overlapping grains of grain_ms (10..80) read them at the pitch, so a slice keeps
+ * its length. Applies to every pitch in semitones (OCT, steps, a key's, the roll's and the freeze's); the tempo's
+ * repitch, HALF, REVERSE's speed, the tape stop and the rewind stay speed */
+void brk_pitch_mode(int keep_length, float grain_ms);
 void brk_swing(float s);                 /* 0.5 straight .. 0.75 */
 
 /* the white keys: a press plays slice s at the next step (or at once when stopped: free play); held, it loops its

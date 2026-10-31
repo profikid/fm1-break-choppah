@@ -27,7 +27,7 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | Control | Does |
 | --- | --- |
 | White keys 1–16 | Slices: at the next 16th while playing, at once while stopped. **Hold to loop**: the key's view shows its window and playhead, and **K1–K4 set that key's loop**: length (1/64 … 2 bars), pitch, start, mode (loop, ping-pong, reverse, one shot); SEL resets it |
-| Black keys 1–11 | Pads, while held: ROLL 1/8 · 1/16 · 1/32 · REVERSE · FREEZE · HALF · TAPE STOP · GATE · RANDOM · FILTER THROW · DUB DELAY. Each shows its own animation while held, and **K1–K4 tune it** (rate, decay, length, speed, feedback…) |
+| Black keys 1–11 | Pads, while held: ROLL 1/8 · 1/16 · 1/32 · REVERSE · FREEZE · HALF · TAPE STOP · GATE · RANDOM · FILTER THROW · DUB DELAY. Each shows its own animation while held, and **K1–K4 tune it** (rate, decay, length, speed, feedback…). The rolls have a LEVEL for quiet ghost-note rolls, and their DECAY fades down or swells up |
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
 | SELECT | Tempo (SEL held: 0.1 BPM) · tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
@@ -36,7 +36,7 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | HOME | PERFORM: K1 DJ filter · K2 swing · K3 complexity · K4 crunch |
 | ARP | GENERATOR: complexity · anchor · roll · fill · SEL + ARP: random pattern |
 | FX | FX: ALGORITHM picks the effect, K1–K4 its settings, FX again turns it on or off |
-| GLO | GLOBAL: K1 MIDI clock in (follow tempo and start / stop), K2 clock out (24 ppqn, start / stop), K3 Bluetooth MIDI on / off (shows up as "CHOPPAH XXXX"), K4 where MIDI goes (USB, Bluetooth, both) |
+| GLO | GLOBAL: K1 MIDI clock in (follow tempo and start / stop), K2 clock out (24 ppqn, start / stop), K3 Bluetooth MIDI on / off (shows up as "CHOPPAH XXXX" in a MIDI app's Bluetooth page), K4 where MIDI goes (USB, Bluetooth, both). **GLO again**: K1 pitch SPEED or KEEP LENGTH (pitch without changing the slices' length), K2 grain size |
 | SAVE | Keep the settings |
 
 ## Breaks

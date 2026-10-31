@@ -16,6 +16,8 @@ static volatile uint32_t p_pads;         /* bit PAD_*: held */
 static volatile uint32_t p_reset;        /* a count: changed = reset at the next render */
 static volatile uint32_t p_rewind;       /* a count: changed = a rewind starts */
 static volatile uint32_t p_len;          /* pattern length, 0 = the break's own */
+static volatile int p_keep;              /* pitch keeps the length (granular), not the speed */
+static volatile float p_grain = 1323.0f; /* its grains, samples (30 ms) */
 static brk_gen_t p_gen;
 static brk_padset_t p_ps;                /* the pads' settings (brk_padset) */
 static brk_step_t pat[BRK_MAX_STEPS];
@@ -41,6 +43,7 @@ typedef struct {
     int32_t slice;
     uint8_t active, loop;
     uint8_t wrap;                        /* runs on round the whole loop (playing, forwards) */
+    float g_pos[2], g_age;               /* KEEP LENGTH: the two grains' read positions, samples into the cycle */
 } voice_t;
 
 static voice_t v[2];
@@ -141,6 +144,8 @@ static void voice_start(const brk_break_t *b, int32_t s, int rev, float at, floa
     n->amp_step = gain / FADE_IN;
     n->loop = 0;
     n->wrap = (uint8_t)(p_playing && !rev);
+    n->g_pos[0] = n->g_pos[1] = n->pos;  /* the grains start on the hit (the second at full: the attack whole) */
+    n->g_age = 0.0f;
     n->active = 1;
     last_slice = s;
 }
@@ -269,7 +274,9 @@ static void roll_begin(const brk_break_t *b)   /* the roll repeats the slice sou
     roll_pos = c->dir > 0.0f ? (float)b->slice[c->slice] : (float)b->slice[c->slice + 1] - 1.0f;
     roll_left = roll_len;                /* this hit has just started: the next one a roll's length on */
     roll_n = 0u;
-    roll_gain = 1.0f;
+    roll_gain = (float)(p_ps.roll_level ? p_ps.roll_level : 100u) * 0.01f;   /* the repeats begin at the level */
+    if (roll_gain > 1.0f)
+        roll_gain = 1.0f;
 }
 
 static void on_step(const brk_break_t *b)
@@ -391,11 +398,44 @@ static void pads_changed(const brk_break_t *b, uint32_t now, float sl)
         v[0].loop = v[1].loop = 0;
 }
 
-static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float *acc)
+static inline float grain_at(const brk_break_t *b, float p)   /* (round the break: a loop's grains run on) */
+{
+    float n = (float)b->len;
+    if (p >= n)
+        p -= n;
+    else if (p < 0.0f)
+        p += n;
+    return hermite(b, p);
+}
+
+/* one sample of a voice: inc its speed, pf the pitch to read it at (1: as it runs). KEEP LENGTH with a pitch: two
+ * grains half a cycle apart, each a triangle (the two sum to one), each reading pf times as fast from where the voice
+ * was when it began; a grain begins again at the foot of its triangle, so nothing clicks */
+static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float pf, float *acc)
 {
     if (!o->active)
         return;
-    *acc += hermite(b, o->pos) * o->amp;
+    if (pf > 0.9999f && pf < 1.0001f)
+        *acc += hermite(b, o->pos) * o->amp;
+    else {
+        float g = p_grain, half = 0.5f * g, ph0 = o->g_age / g, ph1 = ph0 + 0.5f, step = inc * pf * o->dir;
+        float w0, w1, age;
+        if (ph1 >= 1.0f)
+            ph1 -= 1.0f;
+        w0 = 1.0f - (ph0 > 0.5f ? 2.0f * ph0 - 1.0f : 1.0f - 2.0f * ph0);
+        w1 = 1.0f - (ph1 > 0.5f ? 2.0f * ph1 - 1.0f : 1.0f - 2.0f * ph1);
+        *acc += (grain_at(b, o->g_pos[0]) * w0 + grain_at(b, o->g_pos[1]) * w1) * o->amp;
+        o->g_pos[0] += step;
+        o->g_pos[1] += step;
+        age = o->g_age + 1.0f;
+        if (o->g_age < half && age >= half)
+            o->g_pos[1] = o->pos;        /* grain 1 at its foot: again from the voice */
+        if (age >= g) {
+            age -= g;
+            o->g_pos[0] = o->pos;        /* grain 0 at its foot */
+        }
+        o->g_age = age;
+    }
     o->pos += inc * o->dir;
     if (o->dir > 0.0f ? o->pos >= o->hi : o->pos < o->lo) {
         if (o->wrap && !o->loop && o->dir > 0.0f && o->hi >= (float)b->len)
@@ -427,8 +467,8 @@ void brk_render(float *out, uint32_t n)
 {
     const brk_break_t *b = brk_now;
     uint32_t i, pads = p_pads;
-    float sl = step_len(), inc, half, ratio, sw = brk_clampf(p_swing, 0.5f, 0.75f);
-    int playing = p_playing;
+    float sl = step_len(), inc, pf, half, ratio, sw = brk_clampf(p_swing, 0.5f, 0.75f);
+    int playing = p_playing, keep = p_keep;
     n_renders++;
     if (!b || !b->len || !b->nslices) {
         for (i = 0; i < n; i++)
@@ -557,11 +597,15 @@ void brk_render(float *out, uint32_t n)
             roll_left -= 1.0f;
             if (roll_left <= 0.0f) {
                 roll_left += roll_len;
-                roll_n++;                /* each repeat a little quieter (the decay) */
-                roll_gain *= 1.0f - brk_clampf(p_ps.roll_decay, 0.0f, 0.9f);
+                float dc = brk_clampf(p_ps.roll_decay, -0.9f, 0.9f);
+                roll_n++;                /* each repeat at the level, then quieter (the decay) or louder (a swell) */
+                voice_start(b, roll_slice, (pads_now >> PAD_REVERSE) & 1u, roll_pos, roll_gain);
+                if (dc >= 0.0f)
+                    roll_gain *= 1.0f - dc;
+                else
+                    roll_gain += (1.0f - roll_gain) * -dc;
                 if (roll_gain < 0.02f)
                     roll_gain = 0.02f;
-                voice_start(b, roll_slice, (pads_now >> PAD_REVERSE) & 1u, roll_pos, roll_gain);
             }
         }
         /* tape stop: stop_beats down to nothing, spin_steps back up */
@@ -581,7 +625,12 @@ void brk_render(float *out, uint32_t n)
             if ((pads_now >> PAD_FREEZE) & 1u)
                 fxp += p_ps.frz_pitch;
             fxp += key_pitch;
-            inc = ratio * brk_exp2f((p_pitch + step_pitch + fxp) * (1.0f / 12.0f)) * half * tape;
+            pf = brk_exp2f((p_pitch + step_pitch + fxp) * (1.0f / 12.0f));
+            inc = ratio * half * tape;
+            if (!keep) {                 /* SPEED: the pitch is the speed */
+                inc *= pf;
+                pf = 1.0f;
+            }
         }
         if (rewind_len) {                /* the pull-up: up to ten times as fast, then the top of the bar */
             float r = (float)rewind_n / (float)rewind_len;
@@ -597,8 +646,8 @@ void brk_render(float *out, uint32_t n)
                 to_next = 0.0f;
             }
         }
-        voice_tick(b, &v[0], inc, &acc);
-        voice_tick(b, &v[1], inc, &acc);
+        voice_tick(b, &v[0], inc, pf, &acc);
+        voice_tick(b, &v[1], inc, pf, &acc);
         /* the gate pad: open for gate_len of each 1/8, 1/16 or 1/32 */
         g = 1.0f;
         gate_pos += 1.0f;
@@ -700,7 +749,8 @@ void brk_padset_defaults(brk_padset_t *p)
     p->roll_div[2] = 3u;
     p->frz_len = 0u;
     p->gate_div = 1u;
-    p->rsv[0] = p->rsv[1] = p->rsv[2] = 0u;
+    p->roll_level = 100u;
+    p->rsv[0] = p->rsv[1] = 0u;
     p->roll_decay = 0.0f;
     p->roll_pitch = 0.0f;
     p->rev_speed = 1.0f;
@@ -745,6 +795,11 @@ void brk_rewind(void) { p_rewind++; }
 void brk_tempo(float bpm) { p_tempo = brk_clampf(bpm, 40.0f, 300.0f); }
 float brk_get_tempo(void) { return p_tempo; }
 void brk_pitch(float st) { p_pitch = brk_clampf(st, -24.0f, 24.0f); }
+void brk_pitch_mode(int keep_length, float grain_ms)
+{
+    p_grain = brk_clampf(grain_ms, 10.0f, 80.0f) * ((float)BRK_SR / 1000.0f);
+    p_keep = keep_length != 0;
+}
 void brk_swing(float s) { p_swing = brk_clampf(s, 0.5f, 0.75f); }
 void brk_gen(const brk_gen_t *g) { p_gen = *g; }
 void brk_seed(uint32_t seed) { rng = seed ? seed : 1u; }

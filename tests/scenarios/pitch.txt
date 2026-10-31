@@ -1,0 +1,51 @@
+# CHOPPAH: pitch that keeps the length (GLOBAL, its second half: GLO twice), and the roll's level and swell
+#   app/build/host/choppah_host tests/scenarios/pitch.txt app/build/scenarios
+wait 2600
+tap GLO
+wait 200
+tap GLO
+wait 300
+shot g_pitch_speed.png
+tap PLAY
+wait 200
+tap OCT+
+tap OCT+
+tap OCT+
+tap OCT+
+tap OCT+
+wav pitch_speed_plus5.wav
+wait 2800
+wavstop
+turn K1 1 10
+wait 300
+shot g_pitch_keep.png
+wav pitch_keep_plus5.wav
+peakreset
+wait 2800
+expect peak_db_max >-30
+wavstop
+press OCT-
+press OCT+
+wait 100
+release OCT-
+release OCT+
+wait 300
+key b1 down
+wait 200
+turn K4 -15 10
+wait 200
+turn K2 -25 10
+wait 600
+shot r_swell.png
+wav roll_ghost_swell.wav
+wait 2000
+wavstop
+key b1 up
+wait 300
+key b1 down
+wait 200
+turn K2 30 10
+wait 400
+shot r_ghost_decay.png
+key b1 up
+wait 400

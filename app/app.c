@@ -36,7 +36,9 @@ typedef struct {
     uint8_t clk_out;                     /* MIDI clock out: 0 off, 1 on (24 a beat while playing, start / stop) */
     uint8_t ble_off;                     /* Bluetooth MIDI: 0 on (the default), 1 off */
     uint8_t midi_to;                     /* where MIDI goes: 0 USB and Bluetooth, 1 USB, 2 Bluetooth */
-    uint8_t rsv[11];                     /* (zero in older saves: so these load as off, off, on, both) */
+    uint8_t pitch_keep;                  /* pitch: 0 SPEED (repitch), 1 KEEP LENGTH (granular) */
+    uint8_t grain_ms;                    /* its grains, 10..80 ms (0: 30) */
+    uint8_t rsv[9];                      /* (zero in older saves: so these load as off, off, on, both, SPEED, 30) */
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
@@ -76,6 +78,7 @@ static void settings_apply(void)
     brk_fx_set(&set.fx);
     brk_fx_tempo((float)set.tempo_x10 * 0.1f);
     brk_padset(&set.pads);
+    brk_pitch_mode(set.pitch_keep, (float)(set.grain_ms ? set.grain_ms : 30u));
     sfx_set(&set.sfx);
     {
         uint32_t k;
@@ -375,6 +378,7 @@ static struct {
     uint8_t key_turned;                  /* a knob turned while it is held: its view at once */
     uint32_t key_since;                  /* when it was pressed */
     int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
+    uint8_t gpage;                       /* the GLOBAL page's half: 0 MIDI and Bluetooth, 1 pitch */
     uint32_t pad_since, fx_drawn;        /* when it was pressed; the animation's last frame */
     float reel;                          /* the tape stop's reels, turns */
     uint8_t redraw;                      /* RG_* bits: the regions to draw again */
@@ -469,6 +473,15 @@ static const char *const MIDI_TO_NAME[3] = {"USB+BT", "USB", "BT"};
 static void global_value(int i, char *t)
 {
     t[0] = 0;
+    if (ui.gpage) {                      /* the pitch: speed or keep length, the grains */
+        if (i == 0)
+            text_cat(t, set.pitch_keep ? "KEEP LEN" : "SPEED");
+        else if (i == 1) {
+            int_text(set.grain_ms ? set.grain_ms : 30, t);
+            text_cat(t, " MS");
+        }
+        return;
+    }
     text_cat(t, i == 0 ? (set.clk_in ? "FOLLOW" : "OFF") : i == 1 ? (set.clk_out ? "ON" : "OFF")
                 : i == 2 ? (set.ble_off ? "OFF" : "ON") : MIDI_TO_NAME[set.midi_to % 3u]);
 }
@@ -477,6 +490,18 @@ static void global_turn(int i, int32_t d)
 {
     static const char *const NAME[4] = {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"};
     char t[16];
+    if (ui.gpage) {
+        if (i == 0)
+            set.pitch_keep = d > 0;
+        else if (i == 1)
+            set.grain_ms = (uint8_t)clamp((int32_t)(set.grain_ms ? set.grain_ms : 30u) + d * 5, 10, 80);
+        else
+            return;
+        global_value(i, t);
+        app_say(i == 0 ? "PITCH" : "GRAIN", i == 0 && set.pitch_keep ? "KEEP LENGTH" : t);
+        changed();
+        return;
+    }
     if (i == 0) {
         set.clk_in = d > 0;
         if (!set.clk_in) {               /* the tempo is the knob's again */
@@ -596,7 +621,7 @@ static void break_poll(void)
 /* -------------------------------------------------- the pads' own settings --- */
 /* what K1-K4 tune while a pad is held, by pad (brk.h PAD_*); 0: that knob does nothing for it */
 static const char *const PAD_KNOB[BRK_NPADS][4] = {
-    {"RATE", "DECAY", "PITCH", 0}, {"RATE", "DECAY", "PITCH", 0}, {"RATE", "DECAY", "PITCH", 0},
+    {"RATE", "DECAY", "PITCH", "LEVEL"}, {"RATE", "DECAY", "PITCH", "LEVEL"}, {"RATE", "DECAY", "PITCH", "LEVEL"},
     {"SPEED", 0, 0, 0}, {"LENGTH", "PITCH", 0, 0}, {"SPEED", 0, 0, 0}, {"STOP", "SPIN UP", 0, 0},
     {"RATE", "LENGTH", 0, 0}, {"AMOUNT", "PITCH", 0, 0}, {"TARGET", "RESO", "SPEED", 0},
     {"TIME", "FEEDBACK", "TONE", "MIX"}};
@@ -649,6 +674,20 @@ static void dj_text(float dj, char *t)
     }
 }
 
+/* the roll's decay: "DOWN 20%" each repeat quieter, "UP 20%" a swell, "OFF" */
+static void roll_decay_text(float dc, char *t)
+{
+    char v[8];
+    t[0] = 0;
+    if (dc > -0.01f && dc < 0.01f) {
+        text_cat(t, "OFF");
+        return;
+    }
+    text_cat(t, dc > 0.0f ? "DOWN " : "UP ");
+    pct_text(dc > 0.0f ? dc : -dc, v);
+    text_cat(t, v);
+}
+
 static void pad_knob_value(int pad, int k, char *t)
 {
     const brk_padset_t *p = &set.pads;
@@ -657,8 +696,9 @@ static void pad_knob_value(int pad, int k, char *t)
     switch (pad <= PAD_ROLL32 ? 0 : pad) {
     case 0:
         if (k == 0) text_cat(t, BRK_ROLL_DIV_NAME[p->roll_div[pad] % BRK_ROLL_DIVS]);
-        else if (k == 1) pct_text(p->roll_decay, t);
+        else if (k == 1) roll_decay_text(p->roll_decay, t);
         else if (k == 2) signed_tenths(p->roll_pitch, "ST", t);
+        else pct_text((float)(p->roll_level ? p->roll_level : 100u) * 0.01f, t);
         break;
     case PAD_REVERSE: times_text(p->rev_speed, t); break;
     case PAD_FREEZE:
@@ -701,8 +741,9 @@ static void pad_knob_turn(int pad, int k, int32_t d)
     switch (pad <= PAD_ROLL32 ? 0 : pad) {
     case 0:
         if (k == 0) p->roll_div[pad] = (uint8_t)clamp((int32_t)p->roll_div[pad] + d, 0, BRK_ROLL_DIVS - 1);
-        else if (k == 1) p->roll_decay = knob_f(p->roll_decay, d, 0.02f, 0.0f, 0.9f);
-        else p->roll_pitch = knob_f(p->roll_pitch, d, 0.5f, -3.0f, 3.0f);
+        else if (k == 1) p->roll_decay = knob_f(p->roll_decay, d, 0.02f, -0.9f, 0.9f);
+        else if (k == 2) p->roll_pitch = knob_f(p->roll_pitch, d, 0.5f, -3.0f, 3.0f);
+        else p->roll_level = (uint8_t)clamp((int32_t)(p->roll_level ? p->roll_level : 100u) + d * 5, 5, 100);
         break;
     case PAD_REVERSE: p->rev_speed = knob_f(p->rev_speed, d, 0.05f, 0.5f, 2.0f); break;
     case PAD_FREEZE:
@@ -899,10 +940,11 @@ static void input(void)
         ui.page = PG_HOME;
         ui.redraw |= 8u;               /* RG_FOOT: the page */
     }
-    if (bdn & 1u << B_GLO) {             /* GLOBAL: MIDI clock and Bluetooth */
+    if (bdn & 1u << B_GLO) {             /* GLOBAL: MIDI clock and Bluetooth; again, the pitch */
+        ui.gpage = ui.page == PG_GLOBAL ? (uint8_t)!ui.gpage : 0u;
         ui.page = PG_GLOBAL;
         ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
-        app_say("GLOBAL", "");
+        app_say("GLOBAL", ui.gpage ? "PITCH" : "MIDI");
     }
     if (bdn & 1u << B_ENV) {             /* ENV: the soundboard */
         ui.page = PG_SOUND;
@@ -1271,6 +1313,28 @@ static void draw_global(const brk_status_t *st)
     char t[32], v[16];
     uint32_t p;
     int bs = plat_ble_state();
+    if (ui.gpage) {                      /* the pitch: what the mode does, the pitch now */
+        cv_begin(240, 52, C_BLACK);
+        cv_text(6, 2, &FONT_T, "PITCH", C_GRAY);
+        cv_text(96, 2, &FONT_T, set.pitch_keep ? "KEEP LENGTH" : "SPEED", C_HI);
+        cv_text(96, 16, &FONT_XS, set.pitch_keep ? "SLICES KEEP LENGTH" : "PITCH CHANGES LENGTH", C_DIM);
+        cv_text(6, 30, &FONT_T, "NOW", C_GRAY);
+        t[0] = set.pitch > 0 ? '+' : 0;
+        t[1] = 0;
+        int_text(set.pitch, t + (set.pitch > 0));
+        text_cat(t, " ST  (OCT- / OCT+)");
+        cv_text(96, 30, &FONT_T, t, C_WHITE);
+        cv_blit(0, 88);
+        cv_begin(240, 52, C_BLACK);
+        cv_text(6, 2, &FONT_T, "GRAIN", C_GRAY);
+        int_text(set.grain_ms ? set.grain_ms : 30, t);
+        text_cat(t, " MS");
+        cv_text(96, 2, &FONT_T, t, set.pitch_keep ? C_WHITE : C_DIM);
+        cv_text(96, 16, &FONT_XS, "LOWER: TIGHTER HITS", C_DIM);
+        cv_text(6, 30, &FONT_XS, "FOR OCT, KEYS, ROLL, FREEZE AND STEPS", C_DIM);
+        cv_blit(0, 140);
+        return;
+    }
     cv_begin(240, 52, C_BLACK);          /* Bluetooth, and the clock in */
     cv_text(6, 2, &FONT_T, "BLUETOOTH", C_GRAY);
     t[0] = 0;
@@ -1363,7 +1427,8 @@ static void draw_foot(const brk_status_t *st)
         cv_text(x + (20 - text_w(&FONT_T, PAD_NAME[i])) / 2, 1, &FONT_T, PAD_NAME[i], on ? C_BLACK : C_GRAY);
     }
     for (i = 0; i < 4u; i++) {
-        const char *name = KN[ui.page][i];
+        static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "", ""};
+        const char *name = ui.page == PG_GLOBAL && ui.gpage ? KN_PITCH[i] : KN[ui.page][i];
         if (ui.shown >= 100) {           /* a white key held: its loop */
             cv_text(4 + (int32_t)i * 60, 18, &FONT_T, KEY_KNOB[i], C_HI);
             key_knob_value(ui.shown - 100, (int)i, t);
@@ -1451,12 +1516,15 @@ static void draw_fx(int pad, const brk_status_t *st, uint32_t now)
     }
     cv_text(6, 0, &FONT_B, t, C_HI);
     switch (pad <= PAD_ROLL32 ? 0 : pad) {
-    case 0: {                            /* ROLL: the caught slice again and again, each copy quieter, the hit lit */
+    case 0: {                            /* ROLL: the caught slice again and again at its level, fading or
+                                          * swelling, the hit lit */
         int32_t rs = st->roll_slice >= 0 ? st->roll_slice : s, cur = (int32_t)(st->roll_n % 8u);
-        float g = 1.0f;
+        float g = (float)(p->roll_level ? p->roll_level : 100u) * 0.01f;
         for (i = 0; i < 8; i++) {
             fx_slice(rs, 4 + i * 29, 27, g, i == cur ? C_HI : C_DIM);
-            g *= 1.0f - p->roll_decay;
+            g = p->roll_decay >= 0.0f ? g * (1.0f - p->roll_decay) : g + (1.0f - g) * -p->roll_decay;
+            if (g < 0.02f)
+                g = 0.02f;
         }
         int_text((int32_t)st->roll_n, t);
         text_cat(t, " HITS");

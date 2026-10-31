@@ -88,7 +88,7 @@ animation of what it does, and **K1–K4 tune that pad** (the foot shows its set
 
 | Pad | Does | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- | --- |
-| R8 · R16 · R32 | Roll from the next 16th | Rate (1/4 … 1/64, triplets) | Decay | Pitch a repeat | |
+| R8 · R16 · R32 | Roll from the next 16th | Rate (1/4 … 1/64, triplets) | Decay: DOWN (each repeat quieter) or UP (a swell up to full) | Pitch a repeat | Level of the repeats (5–100 %: low for ghost notes) |
 | REV | Reverse | Speed | | | |
 | FRZ | Freeze: the slice (or part of it) loops | Length (slice, 1/2, 1/4, 1/8) | Pitch | | |
 | HLF | Half speed | Speed | | | |
@@ -122,9 +122,10 @@ animation of what it does, and **K1–K4 tune that pad** (the foot shows its set
 K1 level · K2 pitch · K3 **echo** (how much goes into the dub delay: sirens ringing out) · K4 length. All sixteen are
 synthesised on the FM-1, so nothing is sampled. HOME goes back to the slicer.
 
-## 6. GLOBAL: MIDI clock and Bluetooth
+## 6. GLOBAL: MIDI clock, Bluetooth, pitch
 
 **GLO** opens the GLOBAL page: the slice blocks give way to the state of MIDI, and K1–K4 set it (SAVE keeps it).
+**GLO again** turns to its second half, the pitch (below).
 
 ![GLOBAL, following a 119 BPM clock over USB](img/screen-global.png "The GLOBAL page")
 
@@ -137,7 +138,18 @@ synthesised on the FM-1, so nothing is sampled. HOME goes back to the slicer.
 
 The panel shows Bluetooth's state (ready to pair, connected), the clock coming in (its tempo, where from, running or
 stopped), the clock going out, and a light for MIDI in and out on each port. The FM-1 has no MIDI out jack: MIDI goes
-out over USB and Bluetooth only.
+out over USB and Bluetooth only. On an iPhone or iPad, Bluetooth MIDI devices never show in Settings → Bluetooth:
+connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings → Advanced → Bluetooth MIDI Devices).
+
+**The pitch (GLO twice):**
+
+| Knob | Sets | |
+| --- | --- | --- |
+| K1 PITCH | SPEED · KEEP LENGTH | SPEED is the classic repitch: up plays faster and shorter, down slower and longer. KEEP LENGTH changes the pitch only: each slice keeps its length (a granular pitch shift), so a key pitched +7 still fills its loop |
+| K2 GRAIN | 10 … 80 ms | KEEP LENGTH's grains: shorter keeps hits tight, longer sounds smoother on held sounds |
+
+It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
+tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay speed effects.
 
 ## 7. Pages and knobs
 
@@ -148,6 +160,7 @@ out over USB and Bluetooth only.
 | FX | the focused effect's settings and mix (ALGORITHM picks the effect, FX again turns it on or off) | | | |
 | ENV (soundboard) | Level | Pitch | Echo | Length |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
+| GLO again (pitch) | Speed / keep length | Grain | | |
 
 The generator rearranges the break as it plays: **complexity** is how often it jumps, **anchor** keeps the kick and
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
