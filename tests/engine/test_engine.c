@@ -822,6 +822,38 @@ static void test_keep_length(void)
           "pitch KEEP LENGTH: +12 runs at its own speed (%.2f) but sounds at 2 kHz (%u crossings)", adv[1], zc[1]);
 }
 
+/* the gate: at 25 % each slice of the loop sounds for a quarter of its length, then it is quiet until the next */
+static void test_gate(void)
+{
+    uint32_t sl, i;
+    float early[2], late[2];
+    int g;
+    for (g = 0; g < 2; g++) {
+        fresh(1);                        /* 1 bar, 16 slices: a slice a step */
+        sl = brk_step_len_samples();     /* (at fresh's tempo) */
+        brk_gate(g ? 0.25f : 1.0f);
+        brk_play(1);
+        render(buf, sl * 4u, 0, 0, 0);   /* into step 4 */
+        early[g] = late[g] = 0.0f;
+        for (i = 0; i < 4u; i++) {       /* in each of the next steps: its first fifth, and its second half */
+            render(buf, sl, 0, 0, 0);
+            {
+                uint32_t k;
+                for (k = 0; k < sl / 5u; k++)
+                    if (fabsf(buf[k]) > early[g])
+                        early[g] = fabsf(buf[k]);
+                for (k = sl / 2u; k < sl; k++)
+                    if (fabsf(buf[k]) > late[g])
+                        late[g] = fabsf(buf[k]);
+            }
+        }
+    }
+    brk_gate(1.0f);
+    CHECK(early[1] > early[0] * 0.8f && late[1] < 0.002f && late[0] > 0.01f,
+          "gate 25%%: each slice's start sounds (%.3f), its second half is quiet (%.4f; ungated %.3f)",
+          early[1], late[1], late[0]);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -834,6 +866,7 @@ int main(int argc, char **argv)
     test_key_loops();
     test_clock();
     test_keep_length();
+    test_gate();
     test_generator();
     test_pads();
     test_fx();

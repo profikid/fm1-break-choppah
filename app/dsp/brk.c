@@ -5,6 +5,7 @@
 
 #define FADE_IN 44.0f                    /* samples: 1 ms in, 2 ms out on every cut (PRD A-6) */
 #define FADE_OUT 88.0f
+#define GATE_FADE 132.0f                 /* samples: a gated slice's 3 ms fade */
 #define QLEN 32u                         /* key events between two renders */
 
 /* ---------------------------------------------------------------- shared --- */
@@ -17,6 +18,7 @@ static volatile uint32_t p_reset;        /* a count: changed = reset at the next
 static volatile uint32_t p_rewind;       /* a count: changed = a rewind starts */
 static volatile uint32_t p_len;          /* pattern length, 0 = the break's own */
 static volatile int p_keep;              /* pitch keeps the length (granular), not the speed */
+static volatile float p_gate = 1.0f;     /* how much of each of the loop's slices sounds */
 static volatile float p_grain = 1323.0f; /* its grains, samples (30 ms) */
 static brk_gen_t p_gen;
 static brk_padset_t p_ps;                /* the pads' settings (brk_padset) */
@@ -44,6 +46,7 @@ typedef struct {
     uint8_t active, loop;
     uint8_t wrap;                        /* runs on round the whole loop (playing, forwards) */
     float g_pos[2], g_age;               /* KEEP LENGTH: the two grains' read positions, samples into the cycle */
+    float gate_left;                     /* the gate: the break's samples left before it fades (< 0: no gate) */
 } voice_t;
 
 static voice_t v[2];
@@ -146,6 +149,7 @@ static void voice_start(const brk_break_t *b, int32_t s, int rev, float at, floa
     n->wrap = (uint8_t)(p_playing && !rev);
     n->g_pos[0] = n->g_pos[1] = n->pos;  /* the grains start on the hit (the second at full: the attack whole) */
     n->g_age = 0.0f;
+    n->gate_left = -1.0f;
     n->active = 1;
     last_slice = s;
 }
@@ -155,6 +159,8 @@ static void trigger(const brk_break_t *b, int32_t s, int rev)
     if (!b || s < 0 || (uint32_t)s >= b->nslices)
         return;
     voice_start(b, s, rev, -1.0f, 1.0f);
+    if (p_gate < 0.999f)                 /* the gate: this much of the slice, then a short fade */
+        v[cur].gate_left = p_gate * (float)(b->slice[s + 1] - b->slice[s]);
 }
 
 static brk_keyset_t keyset_of(int32_t s)
@@ -393,6 +399,7 @@ static void pads_changed(const brk_break_t *b, uint32_t now, float sl)
         c->lo = (float)b->slice[c->slice];
         c->hi = c->lo + (float)((b->slice[c->slice + 1] - b->slice[c->slice]) >> (p_ps.frz_len & 3u));
         c->loop = 1;
+        c->gate_left = -1.0f;            /* (held: no gate) */
     }
     if (off & 1u << PAD_FREEZE)
         v[0].loop = v[1].loop = 0;
@@ -437,6 +444,15 @@ static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float pf, fl
         o->g_age = age;
     }
     o->pos += inc * o->dir;
+    if (o->gate_left >= 0.0f) {          /* gated: once it has played its share, it fades */
+        o->gate_left -= inc;
+        if (o->gate_left < 0.0f && o->amp_to > 0.0f) {
+            o->amp_to = 0.0f;
+            o->amp_step = o->amp / GATE_FADE;
+            if (o->amp_step <= 0.0f)
+                o->amp_step = 1.0f / GATE_FADE;
+        }
+    }
     if (o->dir > 0.0f ? o->pos >= o->hi : o->pos < o->lo) {
         if (o->wrap && !o->loop && o->dir > 0.0f && o->hi >= (float)b->len)
             o->pos -= (float)b->len;     /* a loop player: round again */
@@ -801,6 +817,7 @@ void brk_pitch_mode(int keep_length, float grain_ms)
     p_keep = keep_length != 0;
 }
 void brk_swing(float s) { p_swing = brk_clampf(s, 0.5f, 0.75f); }
+void brk_gate(float g) { p_gate = brk_clampf(g, 0.05f, 1.0f); }
 void brk_gen(const brk_gen_t *g) { p_gen = *g; }
 void brk_seed(uint32_t seed) { rng = seed ? seed : 1u; }
 void brk_pattern_len(uint32_t len) { p_len = len > BRK_MAX_STEPS ? BRK_MAX_STEPS : len; }

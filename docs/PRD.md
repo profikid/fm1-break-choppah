@@ -252,6 +252,7 @@ on the keys, eyes on the crowd.
 | B-23 | Pattern change quantised to the bar; chain patterns (song mode, up to 32 entries) | P1 | |
 | B-24 | Copy/paste step, page, pattern (SEL+SAVE / SEL+key) | P1 | |
 | B-25 | Knob motion recording (one lane per FX param, P-lock style) | P2 | |
+| B-30 | **Gate** (PERFORM K3, global): every slice the loop plays sounds for 5–100 % of its own length, then a 3 ms fade; follows tempo and pitch; for the loop, ratchets and RANDOM (key loops and rolls have their own lengths; FREEZE ungates). Replaced the PERFORM page's copy of CMPLX (still on GENERATOR). *Done 31 Oct 2026; engine test: at 25 % the second half of each slice is silent* | P1 | |
 
 ### 5.4 Performance screen (HOME)
 

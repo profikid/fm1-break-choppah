@@ -155,12 +155,17 @@ tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay sp
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| HOME (perform) | DJ filter (left low-pass, right high-pass) | Swing | Complexity | Crunch |
+| HOME (perform) | DJ filter (left low-pass, right high-pass) | Swing | Gate | Crunch |
 | ARP (generator) | Complexity | Anchor | Roll | Fill |
 | FX | the focused effect's settings and mix (ALGORITHM picks the effect, FX again turns it on or off) | | | |
 | ENV (soundboard) | Level | Pitch | Echo | Length |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch) | Speed / keep length | Grain | | |
+
+**Gate** (HOME K3) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then
+quiet until the next; down to 5 % for clipped, staccato chops; 100 % is off. It follows the tempo and the pitch, and
+the slice lit in the waveform shrinks with it. It covers the loop's slices, ratchets and the RANDOM pad; key loops
+(their LENGTH) and rolls keep their own; FREEZE holds the slice whole.
 
 The generator rearranges the break as it plays: **complexity** is how often it jumps, **anchor** keeps the kick and
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar

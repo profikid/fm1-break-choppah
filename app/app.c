@@ -38,7 +38,9 @@ typedef struct {
     uint8_t midi_to;                     /* where MIDI goes: 0 USB and Bluetooth, 1 USB, 2 Bluetooth */
     uint8_t pitch_keep;                  /* pitch: 0 SPEED (repitch), 1 KEEP LENGTH (granular) */
     uint8_t grain_ms;                    /* its grains, 10..80 ms (0: 30) */
-    uint8_t rsv[9];                      /* (zero in older saves: so these load as off, off, on, both, SPEED, 30) */
+    uint8_t gate;                        /* how much of each slice sounds, 5..100 % (0: 100, off) */
+    uint8_t rsv[8];                      /* (zero in older saves: so these load as off, off, on, both, SPEED, 30,
+                                          * no gate) */
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
@@ -79,6 +81,7 @@ static void settings_apply(void)
     brk_fx_tempo((float)set.tempo_x10 * 0.1f);
     brk_padset(&set.pads);
     brk_pitch_mode(set.pitch_keep, (float)(set.grain_ms ? set.grain_ms : 30u));
+    brk_gate((float)(set.gate ? set.gate : 100u) * 0.01f);
     sfx_set(&set.sfx);
     {
         uint32_t k;
@@ -559,9 +562,12 @@ static void knob_turn(int k, int32_t d)
         } else if (k == EN_K2) {
             set.swing = (uint8_t)clamp((int32_t)set.swing + d, 50, 75);
             say_int("SWING", set.swing, "%");
-        } else if (k == EN_K3) {
-            set.gen.complexity = knob_f(set.gen.complexity, d, 0.02f, 0.0f, 1.0f);
-            say_int("COMPLEXITY", (int32_t)(set.gen.complexity * 100.0f), "%");
+        } else if (k == EN_K3) {         /* the gate: how much of every slice sounds (complexity: GENERATOR) */
+            set.gate = (uint8_t)clamp((int32_t)(set.gate ? set.gate : 100u) + d * 5, 5, 100);
+            if (set.gate >= 100u)
+                app_say("GATE", "OFF");
+            else
+                say_int("GATE", set.gate, "%");
         } else if (k == EN_K4) {         /* FX mix: the degrader's depth, off at 0 */
             f->deg_bits = knob_f(f->deg_bits, -d, 0.25f, 2.0f, 16.0f);
             f->on[FX_DEGRADE] = f->deg_bits < 15.9f;
@@ -1194,8 +1200,12 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
             int_text(set.swing, t);
             text_cat(t, "%");
         } else if (i == 2) {
-            int_text((int32_t)(set.gen.complexity * 100.0f), t);
-            text_cat(t, "%");
+            if (!set.gate || set.gate >= 100u)
+                text_cat(t, "OFF");
+            else {
+                int_text(set.gate, t);
+                text_cat(t, "%");
+            }
         } else {
             int_text(f->on[FX_DEGRADE] ? (int32_t)((16.0f - f->deg_bits) * 100.0f / 14.0f) : 0, t);
             text_cat(t, "%");
@@ -1265,6 +1275,8 @@ static void draw_wave(const brk_status_t *st, const brk_break_t *b)
             lit_a = (int32_t)(b->slice[st->slice] * 240u / b->len);
             lit_z = (int32_t)(b->slice[st->slice + 1] * 240u / b->len);
             cv_rect(lit_a, 2, lit_z - lit_a, 50, C_BLOCK);
+            if (set.gate && set.gate < 100u && st->key < 0)   /* gated: only the part that sounds lit */
+                lit_z = lit_a + ((lit_z - lit_a) * (int32_t)set.gate + 99) / 100;
         }
         for (i = 0; i < 240u; i++) {
             int32_t h = wave_px[i];
@@ -1412,7 +1424,7 @@ static void draw_blocks(const brk_status_t *st, uint32_t keys)
 /* the foot: the pads, then the page and its knobs with their values */
 static void draw_foot(const brk_status_t *st)
 {
-    static const char *const KN[NPAGES][4] = {{"FILTER", "SWING", "CMPLX", "CRUNCH"},
+    static const char *const KN[NPAGES][4] = {{"FILTER", "SWING", "GATE", "CRUNCH"},
                                               {"CMPLX", "ANCHOR", "ROLL", "FILL"},
                                               {"P1", "P2", "P3", "MIX"},
                                               {"LEVEL", "PITCH", "ECHO", "LENGTH"},

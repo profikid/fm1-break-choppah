@@ -128,6 +128,10 @@ void brk_pitch(float semitones);         /* -24..+24, on top of the tempo's repi
  * repitch, HALF, REVERSE's speed, the tape stop and the rewind stay speed */
 void brk_pitch_mode(int keep_length, float grain_ms);
 void brk_swing(float s);                 /* 0.5 straight .. 0.75 */
+/* the gate (PRD B-30): how much of each slice the loop plays sounds, 0.05..1 (1: all of it). A slice gated at g
+ * fades out once it has played g of its own length (at whatever speed), so it follows the tempo and the pitch. For
+ * the loop's slices, ratchets and the RANDOM pad; key loops and rolls have their own lengths */
+void brk_gate(float g);
 
 /* the white keys: a press plays slice s at the next step (or at once when stopped: free play); held, it loops its
  * window (brk_keyset) until released, the last key pressed winning */

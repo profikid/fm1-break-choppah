@@ -33,7 +33,7 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
 | ALGORITHM | The next break (five synth styles, then 12 recorded Amens) |
 | ENV | SOUNDBOARD: the white keys fire 16 sound-system effects over the break: air horn, dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank, scratch, rewind (pull-up). K1 level · K2 pitch · K3 echo into the dub delay · K4 length |
-| HOME | PERFORM: K1 DJ filter · K2 swing · K3 complexity · K4 crunch |
+| HOME | PERFORM: K1 DJ filter · K2 swing · K3 **gate** (how much of every slice sounds: 100 % off, down to 5 % for tight, clipped chops) · K4 crunch |
 | ARP | GENERATOR: complexity · anchor · roll · fill · SEL + ARP: random pattern |
 | FX | FX: ALGORITHM picks the effect, K1–K4 its settings, FX again turns it on or off |
 | GLO | GLOBAL: K1 MIDI clock in (follow tempo and start / stop), K2 clock out (24 ppqn, start / stop), K3 Bluetooth MIDI on / off (shows up as "CHOPPAH XXXX" in a MIDI app's Bluetooth page), K4 where MIDI goes (USB, Bluetooth, both). **GLO again**: K1 pitch SPEED or KEEP LENGTH (pitch without changing the slices' length), K2 grain size |
