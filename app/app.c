@@ -129,6 +129,8 @@ static uint8_t wave_px[240];             /* the waveform's height per column, fo
 static uint8_t blk_px[BLK_N][BLK_W];     /* each slice's waveform, 0..19 */
 static uint8_t blk_n;                    /* blocks with a slice behind them */
 static volatile uint8_t muted;
+static volatile float meter_l, meter_r;  /* the output's peaks as it leaves (after MASTER: 1 = full scale), falling
+                                          * ~20 dB a second: the render writes, the header's meter reads */
 
 static void wave_build(const brk_break_t *b)
 {
@@ -360,6 +362,20 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         sfx_render(fx, m);               /* the soundboard, over the break, into the delay at its echo */
         brk_status(&st);
         brk_fx_process(mono, fx, sfx_echo(), echo, verb, l, r, m, st.pads);
+        {                                /* the meter: this block's peaks as they leave, or the last ones falling */
+            float pl = 0.0f, pr = 0.0f, fl = meter_l * 0.987f, fr = meter_r * 0.987f, out = gain * (1.0f / 8388608.0f);
+            for (i = 0; i < m; i++) {
+                float a = l[i] < 0.0f ? -l[i] : l[i], b2 = r[i] < 0.0f ? -r[i] : r[i];
+                if (a > pl)
+                    pl = a;
+                if (b2 > pr)
+                    pr = b2;
+            }
+            pl *= out;
+            pr *= out;
+            meter_l = pl > fl ? pl : fl;
+            meter_r = pr > fr ? pr : fr;
+        }
         for (i = 0; i < m; i++) {
             lr[2u * i] = (int32_t)(l[i] * gain);
             lr[2u * i + 1u] = (int32_t)(r[i] * gain);
@@ -403,6 +419,8 @@ static struct {
     uint32_t key_since;                  /* when it was pressed */
     int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
     uint8_t gpage;                       /* the GLOBAL page's half: 0 MIDI and Bluetooth, 1 pitch */
+    int16_t meter_x;                     /* the header's level meter: where (0: not shown now, a message is) */
+    uint32_t meter_drawn;
     uint32_t pad_since, fx_drawn;        /* when it was pressed; the animation's last frame */
     float reel;                          /* the tape stop's reels, turns */
     uint8_t redraw;                      /* RG_* bits: the regions to draw again */
@@ -1460,11 +1478,33 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
         fx_value(ui.fx_focus, i, t);
 }
 
+/* the header's level meter: what leaves, left and right, -48..0 dBFS in 18 steps of 2.7 dB; amber from -8 dB, the
+ * top white near full scale */
+static void draw_meter(void)
+{
+    float lv[2];
+    uint32_t c;
+    int32_t h;
+    lv[0] = meter_l;
+    lv[1] = meter_r;
+    cv_begin(8, 20, C_BLACK);
+    for (c = 0; c < 2u; c++) {
+        for (h = 0; h < 18; h++)         /* the steps it is above: -48 dB + 2.67 dB each (2^(dB / 6.02)) */
+            if (lv[c] < brk_exp2f(((float)h * (48.0f / 18.0f) - 48.0f) * (1.0f / 6.0206f)))
+                break;
+        cv_rect((int32_t)c * 4, 1, 3, 18, C_BLOCK);
+        if (h)
+            cv_rect((int32_t)c * 4, 19 - h, 3, h, h >= 18 ? C_WHITE : h >= 15 ? C_AMB : C_HI);
+    }
+    cv_blit(ui.meter_x, 4);
+}
+
 /* the header: the break and the tempo, a play / stop mark; or a message for a moment */
 static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now)
 {
     char t[24];
     cv_begin(240, 28, C_BLACK);
+    ui.meter_x = 0;
     if (now < ui.msg_until) {
         int32_t x = cv_text(8, 6, &FONT_B, ui.msg[0], C_WHITE);
         cv_text(x + 8, 6, &FONT_B, ui.msg[1], C_HI);
@@ -1478,6 +1518,7 @@ static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now
         cv_text(24, 6, &FONT_B, b ? b->name : "NO BREAK", C_WHITE);
         tenths_text(set.tempo_x10, t);
         cv_text(232 - text_w(&FONT_B, t), 6, &FONT_B, t, C_HI);
+        ui.meter_x = (int16_t)(228 - text_w(&FONT_B, t) - text_w(&FONT_T, "BPM") - 12);   /* left of BPM */
         cv_text(228 - text_w(&FONT_B, t) - text_w(&FONT_T, ext_active() ? "EXT" : "BPM"), 10, &FONT_T,
                 ext_active() ? "EXT" : "BPM", ext_active() ? C_AMB : C_GRAY);
     }
@@ -1671,6 +1712,16 @@ static void draw_chain(void)
         }
         cv_text(6, 26, &FONT_XS, "ALGO: SLOT   PRESETS: EFFECT", C_DIM);
         cv_text(6, 38, &FONT_XS, "FX: ON / BYPASS   SEL+ALGO: MOVE", C_DIM);
+        {                                /* the whole chain's mix (HOME K4), to see, not to set */
+            char w[16];
+            pct_text(f->wet, v);
+            w[0] = 0;
+            text_cat(w, "FX ");
+            text_cat(w, v);
+            cv_text(234 - text_w(&FONT_T, w), 25, &FONT_T, w, f->wet > 0.005f ? C_HI : C_DIM);
+            cv_rect(194, 41, 40, 3, C_BLOCK);
+            cv_rect(194, 41, (int32_t)(40.0f * f->wet + 0.5f), 3, f->wet > 0.005f ? C_HI : C_DIM);
+        }
     }
     cv_blit(0, 140);
 }
@@ -2153,10 +2204,14 @@ void app_frame(void)
         ui.last_hdr = hdr;
         ui.redraw |= RG_HEAD;
     }
-    if (!ui.redraw)
-        return;
     if (ui.redraw & RG_HEAD)
         draw_head(&st, b, now);
+    if (ui.meter_x > 0 && now - ui.meter_drawn >= 33u) {   /* the level meter, about 30 times a second */
+        draw_meter();
+        ui.meter_drawn = now;
+    }
+    if (!ui.redraw)
+        return;
     if (ui.redraw & RG_WAVE)
         draw_wave(&st, b);
     if (ui.redraw & RG_FX) {

@@ -39,7 +39,8 @@ seconds, or at once on any key, the **slicer view** opens. PLAY on the start scr
 
 The slicer view, top to bottom:
 
-- **Header:** play or stop, the break's name, the tempo.
+- **Header:** play or stop, the break's name, a level meter (left and right, what leaves after MASTER: amber from
+  −8 dB, white near full scale), the tempo.
 - **The break:** its waveform, the slice markers, the slice sounding lit, the playhead.
 - **Slice blocks:** sixteen blocks, one per white key, each with its slice's waveform. The slice sounding is lit;
   a key held is outlined; a dot marks a key with a loop of its own (§3, key loops).
@@ -159,7 +160,7 @@ its settings as bars over K1–K4.
 | K1–K3 · K4 | Its settings · its mix |
 | FX (on the page) | That slot on / bypassed |
 | SEL + ALGORITHM | Moves that slot along the chain (the order is the sound: DRIVE before a FILTER is not a FILTER before DRIVE) |
-| HOME K4 FX | The whole chain against the dry break: fade every effect in or out at once |
+| HOME K4 FX | The whole chain against the dry break: fade every effect in or out at once (the FX page shows it, bottom right) |
 
 | Effect | K1 | K2 | K3 |
 | --- | --- | --- | --- |
