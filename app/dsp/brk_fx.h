@@ -17,9 +17,15 @@
  *   TREMOLO  rate (1/2 1/4 1/8 1/16 1/32 1/8T, on the tempo), depth, pan (0 tremolo .. 1 auto-pan)
  *   REVERB   size (decay 0.25..0.97), tone (bright .. dark), pre-delay (0..60 ms); its mix is the reverb's level over
  *            the dry sound. A Dattorro plate (stereo, modulated) at 22.05 kHz inside, 16-bit lines: there is one, so
- *            a second REVERB slot passes the sound on */
+ *            a second REVERB slot passes the sound on
+ *   DELAY    time on the tempo (1/16 1/8 3/16 1/4 3/8 1/2 1/8T 1/4T), feedback, tone (dark .. bright repeats); its mix
+ *            is the SEND into it (the echoes come back at full): a stereo ping-pong at 22.05 kHz on the DUB pad's
+ *            line (0.74 s at most). One: it is also where the DUB pad, the soundboard's echo and the slices' ECHO
+ *            throw; without a DELAY slot the delay sits after the chain with the DUB pad's settings */
 enum { FXT_EMPTY, FXT_FILTER, FXT_CRUNCH, FXT_DRIVE, FXT_PUNCH, FXT_FLANGER, FXT_RING, FXT_TREMOLO, FXT_REVERB,
-       BRK_NFXT };
+       FXT_DELAY, BRK_NFXT };
+#define BRK_DLY_DIVS 8u
+extern const char *const BRK_DLY_DIV_NAME[BRK_DLY_DIVS];
 extern const char *const BRK_FXT_NAME[BRK_NFXT];
 #define BRK_TREM_DIVS 6u
 extern const char *const BRK_TREM_DIV_NAME[BRK_TREM_DIVS];
@@ -55,6 +61,7 @@ void brk_fx_delay_buffer(int16_t *buf, uint32_t n);
 void brk_fx_tempo(float bpm);
 float brk_fx_dj_now(void);               /* where the DJ filter is right now, -1..1 (for the screen) */
 /* in: the break (through the chain); aux: the soundboard (0 for none), joined after the chain, into the DJ filter
- * and the limiter, and sent into the dub delay at aux_send. pads: brk_status_t.pads */
-void brk_fx_process(const float *in, const float *aux, float aux_send, float *l, float *r, uint32_t n,
-                    uint32_t pads);
+ * and the limiter, and thrown into the delay at aux_send; echo, verb: the slices' throws into the delay and the
+ * reverb (brk_sends; 0 for none). pads: brk_status_t.pads */
+void brk_fx_process(const float *in, const float *aux, float aux_send, const float *echo, const float *verb,
+                    float *l, float *r, uint32_t n, uint32_t pads);

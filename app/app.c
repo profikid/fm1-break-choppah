@@ -23,7 +23,7 @@
 #endif
 
 /* ------------------------------------------------------------------ settings --- */
-#define SET_MAGIC 0x35504843u            /* "CHP5" (the FX chain): another magic loads defaults */
+#define SET_MAGIC 0x36504843u            /* "CHP6" (the slices' effects): another magic loads defaults */
 typedef struct {
     uint32_t magic;
     uint16_t tempo_x10;                  /* 400..3000 */
@@ -46,6 +46,7 @@ typedef struct {
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
+    brk_slicefx_t slx[BRK_KEYS];         /* each slice's own effect and level (a key held, FX: its other layer) */
 } settings_t;
 static settings_t set;
 static uint8_t set_dirty;
@@ -68,8 +69,10 @@ static void settings_defaults(void)
     sfx_defaults(&set.sfx);
     {
         uint32_t k;
-        for (k = 0; k < BRK_KEYS; k++)
+        for (k = 0; k < BRK_KEYS; k++) {
             brk_keyset_defaults(&set.keys[k]);
+            brk_slicefx_defaults(&set.slx[k]);
+        }
     }
 }
 
@@ -98,8 +101,10 @@ static void settings_apply(void)
     sfx_set(&set.sfx);
     {
         uint32_t k;
-        for (k = 0; k < BRK_KEYS; k++)
+        for (k = 0; k < BRK_KEYS; k++) {
             brk_keyset(k, &set.keys[k]);
+            brk_slicefx(k, &set.slx[k]);
+        }
     }
 }
 
@@ -329,7 +334,7 @@ void app_tick(void)
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
-    static float mono[APP_BLOCK], fx[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK];
+    static float mono[APP_BLOCK], fx[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK], echo[APP_BLOCK], verb[APP_BLOCK];
     float gain = muted ? 0.0f : (float)master_q12 * (1.0f / 4096.0f) * 8300000.0f;
     brk_status_t st;
     uint32_t t0 = plat_ms(), done = 0u, total = n;
@@ -341,6 +346,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     }
     while (n) {
         uint32_t m = n < APP_BLOCK ? n : APP_BLOCK, i;
+        brk_sends(echo, verb);           /* the slices' throws into the delay and the reverb */
         brk_render(mono, m);
         if (set.clk_out) {               /* clock out: each tick due as its sample plays (a block from now) */
             uint16_t off[16];
@@ -353,7 +359,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         done += m;
         sfx_render(fx, m);               /* the soundboard, over the break, into the delay at its echo */
         brk_status(&st);
-        brk_fx_process(mono, fx, sfx_echo(), l, r, m, st.pads);
+        brk_fx_process(mono, fx, sfx_echo(), echo, verb, l, r, m, st.pads);
         for (i = 0; i < m; i++) {
             lr[2u * i] = (int32_t)(l[i] * gain);
             lr[2u * i + 1u] = (int32_t)(r[i] * gain);
@@ -392,6 +398,7 @@ static struct {
     uint32_t sfx_hit_t, sfx_drawn, sfx_mask;
     int8_t pad_focus;                    /* the pad held last (its animation, K1-K4 tune it); -1 none */
     int8_t key_focus;                    /* the white key held that loops (its view, K1-K4 tune it); -1 none */
+    uint8_t key_layer;                   /* K1-K4 on a key held: 0 its loop, 1 its slice's effect (FX flips) */
     uint8_t key_turned;                  /* a knob turned while it is held: its view at once */
     uint32_t key_since;                  /* when it was pressed */
     int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
@@ -492,13 +499,13 @@ static void times_text(float v, char *t);
 static const char *const FXP_NAME[BRK_NFXT][3] = {
     {"", "", ""}, {"CUTOFF", "RESO", "MODE"}, {"BITS", "RATE", "DRIVE"}, {"GAIN", "TONE", "LEVEL"},
     {"AMOUNT", "ATTACK", "RELEASE"}, {"RATE", "DEPTH", "FEEDBK"}, {"FREQ", "SPREAD", ""}, {"RATE", "DEPTH", "PAN"},
-    {"SIZE", "TONE", "PRE"}};
+    {"SIZE", "TONE", "PRE"}, {"TIME", "FEEDBK", "TONE"}};
 
 static const char *fx_param_name(uint32_t slot, int i)
 {
     const brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
     if (i == 3)
-        return sl->type == FXT_EMPTY ? "" : "MIX";
+        return sl->type == FXT_EMPTY ? "" : sl->type == FXT_DELAY ? "SEND" : "MIX";
     return FXP_NAME[sl->type < BRK_NFXT ? sl->type : 0][i & 3];
 }
 
@@ -563,6 +570,12 @@ static void fx_value(uint32_t slot, int i, char *t)
         }
         return;
     case FXT_REVERB * 4 + 2: int_text((int32_t)(v * 60.0f + 0.5f), t); text_cat(t, "MS"); return;
+    case FXT_DELAY * 4 + 0: {
+        uint32_t d = (uint32_t)(v * (float)(BRK_DLY_DIVS - 1u) + 0.5f);
+        text_cat(t, BRK_DLY_DIV_NAME[d < BRK_DLY_DIVS ? d : 0u]);
+        return;
+    }
+    case FXT_DELAY * 4 + 1: pct_text(v * 0.95f, t); return;
     case FXT_TREMOLO * 4 + 0: {
         uint32_t d = (uint32_t)(v * (float)(BRK_TREM_DIVS - 1u) + 0.5f);
         text_cat(t, BRK_TREM_DIV_NAME[d < BRK_TREM_DIVS ? d : 0u]);
@@ -588,6 +601,8 @@ static void fx_knob_turn(uint32_t slot, int i, int32_t d)
             step = 0.5f;                 /* LP, BP, HP */
         else if (sl->type == FXT_TREMOLO && i == 0)
             step = 1.0f / (float)(BRK_TREM_DIVS - 1u);
+        else if (sl->type == FXT_DELAY && i == 0)
+            step = 1.0f / (float)(BRK_DLY_DIVS - 1u);
         sl->p[i] = knob_f(sl->p[i], d, step, 0.0f, 1.0f);
     }
     fx_value(slot, i, t);
@@ -845,6 +860,17 @@ static void roll_decay_text(float dc, char *t)
     text_cat(t, v);
 }
 
+static void fx_value(uint32_t slot, int i, char *t);
+static void fx_knob_turn(uint32_t slot, int i, int32_t d);
+static int delay_slot(void)              /* the chain's DELAY in use (the first one on), -1 none */
+{
+    uint32_t k;
+    for (k = 0; k < BRK_FX_SLOTS; k++)
+        if (set.fx.slot[k].type == FXT_DELAY && set.fx.slot[k].on)
+            return (int)k;
+    return -1;
+}
+
 static void pad_knob_value(int pad, int k, char *t)
 {
     const brk_padset_t *p = &set.pads;
@@ -880,8 +906,9 @@ static void pad_knob_value(int pad, int k, char *t)
         else if (k == 1) pct_text(f->flt_res, t);
         else pct_text(f->flt_speed, t);
         break;
-    case PAD_DUB:
-        if (k == 0) text_cat(t, BRK_DUB_DIV_NAME[f->dub_div % BRK_DUB_DIVS]);
+    case PAD_DUB:                        /* with a DELAY in the chain, the pad throws into it: its settings */
+        if (delay_slot() >= 0) fx_value((uint32_t)delay_slot(), k, t);
+        else if (k == 0) text_cat(t, BRK_DUB_DIV_NAME[f->dub_div % BRK_DUB_DIVS]);
         else pct_text(k == 1 ? f->dub_fb : k == 2 ? f->dub_tone : f->dub_mix, t);
         break;
     default: break;
@@ -926,6 +953,10 @@ static void pad_knob_turn(int pad, int k, int32_t d)
         else f->flt_speed = knob_f(f->flt_speed, d, 0.02f, 0.0f, 1.0f);
         break;
     case PAD_DUB:
+        if (delay_slot() >= 0) {         /* the DELAY slot's own settings */
+            fx_knob_turn((uint32_t)delay_slot(), k, d);
+            return;
+        }
         if (k == 0) f->dub_div = (uint8_t)clamp((int32_t)f->dub_div + d, 0, BRK_DUB_DIVS - 1);
         else if (k == 1) f->dub_fb = knob_f(f->dub_fb, d, 0.02f, 0.0f, 0.95f);
         else if (k == 2) f->dub_tone = knob_f(f->dub_tone, d, 0.02f, 0.0f, 1.0f);
@@ -940,6 +971,47 @@ static void pad_knob_turn(int pad, int k, int32_t d)
 
 /* ------------------------------------------------- the white keys' own loops --- */
 static const char *const KEY_KNOB[4] = {"LENGTH", "PITCH", "START", "MODE"};
+static const char *const SLX_KNOB[4] = {"EFFECT", "AMOUNT", "TONE", "LEVEL"};
+static const char *const SLX_TAG[BRK_SLX] = {"", "LP", "HP", "CR", "DR", "RM", "EC", "VB"};
+
+/* a key's other layer (a key held, FX): its slice's own effect, amount, tone (the filters' resonance, RING's mix)
+ * and level */
+static void slx_knob_value(int key, int k, char *t)
+{
+    const brk_slicefx_t *f = &set.slx[key & 15];
+    t[0] = 0;
+    if (k == 0)
+        text_cat(t, BRK_SLX_NAME[f->type < BRK_SLX ? f->type : 0]);
+    else if (k == 1)
+        pct_text(f->type == SLX_OFF ? 0.0f : (float)f->amount * 0.01f, t);
+    else if (k == 2) {
+        if (f->type == SLX_LOPASS || f->type == SLX_HIPASS || f->type == SLX_RING)
+            pct_text((float)f->tone * 0.01f, t);
+        else
+            text_cat(t, "-");
+    } else
+        pct_text((float)f->level * 0.01f, t);
+}
+
+static void slx_knob_turn(int key, int k, int32_t d)
+{
+    brk_slicefx_t *f = &set.slx[key & 15];
+    char t[16];
+    if (k == 0)
+        f->type = (uint8_t)clamp((int32_t)f->type + (d > 0 ? 1 : -1), 0, BRK_SLX - 1);
+    else if (k == 1)
+        f->amount = (uint8_t)clamp((int32_t)f->amount + d * 2, 0, 100);
+    else if (k == 2)
+        f->tone = (uint8_t)clamp((int32_t)f->tone + d * 2, 0, 100);
+    else if (k == 3)
+        f->level = (uint8_t)clamp((int32_t)f->level + d * 2, 0, 100);
+    else
+        return;
+    ui.key_turned = 1u;
+    slx_knob_value(key, k, t);
+    app_say(SLX_KNOB[k], t);
+    changed();
+}
 #define KEY_SHOW_MS 160u                 /* a key held this long (or a knob turned) takes the strip: taps don't */
 
 /* the key K1-K4 tune: the white key held, unless a pad was pressed after it */
@@ -1005,6 +1077,10 @@ static void key_knob_turn(int key, int k, int32_t d)
 {
     brk_keyset_t *ks = &set.keys[key & 15];
     char t[16], n[16];
+    if (ui.key_layer) {                  /* the slice's effect layer */
+        slx_knob_turn(key, k, d);
+        return;
+    }
     if (k == 0)
         ks->len = (uint8_t)clamp((int32_t)ks->len + d, 0, BRK_KEY_LENS - 1);
     else if (k == 1)
@@ -1116,7 +1192,12 @@ static void input(void)
         ui.page = PG_GEN;
         ui.redraw |= 8u;               /* RG_FOOT: the page */
     }
-    if (bdn & 1u << B_FX) {              /* FX: the chain's page; again: the focused slot on / bypassed */
+    if (bdn & 1u << B_FX && key_tuned() >= 0) {   /* FX with a key held: its knobs, loop <-> slice effect */
+        ui.key_layer ^= 1u;
+        ui.key_turned = 1u;
+        app_say("KEY", ui.key_layer ? "SLICE FX" : "LOOP");
+        foot_dirty = 1u;
+    } else if (bdn & 1u << B_FX) {       /* FX: the chain's page; again: the focused slot on / bypassed */
         if (ui.page == PG_FX) {
             brk_fxslot_t *sl = &set.fx.slot[ui.fx_focus & 3u];
             if (sl->type == FXT_EMPTY)
@@ -1132,10 +1213,13 @@ static void input(void)
         ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
     }
     if (bdn & 1u << B_SEL && key_tuned() >= 0) {   /* SEL while a key is held: its loop back to the defaults */
-        brk_keyset_defaults(&set.keys[key_tuned()]);
+        if (ui.key_layer)
+            brk_slicefx_defaults(&set.slx[key_tuned()]);
+        else
+            brk_keyset_defaults(&set.keys[key_tuned()]);
         ui.key_turned = 1u;
         changed();
-        app_say("KEY", "RESET");
+        app_say(ui.key_layer ? "SLICE FX" : "KEY", "RESET");
     } else if (bdn & 1u << B_SEL && ui.page == PG_HOME && !(btn & 1u << B_ARP) && !ext_active())
         tap_tempo(now);
     if (bdn & 1u << B_SAVE) {
@@ -1613,6 +1697,9 @@ static void draw_blocks(const brk_status_t *st, uint32_t keys)
             cv_text(x + 3, 35, &FONT_T, t, on ? C_BLACK : have ? C_AMB : C_LINE);
             if (have && key_custom((int)k))  /* a loop of its own: a dot */
                 cv_rect(x + 21, 39, 4, 4, on ? C_BLACK : C_HI);
+            if (have && (set.slx[k].type || set.slx[k].level < 100u))   /* an effect of its own: its tag */
+                cv_text(x + 13, 35, &FONT_XS, set.slx[k].type ? SLX_TAG[set.slx[k].type] : "LV",
+                        on ? C_BLACK : C_HI);
         }
         cv_blit(0, 88u + row * 52u);
     }
@@ -1638,9 +1725,12 @@ static void draw_foot(const brk_status_t *st)
     for (i = 0; i < 4u; i++) {
         static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", ""};
         const char *name = ui.page == PG_GLOBAL && ui.gpage ? KN_PITCH[i] : KN[ui.page][i];
-        if (ui.shown >= 100) {           /* a white key held: its loop */
-            cv_text(4 + (int32_t)i * 60, 18, &FONT_T, KEY_KNOB[i], C_HI);
-            key_knob_value(ui.shown - 100, (int)i, t);
+        if (ui.shown >= 100) {           /* a white key held: its loop, or its slice's effect */
+            cv_text(4 + (int32_t)i * 60, 18, &FONT_T, ui.key_layer ? SLX_KNOB[i] : KEY_KNOB[i], C_HI);
+            if (ui.key_layer)
+                slx_knob_value(ui.shown - 100, (int)i, t);
+            else
+                key_knob_value(ui.shown - 100, (int)i, t);
             cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
             continue;
         }
@@ -1648,6 +1738,8 @@ static void draw_foot(const brk_status_t *st)
             name = PAD_KNOB[ui.shown][i];
             if (!name)
                 continue;
+            if (ui.shown == PAD_DUB && delay_slot() >= 0)
+                name = fx_param_name((uint32_t)delay_slot(), (int)i);   /* (TIME FEEDBK TONE SEND) */
             cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, C_HI);
             pad_knob_value(ui.shown, (int)i, t);
             cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
@@ -1921,10 +2013,24 @@ static void draw_key(int key, const brk_status_t *st, uint32_t now)
     int_text(key + 1, v);
     text_cat(t, v);
     text_cat(t, " ");
-    sixteenths_text(BRK_KEY_SLICES[ks->len % BRK_KEY_LENS] * key_sps(b), v);
-    text_cat(t, v);
-    x = cv_text(6, 0, &FONT_B, t, C_HI);
-    cv_text(x + 8, 4, &FONT_XS, BRK_KEY_MODE_NAME[ks->mode % BRK_KEY_MODES], C_GRAY);
+    if (ui.key_layer) {                  /* the effect layer: the slice's effect */
+        const brk_slicefx_t *sf = &set.slx[key & 15];
+        text_cat(t, "FX");
+        x = cv_text(6, 0, &FONT_B, t, C_HI);
+        t[0] = 0;
+        text_cat(t, BRK_SLX_NAME[sf->type < BRK_SLX ? sf->type : 0]);
+        if (sf->level < 100u) {
+            text_cat(t, "  LEVEL ");
+            pct_text((float)sf->level * 0.01f, v);
+            text_cat(t, v);
+        }
+        cv_text(x + 8, 4, &FONT_XS, t, sf->type ? C_AMB : C_GRAY);
+    } else {
+        sixteenths_text(BRK_KEY_SLICES[ks->len % BRK_KEY_LENS] * key_sps(b), v);
+        text_cat(t, v);
+        x = cv_text(6, 0, &FONT_B, t, C_HI);
+        cv_text(x + 8, 4, &FONT_XS, BRK_KEY_MODE_NAME[ks->mode % BRK_KEY_MODES], C_GRAY);
+    }
     if (ks->pitch) {
         key_knob_value(key, 1, v);
         cv_text(234 - text_w(&FONT_T, v), 2, &FONT_T, v, C_AMB);

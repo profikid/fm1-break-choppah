@@ -85,6 +85,19 @@ typedef struct {
     uint8_t mode;                        /* KEY_* */
 } brk_keyset_t;                          /* 4 bytes: written to the render as one word */
 extern const float BRK_KEY_SLICES[BRK_KEY_LENS];
+
+/* each slice's own effect (PRD B-32), whenever that slice plays (the loop, a key, a roll): a filter, crunch, drive or
+ * ring mod on the slice alone, or a throw of it into the FX chain's delay (ECHO) or reverb (VERB); and its own level.
+ * amount, tone and level are 0..100 */
+enum { SLX_OFF, SLX_LOPASS, SLX_HIPASS, SLX_CRUNCH, SLX_DRIVE, SLX_RING, SLX_ECHO, SLX_VERB, BRK_SLX };
+extern const char *const BRK_SLX_NAME[BRK_SLX];
+typedef struct {
+    uint8_t type;                        /* SLX_* */
+    uint8_t amount;                      /* LO-PASS: darker; HI-PASS: thinner; CRUNCH, DRIVE: more; RING: its pitch;
+                                          * ECHO, VERB: the send */
+    uint8_t tone;                        /* the filters' resonance; RING's mix */
+    uint8_t level;                       /* the slice's level */
+} brk_slicefx_t;                         /* 4 bytes: a word to the render */
 extern const char *const BRK_KEY_MODE_NAME[BRK_KEY_MODES];
 extern const char *const BRK_GATE_DIV_NAME[BRK_GATE_DIVS];
 
@@ -142,6 +155,10 @@ void brk_snap(float slices);
 void brk_key(int slice, int down);
 void brk_keyset_defaults(brk_keyset_t *k);   /* one slice, no pitch, from the slice's start, LOOP */
 void brk_keyset(uint32_t key, const brk_keyset_t *k);   /* main loop; the next repeat follows it */
+void brk_slicefx_defaults(brk_slicefx_t *f);   /* off, level 100 */
+void brk_slicefx(uint32_t slice, const brk_slicefx_t *f);   /* main loop; the slice's next hit follows it */
+/* the render, before brk_render: where it writes the slices' throws (ECHO, VERB) for the effects; 0: none */
+void brk_sends(float *echo, float *verb);
 void brk_pad(int pad, int down);
 void brk_gen(const brk_gen_t *g);
 void brk_padset_defaults(brk_padset_t *p);

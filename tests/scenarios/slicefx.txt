@@ -1,0 +1,41 @@
+# CHOPPAH: each slice's own effect (a key held, FX: its effect layer) and the chain's DELAY (the DUB pad throws into it)
+#   app/build/host/choppah_host tests/scenarios/slicefx.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 400
+key w4 down
+wait 300
+tap FX
+wait 100
+turn K1 1 10
+turn K2 15 10
+turn K4 -10 10
+wait 400
+shot x_key_fx.png
+key w4 up
+wait 400
+shot x_tags.png
+tap FX
+wait 200
+turn ALGO 3 10
+turn PRESET 3 10
+wait 300
+shot x_delay_slot.png
+key w0 down
+wait 300
+turn K1 6 10
+turn K2 25 10
+wait 300
+shot x_echo.png
+key w0 up
+wait 200
+wav slice_fx_delay.wav
+peakreset
+wait 3000
+expect peak_db_max >-30
+wavstop
+key b10 down
+wait 400
+shot x_dub_pad.png
+key b10 up
+wait 300

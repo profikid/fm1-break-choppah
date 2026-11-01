@@ -6,6 +6,8 @@
 
 #define FL_LEN 256u                      /* a flanger's line: 5.8 ms (it reaches 230 samples back) */
 
+static inline float soft(float x) { return x / (1.0f + brk_absf(x)); }
+static volatile float p_bpm = 170.0f;
 typedef struct { float ic1, ic2; } svf_t;  /* a TPT state-variable filter (Simper) */
 typedef struct { float a1, a2, a3, k; } svf_c;
 
@@ -14,7 +16,9 @@ static brk_fx_t fx;                      /* the render's copy */
 static float lim_gain = 1.0f, dj_s;      /* the limiter; the DJ filter's smoothed position */
 static svf_t dj_l, dj_r;
 const char *const BRK_FXT_NAME[BRK_NFXT] = {"EMPTY", "FILTER", "CRUNCH", "DRIVE", "PUNCH", "FLANGER", "RING MOD",
-                                            "TREMOLO", "REVERB"};
+                                            "TREMOLO", "REVERB", "DELAY"};
+const char *const BRK_DLY_DIV_NAME[BRK_DLY_DIVS] = {"1/16", "1/8", "3/16", "1/4", "3/8", "1/2", "1/8T", "1/4T"};
+static const float DLY_STEPS[BRK_DLY_DIVS] = {1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 8.0f, 4.0f / 3.0f, 8.0f / 3.0f};
 const char *const BRK_TREM_DIV_NAME[BRK_TREM_DIVS] = {"1/2", "1/4", "1/8", "1/16", "1/32", "1/8T"};
 static const float TREM_STEPS[BRK_TREM_DIVS] = {8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 4.0f / 3.0f};   /* 16ths a cycle */
 
@@ -140,13 +144,76 @@ static void rv_tick(float x, float decay, float damp, uint32_t pre, float *yl, f
                   rv_tap(RV_LDL2, RV(2673)) - rv_tap(RV_LDL3, RV(2111)) - rv_tap(RV_LAP6, RV(335)) -
                   rv_tap(RV_LDL4, RV(121)));
 }
-/* the dub delay: a 16-bit line the app hands over, its tone filter, the send's level */
+/* the delay: a stereo ping-pong at 22.05 kHz on the 16-bit line the app hands over (left and right interleaved), at
+ * a DELAY slot or after the chain (the DUB pad's settings) */
 const char *const BRK_DUB_DIV_NAME[BRK_DUB_DIVS] = {"1/8", "3/16", "1/4", "3/8"};
-static const float DUB_STEPS[BRK_DUB_DIVS] = {2.0f, 3.0f, 4.0f, 6.0f};
+static const uint8_t DUB_DIV_DLY[BRK_DUB_DIVS] = {1u, 2u, 3u, 4u};   /* the DUB pad's times among the delay's */
 static int16_t *dub_buf;
-static uint32_t dub_n, dub_w;
-static float dub_lp, dub_send, dub_time_s;
-static volatile float p_bpm = 170.0f;
+static uint32_t dub_n, dub_w;            /* (dub_n: frames of two) */
+static float dub_send;                   /* the DUB pad's throw, eased */
+static struct {
+    float lp_l, lp_r, y_l, y_r, yo_l, yo_r, in_prev, time_s;
+    uint8_t odd;
+} dl;
+typedef struct { float time, fb, tone, ret; } dl_c_t;   /* a block's: frames, feedback, the tone's coefficient, return */
+
+static inline float dl_read(uint32_t ch, float d)   /* d frames back, linear */
+{
+    float r = (float)dub_w - d, t;
+    uint32_t i;
+    while (r < 0.0f)
+        r += (float)dub_n;
+    i = (uint32_t)r;
+    t = r - (float)i;
+    return ((float)dub_buf[2u * (i % dub_n) + ch] * (1.0f - t) + (float)dub_buf[2u * ((i + 1u) % dub_n) + ch] * t)
+           * (1.0f / 32000.0f);
+}
+
+/* one 22.05 kHz frame: x in (mono), the echoes out. Left takes the input and right's echo fed back, right takes
+ * left's echo: the repeats bounce between the sides, darker each time */
+static void dl_tick(const dl_c_t *c, float x, float *yl, float *yr)
+{
+    float ol, or_;
+    dl.time_s += (c->time - dl.time_s) * 0.0005f;   /* a new time glides there (a tape's bend) */
+    ol = dl_read(0u, dl.time_s);
+    or_ = dl_read(1u, dl.time_s);
+    dl.lp_l += (ol - dl.lp_l) * c->tone;
+    dl.lp_r += (or_ - dl.lp_r) * c->tone;
+    dub_buf[2u * dub_w] = (int16_t)(soft(x + dl.lp_r * c->fb) * 32000.0f);
+    dub_buf[2u * dub_w + 1u] = (int16_t)(soft(dl.lp_l) * 32000.0f);
+    dub_w = (dub_w + 1u) % dub_n;
+    *yl = dl.lp_l;
+    *yr = dl.lp_r;
+}
+
+/* the delay at the full rate: a frame every other sample, linear between */
+static void dl_run(const dl_c_t *c, float x, float *yl, float *yr)
+{
+    if (dl.odd) {
+        dl.yo_l = dl.y_l;
+        dl.yo_r = dl.y_r;
+        dl_tick(c, 0.5f * (x + dl.in_prev), &dl.y_l, &dl.y_r);
+        *yl = 0.5f * (dl.yo_l + dl.y_l);
+        *yr = 0.5f * (dl.yo_r + dl.y_r);
+    } else {
+        *yl = dl.y_l;
+        *yr = dl.y_r;
+    }
+    dl.in_prev = x;
+    dl.odd ^= 1u;
+}
+
+static void dl_settings(dl_c_t *c, uint32_t div, float fb, float tone, float ret)
+{
+    float want = DLY_STEPS[div % BRK_DLY_DIVS] * 22050.0f * 60.0f / (p_bpm * 4.0f);
+    c->time = brk_clampf(want, 32.0f, (float)(dub_n - 4u));
+    if (dl.time_s <= 0.0f)
+        dl.time_s = c->time;
+    c->fb = brk_clampf(fb, 0.0f, 0.95f);
+    tone = brk_clampf(tone, 0.0f, 1.0f);
+    c->tone = 0.08f + 0.9f * tone * tone;
+    c->ret = ret;
+}
 
 static svf_c svf_coef(float hz, float res)
 {
@@ -183,7 +250,6 @@ static inline float fl_read(const float *buf, uint32_t w, float d)   /* d sample
     return buf[(uint32_t)i % FL_LEN] * (1.0f - t) + buf[(uint32_t)(i + 1) % FL_LEN] * t;
 }
 
-static inline float soft(float x) { return x / (1.0f + brk_absf(x)); }
 /* clean below 0.8, then a soft knee that never passes 1 */
 static inline float knee(float x)
 {
@@ -207,6 +273,7 @@ void brk_fx_slot_defaults(brk_fxslot_t *s, int type)
         {0.35f, 0.0f, 0.0f, 0.5f},       /* RING MOD: 100 Hz */
         {0.6f, 0.7f, 0.0f, 1.0f},        /* TREMOLO: 1/16 */
         {0.6f, 0.4f, 0.25f, 0.3f},       /* REVERB: a medium plate, 15 ms ahead */
+        {2.0f / 7.0f, 0.5f, 0.5f, 0.35f},   /* DELAY: 3/16, feedback 0.47 */
     };
     uint32_t t = (uint32_t)type < BRK_NFXT ? (uint32_t)type : 0u;
     s->type = (uint8_t)t;
@@ -244,7 +311,8 @@ void brk_fx_delay_buffer(int16_t *buf, uint32_t n)
         buf[i] = 0;
     dub_buf = buf;
     dub_w = 0u;
-    dub_n = buf ? n : 0u;
+    dl.lp_l = dl.lp_r = dl.y_l = dl.y_r = dl.yo_l = dl.yo_r = dl.in_prev = dl.time_s = 0.0f;
+    dub_n = buf ? n / 2u : 0u;           /* frames of left and right */
 }
 void brk_fx_tempo(float bpm) { p_bpm = brk_clampf(bpm, 40.0f, 300.0f); }
 float brk_fx_dj_now(void) { return dj_s; }
@@ -272,6 +340,9 @@ typedef struct {
 } slot_c_t;
 static slot_c_t sc[BRK_FX_SLOTS];
 static int rv_taken;                     /* a slot has the reverb this block (the first REVERB in the chain) */
+static int dl_taken;                     /* and the delay (the first DELAY, when the line is there) */
+static dl_c_t dl_slot_c;                 /* the DELAY slot's settings this block */
+static float cur_throw, cur_verb;        /* this sample's throws into the delay and the reverb */
 
 static void slot_block(uint32_t k)
 {
@@ -333,6 +404,14 @@ static void slot_block(uint32_t k)
         c->a = 0.25f + 0.72f * p0;
         c->b = 0.0005f + 0.7f * p1;
         c->g = (float)(uint32_t)(p2 * (float)(RV_PRE - 2u));
+        break;
+    case FXT_DELAY:                      /* the delay's settings; mix is the send */
+        if (dl_taken || !c->on || !dub_n) {
+            c->on = 0u;
+            break;
+        }
+        dl_taken = 1;
+        dl_settings(&dl_slot_c, (uint32_t)(p0 * (float)(BRK_DLY_DIVS - 1u) + 0.5f), p1 * 0.95f, p2, 1.0f);
         break;
     case FXT_TREMOLO: {                  /* a: the cycle's step (on the tempo), b: depth, g: pan */
         uint32_t d = (uint32_t)(p0 * (float)(BRK_TREM_DIVS - 1u) + 0.5f);
@@ -416,8 +495,16 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
         if (s->ph2 >= 1.0f)
             s->ph2 -= 1.0f;
         break;
+    case FXT_DELAY: {                    /* in: what reaches it at the send, and the throws; out: the dry and the
+                                          * echoes at full */
+        float el, er;
+        dl_run(&dl_slot_c, 0.5f * (yl + yr) * c->mix + cur_throw, &el, &er);
+        *xl = yl + el;
+        *xr = yr + er;
+        return;
+    }
     case FXT_REVERB: {                   /* the plate at half the rate: a new pair of outputs every other sample */
-        float in = 0.5f * (yl + yr), ol, or_;
+        float in = 0.5f * (yl + yr) + cur_verb, ol, or_;
         if (rv.odd) {
             rv.yo_l = rv.y_l;
             rv.yo_r = rv.y_r;
@@ -452,12 +539,13 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
     *xr += (yr - *xr) * c->mix;
 }
 
-void brk_fx_process(const float *in, const float *aux, float aux_send, float *l, float *r, uint32_t n,
-                    uint32_t pads)
+void brk_fx_process(const float *in, const float *aux, float aux_send, const float *echo, const float *verb,
+                    float *l, float *r, uint32_t n, uint32_t pads)
 {
     uint32_t i, k;
     svf_c djc;
-    float dj, dj_hz, dub_want = 0.0f, dub_lpk = 0.0f, dub_fb = 0.0f, wet;
+    float dj, dj_hz, wet;
+    dl_c_t dub_c;
     int dj_hp, throw = (pads >> PAD_FILTER) & 1u, dub_on = (pads >> PAD_DUB) & 1u;
     fx = *(const brk_fx_t *)&p_fx;
     wet = brk_clampf(fx.wet, 0.0f, 1.0f);
@@ -468,19 +556,17 @@ void brk_fx_process(const float *in, const float *aux, float aux_send, float *l,
     /* -1 .. 0: low-pass 18 kHz down to 80 Hz; 0 .. 1: high-pass 20 Hz up to 6 kHz (exponential sweeps) */
     dj_hz = dj_hp ? 20.0f * brk_exp2f(dj_s * 8.2f) : 18000.0f * brk_exp2f(dj_s * 7.8f);
     djc = svf_coef(dj_hz, throw ? brk_clampf(fx.flt_res, 0.0f, 0.95f) : 0.35f);
-    if (dub_n) {                         /* the dub delay's time (glides, a tape-ish pitch bend) and tone */
-        float want = DUB_STEPS[fx.dub_div % BRK_DUB_DIVS] * (float)BRK_SR * 60.0f / (p_bpm * 4.0f);
-        dub_want = brk_clampf(want, 64.0f, (float)(dub_n - 4u));
-        if (dub_time_s <= 0.0f)
-            dub_time_s = dub_want;
-        dub_lpk = 0.05f + 0.9f * brk_clampf(fx.dub_tone, 0.0f, 1.0f) * brk_clampf(fx.dub_tone, 0.0f, 1.0f);
-        dub_fb = brk_clampf(fx.dub_fb, 0.0f, 0.95f);
-    }
-    rv_taken = 0;
+    if (dub_n)                           /* the delay after the chain (no DELAY slot): the DUB pad's settings */
+        dl_settings(&dub_c, DUB_DIV_DLY[fx.dub_div % BRK_DUB_DIVS], fx.dub_fb, fx.dub_tone,
+                    brk_clampf(fx.dub_mix, 0.0f, 1.0f));
+    rv_taken = dl_taken = 0;
     for (k = 0; k < BRK_FX_SLOTS; k++)   /* the chain's settings, once a block */
         slot_block(k);
     for (i = 0; i < n; i++) {
         float x = in[i], xl = x, xr = x, lp;
+        dub_send += ((dub_on ? 1.0f : 0.0f) - dub_send) * 0.002f;
+        cur_throw = x * dub_send + (aux ? aux[i] * aux_send : 0.0f) + (echo ? echo[i] : 0.0f);
+        cur_verb = verb ? verb[i] : 0.0f;
         for (k = 0; k < BRK_FX_SLOTS; k++)   /* the chain, slot by slot */
             if (sc[k].on)
                 slot_run(k, &xl, &xr);
@@ -493,27 +579,11 @@ void brk_fx_process(const float *in, const float *aux, float aux_send, float *l,
             xl += a;
             xr += a;
         }
-        if (dub_n) {                     /* the dub delay: held, the pad sends the break in; the echoes ring on */
-            float d, rp, t, y;
-            int32_t i0;
-            dub_send += ((dub_on ? 1.0f : 0.0f) - dub_send) * 0.002f;
-            dub_time_s += (dub_want - dub_time_s) * 0.00005f;
-            d = dub_time_s;
-            rp = (float)dub_w - d;
-            while (rp < 0.0f)
-                rp += (float)dub_n;
-            i0 = (int32_t)rp;
-            t = rp - (float)i0;
-            y = ((float)dub_buf[(uint32_t)i0 % dub_n] * (1.0f - t) + (float)dub_buf[(uint32_t)(i0 + 1) % dub_n] * t)
-                * (1.0f / 32768.0f);
-            dub_lp += (y - dub_lp) * dub_lpk;    /* the tone: each echo darker */
-            {
-                float w = soft(0.5f * (xl + xr) * dub_send + (aux ? aux[i] * aux_send : 0.0f) + dub_lp * dub_fb);
-                dub_buf[dub_w] = (int16_t)(w * 32000.0f);
-            }
-            dub_w = (dub_w + 1u) % dub_n;
-            xl += dub_lp * fx.dub_mix;
-            xr += dub_lp * fx.dub_mix * 0.92f;   /* (a touch of width) */
+        if (dub_n && !dl_taken) {        /* the delay after the chain: the throws in, the echoes at the pad's mix */
+            float el, er;
+            dl_run(&dub_c, cur_throw, &el, &er);
+            xl += el * dub_c.ret;
+            xr += er * dub_c.ret;
         }
         if (dj_s < -0.01f || dj_s > 0.01f) {   /* the master DJ filter */
             float hl = svf_run(&dj_l, &djc, xl, &lp);

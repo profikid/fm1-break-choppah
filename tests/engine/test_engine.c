@@ -263,7 +263,7 @@ static void fx_run(const brk_fx_t *p, uint32_t n)
     brk_fx_init();
     brk_fx_set(p);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0.0f, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
+        brk_fx_process(buf + i, 0, 0.0f, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
 }
 
 static void test_fx(void)
@@ -516,14 +516,14 @@ static void test_dub(void)
     brk_play(1);
     render(buf, n, 0, 0, 0);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0.0f, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
+        brk_fx_process(buf + i, 0, 0.0f, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
     brk_play(0);
     brk_pad(PAD_DUB, 0);
     for (i = 0; i < BLOCK; i++)
         buf[i] = 0.0f;
     for (i = 0; i < s * 8u; i += BLOCK) {    /* silence in, two bars of it */
         uint32_t j;
-        brk_fx_process(buf, 0, 0.0f, bl, br, BLOCK, 0u);
+        brk_fx_process(buf, 0, 0.0f, 0, 0, bl, br, BLOCK, 0u);
         for (j = 0; j < BLOCK; j++)
             if (fabsf(bl[j]) > tail)
                 tail = fabsf(bl[j]);
@@ -647,7 +647,7 @@ static void test_sfx_echo(void)
     sfx_trigger(SFX_LASER);
     for (i = 0; i < BRK_SR * 2u; i += BLOCK) {
         sfx_render(a, BLOCK);
-        brk_fx_process(z, a, 0.8f, bl, br, BLOCK, 0u);
+        brk_fx_process(z, a, 0.8f, 0, 0, bl, br, BLOCK, 0u);
         if (i > BRK_SR)                  /* the laser is long over by now */
             for (j = 0; j < BLOCK; j++)
                 if (fabsf(bl[j]) > tail)
@@ -1025,6 +1025,94 @@ static void test_stop(void)
     brk_key(5, 0);
 }
 
+/* the DELAY slot: a click comes back on the left at the time, then on the right, ping-pong; and the slices' own
+ * effects: a level of 0 silences that slice alone, a LO-PASS darkens it, an ECHO throws it alone into the delay */
+static int16_t dly_line[32768];
+static void test_delay_slices(void)
+{
+    brk_fx_t p;
+    uint32_t i, n = BRK_SR * 2u, T = (uint32_t)(3.0f * 22050.0f * 60.0f / (170.0f * 4.0f)) * 2u, pkl = 0, pkr = 0;
+    float ml = 0.0f, mr = 0.0f;
+    brk_fx_init();
+    brk_fx_delay_buffer(dly_line, 32768u);
+    brk_fx_tempo(170.0f);
+    for (i = 0; i < n; i++)
+        buf[i] = i == 1000u ? 1.0f : 0.0f;
+    brk_fx_defaults(&p);
+    brk_fx_slot_defaults(&p.slot[0], FXT_DELAY);   /* 3/16 */
+    p.slot[0].on = 1u;
+    p.slot[0].mix = 1.0f;
+    brk_fx_set(&p);
+    for (i = 0; i < n; i += BLOCK)
+        brk_fx_process(buf + i, 0, 0.0f, 0, 0, bl + i, br + i, BLOCK, 0u);
+    for (i = 1100u; i < 1000u + T + T / 2u; i++) {   /* the first echo: left only */
+        if (fabsf(bl[i]) > ml) { ml = fabsf(bl[i]); pkl = i; }
+        if (fabsf(br[i]) > mr) mr = fabsf(br[i]);
+    }
+    CHECK(ml > 0.02f && mr < ml * 0.1f && pkl > 1000u + T - 8u && pkl < 1000u + T + 8u,
+          "delay: the first echo on the left at 3/16 (%u samples on, want %u; right %.3f)", pkl - 1000u, T, mr);
+    ml = mr = 0.0f;
+    for (i = 1000u + T + T / 2u; i < 1000u + 2u * T + T / 2u; i++) {   /* the second: right */
+        if (fabsf(br[i]) > mr) { mr = fabsf(br[i]); pkr = i; }
+        if (fabsf(bl[i]) > ml) ml = fabsf(bl[i]);
+    }
+    CHECK(mr > 0.02f && ml < mr * 0.1f && pkr > 1000u + 2u * T - 12u && pkr < 1000u + 2u * T + 12u,
+          "delay: the second on the right, ping-pong (%u on)", pkr - 1000u);
+    brk_fx_delay_buffer(0, 0u);
+    /* the slices' own effects, through the engine */
+    {
+        brk_slicefx_t f;
+        uint32_t sl, k, zc[2];
+        float lv[2], e_on, e_off;
+        static float ebuf[BRK_SR * 2u];
+        for (k = 0; k < 2u; k++) {       /* level: slice 4 at 0 */
+            fresh(1);
+            sl = brk_step_len_samples();
+            brk_slicefx_defaults(&f);
+            f.level = k ? 0u : 100u;
+            brk_slicefx(4u, &f);
+            brk_play(1);
+            render(buf, sl * 4u + sl / 10u, 0, 0, 0);
+            lv[k] = render(buf, sl * 8u / 10u, 0, 0, 0);    /* inside step 4 */
+        }
+        CHECK(lv[0] > 0.05f && lv[1] < 0.001f, "slice level 0: that slice silent (%.3f, was %.3f)", lv[1], lv[0]);
+        for (k = 0; k < 2u; k++) {       /* LO-PASS on slice 2 (a snare's hiss): fewer zero crossings */
+            uint32_t j;
+            fresh(1);
+            sl = brk_step_len_samples();
+            brk_slicefx_defaults(&f);
+            f.type = k ? SLX_LOPASS : SLX_OFF;
+            f.amount = 85u;
+            brk_slicefx(2u, &f);
+            brk_play(1);
+            render(buf, sl * 2u + 64u, 0, 0, 0);
+            render(buf, sl / 2u, 0, 0, 0);
+            for (j = 1, zc[k] = 0; j < sl / 2u; j++)
+                if ((buf[j - 1] < 0.0f) != (buf[j] < 0.0f))
+                    zc[k]++;
+        }
+        CHECK(zc[1] < zc[0] / 2u, "slice LO-PASS: darker (%u crossings, was %u)", zc[1], zc[0]);
+        /* ECHO on slice 0 only: its throw is there while slice 0 plays, and nothing while slice 1 does */
+        fresh(1);
+        sl = brk_step_len_samples();
+        brk_slicefx_defaults(&f);
+        f.type = SLX_ECHO;
+        f.amount = 100u;
+        brk_slicefx(0u, &f);
+        brk_sends(ebuf, 0);
+        brk_play(1);
+        render(buf, sl / 2u, 0, 0, 0);
+        for (i = 0, e_on = 0.0f; i < sl / 2u; i++)
+            e_on += fabsf(ebuf[i]);
+        render(buf, sl / 2u + 64u, 0, 0, 0);
+        render(buf, sl / 2u, 0, 0, 0);
+        for (i = 0, e_off = 0.0f; i < sl / 2u; i++)
+            e_off += fabsf(ebuf[i]);
+        brk_sends(0, 0);
+        CHECK(e_on > 1.0f && e_off < 0.01f, "slice ECHO: slice 0 thrown (%.2f), slice 1 not (%.4f)", e_on, e_off);
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -1041,6 +1129,7 @@ int main(int argc, char **argv)
     test_snap();
     test_reverb();
     test_stop();
+    test_delay_slices();
     test_generator();
     test_pads();
     test_fx();

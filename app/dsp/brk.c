@@ -25,6 +25,10 @@ static brk_gen_t p_gen;
 static brk_padset_t p_ps;                /* the pads' settings (brk_padset) */
 static brk_step_t pat[BRK_MAX_STEPS];
 static volatile uint32_t p_keys[BRK_KEYS];   /* the white keys' settings, a brk_keyset_t a word */
+static volatile uint32_t p_slx[BRK_KEYS];    /* each slice's effect, a brk_slicefx_t a word */
+typedef union { uint32_t w; brk_slicefx_t f; } slxword_t;
+const char *const BRK_SLX_NAME[BRK_SLX] = {"OFF", "LO-PASS", "HI-PASS", "CRUNCH", "DRIVE", "RING MOD", "ECHO", "VERB"};
+static float *send_echo, *send_verb;     /* the render's throws (brk_sends) */
 typedef union { uint32_t w; brk_keyset_t k; } keyword_t;
 
 const char *const BRK_ROLL_DIV_NAME[BRK_ROLL_DIVS] = {"1/4", "1/8", "1/16", "1/32", "1/64", "1/8T", "1/16T", "1/32T"};
@@ -48,6 +52,12 @@ typedef struct {
     uint8_t wrap;                        /* runs on round the whole loop (playing, forwards) */
     float g_pos[2], g_age;               /* KEEP LENGTH: the two grains' read positions, samples into the cycle */
     float gate_left;                     /* the gate: the break's samples left before it fades (< 0: no gate) */
+    /* the slice's own effect (brk_slicefx), set as it starts */
+    uint8_t fxt;
+    float lvl, echo, verb;               /* its level; its throws */
+    float f1, f2, fa1, fa2, fa3, fk;     /* LO-PASS / HI-PASS: a TPT state-variable filter */
+    float fq, fstep, fph, fhold;         /* CRUNCH: levels, the rate's step, phase, held; RING: fstep, fph, fq = mix */
+    float fg;                            /* DRIVE: gain */
 } voice_t;
 
 static voice_t v[2];
@@ -127,6 +137,89 @@ static uint32_t loop_steps(const brk_break_t *b)
     return n < 1u ? 1u : n > BRK_MAX_STEPS ? BRK_MAX_STEPS : n;
 }
 
+/* a voice's slice effect, from the slice's settings as it starts */
+static void voice_fx(voice_t *n, const brk_break_t *b, int32_t s)
+{
+    slxword_t u;
+    float a, t;
+    (void)b;
+    u.w = (s >= 0 && (uint32_t)s < BRK_KEYS) ? p_slx[s] : 0x64000000u;   /* (off, level 100) */
+    a = (float)(u.f.amount > 100u ? 100u : u.f.amount) * 0.01f;
+    t = (float)(u.f.tone > 100u ? 100u : u.f.tone) * 0.01f;
+    n->fxt = u.f.type < BRK_SLX ? u.f.type : SLX_OFF;
+    n->lvl = (float)(u.f.level > 100u ? 100u : u.f.level) * 0.01f;
+    n->echo = n->verb = 0.0f;
+    n->f1 = n->f2 = n->fph = n->fhold = 0.0f;
+    switch (n->fxt) {
+    case SLX_LOPASS:
+    case SLX_HIPASS: {                   /* LO-PASS 16 kHz down to 150 Hz, HI-PASS 30 Hz up to 5 kHz */
+        float hz = n->fxt == SLX_LOPASS ? 16000.0f * brk_exp2f(-a * 6.74f) : 30.0f * brk_exp2f(a * 7.38f);
+        float g = brk_tan_pi(hz / (float)BRK_SR);
+        n->fk = 2.0f - 1.9f * t;
+        n->fa1 = 1.0f / (1.0f + g * (g + n->fk));
+        n->fa2 = g * n->fa1;
+        n->fa3 = g * n->fa2;
+        break;
+    }
+    case SLX_CRUNCH:                     /* 16 bits at 44.1 kHz down to 3 bits at 2.8 kHz */
+        n->fq = brk_exp2f(15.0f - 12.0f * a);
+        n->fstep = brk_exp2f(-a * 4.0f);
+        break;
+    case SLX_DRIVE:
+        n->fg = 1.0f + 24.0f * a * a;
+        break;
+    case SLX_RING:                       /* 40 Hz .. 2 kHz, mixed by tone (0: half) */
+        n->fstep = 40.0f * brk_exp2f(a * 5.64f) / (float)BRK_SR;
+        n->fq = 0.5f + 0.5f * t;
+        break;
+    case SLX_ECHO:
+        n->echo = a;
+        break;
+    case SLX_VERB:
+        n->verb = a;
+        break;
+    default:
+        break;
+    }
+}
+
+/* the voice's sample through its slice effect (the ECHO and VERB throws are taken from it after) */
+static inline float voice_fx_run(voice_t *o, float x)
+{
+    switch (o->fxt) {
+    case SLX_LOPASS:
+    case SLX_HIPASS: {
+        float v3 = x - o->f2, v1 = o->fa1 * o->f1 + o->fa2 * v3, v2 = o->f2 + o->fa2 * o->f1 + o->fa3 * v3;
+        o->f1 = 2.0f * v1 - o->f1;
+        o->f2 = 2.0f * v2 - o->f2;
+        x = o->fxt == SLX_LOPASS ? v2 : x - o->fk * v1 - v2;
+        break;
+    }
+    case SLX_CRUNCH:                     /* (x in the PCM's units, +-32768) */
+        o->fph += o->fstep;
+        if (o->fph >= 1.0f) {
+            o->fph -= 1.0f;
+            o->fhold = (float)(int32_t)(x * (1.0f / 32768.0f) * o->fq) / o->fq * 32768.0f;
+        }
+        x = o->fhold;
+        break;
+    case SLX_DRIVE: {
+        float y = x * (1.0f / 32768.0f) * o->fg;
+        x = y / (1.0f + brk_absf(y)) * 32768.0f * (1.0f + 0.15f * o->fg / 25.0f);
+        break;
+    }
+    case SLX_RING:
+        x = x * (1.0f - o->fq) + x * brk_sin_turns(o->fph) * o->fq;
+        o->fph += o->fstep;
+        if (o->fph >= 1.0f)
+            o->fph -= 1.0f;
+        break;
+    default:
+        break;
+    }
+    return x * o->lvl;
+}
+
 static void voice_start(const brk_break_t *b, int32_t s, int rev, float at, float gain)
 {
     voice_t *o = &v[cur], *n;
@@ -154,6 +247,7 @@ static void voice_start(const brk_break_t *b, int32_t s, int rev, float at, floa
     n->g_pos[0] = n->g_pos[1] = n->pos;  /* the grains start on the hit (the second at full: the attack whole) */
     n->g_age = 0.0f;
     n->gate_left = -1.0f;
+    voice_fx(n, b, s);
     n->active = 1;
     last_slice = s;
 }
@@ -452,12 +546,13 @@ static inline float grain_at(const brk_break_t *b, float p)   /* (round the brea
 /* one sample of a voice: inc its speed, pf the pitch to read it at (1: as it runs). KEEP LENGTH with a pitch: two
  * grains half a cycle apart, each a triangle (the two sum to one), each reading pf times as fast from where the voice
  * was when it began; a grain begins again at the foot of its triangle, so nothing clicks */
-static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float pf, float *acc)
+static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float pf, float *acc, float *ea, float *va)
 {
+    float x;
     if (!o->active)
         return;
     if (pf > 0.9999f && pf < 1.0001f)
-        *acc += hermite(b, o->pos) * o->amp;
+        x = hermite(b, o->pos);
     else {
         float g = p_grain, half = 0.5f * g, ph0 = o->g_age / g, ph1 = ph0 + 0.5f, step = inc * pf * o->dir;
         float w0, w1, age;
@@ -465,7 +560,7 @@ static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float pf, fl
             ph1 -= 1.0f;
         w0 = 1.0f - (ph0 > 0.5f ? 2.0f * ph0 - 1.0f : 1.0f - 2.0f * ph0);
         w1 = 1.0f - (ph1 > 0.5f ? 2.0f * ph1 - 1.0f : 1.0f - 2.0f * ph1);
-        *acc += (grain_at(b, o->g_pos[0]) * w0 + grain_at(b, o->g_pos[1]) * w1) * o->amp;
+        x = grain_at(b, o->g_pos[0]) * w0 + grain_at(b, o->g_pos[1]) * w1;
         o->g_pos[0] += step;
         o->g_pos[1] += step;
         age = o->g_age + 1.0f;
@@ -477,6 +572,10 @@ static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float pf, fl
         }
         o->g_age = age;
     }
+    x = voice_fx_run(o, x) * o->amp;     /* the slice's own effect and level, then the voice's fade */
+    *acc += x;
+    *ea += x * o->echo;
+    *va += x * o->verb;
     o->pos += inc * o->dir;
     if (o->gate_left >= 0.0f) {          /* gated: once it has played its share, it fades */
         o->gate_left -= inc;
@@ -521,8 +620,13 @@ void brk_render(float *out, uint32_t n)
     int playing = p_playing, keep = p_keep;
     n_renders++;
     if (!b || !b->len || !b->nslices) {
-        for (i = 0; i < n; i++)
+        for (i = 0; i < n; i++) {
             out[i] = 0.0f;
+            if (send_echo)
+                send_echo[i] = 0.0f;
+            if (send_verb)
+                send_verb[i] = 0.0f;
+        }
         return;
     }
     if (p_reset != reset_seen) {
@@ -611,7 +715,7 @@ void brk_render(float *out, uint32_t n)
         half *= brk_clampf(p_ps.rev_speed, 0.5f, 2.0f);
     ratio = (float)b->rate / (float)BRK_SR * (p_tempo * 100.0f / (float)b->bpm_x100);
     for (i = 0; i < n; i++) {
-        float acc = 0.0f, g;
+        float acc = 0.0f, ea = 0.0f, va = 0.0f, g;
         if (playing) {
             to_next -= 1.0f;
             if (to_next <= 0.0f) {
@@ -716,8 +820,8 @@ void brk_render(float *out, uint32_t n)
                 to_next = 0.0f;
             }
         }
-        voice_tick(b, &v[0], inc, pf, &acc);
-        voice_tick(b, &v[1], inc, pf, &acc);
+        voice_tick(b, &v[0], inc, pf, &acc, &ea, &va);
+        voice_tick(b, &v[1], inc, pf, &acc, &ea, &va);
         /* the gate pad: open for gate_len of each 1/8, 1/16 or 1/32 */
         g = 1.0f;
         gate_pos += 1.0f;
@@ -728,7 +832,14 @@ void brk_render(float *out, uint32_t n)
             g = ph < brk_clampf(p_ps.gate_len, 0.1f, 0.9f) * per ? 1.0f : 0.0f;
         }
         gate_amp += (g - gate_amp) * 0.02f;
-        out[i] = acc * (1.0f / 32768.0f) * gate_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
+        {
+            float k = (1.0f / 32768.0f) * gate_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
+            out[i] = acc * k;
+            if (send_echo)               /* the slices' throws, for the effects' delay and reverb */
+                send_echo[i] = ea * k;
+            if (send_verb)
+                send_verb[i] = va * k;
+        }
     }
     status.step = step;
     status.slice = v[cur].active ? v[cur].slice : -1;
@@ -802,8 +913,12 @@ void brk_init(void)
         brk_keyset_t d;
         uint32_t k;
         brk_keyset_defaults(&d);
+        brk_slicefx_t f;
         for (k = 0; k < BRK_KEYS; k++)
             brk_keyset(k, &d);
+        brk_slicefx_defaults(&f);
+        for (k = 0; k < BRK_KEYS; k++)
+            brk_slicefx(k, &f);
     }
     q_r = q_w;
     p_gen.complexity = 0.0f;
@@ -836,6 +951,29 @@ void brk_padset_defaults(brk_padset_t *p)
 }
 
 void brk_padset(const brk_padset_t *p) { p_ps = *p; }
+
+void brk_slicefx_defaults(brk_slicefx_t *f)
+{
+    f->type = SLX_OFF;
+    f->amount = 50u;
+    f->tone = 30u;
+    f->level = 100u;
+}
+
+void brk_slicefx(uint32_t slice, const brk_slicefx_t *f)
+{
+    slxword_t u;
+    if (slice >= BRK_KEYS)
+        return;
+    u.f = *f;
+    p_slx[slice] = u.w;                  /* one word */
+}
+
+void brk_sends(float *echo, float *verb)
+{
+    send_echo = echo;
+    send_verb = verb;
+}
 
 void brk_keyset_defaults(brk_keyset_t *k)
 {

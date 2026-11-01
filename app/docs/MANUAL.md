@@ -83,6 +83,25 @@ round, ROLL and FREEZE take it over while held.
 
 ![A key held: a half-bar ping-pong loop](img/screen-keyloop.png "Key 5 held, 1/2 bar, ping-pong")
 
+### Slice effects
+
+Every slice can have an effect of its own, there whenever that slice plays: in the loop, from its key, in a roll.
+Hold the key and press **FX**: K1–K4 turn from its loop to its slice's effect (FX again turns them back; the knobs
+stay on the layer you left them on for the next key). A block whose slice has an effect shows its tag (LP, HP, CR,
+DR, RM, EC, VB; LV for a level alone). SEL while held resets the layer shown.
+
+| Knob | Sets |
+| --- | --- |
+| K1 EFFECT | OFF · LO-PASS · HI-PASS · CRUNCH · DRIVE · RING MOD · ECHO (throws the slice into the FX chain's delay) · VERB (throws it into the reverb) |
+| K2 AMOUNT | How much: darker, thinner, crunchier, harder, the ring's pitch, the throw's level |
+| K3 TONE | The filters' resonance, RING MOD's mix |
+| K4 LEVEL | The slice's own level: accents, or ghost notes of single hits |
+
+ECHO and VERB throw only that slice: put a DELAY (or a REVERB) in the FX chain with its SEND (MIX) low, and only the
+slices you marked ring out, the classic dub throw. (Without a DELAY slot, ECHO goes into the delay after the chain.)
+
+![Key 5 held, its slice effect: LO-PASS at 80 %, level 80 %](img/screen-slicefx.png "A slice effect")
+
 ## 4. The pads
 
 The black keys, left to right, act while held and combine. While a pad is held, the slice blocks give way to an
@@ -98,7 +117,7 @@ animation of what it does, and **K1–K4 tune that pad** (the foot shows its set
 | GAT | Gate | Rate (1/8, 1/16, 1/32) | Length | | |
 | RND | Random slices | Amount | Random pitch | | |
 | FLT | Throws the DJ filter | Target (LP … HP) | Resonance | Speed | |
-| DUB | Sends the break into a tempo-synced dub delay; the echoes ring on | Time (1/8, 3/16, 1/4, 3/8) | Feedback | Tone | Mix |
+| DUB | Throws the break into the delay (stereo ping-pong); the echoes ring on. With a DELAY in the FX chain it throws into that one, and K1–K4 are that DELAY's | Time (1/8, 3/16, 1/4, 3/8; the DELAY's all eight) | Feedback | Tone | Mix (the DELAY's: Send) |
 
 ![ROLL held: the caught slice repeating, each copy quieter, RATE / DECAY / PITCH on K1-K3](img/pad-roll8.png "ROLL held")
 ![TAPE STOP held: two reels slowing down](img/pad-stop.png "TAPE STOP held") ![DUB held: echoes marching out](img/pad-dub.png "DUB held")
@@ -152,6 +171,12 @@ its settings as bars over K1–K4.
 | RING MOD | Frequency (20 Hz – 2 kHz) | Spread (the right side higher) | |
 | TREMOLO | Rate on the tempo (1/2 … 1/32, 1/8T) | Depth | Pan (0 tremolo … 100 % auto-pan) |
 | REVERB | Size (short room … long hall) | Tone (bright … dark) | Pre-delay (0 – 60 ms) |
+| DELAY | Time on the tempo (1/16, 1/8, 3/16, 1/4, 3/8, 1/2, 1/8T, 1/4T) | Feedback | Tone (dark … bright repeats) |
+
+**DELAY** is a stereo ping-pong: the echoes bounce left, right, left, each darker. Its K4 is **SEND**, how much of the
+sound reaching it goes in (the echoes come back at full), so with SEND low only throws ring out: the DUB pad, the
+soundboard's ECHO, the slices' ECHO. There is one delay (0.74 s at most: 1/2 at 162 BPM and up; slower, it holds the
+longest it can).
 
 **REVERB** is a plate (after Dattorro's design: diffusers, then a modulated stereo tank): its MIX is how much reverb
 goes over the dry sound. The tail rings on after STOP. There is one: a second REVERB slot passes the sound on. Put it
