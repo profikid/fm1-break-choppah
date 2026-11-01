@@ -162,6 +162,7 @@ ABG's four, plus the master section a live unit needs.
 | A-47 | **DELAY** in the chain: a stereo ping-pong at 22.05 kHz on the DUB line (0.74 s per side), time on the tempo (1/16 … 1/2, 1/8T, 1/4T), feedback, tone (each repeat darker), K4 SEND (echoes return at full). One delay: also where the DUB pad, the soundboard's echo and the slices' ECHO throw; the DUB pad's K1–K4 edit it when it is in the chain; without it the delay sits after the chain with the pad's settings | P1 | *Done 1 Nov 2026; engine tests: the first echo left at 3/16, the second right* |
 | A-48 | **EQ** (3 bands: a low shelf at 120 Hz, a mid bell 200 Hz – 5 kHz on K4, a high shelf at 8 kHz, ±12 dB; Simper's SVF bands) and **TAPE** (drive 0–24 dB into an asymmetric soft curve, peak-matched make-up; warmth: a head bump and the top rolled off; wow and flutter on the slot's short line) in the chain | P1 | *Done 1 Nov 2026; engine tests: EQ flat, +12 dB low ×4, −12 dB high ÷4, mid ×4; TAPE harmonics on a pure tone, wow wanders the pitch* |
 | A-46 | **REVERB** in the chain: a Dattorro plate (pre-delay, four input diffusers, a modulated two-half tank, fourteen output taps), at 22.05 kHz inside on 16-bit lines (~35 KB RAM; the flangers' lines shortened to 256 to pay for it); SIZE (decay), TONE (damping), PRE (0–60 ms), MIX its level over the dry; one in the chain. STOP now fades the break out (it looped on before) so tails ring alone | P1 | *Done 1 Nov 2026; engine tests: an impulse rings and dies, left and right decorrelated, a bigger size rings longer, a second REVERB passes; RAM 79 KB of 96* |
+| A-49 | **MB COMP** (a 3-band compressor: splits at 200 Hz and 2.5 kHz that sum back exactly; per band an amount = threshold 0 … −30 dB and ratio 1 … 8:1 together, made up by half the reduction at full scale; attack/release per band, low slow, high fast; MIX parallel) and **CLIP** (drive 0 … +24 dB, knee soft … hard, ceiling 0 … −12 dB) in the chain. The FX page shows MB COMP's reduction per band under K1–K3 | P1 | *Done 1 Nov 2026; engine tests: the bands sum back at 0, LOW pressed: +14 dB in gives under +3.5 dB out and 1 kHz stays, CLIP clean below its edge and held at its ceiling* |
 | A-45 | **Master bus:** DJ filter (one knob LP↔HP), compressor with drive, brickwall limiter | P1 | No output clipping at max settings |
 | A-46 | Send FX: tape/dub delay (tempo-synced, feedback, filter in loop) and small reverb | P1 | |
 
@@ -359,7 +360,7 @@ data first, header last, so a cut upload leaves the old header valid or nothing 
 
 | Object | Content | Size |
 | --- | --- | --- |
-| OBJ_SETTINGS (0xFC000) | globals, MIDI, last break/pattern/tempo, FX state | < 1 KB |
+| OBJ_SETTINGS (0xFC000) | globals, MIDI, last break/pattern/tempo, FX state, the kick. Magic CHP6; since 1 Nov 2026 the struct only grows at the end and a shorter save loads into the front (the rest keeps its defaults) | < 1 KB |
 | OBJ_PAT0..3 | 16 patterns × 64 steps × 4 bytes, split over 4 objects | 4 × ~1 KB (fits 3840 B max) |
 | OBJ_SONG | chain | < 256 B |
 | OBJ_PANEL (0xDC000) | panel calibration (platform's) | |
@@ -423,6 +424,28 @@ scratch, rewind). Four voices; siren and riser sustain while held; REWIND also p
 10x, then restarts from the top of the bar). K1 level, K2 pitch, K3 echo (send into the dub delay), K4 length.
 Sounds join after the four effects, before the DJ filter and limiter. Built-in breaks were then five synthesised styles and 12 recorded Amens (8 classic breaks since
 1 Nov 2026, Q1).
+
+## 11b. Kick (built 1 Nov 2026)
+
+A synthesised kick over the break, from the Gabber Kick Designer brief: four layers summed into a drive and a
+clipper, its own 16-step lane, through the FX chain or around it. `app/dsp/kick.c` (platform-free, its own `o2`
+unit); settings appended to OBJ_SETTINGS (140 B).
+
+| ID | Requirement | Pri | Acceptance |
+| --- | --- | --- | --- |
+| K-1 | **Four layers:** SUB (a sine dropping from 3× to 30–90 Hz, saturated by TONE, 60–1500 ms), PUNCH (a sine swept down from up to 18×, 50–200 Hz, 20–400 ms), GRIT (FM at 1.41× into a drive, noise by TONE, 40–400 Hz, 20–800 ms), CLICK (high-passed noise against a ringing click, 1–12 kHz, 1–40 ms); each LEVEL, PITCH, DECAY (to −40 dB), TONE | P0 | *Done; engine tests: each layer alone sounds, SUB's pitch within 10 %, DECAY lengthens the tail* |
+| K-2 | **Layer FX:** per layer OFF / DRIVE (gain, tone) / CRUNCH (bits 15–3, rate) / FILTER (low-pass 60 Hz–11.6 kHz, resonance) / RING MOD (30 Hz–1.9 kHz) with WET | P0 | *Done; every layer through every effect bounded* |
+| K-3 | **INTENSITY:** the sum's drive (0.3–30×) into a soft clip, turning hard over half (the distorted gabber kick), made up to full scale; VOLUME | P0 | *Done; INTENSITY raises the body* |
+| K-4 | **KICK page on EDIT:** EDIT again steps MIX (K1–K4 the layers' levels) → LAYER (LEVEL PITCH DECAY TONE) → LAYER FX (EFFECT, A, B, WET) → MACRO (SUB, PUNCH, GRIT, INTENSITY) → OUT (VOLUME, ROUTE); ALGORITHM the layer; the strip shows the kick's shape (600 ms), the layers' levels, the 16 steps with the playhead | P0 | *Done; simulator scenario kick.txt* |
+| K-5 | **Steps:** on the KICK page the white keys toggle the kick on the bar's 16 steps (default four to the floor; LEDs show them, the step playing flipped). The engine marks each step's sample offset (`brk_step_events`) so the kick lands sample-accurate, swing included | P0 | *Done; engine test: 16 events a bar, a step apart, places 0–15* |
+| K-6 | **Presets:** PRESETS loads a built-in kick (909, TECHNO, EARLY HC, ROTTERDAM the default, INDUSTRIAL, DISTORTO); the steps, routing and volume stay; SAVE keeps the kick with the settings | P0 | *Done; six presets in range and distinct* |
+| K-7 | **Routing:** through the FX chain with the break (default) or around it (joins after the chain like the soundboard, into the DJ filter and limiter, thrown nowhere); SEL + EDIT or OUT K2 | P1 | *Done* |
+| K-8 | **MIDI:** note 36 (C1) note-on on any channel plays the kick at the next block, also while stopped | P1 | *Done; scenario: a note sounds while stopped* |
+| K-9 | Retrigger without clicks: the kick still sounding fades out under the new hit; no work while silent | P0 | *Done; engine test* |
+
+From the brief and not built: a per-kick master chain of its own (the kick goes through CHOPPAH's chain instead,
+which now has MB COMP and CLIP, A-49), separate envelope pages per layer, a preset browser with categories and
+user presets (the kick is saved with the settings), and the overload guard (E-7, still open).
 
 ## 12. Future (post v1)
 

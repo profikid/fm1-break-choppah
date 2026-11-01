@@ -12,7 +12,7 @@ key w4 down
 wait 700
 peakreset
 wait 400
-expect peak_db_max >-30
+expect peak_db_min -30
 shot k_hold.png
 turn K1 2 10
 wait 900
@@ -45,7 +45,7 @@ turn K1 2 10
 wait 1200
 peakreset
 wait 300
-expect peak_db_max >-30
+expect peak_db_min -30
 shot k_stopped.png
 key w12 up
 wait 600

@@ -37,6 +37,18 @@ static inline float brk_exp2f(float x)
     return r.f;
 }
 
+/* log2(x), x > 0: the exponent bits, the mantissa by a cubic (error < 0.002) */
+static inline float brk_log2f(float x)
+{
+    union { float f; uint32_t u; } r;
+    float e, t;
+    r.f = x;
+    e = (float)(int32_t)((r.u >> 23) & 0xFFu) - 127.0f;
+    r.u = (r.u & 0x007FFFFFu) | 0x3F800000u;   /* 1 <= 1 + t < 2 */
+    t = r.f - 1.0f;
+    return e + t * (1.4234755f + t * (-0.5876945f + t * 0.1642190f));
+}
+
 /* tan(pi * f / sr) for a filter's prewarp, f below sr / 2 */
 static inline float brk_tan_pi(float f_over_sr)
 {

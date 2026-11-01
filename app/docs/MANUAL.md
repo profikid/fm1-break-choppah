@@ -16,9 +16,10 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 5. The soundboard
 6. The FX chain
 7. GLOBAL: MIDI clock, Bluetooth, pitch
-8. Pages and knobs
-9. Saving
-10. Troubleshooting
+8. The kick
+9. Pages and knobs
+10. Saving
+11. Troubleshooting
 
 ---
 
@@ -175,9 +176,20 @@ its settings as bars over K1–K4.
 | DELAY | Time on the tempo (1/16, 1/8, 3/16, 1/4, 3/8, 1/2, 1/8T, 1/4T) | Feedback | Tone (dark … bright repeats) |
 | EQ | Low (a shelf at 120 Hz) | Mid (a bell; K4 is its frequency, 200 Hz – 5 kHz) | High (a shelf at 8 kHz) |
 | TAPE | Drive (0 – 24 dB into a tape curve: denser, warmer, even harmonics; the peaks kept level) | Warmth (the low head bump, the top rolled off) | Wow (and flutter: the pitch wanders like a worn machine) |
+| MB COMP | Low (below 200 Hz) | Mid | High (above 2.5 kHz) |
+| CLIP | Drive (0 – +24 dB into it) | Knee (soft … hard) | Ceiling (0 – −12 dB) |
 
 **EQ**'s bands go −12 … +12 dB, flat in the middle; its K4 is not a mix but the **mid's frequency**. **TAPE** is a
 saturator after a tape machine: put it last in the chain to glue the break, or before CRUNCH for a dusty sampler.
+
+**MB COMP** is a 3-band (multiband) compressor. Each knob is how hard its band is pressed, shown as the band's ratio
+(OFF … 8:1; the threshold drops with it, down to −30 dB, and half the reduction is made back up). The low band is
+slow, the high band fast; at OFF the bands add back up to the sound untouched. Its MIX is a parallel mix: the
+pressed sound against the dry. Amber bars under K1–K3 show each band's reduction as it happens. **CLIP** squares the
+peaks off at its ceiling: soft rounds them, hard cuts them; below the ceiling it only adds its drive. MB COMP then
+CLIP last in the chain is a loud master; CLIP before a FILTER is a fizzy one.
+
+![MB COMP in slot 1: the low band pressed 7.3:1, its reduction in amber under K1](img/screen-mbcomp.png "MB COMP")
 
 **DELAY** is a stereo ping-pong: the echoes bounce left, right, left, each darker. Its K4 is **SEND**, how much of the
 sound reaching it goes in (the echoes come back at full), so with SEND low only throws ring out: the DUB pad, the
@@ -223,7 +235,45 @@ connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings →
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
 tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay speed effects.
 
-## 8. Pages and knobs
+## 8. The kick
+
+**EDIT** opens the KICK page: a synthesised kick under the break, for gabber, hardcore and techno. It plays on the
+steps you give it, in time with the break (swing included), through the FX chain or around it. **EDIT again** steps
+through its sub-pages: MIX → LAYER → LAYER FX → MACRO → OUT.
+
+![The KICK page on LAYER: GRIT's decay being set, the kick's shape, the layers' levels, its 16 steps](img/screen-kick.png "The KICK page")
+
+The kick is four layers summed and pushed into a clipper:
+
+| Layer | Is | PITCH | DECAY |
+| --- | --- | --- | --- |
+| SUB | The low end: a sine dropping onto its pitch (TONE saturates it) | 30 – 90 Hz | 60 – 1500 ms |
+| PUNCH | The hit and the body: a sine swept down fast (TONE: how far it sweeps) | 50 – 200 Hz | 20 – 400 ms |
+| GRIT | The dirty mids: FM through a drive (TONE: more FM and noise) | 40 – 400 Hz | 20 – 800 ms |
+| CLICK | The attack: a click and noise (TONE: from click to noise) | 1 – 12 kHz | 1 – 40 ms |
+
+| Control | Does |
+| --- | --- |
+| White keys | The kick's 16 steps of the bar, on and off (lit: on; the step playing flips). Four to the floor to start |
+| ALGORITHM | The layer LAYER and LAYER FX edit |
+| PRESETS | A built-in kick: 909, TECHNO, EARLY HC, ROTTERDAM (the start), INDUSTRIAL, DISTORTO. The steps, routing and volume stay |
+| SEL + EDIT | The kick through the FX chain (with the break) or around it (clean, straight to the DJ filter and the limiter) |
+| MIDI note 36 (C1) | Plays the kick, from any channel, also while stopped |
+
+| Sub-page | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- |
+| MIX | SUB level | PUNCH level | GRIT level | CLICK level |
+| LAYER | Level | Pitch | Decay | Tone |
+| LAYER FX | Effect: OFF · DRIVE · CRUNCH · FILTER · RING MOD | A (gain · bits · cutoff · frequency) | B (tone · rate · resonance) | Wet |
+| MACRO | SUB (level, tail, weight) | PUNCH (level, sweep, click) | GRIT (level, dirt, tail) | INTENSITY |
+| OUT | Volume | Route: THRU FX · AROUND FX | | |
+
+**INTENSITY** is the drive into the clipper: low is a clean, round kick; past half the clip turns hard, the tail
+flattens into the long, distorted gabber kick. The strip shows the kick's shape (its first 600 ms), the layers'
+levels (the layer edited outlined, amber with an effect on) and the 16 steps with the playhead. The white keys play
+slices again on every other page. SAVE keeps the kick with the rest.
+
+## 9. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
@@ -233,6 +283,7 @@ tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay sp
 | ENV (soundboard) | Level | Pitch | Echo | Length |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | |
+| EDIT (kick) | see §8: MIX, LAYER, LAYER FX, MACRO, OUT | | | |
 
 **Gate** (HOME K3) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then
 quiet until the next; down to 5 % for clipped, staccato chops; 100 % is off. It follows the tempo and the pitch, and
@@ -243,12 +294,13 @@ The generator rearranges the break as it plays: **complexity** is how often it j
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
 of a phrase. SEL + ARP writes a random pattern.
 
-## 9. Saving
+## 10. Saving
 
-SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop and the GLOBAL settings;
-SAVE is lit when something changed.
+SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop, the kick and the
+GLOBAL settings; SAVE is lit when something changed. A new version keeps what an older one saved: new settings start
+at their defaults.
 
-## 10. Troubleshooting
+## 11. Troubleshooting
 
 - **No sound:** turn MASTER up; press PLAY.
 - **A crash screen:** press a key to restart. Two failed starts in a row start safe mode, which the installer can

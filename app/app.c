@@ -11,6 +11,7 @@
 #include "brk_bank.h"
 #include "brk_math.h"
 #include "brk_synth.h"
+#include "kick.h"
 #include "sfx.h"
 #if defined(__has_include)
 #if __has_include("bank_data.h")
@@ -24,6 +25,8 @@
 
 /* ------------------------------------------------------------------ settings --- */
 #define SET_MAGIC 0x36504843u            /* "CHP6" (the slices' effects): another magic loads defaults */
+/* From CHP6 on the settings only grow at the end: a shorter save (an older firmware's) loads into the front and the
+ * fields after it keep their defaults. A change that isn't an append needs a new magic (and loses the saves). */
 typedef struct {
     uint32_t magic;
     uint16_t tempo_x10;                  /* 400..3000 */
@@ -47,7 +50,11 @@ typedef struct {
     sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
     brk_slicefx_t slx[BRK_KEYS];         /* each slice's own effect and level (a key held, FX: its other layer) */
+    /* ---- CHP6 saves end here; appended since: */
+    kick_t kick;                         /* the kick (PRD K-*): its sound, its 16 steps, chain or around */
 } settings_t;
+#define SET_SIZE_CHP6 __builtin_offsetof(settings_t, kick)   /* the shortest save that loads */
+_Static_assert(sizeof(settings_t) <= 3840u, "a store object holds 3840 bytes");
 static settings_t set;
 static uint8_t set_dirty;
 static uint8_t foot_dirty;               /* a setting changed: the slicer's foot shows the new value */
@@ -74,6 +81,7 @@ static void settings_defaults(void)
             brk_slicefx_defaults(&set.slx[k]);
         }
     }
+    kick_defaults(&set.kick);
 }
 
 static int pitch_keeps(void) { return set.pitch_keep != 2u; }   /* KEEP LENGTH unless SPEED was chosen */
@@ -99,6 +107,7 @@ static void settings_apply(void)
     brk_gate((float)(set.gate ? set.gate : 100u) * 0.01f);
     brk_snap(SNAP_SL[snap_index()]);
     sfx_set(&set.sfx);
+    kick_set(&set.kick);
     {
         uint32_t k;
         for (k = 0; k < BRK_KEYS; k++) {
@@ -220,13 +229,20 @@ void app_init(void)
     brk_fx_init();
     brk_fx_delay_buffer(dub_line, CH_DUB_LEN);
     sfx_init();
+    kick_init();
     n_synth = n_breaks = 0u;             /* the breaks are the bank's (breaks/breaks.txt) */
     while (n_breaks < BANK_SLOTS && bank_slot(n_breaks))
         n_breaks++;
     if (!n_breaks)                       /* a build without a bank still has a break: a synthesised Amen */
         n_synth = n_breaks = 1u;
-    if (plat_store_load(OBJ_SETTINGS, &set, sizeof set) != (int)sizeof set || set.magic != SET_MAGIC ||
-        set.tempo_x10 < 400u || set.tempo_x10 > 3000u || set.swing < 50u || set.swing > 75u) {
+    settings_defaults();                 /* (what a shorter, older save doesn't reach keeps these) */
+    {
+        int sz = plat_store_size(OBJ_SETTINGS);
+        if (sz < (int)SET_SIZE_CHP6 || sz > (int)sizeof set || plat_store_load(OBJ_SETTINGS, &set, (uint32_t)sz) != sz)
+            set.magic = 0u;
+    }
+    if (set.magic != SET_MAGIC || set.tempo_x10 < 400u || set.tempo_x10 > 3000u || set.swing < 50u ||
+        set.swing > 75u) {
         settings_defaults();
         if (n_breaks > n_synth)
             set.brk = (uint8_t)n_synth;  /* the bank's first break */
@@ -239,6 +255,7 @@ void app_init(void)
 
 /* ------------------------------------------------------- MIDI clock, Bluetooth --- */
 #define PKT_RT(b) (0x0Fu | (uint32_t)(b) << 8)   /* a real-time byte as a USB-MIDI packet (CIN 0xF) */
+#define KICK_NOTE 36u
 #define MS_PER_SAMPLE (1000.0f / (float)BRK_SR)
 #define CLKQ 64u
 /* (times in plat_ms: the 1 kHz tick sends at that grain anyway, a beat of ticks averages the tempo, and the host
@@ -286,6 +303,10 @@ void app_loop(void)
     int port;
     while (plat_midi_in(&pkt, &port)) {
         uint32_t st = pkt >> 8 & 0xFFu, t = plat_ms();
+        if ((st & 0xF0u) == 0x90u && (pkt >> 16 & 0x7Fu) == KICK_NOTE && (pkt >> 24 & 0x7Fu)) {
+            kick_hit();                  /* note 36 (C1, a drum machine's kick) on any channel: the kick */
+            continue;
+        }
         if (!set.clk_in)
             continue;
         if (st == 0xF8u) {
@@ -337,6 +358,7 @@ void app_tick(void)
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float mono[APP_BLOCK], fx[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK], echo[APP_BLOCK], verb[APP_BLOCK];
+    static float kick[APP_BLOCK];
     float gain = muted ? 0.0f : (float)master_q12 * (1.0f / 4096.0f) * 8300000.0f;
     brk_status_t st;
     uint32_t t0 = plat_ms(), done = 0u, total = n;
@@ -359,9 +381,21 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             }
         }
         done += m;
+        {                                /* the kick: on the steps of the bar its lane has, at their samples */
+            uint16_t off[8], at[8];
+            uint8_t idx[8];
+            uint32_t k, ne = brk_step_events(off, idx, 8u), na = 0u, steps = set.kick.steps;
+            for (k = 0; k < ne; k++)
+                if (steps >> idx[k] & 1u)
+                    at[na++] = off[k];
+            kick_render(kick, m, at, na);
+            if (set.kick.chain)          /* through the chain with the break, or around it */
+                for (i = 0; i < m; i++)
+                    mono[i] += kick[i];
+        }
         sfx_render(fx, m);               /* the soundboard, over the break, into the delay at its echo */
         brk_status(&st);
-        brk_fx_process(mono, fx, sfx_echo(), echo, verb, l, r, m, st.pads);
+        brk_fx_process(mono, fx, sfx_echo(), echo, verb, set.kick.chain ? 0 : kick, l, r, m, st.pads);
         {                                /* the meter: this block's peaks as they leave, or the last ones falling */
             float pl = 0.0f, pr = 0.0f, fl = meter_l * 0.987f, fr = meter_r * 0.987f, out = gain * (1.0f / 8388608.0f);
             for (i = 0; i < m; i++) {
@@ -392,8 +426,8 @@ void app_panic(void)
 }
 
 /* ----------------------------------------------------------------------- UI --- */
-enum { PG_HOME, PG_GEN, PG_FX, PG_SOUND, PG_GLOBAL, NPAGES };
-static const char *const PAGE_NAME[NPAGES] = {"PERFORM", "GENERATOR", "FX", "SOUNDBOARD", "GLOBAL"};
+enum { PG_HOME, PG_GEN, PG_FX, PG_SOUND, PG_GLOBAL, PG_KICK, NPAGES };
+static const char *const PAGE_NAME[NPAGES] = {"PERFORM", "GENERATOR", "FX", "SOUNDBOARD", "GLOBAL", "KICK"};
 static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
                                                 "FLT", "DUB"};
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
@@ -419,6 +453,7 @@ static struct {
     uint32_t key_since;                  /* when it was pressed */
     int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
     uint8_t gpage;                       /* the GLOBAL page's half: 0 MIDI and Bluetooth, 1 pitch */
+    uint8_t kpage, klayer, kpreset;      /* the KICK page: its sub-page (KP_*), the layer it edits, the preset */
     int16_t meter_x;                     /* the header's level meter: where (0: not shown now, a message is) */
     uint32_t meter_drawn;
     uint32_t pad_since, fx_drawn;        /* when it was pressed; the animation's last frame */
@@ -518,7 +553,8 @@ static void times_text(float v, char *t);
 static const char *const FXP_NAME[BRK_NFXT][3] = {
     {"", "", ""}, {"CUTOFF", "RESO", "MODE"}, {"BITS", "RATE", "DRIVE"}, {"GAIN", "TONE", "LEVEL"},
     {"AMOUNT", "ATTACK", "RELEASE"}, {"RATE", "DEPTH", "FEEDBK"}, {"FREQ", "SPREAD", ""}, {"RATE", "DEPTH", "PAN"},
-    {"SIZE", "TONE", "PRE"}, {"TIME", "FEEDBK", "TONE"}, {"LOW", "MID", "HIGH"}, {"DRIVE", "WARMTH", "WOW"}};
+    {"SIZE", "TONE", "PRE"}, {"TIME", "FEEDBK", "TONE"}, {"LOW", "MID", "HIGH"}, {"DRIVE", "WARMTH", "WOW"},
+    {"LOW", "MID", "HIGH"}, {"DRIVE", "KNEE", "CEILING"}};
 
 static const char *fx_param_name(uint32_t slot, int i)
 {
@@ -578,6 +614,32 @@ static void fx_value(uint32_t slot, int i, char *t)
         return;
     }
     case FXT_TAPE * 4 + 0: int_text((int32_t)(v * 24.0f + 0.5f), t); text_cat(t, " DB"); return;
+    case FXT_CLIP * 4 + 0: text_cat(t, "+"); int_text((int32_t)(v * 24.0f + 0.5f), t + 1); text_cat(t, " DB"); return;
+    case FXT_CLIP * 4 + 1: text_cat(t, v < 0.34f ? "SOFT " : v < 0.67f ? "MID " : "HARD ");
+        {
+            char d[8];
+            pct_text(v, d);
+            text_cat(t, d);
+        }
+        return;
+    case FXT_CLIP * 4 + 2:
+        if (v < 0.005f)
+            text_cat(t, "0 DB");
+        else
+            signed_tenths(-v * 12.0f, "DB", t);
+        return;
+    case FXT_MBCOMP * 4 + 0:
+    case FXT_MBCOMP * 4 + 1:
+    case FXT_MBCOMP * 4 + 2: {           /* its amount as the band's ratio */
+        int32_t r10 = (int32_t)((1.0f + 7.0f * v) * 10.0f + 0.5f);
+        if (r10 <= 10)
+            text_cat(t, "OFF");
+        else {
+            tenths_text(r10, t);
+            text_cat(t, ":1");
+        }
+        return;
+    }
     case FXT_FILTER * 4 + 0: hz_text(30.0f * brk_exp2f(v * 9.06f), t); return;
     case FXT_FILTER * 4 + 2: text_cat(t, v < 0.33f ? "LP" : v < 0.67f ? "BP" : "HP"); return;
     case FXT_CRUNCH * 4 + 0: int_text((int32_t)(16.0f - 14.0f * v + 0.5f), t); text_cat(t, " BIT"); return;
@@ -742,11 +804,155 @@ static void global_turn(int i, int32_t d)
     changed();
 }
 
+
+/* ---- the KICK page (PRD K-*): EDIT opens it, EDIT again the next sub-page. The white keys are the kick's 16
+ * steps, ALGORITHM the layer, PRESETS the built-in kicks, SEL + EDIT through the FX chain or around it */
+enum { KP_MIX, KP_LAYER, KP_FX, KP_MACRO, KP_OUT, KPAGES };
+static const char *const KPAGE_NAME[KPAGES] = {"MIX", "LAYER", "LAYER FX", "MACRO", "OUT"};
+static const char *const KN_KICK[KPAGES][4] = {{"SUB", "PUNCH", "GRIT", "CLICK"},
+                                               {"LEVEL", "PITCH", "DECAY", "TONE"},
+                                               {"EFFECT", "", "", "WET"},
+                                               {"SUB", "PUNCH", "GRIT", "INTENSITY"},
+                                               {"VOLUME", "ROUTE", "", ""}};
+static const char *const KFX_PARAM[KICK_FX][2] = {{"", ""}, {"GAIN", "TONE"}, {"BITS", "RATE"},
+                                                  {"CUTOFF", "RESO"}, {"FREQ", ""}};
+/* the macros: each moves a few of the sound's settings together */
+#define KM_N 3u
+static float *kick_macro(int m, uint32_t j)
+{
+    kick_t *k = &set.kick;
+    switch (m) {
+    case 0:                              /* SUB: its level, its tail, its weight */
+        return j == 0u ? &k->l[KL_SUB].level : j == 1u ? &k->l[KL_SUB].decay : &k->l[KL_SUB].tone;
+    case 1:                              /* PUNCH: its level, its sweep, the click */
+        return j == 0u ? &k->l[KL_PUNCH].level : j == 1u ? &k->l[KL_PUNCH].tone : &k->l[KL_CLICK].level;
+    default:                             /* GRIT: its level, its dirt, its tail */
+        return j == 0u ? &k->l[KL_GRIT].level : j == 1u ? &k->l[KL_GRIT].tone : &k->l[KL_GRIT].decay;
+    }
+}
+static float kick_macro_value(int m)
+{
+    uint32_t j;
+    float v = 0.0f;
+    for (j = 0; j < KM_N; j++)
+        v += *kick_macro(m, j);
+    return v * (1.0f / (float)KM_N);
+}
+static const char *kick_knob_name(int i)
+{
+    if (ui.kpage == KP_FX && (i == 1 || i == 2))
+        return KFX_PARAM[set.kick.l[ui.klayer % KICK_LAYERS].fx % KICK_FX][i - 1];
+    return KN_KICK[ui.kpage % KPAGES][i];
+}
+static void kick_value(int i, char *t)
+{
+    const kick_t *k = &set.kick;
+    const kick_layer_t *l = &k->l[ui.klayer % KICK_LAYERS];
+    t[0] = 0;
+    switch (ui.kpage) {
+    case KP_MIX:
+        pct_text(k->l[i].level, t);
+        break;
+    case KP_LAYER:
+        if (i == 1)
+            hz_text(kick_pitch_hz(ui.klayer, l->pitch), t);
+        else if (i == 2) {
+            int_text((int32_t)(kick_decay_ms(ui.klayer, l->decay) + 0.5f), t);
+            text_cat(t, " MS");
+        } else
+            pct_text(i == 0 ? l->level : l->tone, t);
+        break;
+    case KP_FX:
+        if (i == 0)
+            text_cat(t, KICK_FX_NAME[l->fx % KICK_FX]);
+        else if (i == 3)
+            pct_text(l->wet, t);
+        else if (!kick_knob_name(i)[0])
+            ;
+        else if (l->fx == KFX_CRUNCH && i == 1) {
+            int_text((int32_t)kick_fx_bits(l->fa), t);
+            text_cat(t, " BIT");
+        } else if ((l->fx == KFX_FILTER || l->fx == KFX_RING) && i == 1)
+            hz_text(kick_fx_hz(l->fx, l->fa), t);
+        else
+            pct_text(i == 1 ? l->fa : l->fb, t);
+        break;
+    case KP_MACRO:
+        pct_text(i == 3 ? k->intensity : kick_macro_value(i), t);
+        break;
+    default:
+        if (i == 0)
+            pct_text(k->volume, t);
+        else if (i == 1)
+            text_cat(t, k->chain ? "THRU FX" : "AROUND FX");
+        break;
+    }
+}
+static void kick_knob_turn(int i, int32_t d)
+{
+    kick_t *k = &set.kick;
+    kick_layer_t *l = &k->l[ui.klayer % KICK_LAYERS];
+    char t[16];
+    switch (ui.kpage) {
+    case KP_MIX:
+        k->l[i].level = knob_f(k->l[i].level, d, 0.02f, 0.0f, 1.0f);
+        break;
+    case KP_LAYER: {
+        float *p = i == 0 ? &l->level : i == 1 ? &l->pitch : i == 2 ? &l->decay : &l->tone;
+        *p = knob_f(*p, d, i == 1 ? 0.01f : 0.02f, 0.0f, 1.0f);
+        break;
+    }
+    case KP_FX:
+        if (i == 0)
+            l->fx = (uint8_t)clamp((int32_t)l->fx + (d > 0 ? 1 : -1), 0, KICK_FX - 1);
+        else if (i == 3)
+            l->wet = knob_f(l->wet, d, 0.02f, 0.0f, 1.0f);
+        else if (kick_knob_name(i)[0]) {
+            float *p = i == 1 ? &l->fa : &l->fb;
+            *p = knob_f(*p, d, 0.02f, 0.0f, 1.0f);
+        }
+        break;
+    case KP_MACRO:
+        if (i == 3)
+            k->intensity = knob_f(k->intensity, d, 0.02f, 0.0f, 1.0f);
+        else {
+            uint32_t j;
+            for (j = 0; j < KM_N; j++)
+                *kick_macro(i, j) = knob_f(*kick_macro(i, j), d, 0.02f, 0.0f, 1.0f);
+        }
+        break;
+    default:
+        if (i == 0)
+            k->volume = knob_f(k->volume, d, 0.02f, 0.0f, 1.0f);
+        else if (i == 1)
+            k->chain = d > 0 ? 0u : 1u;  /* right: around the chain, left: through it */
+        else
+            return;
+        break;
+    }
+    kick_value(i, t);
+    if (ui.kpage == KP_LAYER || (ui.kpage == KP_FX && i)) {   /* "GRIT  DECAY 240 MS" */
+        char w[24];
+        w[0] = 0;
+        text_cat(w, kick_knob_name(i));
+        text_cat(w, " ");
+        text_cat(w, t);
+        app_say(KICK_LAYER_NAME[ui.klayer % KICK_LAYERS], w);
+    } else
+        app_say(kick_knob_name(i), t);
+    ui.redraw |= RG_BLOCKS;
+    changed();
+}
+
 static void knob_turn(int k, int32_t d)
 {
     brk_fx_t *f = &set.fx;
     if (ui.page == PG_GLOBAL) {
         global_turn(k - EN_K1, d);
+        return;
+    }
+    if (ui.page == PG_KICK) {
+        kick_knob_turn(k - EN_K1, d);
         return;
     }
     if (ui.page == PG_SOUND) {           /* the soundboard's level, pitch, echo and length */
@@ -1138,6 +1344,17 @@ static int key_custom(int key)           /* the key has settings of its own (a d
     return ks->len != 3u || ks->pitch || ks->start || ks->mode != KEY_LOOP;
 }
 
+/* white keys held into a page where they don't play slices: let the engine's loops go */
+static void slices_let_go(uint32_t keys)
+{
+    uint32_t i;
+    if (ui.page == PG_SOUND || ui.page == PG_KICK)
+        return;
+    for (i = 0; i < 16u; i++)
+        if (keys >> WK[i] & 1u)
+            brk_key((int)i, 0);
+}
+
 static void input(void)
 {
     uint32_t keys = plat_keys(), btn = plat_buttons(), now = plat_ms(), i;
@@ -1146,6 +1363,15 @@ static void input(void)
     if (keys != ui.keys || btn != ui.btn)
         ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
     for (i = 0; i < 16u; i++) {          /* white keys: slices, or on the soundboard its sounds */
+        if (ui.page == PG_KICK) {        /* the KICK page: the kick's 16 steps, on and off */
+            if (kdn >> WK[i] & 1u) {
+                set.kick.steps ^= (uint16_t)(1u << i);
+                say_int(set.kick.steps >> i & 1u ? "KICK ON" : "KICK OFF", (int32_t)i + 1, "");
+                ui.redraw |= RG_BLOCKS;
+                set_dirty = 1u;
+            }
+            continue;
+        }
         if (ui.page == PG_SOUND) {
             if (kdn >> WK[i] & 1u) {
                 sfx_trigger((int)i);
@@ -1168,9 +1394,9 @@ static void input(void)
         if (kup >> WK[i] & 1u)
             brk_key((int)i, 0);
     }
-    if (ui.key_focus >= 0 && (ui.page == PG_SOUND || !(keys >> WK[ui.key_focus] & 1u))) {
+    if (ui.key_focus >= 0 && (ui.page == PG_SOUND || ui.page == PG_KICK || !(keys >> WK[ui.key_focus] & 1u))) {
         ui.key_focus = -1;               /* let go: the lowest key still held loops (as in the engine), or none */
-        if (ui.page != PG_SOUND)
+        if (ui.page != PG_SOUND && ui.page != PG_KICK)
             for (i = 16u; i-- > 0u;)
                 if (keys >> WK[i] & 1u) {
                     ui.key_focus = (int8_t)i;
@@ -1212,7 +1438,24 @@ static void input(void)
         ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
         app_say("GLOBAL", ui.gpage ? "PITCH, SNAP" : "MIDI");
     }
+    if (bdn & 1u << B_EDIT && btn & 1u << B_SEL) {   /* SEL + EDIT: the kick through the FX chain, or around it */
+        set.kick.chain ^= 1u;
+        app_say("KICK", set.kick.chain ? "THRU FX" : "AROUND FX");
+        ui.redraw |= RG_BLOCKS | RG_FOOT;
+        changed();
+    } else if (bdn & 1u << B_EDIT) {     /* EDIT: the KICK page; again, its next sub-page */
+        if (ui.page == PG_KICK)
+            ui.kpage = (uint8_t)((ui.kpage + 1u) % KPAGES);
+        else {
+            slices_let_go(keys);
+            ui.kpage = KP_MIX;
+        }
+        ui.page = PG_KICK;
+        ui.redraw |= RG_FOOT | RG_BLOCKS;
+        app_say("KICK", KPAGE_NAME[ui.kpage]);
+    }
     if (bdn & 1u << B_ENV) {             /* ENV: the soundboard */
+        slices_let_go(keys);
         ui.page = PG_SOUND;
         ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
         app_say("SOUNDBOARD", "");
@@ -1253,7 +1496,8 @@ static void input(void)
         ui.key_turned = 1u;
         changed();
         app_say(ui.key_layer ? "SLICE FX" : "KEY", "RESET");
-    } else if (bdn & 1u << B_SEL && ui.page == PG_HOME && !(btn & 1u << B_ARP) && !ext_active())
+    } else if (bdn & 1u << B_SEL && ui.page == PG_HOME && !(btn & 1u << B_ARP) && !ext_active() &&
+               !(btn & 1u << B_EDIT))
         tap_tempo(now);
     if (bdn & 1u << B_SAVE) {
         app_say("SAVE", plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 ? "DONE" : "FAILED");
@@ -1298,13 +1542,24 @@ static void input(void)
                 app_say("BPM", t);
             }
         } else if (k == EN_ALGO) {       /* the break; on the FX page the slot (SEL held: moves it along) */
-            if (ui.page == PG_FX)
+            if (ui.page == PG_KICK) {    /* the KICK page: the layer its LAYER and LAYER FX pages edit */
+                ui.klayer = (uint8_t)((ui.klayer + (d > 0 ? 1u : KICK_LAYERS - 1u)) % KICK_LAYERS);
+                app_say("LAYER", KICK_LAYER_NAME[ui.klayer]);
+                ui.redraw |= RG_BLOCKS | RG_FOOT;
+            } else if (ui.page == PG_FX)
                 fx_algo(d, btn & 1u << B_SEL);
             else {                     /* the next or previous break */
                 break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
             }
         } else if (k == EN_PRESET && ui.page == PG_FX)
             fx_type_turn(d);             /* the focused slot's effect */
+        else if (k == EN_PRESET && ui.page == PG_KICK) {   /* a built-in kick (its steps and routing kept) */
+            ui.kpreset = (uint8_t)((ui.kpreset + (d > 0 ? 1u : KICK_PRESETS - 1u)) % KICK_PRESETS);
+            kick_preset(&set.kick, ui.kpreset);
+            app_say("KICK", KICK_PRESET_NAME[ui.kpreset]);
+            ui.redraw |= RG_BLOCKS | RG_FOOT;
+            changed();
+        }
         else if (k == EN_PRESET)
             app_say("PATTERN", "1");     /* patterns arrive in M2 */
         else if (key_tuned() >= 0)       /* a white key held: K1-K4 tune its loop */
@@ -1328,10 +1583,17 @@ static void leds(void)
     if (st.playing)
         b |= 1u << B_PLAY;
     b |= 1u << (ui.page == PG_HOME ? B_HOME : ui.page == PG_GEN ? B_ARP : ui.page == PG_SOUND ? B_ENV :
-                ui.page == PG_GLOBAL ? B_GLO : B_FX);
+                ui.page == PG_GLOBAL ? B_GLO : ui.page == PG_KICK ? B_EDIT : B_FX);
     if (set_dirty)
         b |= 1u << B_SAVE;
-    if (ui.page == PG_SOUND) {           /* the soundboard: the sounds playing */
+    if (ui.page == PG_KICK) {            /* the KICK page: its steps lit, the step playing flipped */
+        uint32_t m = set.kick.steps;
+        if (st.playing && st.bar16 >= 0)
+            m ^= 1u << st.bar16;
+        for (i = 0; i < 16u; i++)
+            if (m >> i & 1u)
+                k |= 1u << WK[i];
+    } else if (ui.page == PG_SOUND) {    /* the soundboard: the sounds playing */
         uint32_t m = sfx_playing();
         for (i = 0; i < 16u; i++)
             if (m >> i & 1u)
@@ -1449,6 +1711,10 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
     t[0] = 0;
     if (ui.page == PG_GLOBAL) {
         global_value(i, t);
+        return;
+    }
+    if (ui.page == PG_KICK) {
+        kick_value(i, t);
         return;
     }
     if (ui.page == PG_SOUND) {
@@ -1725,6 +1991,14 @@ static void draw_chain(void)
             cv_rect(6 + (int32_t)i * 58, 16, 52, 4, C_BLOCK);
             cv_rect(6 + (int32_t)i * 58, 16, (int32_t)(52.0f * val), 4, sl->on ? C_HI : C_GRAY);
         }
+        if (sl->type == FXT_MBCOMP && sl->on) {   /* each band's reduction now, under its knob (0..-24 dB) */
+            float gr[3];
+            brk_fx_gr(gr);
+            for (i = 0; i < 3u; i++) {
+                float db = gr[i] < 0.999f ? -6.0206f * brk_log2f(gr[i] > 0.01f ? gr[i] : 0.01f) : 0.0f;
+                cv_rect(6 + (int32_t)i * 58, 21, (int32_t)(52.0f * brk_clampf(db / 24.0f, 0.0f, 1.0f)), 2, C_AMB);
+            }
+        }
         cv_text(6, 26, &FONT_XS, "ALGO: SLOT   PRESETS: EFFECT", C_DIM);
         cv_text(6, 38, &FONT_XS, "FX: ON / BYPASS   SEL+ALGO: MOVE", C_DIM);
         {                                /* the whole chain's mix (HOME K4), to see, not to set */
@@ -1738,6 +2012,61 @@ static void draw_chain(void)
             cv_rect(194, 41, (int32_t)(40.0f * f->wet + 0.5f), 3, f->wet > 0.005f ? C_HI : C_DIM);
         }
     }
+    cv_blit(0, 140);
+}
+
+/* the KICK page's strip: the kick's shape and its layers' levels; then its 16 steps (the one playing outlined),
+ * what the page edits and where the kick goes */
+#define KS_W 160u                        /* the shape's columns: its first 600 ms */
+static uint8_t kick_px[KS_W];
+static uint32_t kick_px_sig = 1u;
+static void draw_kick(const brk_status_t *st)
+{
+    const kick_t *k = &set.kick;
+    uint32_t i, sig = 2166136261u;
+    char t[40];
+    for (i = 0; i < __builtin_offsetof(kick_t, steps); i++)   /* the sound's bytes (not the steps): changed? */
+        sig = (sig ^ ((const uint8_t *)k)[i]) * 16777619u;
+    if (sig != kick_px_sig) {
+        kick_px_sig = sig;
+        kick_shape(k, kick_px, KS_W, 600u, 36u);
+    }
+    cv_begin(240, 52, C_BLACK);
+    for (i = 0; i < KS_W; i++)           /* the shape, mirrored about its centre line */
+        if (kick_px[i])
+            cv_rect(4 + (int32_t)i, 26 - kick_px[i] / 2, 1, kick_px[i] | 1, k->volume > 0.0f ? C_HI : C_DIM);
+    cv_rect(4, 26, KS_W, 1, C_LINE);
+    cv_text(6, 0, &FONT_XS, KPAGE_NAME[ui.kpage % KPAGES], C_GRAY);
+    for (i = 0; i < KICK_LAYERS; i++) {  /* the layers' levels, the one edited outlined */
+        int32_t x = 172 + (int32_t)i * 17, h = (int32_t)(k->l[i].level * 36.0f + 0.5f);
+        int sel = i == ui.klayer && (ui.kpage == KP_LAYER || ui.kpage == KP_FX);
+        cv_rect(x, 2, 14, 38, sel ? C_WHITE : C_BLOCK);
+        cv_rect(x + 1, 3, 12, 36, C_BLOCK);
+        if (h)
+            cv_rect(x + 1, 39 - h, 12, h, sel ? C_HI : k->l[i].fx ? C_AMB : C_GRAY);
+        t[0] = KICK_LAYER_NAME[i][0];
+        t[1] = 0;
+        cv_text(x + 4, 41, &FONT_XS, t, sel ? C_HI : C_GRAY);
+    }
+    cv_blit(0, 88);
+    cv_begin(240, 52, C_BLACK);
+    for (i = 0; i < 16u; i++) {          /* the steps: one per white key */
+        int32_t x = 1 + (int32_t)i * 15;
+        int on = k->steps >> i & 1u, now = st->playing && st->bar16 == (int8_t)i;
+        cv_rect(x, 2, 13, 20, now ? C_WHITE : on ? C_BLOCK_HI : (i & 3u) ? C_BLOCK : C_LINE);
+        if (now)
+            cv_rect(x + 2, 4, 9, 16, on ? C_BLOCK_HI : C_BLOCK);
+    }
+    t[0] = 0;
+    text_cat(t, KICK_LAYER_NAME[ui.klayer % KICK_LAYERS]);
+    if (k->l[ui.klayer % KICK_LAYERS].fx) {
+        text_cat(t, " + ");
+        text_cat(t, KICK_FX_NAME[k->l[ui.klayer % KICK_LAYERS].fx % KICK_FX]);
+    }
+    cv_text(6, 26, &FONT_XS, t, C_HI);
+    cv_text(234 - text_w(&FONT_XS, k->chain ? "THRU FX" : "AROUND FX"), 26, &FONT_XS,
+            k->chain ? "THRU FX" : "AROUND FX", k->chain ? C_GRAY : C_AMB);
+    cv_text(6, 38, &FONT_XS, "KEYS: STEPS  ALGO: LAYER  PRESETS: KICK", C_DIM);
     cv_blit(0, 140);
 }
 
@@ -1778,7 +2107,8 @@ static void draw_foot(const brk_status_t *st)
                                               {"CMPLX", "ANCHOR", "ROLL", "FILL"},
                                               {"P1", "P2", "P3", "MIX"},
                                               {"LEVEL", "PITCH", "ECHO", "LENGTH"},
-                                              {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"}};
+                                              {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"},
+                                              {"", "", "", ""}};
     uint32_t i;
     char t[16];
     cv_begin(240, 48, C_BLACK);
@@ -1813,6 +2143,8 @@ static void draw_foot(const brk_status_t *st)
         }
         if (ui.page == PG_FX)            /* the focused slot's effect: its settings, then MIX */
             name = fx_param_name(ui.fx_focus, (int)i);
+        else if (ui.page == PG_KICK)
+            name = kick_knob_name((int)i);
         cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.page == PG_FX
                 ? (set.fx.slot[ui.fx_focus & 3u].on ? C_HI : C_DIM) : C_GRAY);
         knob_value((int)i, t);
@@ -2170,6 +2502,8 @@ void app_frame(void)
     }
     if (ui.page == PG_GLOBAL && now - ui.sfx_drawn >= 200u)   /* the GLOBAL page's panel: five times a second */
         ui.redraw |= RG_BLOCKS;
+    if (ui.page == PG_FX && set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP && now - ui.sfx_drawn >= 50u)
+        ui.redraw |= RG_BLOCKS;          /* MULTIBAND focused: its reduction, twenty times a second */
     if (ui.page == PG_SOUND) {           /* the soundboard's fuses burn at about 20 frames a second */
         uint32_t m = sfx_playing();
         if (m != ui.sfx_mask || (m && now - ui.sfx_drawn >= 50u) ||
@@ -2243,8 +2577,11 @@ void app_frame(void)
         } else if (ui.page == PG_GLOBAL) {
             draw_global(&st);
             ui.sfx_drawn = now;
-        } else if (ui.page == PG_FX)
+        } else if (ui.page == PG_FX) {
             draw_chain();
+            ui.sfx_drawn = now;
+        } else if (ui.page == PG_KICK)
+            draw_kick(&st);
         else
             draw_blocks(&st, ui.keys);
     }

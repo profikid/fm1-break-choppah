@@ -25,9 +25,16 @@
  *   EQ       low (a shelf at 120 Hz), mid (a bell), high (a shelf at 8 kHz): -12..+12 dB each, 0.5 flat; its mix is
  *            the mid's frequency (200 Hz..5 kHz)
  *   TAPE     drive (0..24 dB into a tape curve, even harmonics, made up), warmth (the head bump and the top rolled
- *            off), wow (and flutter: the pitch wanders) */
+ *            off), wow (and flutter: the pitch wanders)
+ *   MB COMP  a 3-band (multiband) compressor: low (below 200 Hz), mid, high (above 2.5 kHz), each band's amount
+ *            (its threshold 0..-30 dB and its ratio 1..8:1 together, made up by half its reduction at full scale);
+ *            its own attack and release per band (low slow, high fast); the bands sum back to the input when nothing
+ *            is pressed. Its mix is the parallel mix (the pressed sound against the dry). brk_fx_gr: its reduction
+ *            per band
+ *   CLIP     drive (0..+24 dB into it), knee (soft .. hard), ceiling (0..-12 dB): a clipper, the level held at the
+ *            ceiling */
 enum { FXT_EMPTY, FXT_FILTER, FXT_CRUNCH, FXT_DRIVE, FXT_PUNCH, FXT_FLANGER, FXT_RING, FXT_TREMOLO, FXT_REVERB,
-       FXT_DELAY, FXT_EQ, FXT_TAPE, BRK_NFXT };
+       FXT_DELAY, FXT_EQ, FXT_TAPE, FXT_MBCOMP, FXT_CLIP, BRK_NFXT };
 #define BRK_DLY_DIVS 8u
 extern const char *const BRK_DLY_DIV_NAME[BRK_DLY_DIVS];
 extern const char *const BRK_FXT_NAME[BRK_NFXT];
@@ -64,8 +71,11 @@ void brk_fx_set(const brk_fx_t *p);
 void brk_fx_delay_buffer(int16_t *buf, uint32_t n);
 void brk_fx_tempo(float bpm);
 float brk_fx_dj_now(void);               /* where the DJ filter is right now, -1..1 (for the screen) */
+/* the first MB COMP slot's gain now, per band (low, mid, high; 1 = no reduction), for the screen; 1s for none */
+void brk_fx_gr(float *gr);
 /* in: the break (through the chain); aux: the soundboard (0 for none), joined after the chain, into the DJ filter
  * and the limiter, and thrown into the delay at aux_send; echo, verb: the slices' throws into the delay and the
- * reverb (brk_sends; 0 for none). pads: brk_status_t.pads */
+ * reverb (brk_sends; 0 for none); post: joined after the chain like aux but thrown nowhere (the kick around the
+ * chain; 0 for none). pads: brk_status_t.pads */
 void brk_fx_process(const float *in, const float *aux, float aux_send, const float *echo, const float *verb,
-                    float *l, float *r, uint32_t n, uint32_t pads);
+                    const float *post, float *l, float *r, uint32_t n, uint32_t pads);

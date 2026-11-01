@@ -16,7 +16,7 @@ static brk_fx_t fx;                      /* the render's copy */
 static float lim_gain = 1.0f, dj_s;      /* the limiter; the DJ filter's smoothed position */
 static svf_t dj_l, dj_r;
 const char *const BRK_FXT_NAME[BRK_NFXT] = {"EMPTY", "FILTER", "CRUNCH", "DRIVE", "PUNCH", "FLANGER", "RING MOD",
-                                            "TREMOLO", "REVERB", "DELAY", "EQ", "TAPE"};
+                                            "TREMOLO", "REVERB", "DELAY", "EQ", "TAPE", "MB COMP", "CLIP"};
 const char *const BRK_DLY_DIV_NAME[BRK_DLY_DIVS] = {"1/16", "1/8", "3/16", "1/4", "3/8", "1/2", "1/8T", "1/4T"};
 static const float DLY_STEPS[BRK_DLY_DIVS] = {1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 8.0f, 4.0f / 3.0f, 8.0f / 3.0f};
 const char *const BRK_TREM_DIV_NAME[BRK_TREM_DIVS] = {"1/2", "1/4", "1/8", "1/16", "1/32", "1/8T"};
@@ -33,7 +33,10 @@ typedef struct {
     float env, gr;                       /* PUNCH: the level followed, the gain */
     float fl[2][FL_LEN];                 /* FLANGER; TAPE's wow */
     uint32_t w;
-    svf_t eq[3][2];                      /* EQ: low, mid, high, left and right; TAPE: eq[0] its head bump */
+    svf_t eq[3][2];                      /* EQ: low, mid, high, left and right; TAPE: eq[0] its head bump;
+                                          * MULTIBAND: eq[0] the high band's split (f: the low's) */
+    float mb_env[3], mb_g[3];            /* MULTIBAND: each band's level followed, its gain */
+    uint32_t mb_n;                       /* (its gains are worked out every fourth sample) */
 } slot_st_t;
 static slot_st_t st[BRK_FX_SLOTS];
 
@@ -277,6 +280,8 @@ void brk_fx_slot_defaults(brk_fxslot_t *s, int type)
         {2.0f / 7.0f, 0.5f, 0.5f, 0.35f},   /* DELAY: 3/16, feedback 0.47 */
         {0.5f, 0.5f, 0.5f, 0.5f},        /* EQ: flat, the mid at 1 kHz */
         {0.4f, 0.5f, 0.15f, 1.0f},       /* TAPE: 10 dB of drive, a little wow */
+        {0.5f, 0.35f, 0.45f, 1.0f},      /* MULTIBAND: the low held down, the rest lighter */
+        {0.4f, 0.5f, 0.06f, 1.0f},       /* CLIP: +10 dB in, a middling knee, -0.7 dB */
     };
     uint32_t t = (uint32_t)type < BRK_NFXT ? (uint32_t)type : 0u;
     s->type = (uint8_t)t;
@@ -381,6 +386,10 @@ typedef struct {
     float m[3][3];                       /* and their mixes: out = v0 * m0 + v1 * m1 + v2 * m2 */
 } slot_c_t;
 static slot_c_t sc[BRK_FX_SLOTS];
+static volatile float mb_gr[3] = {1.0f, 1.0f, 1.0f};   /* the first MULTIBAND's gains, for the screen */
+static int mb_shown;                     /* a MULTIBAND has given them this block */
+static const float MB_ATT[3] = {0.0023f, 0.0045f, 0.011f};   /* its bands' attack: 10, 5, 2 ms */
+static const float MB_REL[3] = {0.00015f, 0.00023f, 0.00038f};   /* release: 150, 100, 60 ms */
 static int rv_taken;                     /* a slot has the reverb this block (the first REVERB in the chain) */
 static int dl_taken;                     /* and the delay (the first DELAY, when the line is there) */
 static dl_c_t dl_slot_c;                 /* the DELAY slot's settings this block */
@@ -471,6 +480,25 @@ static void slot_block(uint32_t k)
         c->m[1][0] = p2 * 66.0f;
         break;
     }
+    case FXT_MBCOMP: {                   /* c: the low's split, e[0] the high's; per band m[b]: log2 of the threshold,
+                                          * the slope (1 - 1/ratio), the make-up */
+        const float amt[3] = {p0, p1, p2};
+        uint32_t b;
+        c->c = svf_coef(200.0f, 0.0f);
+        c->e[0] = svf_coef(2500.0f, 0.0f);
+        for (b = 0; b < 3u; b++) {
+            float th = -5.0f * amt[b], slope = 1.0f - 1.0f / (1.0f + 7.0f * amt[b]);
+            c->m[b][0] = th;
+            c->m[b][1] = slope;
+            c->m[b][2] = brk_exp2f(-0.5f * th * slope);   /* half the reduction a full-scale band gets */
+        }
+        break;
+    }
+    case FXT_CLIP:                       /* g: the drive (over the ceiling), a: the ceiling, b: how hard */
+        c->a = brk_exp2f(-p2 * 12.0f * 0.1661f);
+        c->g = brk_exp2f(p0 * 24.0f * 0.1661f) / c->a;
+        c->b = p1;
+        break;
     case FXT_TREMOLO: {                  /* a: the cycle's step (on the tempo), b: depth, g: pan */
         uint32_t d = (uint32_t)(p0 * (float)(BRK_TREM_DIVS - 1u) + 0.5f);
         c->a = 1.0f / (TREM_STEPS[d < BRK_TREM_DIVS ? d : 0u] * (float)BRK_SR * 60.0f / (p_bpm * 4.0f));
@@ -587,6 +615,46 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
         yr = s->lp[1];
         break;
     }
+    case FXT_MBCOMP: {                   /* split (low and high by their filters, mid what is left), each band's level
+                                          * followed (left and right together), pressed, made up, summed */
+        float bl[3], br[3], hp, lpl, lpr;
+        uint32_t b;
+        svf_run(&s->f[0], &c->c, yl, &lpl);
+        svf_run(&s->f[1], &c->c, yr, &lpr);
+        bl[0] = lpl;
+        br[0] = lpr;
+        bl[2] = svf_run(&s->eq[0][0], &c->e[0], yl, &hp);
+        br[2] = svf_run(&s->eq[0][1], &c->e[0], yr, &hp);
+        bl[1] = yl - bl[0] - bl[2];
+        br[1] = yr - br[0] - br[2];
+        yl = yr = 0.0f;
+        for (b = 0; b < 3u; b++) {
+            float pk = brk_absf(bl[b]) > brk_absf(br[b]) ? brk_absf(bl[b]) : brk_absf(br[b]);
+            s->mb_env[b] += (pk - s->mb_env[b]) * (pk > s->mb_env[b] ? MB_ATT[b] : MB_REL[b]);
+            if (!(s->mb_n & 3u)) {       /* the gain: (env / threshold)^-slope above it, in octaves */
+                float over = s->mb_env[b] > 1e-6f ? brk_log2f(s->mb_env[b]) - c->m[b][0] : -1.0f;
+                s->mb_g[b] = over > 0.0f ? brk_exp2f(-over * c->m[b][1]) : 1.0f;
+            }
+            yl += bl[b] * s->mb_g[b] * c->m[b][2];
+            yr += br[b] * s->mb_g[b] * c->m[b][2];
+        }
+        s->mb_n++;
+        break;
+    }
+    case FXT_CLIP: {                     /* a cubic's soft curve (flat at 1.5) and a hard edge at 1, blended by the
+                                          * knee; both start at a slope of 1: below the edge the drive is the gain */
+        float u[2];
+        uint32_t j;
+        u[0] = brk_clampf(yl * c->g, -1.5f, 1.5f);
+        u[1] = brk_clampf(yr * c->g, -1.5f, 1.5f);
+        for (j = 0; j < 2u; j++) {
+            float soft3 = u[j] - 0.14814815f * u[j] * u[j] * u[j], hard = brk_clampf(u[j], -1.0f, 1.0f);
+            u[j] = (soft3 + (hard - soft3) * c->b) * c->a;
+        }
+        yl = u[0];
+        yr = u[1];
+        break;
+    }
     case FXT_DELAY: {                    /* in: what reaches it at the send, and the throws; out: the dry and the
                                           * echoes at full */
         float el, er;
@@ -631,8 +699,15 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
     *xr += (yr - *xr) * c->mix;
 }
 
+void brk_fx_gr(float *gr)
+{
+    gr[0] = mb_gr[0];
+    gr[1] = mb_gr[1];
+    gr[2] = mb_gr[2];
+}
+
 void brk_fx_process(const float *in, const float *aux, float aux_send, const float *echo, const float *verb,
-                    float *l, float *r, uint32_t n, uint32_t pads)
+                    const float *post, float *l, float *r, uint32_t n, uint32_t pads)
 {
     uint32_t i, k;
     svf_c djc;
@@ -654,6 +729,16 @@ void brk_fx_process(const float *in, const float *aux, float aux_send, const flo
     rv_taken = dl_taken = 0;
     for (k = 0; k < BRK_FX_SLOTS; k++)   /* the chain's settings, once a block */
         slot_block(k);
+    mb_shown = 0;
+    for (k = 0; k < BRK_FX_SLOTS && !mb_shown; k++)   /* the first MULTIBAND on: its gains, for the screen */
+        if (sc[k].on && sc[k].type == FXT_MBCOMP) {
+            uint32_t b;
+            for (b = 0; b < 3u; b++)
+                mb_gr[b] = st[k].mb_g[b];
+            mb_shown = 1;
+        }
+    if (!mb_shown)
+        mb_gr[0] = mb_gr[1] = mb_gr[2] = 1.0f;
     for (i = 0; i < n; i++) {
         float x = in[i], xl = x, xr = x, lp;
         dub_send += ((dub_on ? 1.0f : 0.0f) - dub_send) * 0.002f;
@@ -667,7 +752,8 @@ void brk_fx_process(const float *in, const float *aux, float aux_send, const flo
             xr = x + (xr - x) * wet;
         }
         {
-            float a = aux ? aux[i] : 0.0f;   /* the soundboard joins here: clean, then the delay and the filter */
+            float a = (aux ? aux[i] : 0.0f) + (post ? post[i] : 0.0f);   /* the soundboard (and the kick around
+                                                                         * the chain) join here, clean */
             xl += a;
             xr += a;
         }

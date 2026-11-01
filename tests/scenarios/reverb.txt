@@ -15,7 +15,7 @@ shot rv_page.png
 wav reverb_chain.wav
 peakreset
 wait 2500
-expect peak_db_max >-30
+expect peak_db_min -30
 tap PLAY
 wait 2500
 wavstop

@@ -83,7 +83,7 @@ shot p_dub.png
 key b10 up
 wait 250
 shot p_after.png
-expect peak_db_max >-30
+expect peak_db_min -30
 tap SAVE
 wait 50
 expect store_writes 1

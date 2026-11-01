@@ -14,7 +14,7 @@ peakreset
 wav ui.wav
 tap PLAY
 wait 60
-expect peak_db_max >-30
+expect peak_db_min -30
 wait 900
 shot u5_playing.png
 key w9 down

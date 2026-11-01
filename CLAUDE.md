@@ -14,6 +14,8 @@ E-*, N-*; milestones M0–M8). Keep the PRD in step when scope changes.
   allocation. Main loop → render through `brk_*` setters (single words) and the key queue.
 - Pool RAM budget (PRD 8.2): canvas 240×96 (45 KB) + PCM buffers; stay under 336 KB total.
 - Flash writes stall audio: only on SAVE or while stopped.
+- Settings (`settings_t`, magic CHP6) only grow at the end: append new fields after `kick` and give them defaults in
+  `settings_defaults()`; a shorter (older) save loads into the front. Anything else needs a new magic (saves lost).
 - Bluetooth MIDI is on (`ble = true`, `ble_stack = "own"`: fm1-base's own stack, nothing of JieLi's); the GLOBAL
   page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash.
 - Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;

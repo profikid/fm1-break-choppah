@@ -3,5 +3,5 @@ wait 300
 peakreset
 tap PLAY
 wait 80
-expect peak_db_max >-30
+expect peak_db_min -30
 shot s1_skip_playing.png

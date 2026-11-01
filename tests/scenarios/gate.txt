@@ -12,7 +12,7 @@ shot gate_25.png
 wav gate_25.wav
 peakreset
 wait 2000
-expect peak_db_max >-30
+expect peak_db_min -30
 wavstop
 turn K3 15 10
 wait 300

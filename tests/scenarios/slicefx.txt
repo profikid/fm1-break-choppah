@@ -32,7 +32,7 @@ wait 200
 wav slice_fx_delay.wav
 peakreset
 wait 3000
-expect peak_db_max >-30
+expect peak_db_min -30
 wavstop
 key b10 down
 wait 400

@@ -30,7 +30,7 @@ shot c_moved.png
 peakreset
 wav fx_chain.wav
 wait 2000
-expect peak_db_max >-30
+expect peak_db_min -30
 wavstop
 tap HOME
 wait 200

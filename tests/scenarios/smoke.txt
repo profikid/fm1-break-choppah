@@ -7,7 +7,7 @@ wav play.wav
 tap PLAY
 wait 1500
 shot playing.png
-expect peak_db_max >-30
+expect peak_db_min -30
 key b2 down
 wait 400
 shot roll.png

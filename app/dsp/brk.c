@@ -100,6 +100,10 @@ static uint16_t clk_off[CLK_MAX];        /* the last render's ticks: their sampl
 static uint32_t clk_cnt;
 static float clk_left;                   /* samples to the next tick */
 static uint32_t clk_k = 12u;             /* ticks given in this pair of 16ths (12: done until the next pair) */
+#define EV_MAX 8u
+static uint16_t ev_off[EV_MAX];          /* the last render's steps: offsets and places in the bar */
+static uint8_t ev_idx[EV_MAX];
+static uint32_t ev_cnt;
 static uint32_t steps_total;             /* steps begun since the reset (the outside clock counts from its start) */
 static int was_playing;                  /* the transport at the last render: a stop fades the break out */
 static volatile uint32_t n_renders;
@@ -637,6 +641,7 @@ void brk_render(float *out, uint32_t n)
         steps_total = 0u;
     }
     clk_cnt = 0u;
+    ev_cnt = 0u;
     if (was_playing && !playing) {       /* stopped: the break fades out (2 ms), but a key held loops on */
         uint32_t k;
         pending = BRK_NO_SLICE;
@@ -723,6 +728,10 @@ void brk_render(float *out, uint32_t n)
                 float len = 2.0f * sl * ((((uint32_t)(step + 1)) & 1u) ? 1.0f - sw : sw);
                 step_in_len = (uint32_t)len;
                 on_step(b);
+                if (ev_cnt < EV_MAX) {
+                    ev_off[ev_cnt] = (uint16_t)i;
+                    ev_idx[ev_cnt++] = (uint8_t)(steps_total & 15u);
+                }
                 steps_total++;
                 to_next += len;
                 if (!(step & 1)) {       /* MIDI clock: twelve straight ticks over each pair of 16ths */
@@ -861,6 +870,7 @@ void brk_render(float *out, uint32_t n)
                        ? brk_clampf(1.0f - key_left / (key_steps * sl), 0.0f, 1.0f) : 0.0f;
     status.key_n = (uint16_t)key_n;
     status.key_rev = (uint8_t)(v[cur].dir < 0.0f);
+    status.bar16 = steps_total ? (int8_t)((steps_total - 1u) & 15u) : (int8_t)-1;
 }
 
 /* -------------------------------------------------------------- main loop --- */
@@ -909,6 +919,7 @@ void brk_init(void)
     was_playing = 0;
     clk_cnt = 0u;
     clk_k = 12u;
+    ev_cnt = 0u;
     {
         brk_keyset_t d;
         uint32_t k;
@@ -1074,6 +1085,16 @@ uint32_t brk_clock_ticks(uint16_t *off, uint32_t max)
     uint32_t i, n = clk_cnt < max ? clk_cnt : max;
     for (i = 0; i < n; i++)
         off[i] = clk_off[i];
+    return n;
+}
+
+uint32_t brk_step_events(uint16_t *off, uint8_t *idx, uint32_t max)
+{
+    uint32_t i, n = ev_cnt < max ? ev_cnt : max;
+    for (i = 0; i < n; i++) {
+        off[i] = ev_off[i];
+        idx[i] = ev_idx[i];
+    }
     return n;
 }
 

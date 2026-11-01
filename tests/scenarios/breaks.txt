@@ -7,47 +7,47 @@ turn ALGO 1
 wait 400
 peakreset
 wait 1200
-expect peak_db_max >-30
+expect peak_db_min -30
 shot a_00.png
 turn ALGO 1
 wait 400
 peakreset
 wait 1200
-expect peak_db_max >-30
+expect peak_db_min -30
 shot a_01.png
 turn ALGO 1
 wait 400
 peakreset
 wait 1200
-expect peak_db_max >-30
+expect peak_db_min -30
 shot a_02.png
 turn ALGO 1
 wait 400
 peakreset
 wait 1200
-expect peak_db_max >-30
+expect peak_db_min -30
 shot a_03.png
 turn ALGO 1
 wait 400
 peakreset
 wait 1200
-expect peak_db_max >-30
+expect peak_db_min -30
 shot a_04.png
 turn ALGO 1
 wait 400
 peakreset
 wait 1200
-expect peak_db_max >-30
+expect peak_db_min -30
 shot a_05.png
 turn ALGO 1
 wait 400
 peakreset
 wait 1200
-expect peak_db_max >-30
+expect peak_db_min -30
 shot a_06.png
 turn ALGO 1
 wait 400
 peakreset
 wait 1200
-expect peak_db_max >-30
+expect peak_db_min -30
 shot a_07.png

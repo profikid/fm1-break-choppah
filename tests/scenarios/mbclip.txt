@@ -1,0 +1,25 @@
+# CHOPPAH: MULTIBAND and CLIP in the FX chain
+#   app/build/host/choppah_host tests/scenarios/mbclip.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 400
+tap FX
+wait 200
+turn PRESET 10 10
+wait 200
+turn K1 20 10
+turn K2 10 10
+wait 800
+shot c_multiband.png
+turn ALGO 1 10
+turn PRESET 12 10
+wait 200
+turn K1 10 10
+turn K3 10 10
+wait 400
+shot c_clip.png
+wav mb_clip.wav
+peakreset
+wait 2500
+expect peak_db_min -30
+wavstop

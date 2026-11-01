@@ -9,6 +9,7 @@
 #include "brk.h"
 #include "brk_fx.h"
 #include "brk_synth.h"
+#include "kick.h"
 #include "sfx.h"
 
 #define RATE 22050u
@@ -263,7 +264,7 @@ static void fx_run(const brk_fx_t *p, uint32_t n)
     brk_fx_init();
     brk_fx_set(p);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0.0f, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
+        brk_fx_process(buf + i, 0, 0.0f, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
 }
 
 static void test_fx(void)
@@ -516,14 +517,14 @@ static void test_dub(void)
     brk_play(1);
     render(buf, n, 0, 0, 0);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0.0f, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
+        brk_fx_process(buf + i, 0, 0.0f, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
     brk_play(0);
     brk_pad(PAD_DUB, 0);
     for (i = 0; i < BLOCK; i++)
         buf[i] = 0.0f;
     for (i = 0; i < s * 8u; i += BLOCK) {    /* silence in, two bars of it */
         uint32_t j;
-        brk_fx_process(buf, 0, 0.0f, 0, 0, bl, br, BLOCK, 0u);
+        brk_fx_process(buf, 0, 0.0f, 0, 0, 0, bl, br, BLOCK, 0u);
         for (j = 0; j < BLOCK; j++)
             if (fabsf(bl[j]) > tail)
                 tail = fabsf(bl[j]);
@@ -647,7 +648,7 @@ static void test_sfx_echo(void)
     sfx_trigger(SFX_LASER);
     for (i = 0; i < BRK_SR * 2u; i += BLOCK) {
         sfx_render(a, BLOCK);
-        brk_fx_process(z, a, 0.8f, 0, 0, bl, br, BLOCK, 0u);
+        brk_fx_process(z, a, 0.8f, 0, 0, 0, bl, br, BLOCK, 0u);
         if (i > BRK_SR)                  /* the laser is long over by now */
             for (j = 0; j < BLOCK; j++)
                 if (fabsf(bl[j]) > tail)
@@ -1044,7 +1045,7 @@ static void test_delay_slices(void)
     p.slot[0].mix = 1.0f;
     brk_fx_set(&p);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0.0f, 0, 0, bl + i, br + i, BLOCK, 0u);
+        brk_fx_process(buf + i, 0, 0.0f, 0, 0, 0, bl + i, br + i, BLOCK, 0u);
     for (i = 1100u; i < 1000u + T + T / 2u; i++) {   /* the first echo: left only */
         if (fabsf(bl[i]) > ml) { ml = fabsf(bl[i]); pkl = i; }
         if (fabsf(br[i]) > mr) mr = fabsf(br[i]);
@@ -1115,13 +1116,13 @@ static void test_delay_slices(void)
 
 /* EQ: flat at 0.5; LOW +12 dB lifts 60 Hz four times, HIGH -12 dB drops 12 kHz to a quarter. TAPE: drive puts
  * harmonics on a pure tone; wow makes its pitch wander */
-static float tone_peak(float hz, int type, float p0, float p1, float p2, float mix, uint32_t from)
+static float tone_peak_a(float hz, float amp, int type, float p0, float p1, float p2, float mix, uint32_t from)
 {
     brk_fx_t p;
     uint32_t i, n = BRK_SR;
     float pk = 0.0f;
     for (i = 0; i < n; i++)
-        buf[i] = 0.25f * sinf(6.2831853f * hz * (float)i / (float)BRK_SR);
+        buf[i] = amp * sinf(6.2831853f * hz * (float)i / (float)BRK_SR);
     brk_fx_defaults(&p);
     brk_fx_slot_defaults(&p.slot[0], type);
     p.slot[0].on = 1u;
@@ -1134,6 +1135,11 @@ static float tone_peak(float hz, int type, float p0, float p1, float p2, float m
         if (fabsf(bl[i]) > pk)
             pk = fabsf(bl[i]);
     return pk;
+}
+
+static float tone_peak(float hz, int type, float p0, float p1, float p2, float mix, uint32_t from)
+{
+    return tone_peak_a(hz, 0.25f, type, p0, p1, p2, mix, from);
 }
 
 static void test_eq_tape(void)
@@ -1174,6 +1180,197 @@ static void test_eq_tape(void)
     }
 }
 
+/* MULTIBAND: the bands sum back to the input untouched; a band pressed holds its level, the others don't move; CLIP:
+ * clean below its edge, held at its ceiling above */
+static void test_mb_clip(void)
+{
+    float gr[3];
+    float f60 = tone_peak(60.0f, FXT_MBCOMP, 0.0f, 0.0f, 0.0f, 1.0f, 8000u);
+    float f1k = tone_peak(1000.0f, FXT_MBCOMP, 0.0f, 0.0f, 0.0f, 1.0f, 4000u);
+    float f8k = tone_peak(8000.0f, FXT_MBCOMP, 0.0f, 0.0f, 0.0f, 1.0f, 4000u);
+    float lo_q, lo_l, k1;
+    CHECK(fabsf(f60 - 0.25f) < 0.01f && fabsf(f1k - 0.25f) < 0.01f && fabsf(f8k - 0.25f) < 0.01f,
+          "MULTIBAND at 0: the bands sum back (60 Hz %.3f, 1 kHz %.3f, 8 kHz %.3f of 0.25)", f60, f1k, f8k);
+    lo_q = tone_peak_a(60.0f, 0.05f, FXT_MBCOMP, 1.0f, 0.0f, 0.0f, 1.0f, 30000u);
+    lo_l = tone_peak_a(60.0f, 0.25f, FXT_MBCOMP, 1.0f, 0.0f, 0.0f, 1.0f, 30000u);
+    brk_fx_gr(gr);
+    CHECK(lo_l / lo_q < 1.5f && lo_l / lo_q > 1.0f, "MULTIBAND LOW: 14 dB more in, %.1f dB more out", 
+          20.0f * log10f(lo_l / lo_q));
+    CHECK(gr[0] < 0.4f && gr[1] > 0.95f && gr[2] > 0.95f, "MULTIBAND LOW: its reduction shown (%.2f %.2f %.2f)",
+          gr[0], gr[1], gr[2]);
+    k1 = tone_peak(1000.0f, FXT_MBCOMP, 1.0f, 0.0f, 0.0f, 1.0f, 4000u);
+    CHECK(fabsf(k1 - 0.25f) < 0.025f, "MULTIBAND LOW pressed: 1 kHz untouched (%.3f)", k1);
+    k1 = tone_peak(1000.0f, FXT_CLIP, 0.0f, 0.5f, 0.0f, 1.0f, 4000u);
+    CHECK(fabsf(k1 - 0.25f) < 0.01f, "CLIP at 0 dB in: clean (%.3f)", k1);
+    k1 = tone_peak(1000.0f, FXT_CLIP, 1.0f, 0.0f, 0.5f, 1.0f, 4000u);
+    CHECK(k1 > 0.48f && k1 < 0.51f, "CLIP +24 dB into -6 dB: held at the ceiling (%.3f)", k1);
+    k1 = tone_peak(1000.0f, FXT_CLIP, 1.0f, 1.0f, 0.5f, 1.0f, 4000u);
+    CHECK(k1 > 0.48f && k1 < 0.51f, "CLIP hard: held at the ceiling too (%.3f)", k1);
+}
+
+/* the kick (PRD K-*): its layers, its decay, its hits on their samples, the presets, the steps' events */
+static float kick_buf[BRK_SR];
+static float kick_run(const kick_t *k, uint32_t n, uint32_t hit_at)
+{
+    uint32_t i = 0;
+    float peak = 0.0f;
+    kick_set(k);
+    kick_init();
+    while (i < n) {
+        uint32_t m = n - i < BLOCK ? n - i : BLOCK, j;
+        uint16_t at = (uint16_t)(hit_at - i);
+        kick_render(kick_buf + i, m, &at, hit_at >= i && hit_at < i + m ? 1u : 0u);
+        for (j = 0; j < m; j++)
+            if (fabsf(kick_buf[i + j]) > peak)
+                peak = fabsf(kick_buf[i + j]);
+        i += m;
+    }
+    return peak;
+}
+static float span_peak(uint32_t a, uint32_t b)
+{
+    float p = 0.0f;
+    for (; a < b; a++)
+        if (fabsf(kick_buf[a]) > p)
+            p = fabsf(kick_buf[a]);
+    return p;
+}
+
+static void test_kick(void)
+{
+    kick_t k, solo;
+    uint32_t i, l, n = BRK_SR / 2u, zc = 0;
+    float p, first = 0.0f, prev_peak = -1.0f;
+    int differ = 0, bounded = 1;
+    kick_defaults(&k);
+    CHECK(sizeof(kick_t) == 140u, "kick_t is %u bytes (140: the settings grow at the end)", (unsigned)sizeof(kick_t));
+    p = kick_run(&k, n, 1000u);
+    CHECK(span_peak(0, 1000u) == 0.0f, "kick: silent before its hit (%.4f)", span_peak(0, 1000u));
+    CHECK(p > 0.4f && p <= 1.0f, "kick: a full hit (peak %.3f)", p);
+    wav("kick_default.wav", kick_buf, kick_buf, n);
+    p = kick_run(&k, BRK_SR, 0u);
+    CHECK(span_peak(BRK_SR - 2205u, BRK_SR) < p * 0.1f, "kick: it decays (%.3f at the end of a second, %.3f peak)",
+          span_peak(BRK_SR - 2205u, BRK_SR), p);
+    for (l = 0; l < KICK_LAYERS; l++) {  /* each layer alone sounds */
+        uint32_t o;
+        solo = k;
+        solo.intensity = 0.0f;
+        for (o = 0; o < KICK_LAYERS; o++)
+            solo.l[o].level = o == l ? 1.0f : 0.0f;
+        p = kick_run(&solo, n, 0u);
+        CHECK(p > 0.05f && p <= 1.0f, "kick: %s alone sounds (peak %.3f)", KICK_LAYER_NAME[l], p);
+        for (o = 0; o < KICK_FX; o++) {  /* and through each of its effects, bounded */
+            solo.l[l].fx = (uint8_t)o;
+            solo.l[l].fa = solo.l[l].fb = 0.8f;
+            p = kick_run(&solo, n / 4u, 0u);
+            if (!(p <= 1.0f) || (o != KFX_RING && p < 0.01f))
+                bounded = 0;
+        }
+    }
+    CHECK(bounded, "kick: every layer through every effect sounds and stays in range");
+    /* SUB's pitch: 30 Hz at 0, 90 at 1; after its drop, the zero crossings say so */
+    solo = k;
+    solo.intensity = 0.0f;
+    for (l = 0; l < KICK_LAYERS; l++)
+        solo.l[l].level = l == KL_SUB ? 1.0f : 0.0f;
+    solo.l[KL_SUB].pitch = 0.5f;
+    solo.l[KL_SUB].decay = 1.0f;
+    solo.l[KL_SUB].tone = 0.0f;
+    kick_run(&solo, n, 0u);
+    for (i = BRK_SR / 10u; i < BRK_SR / 10u * 4u; i++)
+        if (kick_buf[i - 1] < 0.0f && kick_buf[i] >= 0.0f)
+            zc++;
+    {
+        float hz = (float)zc / 0.3f, want = 30.0f * powf(2.0f, 0.5f * 1.585f);
+        CHECK(fabsf(hz - want) < want * 0.1f, "kick: SUB at pitch 0.5 is %.1f Hz (%.1f)", hz, want);
+    }
+    /* decay longer, tail longer */
+    solo.l[KL_SUB].decay = 0.1f;
+    kick_run(&solo, n, 0u);
+    first = span_peak(BRK_SR / 5u, BRK_SR / 5u + 2205u);
+    solo.l[KL_SUB].decay = 0.9f;
+    kick_run(&solo, n, 0u);
+    CHECK(span_peak(BRK_SR / 5u, BRK_SR / 5u + 2205u) > first * 4.0f, "kick: DECAY lengthens the tail (%.3f vs %.3f)",
+          span_peak(BRK_SR / 5u, BRK_SR / 5u + 2205u), first);
+    /* INTENSITY: more drive, more of the tail held up near the peak */
+    {
+        float clean, hard;
+        k.intensity = 0.0f;
+        kick_run(&k, n, 0u);
+        clean = span_peak(BRK_SR / 10u, BRK_SR / 10u + 2205u);
+        k.intensity = 1.0f;
+        kick_run(&k, n, 0u);
+        hard = span_peak(BRK_SR / 10u, BRK_SR / 10u + 2205u);
+        CHECK(hard > clean * 1.5f, "kick: INTENSITY drives the body up (%.3f vs clean %.3f)", hard, clean);
+        kick_defaults(&k);
+    }
+    /* the presets: all bounded, all different */
+    for (l = 0; l < KICK_PRESETS; l++) {
+        float e = 0.0f;
+        char name[40];
+        kick_preset(&k, l);
+        p = kick_run(&k, n, 0u);
+        for (i = 0; i < n; i++)
+            e += kick_buf[i] * kick_buf[i];
+        if (!(p <= 1.0f && p > 0.3f))
+            bounded = 0;
+        if (prev_peak >= 0.0f && fabsf(e - prev_peak) > 1.0f)
+            differ++;
+        prev_peak = e;
+        snprintf(name, sizeof name, "kick_%u.wav", l);
+        wav(name, kick_buf, kick_buf, n);
+    }
+    CHECK(bounded && differ == (int)KICK_PRESETS - 1, "kick: %u presets, in range and each its own (%d differ)",
+          KICK_PRESETS, differ);
+    /* kick_hit (a MIDI note): at the next render */
+    kick_defaults(&k);
+    kick_set(&k);
+    kick_init();
+    kick_hit();
+    kick_render(kick_buf, BLOCK, 0, 0u);
+    CHECK(span_peak(0, BLOCK) > 0.3f, "kick: kick_hit sounds at the next render (%.3f)", span_peak(0, BLOCK));
+    /* a retrigger mid-kick: the kick sounding fades out under the new one, no step (SUB and PUNCH start at 0) */
+    {
+        uint16_t at = 100u;
+        solo = k;
+        solo.intensity = 0.0f;
+        solo.l[KL_GRIT].level = solo.l[KL_CLICK].level = 0.0f;
+        kick_run(&solo, BRK_SR / 5u, 0u);    /* 200 ms in */
+        kick_render(kick_buf, BLOCK, &at, 1u);
+        p = fabsf(kick_buf[100] - kick_buf[99]);
+        CHECK(p < 0.03f && fabsf(kick_buf[99]) > 0.05f, "kick: a retrigger doesn't click (step %.3f, at %.3f)", p,
+              kick_buf[99]);
+    }
+    /* the shape for the screen: loud first, quiet at the end */
+    {
+        uint8_t px[60];
+        kick_shape(&k, px, 60u, 1000u, 40u);
+        CHECK(px[1] > 20u && px[59] < px[1] / 2u, "kick shape: %u at the start, %u at the end", px[1], px[59]);
+    }
+    /* the steps' events: 16 a bar, their places 0..15, a step apart */
+    {
+        uint16_t off[8];
+        uint8_t idx[8];
+        uint32_t sl = brk_step_len_samples(), t, ne, total = 0, bad = 0, last = 0;
+        fresh(1);
+        brk_play(1);
+        for (t = 0; t < sl * 16u; t += BLOCK) {
+            brk_render(buf, BLOCK);
+            ne = brk_step_events(off, idx, 8u);
+            for (i = 0; i < ne; i++) {
+                uint32_t at = t + off[i];
+                if (at >= sl * 16u)
+                    break;
+                if (idx[i] != (uint8_t)total || (total && (at - last + 2u < sl || at - last > sl + 2u)))
+                    bad++;
+                last = at;
+                total++;
+            }
+        }
+        CHECK(total == 16u && !bad, "step events: %u a bar (16), %u out of place", total, bad);
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -1192,6 +1389,8 @@ int main(int argc, char **argv)
     test_stop();
     test_delay_slices();
     test_eq_tape();
+    test_mb_clip();
+    test_kick();
     test_generator();
     test_pads();
     test_fx();

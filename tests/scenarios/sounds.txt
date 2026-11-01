@@ -9,7 +9,7 @@ peakreset
 tapkey w0
 wait 300
 shot s_horn.png
-expect peak_db_max >-20
+expect peak_db_min -20
 key w1 down
 wait 600
 shot s_siren.png

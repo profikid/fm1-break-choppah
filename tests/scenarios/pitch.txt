@@ -25,7 +25,7 @@ shot g_pitch_keep.png
 wav pitch_keep_plus5.wav
 peakreset
 wait 2800
-expect peak_db_max >-30
+expect peak_db_min -30
 wavstop
 press OCT-
 press OCT+

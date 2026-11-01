@@ -1,0 +1,47 @@
+# CHOPPAH: the KICK page. EDIT opens it (and steps through MIX, LAYER, LAYER FX, MACRO, OUT); the white keys are its
+# 16 steps; ALGORITHM picks the layer; PRESETS the built-in kicks; SEL + EDIT routes it around the FX chain; MIDI
+# note 36 plays it
+#   app/build/host/choppah_host tests/scenarios/kick.txt app/build/scenarios
+wait 2600
+tap EDIT
+wait 300
+shot k_mix.png
+tapkey w2
+tapkey w10
+wait 200
+tap PLAY
+wav kick.wav
+wait 1500
+expect peak_db_min -16
+shot k_playing.png
+tap EDIT
+turn ALGO 2 10
+turn K3 6 10
+wait 300
+shot k_layer.png
+tap EDIT
+turn K1 1 10
+turn K2 6 10
+wait 300
+shot k_layerfx.png
+tap EDIT
+turn K4 5 10
+wait 300
+shot k_macro.png
+turn PRESET 2 10
+wait 300
+shot k_preset.png
+press SEL
+tap EDIT
+release SEL
+wait 200
+tap EDIT
+wait 300
+shot k_out.png
+tap PLAY
+wait 600
+peakreset
+midi USB 99 24 64
+wait 300
+expect peak_db_min -20
+wavstop
