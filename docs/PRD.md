@@ -400,7 +400,7 @@ data first, header last, so a cut upload leaves the old header valid or nothing 
 
 | # | Question | Default if not decided |
 | --- | --- | --- |
-| Q1 | **Built-in breaks.** The Amen and other recorded breaks are copyrighted recordings; X0X ships none. Ship user-loaded only, plus a synthesised "Amen-like" break played by an internal kit? | **Decided 30 Oct 2026:** five synthesised styles plus 12 recorded Amens built in (13 until Bluetooth MIDI took ~40 KB): Cyberworm's loops, which he offers royalty free. All 60 WAVs live in `breaks/`; `breaks/breaks.txt` picks the 12 (all 60 at 2 bars would need ~1.9 MB, the firmware has 400 KB for breaks) |
+| Q1 | **Built-in breaks.** The Amen and other recorded breaks are copyrighted recordings; X0X ships none. Ship user-loaded only, plus a synthesised "Amen-like" break played by an internal kit? | **Decided 30 Oct 2026:** five synthesised styles plus 12 of Cyberworm's royalty-free Amens. **Changed 1 Nov 2026 (Laurens):** the synthesised styles out (kept only as the fallback of a build without a bank), and 8 classic breaks from the records, 2 bars at 22.05 kHz (360 KB): Amen, Funky Drummer, The Worm, Think, Cold Sweat, Hot Pants, Apache, Sport; Rotary Connection and Skull Snaps left out for room. Commercial recordings, published by the owner's decision. The PCM buffer grew to 106,496 samples for the slow ones |
 | Q2 | Name: CHOPPAH / BREAK CHOPPAH / AMEN-1? | CHOPPAH |
 | Q3 | Licence: MPL-2.0 (like fm1-base) or GPL-3.0 (needed if we port GPL code such as X0X's BB Gen port)? | MPL-2.0, write the generator from scratch |
 | Q4 | Default sample rate 22.05 kHz (more breaks, crunchier) or 32 kHz (cleaner)? | 22.05 kHz, per-break override |
@@ -415,8 +415,8 @@ ENV opens a soundboard: the white keys fire 16 synthesised sound-system effects 
 dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank,
 scratch, rewind). Four voices; siren and riser sustain while held; REWIND also pulls the break up (spins back up to
 10x, then restarts from the top of the bar). K1 level, K2 pitch, K3 echo (send into the dub delay), K4 length.
-Sounds join after the four effects, before the DJ filter and limiter. Built-in breaks are now five synthesised styles and 12 recorded Amens,
-so public builds have several breaks to choose from.
+Sounds join after the four effects, before the DJ filter and limiter. Built-in breaks were then five synthesised styles and 12 recorded Amens (8 classic breaks since
+1 Nov 2026, Q1).
 
 ## 12. Future (post v1)
 

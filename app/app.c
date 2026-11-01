@@ -5,8 +5,8 @@
  *
  * M1 scope (PRD 13): the built-in break, 16 slices on the white keys, the 11 pads on the black keys, play / reset,
  * tempo and tap tempo, pitch on OCT-/OCT+, the generator, the four FX and the DJ filter, settings kept by SAVE.
- * Breaks: the synthesised styles, then the bank built into the image (app/bank_data.h, which ./build.sh generates
- * from breaks/breaks.txt), chosen on ALGORITHM. */
+ * Breaks: the bank built into the image (app/bank_data.h, which ./build.sh generates from breaks/breaks.txt), chosen
+ * on ALGORITHM; a build with no bank falls back to one synthesised break. */
 #include "adpcm.h"
 #include "brk_bank.h"
 #include "brk_math.h"
@@ -103,7 +103,7 @@ static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 static int16_t dub_line[CH_DUB_LEN] PLAT_POOL;
 static brk_break_t brk0;
 static brk_break_t brk_cur;              /* the bank's break playing (pcm_a holds it) */
-static uint32_t n_synth;                 /* the built-in styles come first (brk_synth.c) */
+static uint32_t n_synth;                 /* 0; 1 in a build with no bank: a synthesised break (brk_synth.c) */
 static uint32_t n_breaks;                /* then the bank's valid slots */
 static uint8_t wave_px[240];             /* the waveform's height per column, for the screen */
 #define BLK_N 16u                        /* the slicer view's blocks: one per white key */
@@ -200,9 +200,11 @@ void app_init(void)
     brk_fx_init();
     brk_fx_delay_buffer(dub_line, CH_DUB_LEN);
     sfx_init();
-    n_synth = n_breaks = brk_synth_count();
-    while (n_breaks - n_synth < BANK_SLOTS && bank_slot(n_breaks - n_synth))
+    n_synth = n_breaks = 0u;             /* the breaks are the bank's (breaks/breaks.txt) */
+    while (n_breaks < BANK_SLOTS && bank_slot(n_breaks))
         n_breaks++;
+    if (!n_breaks)                       /* a build without a bank still has a break: a synthesised Amen */
+        n_synth = n_breaks = 1u;
     if (plat_store_load(OBJ_SETTINGS, &set, sizeof set) != (int)sizeof set || set.magic != SET_MAGIC ||
         set.tempo_x10 < 400u || set.tempo_x10 > 3000u || set.swing < 50u || set.swing > 75u) {
         settings_defaults();

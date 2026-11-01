@@ -39,7 +39,7 @@ BANK_CAPACITY = (0xDA000 - 0x97000) + (0xFC000 - 0xE5000) - 0x1000
 # Bluetooth MIDI): 400 KB keeps ~20 KB for the code to grow. The build checks the image against the slot as well.
 IMAGE_CAPACITY = 0x64000
 # a break decodes into the firmware's PCM buffer (app.h CH_PCM_MAX): no break longer than that
-BANK_MAX_LEN = 81920
+BANK_MAX_LEN = 106496
 
 STEP = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
         107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796,
@@ -50,27 +50,47 @@ ADJ = [-1, -1, -1, -1, 2, 4, 6, 8]
 
 
 def read_wav(path):
-    """mono floats -1..1 and the rate"""
-    with wave.open(str(path), "rb") as w:
-        ch, width, rate, n = w.getnchannels(), w.getsampwidth(), w.getframerate(), w.getnframes()
-        raw = w.readframes(n)
-    if width == 2:
-        a = array.array("h", raw)
-        scale = 32768.0
-    elif width == 3:
-        a = [int.from_bytes(raw[i:i + 3], "little", signed=True) for i in range(0, len(raw), 3)]
+    """mono floats -1..1 and the rate. RIFF read by hand: integer PCM (8, 16, 24, 32 bit), IEEE float (32, 64 bit) and
+    WAVE_FORMAT_EXTENSIBLE holding either (the wave module reads integer PCM only)"""
+    data = Path(path).read_bytes()
+    if data[0:4] != b"RIFF" or data[8:12] != b"WAVE":
+        raise SystemExit(f"{path}: not a RIFF WAVE file")
+    fmt = raw = None
+    i = 12
+    while i + 8 <= len(data):
+        cid, size = data[i:i + 4], struct.unpack_from("<I", data, i + 4)[0]
+        body = data[i + 8:i + 8 + size]
+        if cid == b"fmt ":
+            fmt = body
+        elif cid == b"data":
+            raw = body
+        i += 8 + size + (size & 1)
+    if fmt is None or raw is None:
+        raise SystemExit(f"{path}: no fmt or data chunk")
+    tag, ch, rate = struct.unpack_from("<HHI", fmt, 0)
+    bits = struct.unpack_from("<H", fmt, 14)[0]
+    if tag == 0xFFFE and len(fmt) >= 26:     # extensible: the real format is the sub-format GUID's first two bytes
+        tag = struct.unpack_from("<H", fmt, 24)[0]
+    width = bits // 8
+    raw = raw[:len(raw) - len(raw) % (width * ch)]
+    if tag == 3 and width == 4:
+        a, scale = array.array("f", raw), 1.0
+    elif tag == 3 and width == 8:
+        a, scale = array.array("d", raw), 1.0
+    elif tag == 1 and width == 2:
+        a, scale = array.array("h", raw), 32768.0
+    elif tag == 1 and width == 3:
+        a = [int.from_bytes(raw[k:k + 3], "little", signed=True) for k in range(0, len(raw), 3)]
         scale = 8388608.0
-    elif width == 4:
-        a = array.array("i", raw)
-        scale = 2147483648.0
-    elif width == 1:
-        a = [b - 128 for b in raw]
-        scale = 128.0
+    elif tag == 1 and width == 4:
+        a, scale = array.array("i", raw), 2147483648.0
+    elif tag == 1 and width == 1:
+        a, scale = [b - 128 for b in raw], 128.0
     else:
-        raise SystemExit(f"{path}: {8 * width}-bit WAV not supported")
-    if sys.byteorder == "big" and width in (2, 4):
+        raise SystemExit(f"{path}: WAV format {tag}, {bits}-bit, not supported")
+    if sys.byteorder == "big" and isinstance(a, array.array):
         a.byteswap()
-    mono = [sum(a[i:i + ch]) / (ch * scale) for i in range(0, len(a) - ch + 1, ch)]
+    mono = [max(-1.0, min(1.0, sum(a[k:k + ch]) / (ch * scale))) for k in range(0, len(a) - ch + 1, ch)]
     return mono, rate
 
 

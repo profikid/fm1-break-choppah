@@ -18,7 +18,9 @@ E-*, N-*; milestones M0–M8). Keep the PRD in step when scope changes.
   page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash.
 - Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;
   `./build.sh` regenerates `app/bank_data.h` (never commit it, never edit it). The bank has 400 KB (`IMAGE_CAPACITY`
-  in `tools/prep_breaks.py`) and 16 slots; the image is ~560 KB of the 581 KB app slot.
+  in `tools/prep_breaks.py`) and 16 slots, a break at most `CH_PCM_MAX` 106,496 samples (pool ~325 of 344 KB); the
+  image is ~530 KB of the 581 KB app slot. The breaks are the bank's only: brk_synth is the no-bank fallback (and
+  the tests').
 - Releases are automatic: every push to main is the last `vX.Y` tag + 1 minor (`scripts/next_version.sh`, floor
   `VERSION`). Don't tag by hand or bump `VERSION` for a minor; raise `VERSION` only for a new major.
 
