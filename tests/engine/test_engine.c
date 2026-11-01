@@ -257,33 +257,76 @@ static void test_pads(void)
     }
 }
 
+static void fx_run(const brk_fx_t *p, uint32_t n)
+{
+    uint32_t i;
+    brk_fx_init();
+    brk_fx_set(p);
+    for (i = 0; i < n; i += BLOCK)
+        brk_fx_process(buf + i, 0, 0.0f, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
+}
+
 static void test_fx(void)
 {
     brk_fx_t p;
-    uint32_t n = brk_step_len_samples() * 32u, i, ok = 1, f;
-    float peak = 0.0f;
+    uint32_t n = brk_step_len_samples() * 32u, i, ok = 1, t, silent = 0, same = 1;
+    float peak, diff = 0.0f;
+    static float ref[BRK_SR * 2u];
     fresh(1);
     brk_play(1);
     render(buf, n, 0, 0, 0);
-    for (f = 0; f <= BRK_NFX; f++) {     /* each effect alone, then all four */
-        brk_fx_init();
+    for (t = 1; t <= BRK_NFXT; t++) {    /* each effect alone in slot 1, then the default chain all on */
         brk_fx_defaults(&p);
-        for (i = 0; i < BRK_NFX; i++)
-            p.on[i] = (uint8_t)(f == BRK_NFX || i == f);
-        brk_fx_set(&p);
-        for (i = 0; i < n; i += BLOCK)
-            brk_fx_process(buf + i, 0, 0.0f, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
-        for (i = 0; i < n; i++) {
+        if (t < BRK_NFXT) {
+            brk_fx_slot_defaults(&p.slot[0], (int)t);
+            p.slot[0].on = 1u;
+        } else
+            for (i = 0; i < BRK_FX_SLOTS; i++)
+                p.slot[i].on = 1u;
+        fx_run(&p, n);
+        for (i = 0, peak = 0.0f; i < n; i++) {
             if (!(fabsf(bl[i]) <= 1.0f) || !(fabsf(br[i]) <= 1.0f))
                 ok = 0;
             if (fabsf(bl[i]) > peak)
                 peak = fabsf(bl[i]);
         }
-        if (f == BRK_NFX)
-            wav("fx_all.wav", bl, br, n);
+        if (peak < 0.01f)
+            silent |= 1u << t;
+        if (t == BRK_NFXT)
+            wav("fx_chain.wav", bl, br, n);
     }
-    CHECK(ok, "FX output stays finite and inside -1..1");
-    CHECK(peak > 0.01f, "FX output is not silent (peak %.3f)", peak);
+    CHECK(ok, "FX output stays finite and inside -1..1, every effect");
+    CHECK(!silent, "no effect silences the break (mask %x)", silent);
+    /* the order matters: DRIVE then a low-pass is not a low-pass then DRIVE */
+    brk_fx_defaults(&p);
+    brk_fx_slot_defaults(&p.slot[0], FXT_DRIVE);
+    brk_fx_slot_defaults(&p.slot[1], FXT_FILTER);
+    p.slot[0].p[0] = 1.0f;
+    p.slot[0].on = p.slot[1].on = 1u;
+    fx_run(&p, BRK_SR);
+    for (i = 0; i < BRK_SR; i++)
+        ref[i] = bl[i];
+    p.slot[0] = p.slot[1];
+    brk_fx_slot_defaults(&p.slot[1], FXT_DRIVE);
+    p.slot[1].p[0] = 1.0f;
+    p.slot[1].on = 1u;
+    fx_run(&p, BRK_SR);
+    for (i = 0; i < BRK_SR; i++)
+        diff += fabsf(bl[i] - ref[i]);
+    CHECK(diff / (float)BRK_SR > 0.003f, "the chain's order matters (mean difference %.4f)", diff / (float)BRK_SR);
+    /* FX 0: the whole chain against the dry break, all dry */
+    brk_fx_defaults(&p);
+    fx_run(&p, BRK_SR);
+    for (i = 0; i < BRK_SR; i++)
+        ref[i] = bl[i];
+    for (i = 0; i < BRK_FX_SLOTS; i++)
+        p.slot[i].on = 1u;
+    p.wet = 0.0f;
+    fx_run(&p, BRK_SR);
+    for (i = 0; i < BRK_SR; i++)
+        if (fabsf(bl[i] - ref[i]) > 1e-4f)
+            same = 0;
+    CHECK(same, "FX 0: the chain on but all dry");
 }
 
 /* an IMA ADPCM encoder for the test only (tools/prep_breaks.py has the real one) */

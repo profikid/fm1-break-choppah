@@ -14,9 +14,11 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 3. Playing
 4. The pads
 5. The soundboard
-6. Pages and knobs
-7. Saving
-8. Troubleshooting
+6. The FX chain
+7. GLOBAL: MIDI clock, Bluetooth, pitch
+8. Pages and knobs
+9. Saving
+10. Troubleshooting
 
 ---
 
@@ -122,7 +124,38 @@ animation of what it does, and **K1–K4 tune that pad** (the foot shows its set
 K1 level · K2 pitch · K3 **echo** (how much goes into the dub delay: sirens ringing out) · K4 length. All sixteen are
 synthesised on the FM-1, so nothing is sampled. HOME goes back to the slicer.
 
-## 6. GLOBAL: MIDI clock, Bluetooth, pitch
+## 6. The FX chain
+
+**FX** opens the master effects chain: four slots in series, the break through slot 1, then 2, 3 and 4, then on to the
+soundboard, the DUB pad's delay, the DJ filter and the limiter. Each slot holds any effect (two of one are fine), with
+three settings, a mix and a bypass. The tiles show the chain in order (lit: on), the one you tune outlined; below,
+its settings as bars over K1–K4.
+
+![The FX chain: CRUNCH, then TREMOLO, then DRIVE, RING MOD bypassed](img/screen-fxchain.png "The FX chain")
+
+| Control | Does |
+| --- | --- |
+| ALGORITHM | The slot to tune (1–4) |
+| PRESETS | The effect in that slot, through the library (EMPTY first); a new effect comes in on, at its own starting settings |
+| K1–K3 · K4 | Its settings · its mix |
+| FX (on the page) | That slot on / bypassed |
+| SEL + ALGORITHM | Moves that slot along the chain (the order is the sound: DRIVE before a FILTER is not a FILTER before DRIVE) |
+| HOME K4 FX | The whole chain against the dry break: fade every effect in or out at once |
+
+| Effect | K1 | K2 | K3 |
+| --- | --- | --- | --- |
+| FILTER | Cutoff (30 Hz – 16 kHz) | Resonance | Mode: LP · BP · HP |
+| CRUNCH | Bits (16 → 2) | Rate (44.1 kHz → 1 kHz) | Drive |
+| DRIVE | Gain (×1 – ×30) | Tone (dark → bright) | Level |
+| PUNCH | Amount (a drum-bus compressor; low MIX for parallel squash) | Attack (0.1 – 30 ms) | Release (20 – 500 ms) |
+| FLANGER | Rate (0.02 – 10 Hz) | Depth | Feedback (−90 … +90 %) |
+| RING MOD | Frequency (20 Hz – 2 kHz) | Spread (the right side higher) | |
+| TREMOLO | Rate on the tempo (1/2 … 1/32, 1/8T) | Depth | Pan (0 tremolo … 100 % auto-pan) |
+
+The chain starts as CRUNCH → FILTER → FLANGER → RING MOD, all bypassed: FX on the page switches the focused one on.
+CRUNCH used to be HOME's K4; it is slot 1 now.
+
+## 7. GLOBAL: MIDI clock, Bluetooth, pitch
 
 **GLO** opens the GLOBAL page: the slice blocks give way to the state of MIDI, and K1–K4 set it (SAVE keeps it).
 **GLO again** turns to its second half, the pitch (below).
@@ -152,13 +185,13 @@ connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings →
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
 tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay speed effects.
 
-## 7. Pages and knobs
+## 8. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| HOME (perform) | DJ filter (left low-pass, right high-pass) | Swing | Gate | Crunch |
+| HOME (perform) | DJ filter (left low-pass, right high-pass) | Swing | Gate | FX (the chain, dry to wet) |
 | ARP (generator) | Complexity | Anchor | Roll | Fill |
-| FX | the focused effect's settings and mix (ALGORITHM picks the effect, FX again turns it on or off) | | | |
+| FX (the chain) | the focused slot's effect: its three settings | | | Its mix |
 | ENV (soundboard) | Level | Pitch | Echo | Length |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | |
@@ -172,12 +205,12 @@ The generator rearranges the break as it plays: **complexity** is how often it j
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
 of a phrase. SEL + ARP writes a random pattern.
 
-## 8. Saving
+## 9. Saving
 
-SAVE keeps the tempo, pitch, swing, generator, effects, the break chosen, each key's loop and the GLOBAL settings;
+SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop and the GLOBAL settings;
 SAVE is lit when something changed.
 
-## 9. Troubleshooting
+## 10. Troubleshooting
 
 - **No sound:** turn MASTER up; press PLAY.
 - **A crash screen:** press a key to restart. Two failed starts in a row start safe mode, which the installer can

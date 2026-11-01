@@ -23,7 +23,7 @@
 #endif
 
 /* ------------------------------------------------------------------ settings --- */
-#define SET_MAGIC 0x34504843u            /* "CHP4" (+ the white keys' loops): another magic loads defaults */
+#define SET_MAGIC 0x35504843u            /* "CHP5" (the FX chain): another magic loads defaults */
 typedef struct {
     uint32_t magic;
     uint16_t tempo_x10;                  /* 400..3000 */
@@ -372,14 +372,13 @@ void app_panic(void)
 /* ----------------------------------------------------------------------- UI --- */
 enum { PG_HOME, PG_GEN, PG_FX, PG_SOUND, PG_GLOBAL, NPAGES };
 static const char *const PAGE_NAME[NPAGES] = {"PERFORM", "GENERATOR", "FX", "SOUNDBOARD", "GLOBAL"};
-static const char *const FX_NAME[BRK_NFX] = {"RING MOD", "HI-PASS", "FLANGER", "DEGRADER"};
 static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
                                                 "FLT", "DUB"};
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
 
 static struct {
     uint32_t keys, btn;
-    uint8_t page, fx_focus;
+    uint8_t page, fx_focus;              /* fx_focus: the FX chain's slot the FX page tunes (0..3) */
     char msg[2][24];
     uint32_t msg_until;
     uint32_t taps[4], ntaps;             /* tap tempo on SEL */
@@ -486,6 +485,146 @@ static void tap_tempo(uint32_t now)
     }
 }
 
+/* ------------------------------------------------------------- the FX chain --- */
+static void pct_text(float v, char *t);  /* (below, with the pads') */
+static void times_text(float v, char *t);
+/* each effect's settings, as the foot names them (K1-K3; K4 is MIX) */
+static const char *const FXP_NAME[BRK_NFXT][3] = {
+    {"", "", ""}, {"CUTOFF", "RESO", "MODE"}, {"BITS", "RATE", "DRIVE"}, {"GAIN", "TONE", "LEVEL"},
+    {"AMOUNT", "ATTACK", "RELEASE"}, {"RATE", "DEPTH", "FEEDBK"}, {"FREQ", "SPREAD", ""}, {"RATE", "DEPTH", "PAN"}};
+
+static const char *fx_param_name(uint32_t slot, int i)
+{
+    const brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
+    if (i == 3)
+        return sl->type == FXT_EMPTY ? "" : "MIX";
+    return FXP_NAME[sl->type < BRK_NFXT ? sl->type : 0][i & 3];
+}
+
+static void hz_text(float hz, char *t)   /* 340 -> "340HZ", 1234 -> "1.2K" */
+{
+    t[0] = 0;
+    if (hz >= 1000.0f) {
+        tenths_text((int32_t)(hz / 100.0f + 0.5f), t);
+        text_cat(t, "K");
+    } else {
+        int_text((int32_t)(hz + 0.5f), t);
+        text_cat(t, "HZ");
+    }
+}
+
+static void hundredths_text(float v, char *t)   /* 0.25 -> "0.25" (0..99.99) */
+{
+    int32_t c = (int32_t)(v * 100.0f + 0.5f);
+    char d[4];
+    int_text(c / 100, t);
+    text_cat(t, ".");
+    d[0] = (char)('0' + c / 10 % 10);
+    d[1] = (char)('0' + c % 10);
+    d[2] = 0;
+    text_cat(t, d);
+}
+
+static void fx_value(uint32_t slot, int i, char *t)
+{
+    const brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
+    float v = i == 3 ? sl->mix : sl->p[i & 3];
+    t[0] = 0;
+    if (sl->type == FXT_EMPTY || !fx_param_name(slot, i)[0])
+        return;
+    if (i == 3) {
+        pct_text(v, t);
+        return;
+    }
+    switch (sl->type * 4 + i) {
+    case FXT_FILTER * 4 + 0: hz_text(30.0f * brk_exp2f(v * 9.06f), t); return;
+    case FXT_FILTER * 4 + 2: text_cat(t, v < 0.33f ? "LP" : v < 0.67f ? "BP" : "HP"); return;
+    case FXT_CRUNCH * 4 + 0: int_text((int32_t)(16.0f - 14.0f * v + 0.5f), t); text_cat(t, " BIT"); return;
+    case FXT_CRUNCH * 4 + 1: hz_text(44100.0f * brk_exp2f(-v * 5.46f), t); return;
+    case FXT_DRIVE * 4 + 0: times_text(1.0f + 29.0f * v * v, t); return;
+    case FXT_PUNCH * 4 + 1: tenths_text((int32_t)((0.1f + 29.9f * v * v) * 10.0f + 0.5f), t); text_cat(t, "MS"); return;
+    case FXT_PUNCH * 4 + 2: int_text((int32_t)(20.0f + 480.0f * v + 0.5f), t); text_cat(t, "MS"); return;
+    case FXT_FLANGER * 4 + 0: hundredths_text(0.02f * brk_exp2f(v * 9.0f), t); text_cat(t, "HZ"); return;
+    case FXT_FLANGER * 4 + 2: {
+        int32_t x = (int32_t)((2.0f * v - 1.0f) * 90.0f + (v < 0.5f ? -0.5f : 0.5f));
+        t[0] = x > 0 ? '+' : x < 0 ? '-' : 0;
+        t[1] = 0;
+        int_text(x < 0 ? -x : x, t + (x != 0));
+        text_cat(t, "%");
+        return;
+    }
+    case FXT_RING * 4 + 0: hz_text(20.0f * brk_exp2f(v * 6.64f), t); return;
+    case FXT_TREMOLO * 4 + 0: {
+        uint32_t d = (uint32_t)(v * (float)(BRK_TREM_DIVS - 1u) + 0.5f);
+        text_cat(t, BRK_TREM_DIV_NAME[d < BRK_TREM_DIVS ? d : 0u]);
+        return;
+    }
+    default:
+        pct_text(v, t);
+        return;
+    }
+}
+
+static void fx_knob_turn(uint32_t slot, int i, int32_t d)
+{
+    brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
+    char t[16];
+    float step = 0.02f;
+    if (sl->type == FXT_EMPTY || i < 0 || i > 3 || !fx_param_name(slot, i)[0])
+        return;
+    if (i == 3)
+        sl->mix = knob_f(sl->mix, d, 0.02f, 0.0f, 1.0f);
+    else {
+        if (sl->type == FXT_FILTER && i == 2)
+            step = 0.5f;                 /* LP, BP, HP */
+        else if (sl->type == FXT_TREMOLO && i == 0)
+            step = 1.0f / (float)(BRK_TREM_DIVS - 1u);
+        sl->p[i] = knob_f(sl->p[i], d, step, 0.0f, 1.0f);
+    }
+    fx_value(slot, i, t);
+    app_say(fx_param_name(slot, i), t);
+    ui.redraw |= RG_BLOCKS;
+    changed();
+}
+
+/* PRESETS on the FX page: the focused slot's effect, through the library (EMPTY first), with its own starting
+ * settings, on at once */
+static void fx_type_turn(int32_t d)
+{
+    brk_fxslot_t *sl = &set.fx.slot[ui.fx_focus & 3u];
+    int32_t t = clamp((int32_t)sl->type + (d > 0 ? 1 : -1), 0, BRK_NFXT - 1);
+    char n[16];
+    if ((uint32_t)t == sl->type)
+        return;
+    brk_fx_slot_defaults(sl, (int)t);
+    sl->on = (uint8_t)(t != FXT_EMPTY);
+    n[0] = 0;
+    text_cat(n, "SLOT ");
+    int_text((int32_t)(ui.fx_focus & 3u) + 1, n + 5);
+    app_say(n, BRK_FXT_NAME[t]);
+    ui.redraw |= RG_BLOCKS | RG_FOOT;
+    changed();
+}
+
+/* ALGORITHM on the FX page: the next or previous slot; with SEL held, the focused slot moves along the chain */
+static void fx_algo(int32_t d, uint32_t sel)
+{
+    uint32_t a = ui.fx_focus & 3u, b = (a + (d > 0 ? 1u : 3u)) & 3u;
+    char n[8];
+    if (sel) {
+        brk_fxslot_t tmp = set.fx.slot[a];
+        if ((d > 0 && a == 3u) || (d < 0 && a == 0u))
+            return;                      /* (the ends stay the ends) */
+        set.fx.slot[a] = set.fx.slot[b];
+        set.fx.slot[b] = tmp;
+        changed();
+    }
+    ui.fx_focus = (uint8_t)b;
+    int_text((int32_t)b + 1, n);
+    app_say(sel ? "MOVED TO" : "SLOT", n);
+    ui.redraw |= RG_BLOCKS | RG_FOOT;
+}
+
 /* the GLOBAL page's knobs: clock in, clock out, Bluetooth, where MIDI goes */
 static const char *const MIDI_TO_NAME[3] = {"USB+BT", "USB", "BT"};
 static void global_value(int i, char *t)
@@ -587,11 +726,9 @@ static void knob_turn(int k, int32_t d)
                 app_say("GATE", "OFF");
             else
                 say_int("GATE", set.gate, "%");
-        } else if (k == EN_K4) {         /* FX mix: the degrader's depth, off at 0 */
-            f->deg_bits = knob_f(f->deg_bits, -d, 0.25f, 2.0f, 16.0f);
-            f->on[FX_DEGRADE] = f->deg_bits < 15.9f;
-            f->deg_rate = 2000.0f + (f->deg_bits - 2.0f) * (42100.0f / 14.0f);
-            say_int("CRUNCH", (int32_t)((16.0f - f->deg_bits) * 100.0f / 14.0f), "%");
+        } else if (k == EN_K4) {         /* FX: the whole chain against the dry break (CRUNCH is in the chain) */
+            f->wet = knob_f(f->wet, d, 0.02f, 0.0f, 1.0f);
+            say_int("FX", (int32_t)(f->wet * 100.0f + 0.5f), "%");
         }
     } else if (ui.page == PG_GEN) {
         float *p = k == EN_K1 ? &set.gen.complexity : k == EN_K2 ? &set.gen.anchor : k == EN_K3 ? &set.gen.roll
@@ -599,23 +736,9 @@ static void knob_turn(int k, int32_t d)
         static const char *const N[4] = {"COMPLEXITY", "ANCHOR", "ROLL", "FILL"};
         *p = knob_f(*p, d, 0.02f, 0.0f, 1.0f);
         say_int(N[k - EN_K1], (int32_t)(*p * 100.0f), "%");
-    } else {                             /* FX: the focused effect's three settings and its mix */
-        int i = k - EN_K1;
-        switch (ui.fx_focus * 4 + i) {
-        case FX_RING * 4 + 0: f->ring_hz = knob_f(f->ring_hz, d, 10.0f, 20.0f, 2000.0f); say_int("RING", (int32_t)f->ring_hz, " HZ"); break;
-        case FX_RING * 4 + 3: f->ring_mix = knob_f(f->ring_mix, d, 0.02f, 0.0f, 1.0f); say_int("RING MIX", (int32_t)(f->ring_mix * 100.0f), "%"); break;
-        case FX_HPF * 4 + 0: f->hpf_hz = knob_f(f->hpf_hz, d, 20.0f, 20.0f, 8000.0f); say_int("CUTOFF", (int32_t)f->hpf_hz, " HZ"); break;
-        case FX_HPF * 4 + 1: f->hpf_res = knob_f(f->hpf_res, d, 0.02f, 0.0f, 0.95f); say_int("RESONANCE", (int32_t)(f->hpf_res * 100.0f), "%"); break;
-        case FX_HPF * 4 + 2: f->hpf_spread = knob_f(f->hpf_spread, d, 0.02f, 0.0f, 1.0f); say_int("SPREAD", (int32_t)(f->hpf_spread * 100.0f), "%"); break;
-        case FX_FLANGER * 4 + 0: f->fl_rate = knob_f(f->fl_rate, d, 0.02f, 0.02f, 10.0f); say_int("RATE", (int32_t)(f->fl_rate * 100.0f), " CHZ"); break;
-        case FX_FLANGER * 4 + 1: f->fl_depth = knob_f(f->fl_depth, d, 0.02f, 0.0f, 1.0f); say_int("DEPTH", (int32_t)(f->fl_depth * 100.0f), "%"); break;
-        case FX_FLANGER * 4 + 2: f->fl_fb = knob_f(f->fl_fb, d, 0.02f, -0.9f, 0.9f); say_int("FEEDBACK", (int32_t)(f->fl_fb * 100.0f), "%"); break;
-        case FX_FLANGER * 4 + 3: f->fl_mix = knob_f(f->fl_mix, d, 0.02f, 0.0f, 1.0f); say_int("FLANGE MIX", (int32_t)(f->fl_mix * 100.0f), "%"); break;
-        case FX_DEGRADE * 4 + 0: f->deg_bits = knob_f(f->deg_bits, d, 0.25f, 2.0f, 16.0f); say_int("BITS", (int32_t)f->deg_bits, ""); break;
-        case FX_DEGRADE * 4 + 1: f->deg_rate = knob_f(f->deg_rate, d, 250.0f, 1000.0f, 44100.0f); say_int("RATE", (int32_t)f->deg_rate, " HZ"); break;
-        case FX_DEGRADE * 4 + 2: f->deg_drive = knob_f(f->deg_drive, d, 0.02f, 0.0f, 1.0f); say_int("DRIVE", (int32_t)(f->deg_drive * 100.0f), "%"); break;
-        default: return;
-        }
+    } else {                             /* FX: the focused slot's three settings and its mix */
+        fx_knob_turn(ui.fx_focus, k - EN_K1, d);
+        return;
     }
     changed();
 }
@@ -984,14 +1107,20 @@ static void input(void)
         ui.page = PG_GEN;
         ui.redraw |= 8u;               /* RG_FOOT: the page */
     }
-    if (bdn & 1u << B_FX) {              /* FX: the page; again: the focused effect on / off */
+    if (bdn & 1u << B_FX) {              /* FX: the chain's page; again: the focused slot on / bypassed */
         if (ui.page == PG_FX) {
-            set.fx.on[ui.fx_focus] ^= 1u;
-            app_say(FX_NAME[ui.fx_focus], set.fx.on[ui.fx_focus] ? "ON" : "OFF");
-            changed();
-        }
+            brk_fxslot_t *sl = &set.fx.slot[ui.fx_focus & 3u];
+            if (sl->type == FXT_EMPTY)
+                app_say("EMPTY", "PRESETS");
+            else {
+                sl->on ^= 1u;
+                app_say(BRK_FXT_NAME[sl->type], sl->on ? "ON" : "BYPASS");
+                changed();
+            }
+        } else
+            app_say("FX CHAIN", "");
         ui.page = PG_FX;
-        ui.redraw |= 8u;               /* RG_FOOT: the page */
+        ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
     }
     if (bdn & 1u << B_SEL && key_tuned() >= 0) {   /* SEL while a key is held: its loop back to the defaults */
         brk_keyset_defaults(&set.keys[key_tuned()]);
@@ -1042,14 +1171,15 @@ static void input(void)
                 tenths_text(set.tempo_x10, t);
                 app_say("BPM", t);
             }
-        } else if (k == EN_ALGO) {       /* the break (one in M1); on the FX page the focused effect */
-            if (ui.page == PG_FX) {
-                ui.fx_focus = (uint8_t)((ui.fx_focus + (d > 0 ? 1 : BRK_NFX - 1)) % BRK_NFX);
-                app_say(FX_NAME[ui.fx_focus], set.fx.on[ui.fx_focus] ? "ON" : "OFF");
-            } else {                     /* the next or previous break */
+        } else if (k == EN_ALGO) {       /* the break; on the FX page the slot (SEL held: moves it along) */
+            if (ui.page == PG_FX)
+                fx_algo(d, btn & 1u << B_SEL);
+            else {                     /* the next or previous break */
                 break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
             }
-        } else if (k == EN_PRESET)
+        } else if (k == EN_PRESET && ui.page == PG_FX)
+            fx_type_turn(d);             /* the focused slot's effect */
+        else if (k == EN_PRESET)
             app_say("PATTERN", "1");     /* patterns arrive in M2 */
         else if (key_tuned() >= 0)       /* a white key held: K1-K4 tune its loop */
             key_knob_turn(key_tuned(), k - EN_K1, d);
@@ -1226,36 +1356,15 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
                 text_cat(t, "%");
             }
         } else {
-            int_text(f->on[FX_DEGRADE] ? (int32_t)((16.0f - f->deg_bits) * 100.0f / 14.0f) : 0, t);
+            int_text((int32_t)(f->wet * 100.0f + 0.5f), t);
             text_cat(t, "%");
         }
     } else if (ui.page == PG_GEN) {
         float v = i == 0 ? set.gen.complexity : i == 1 ? set.gen.anchor : i == 2 ? set.gen.roll : set.gen.fill;
         int_text((int32_t)(v * 100.0f), t);
         text_cat(t, "%");
-    } else {
-        static const char *const NONE = "-";
-        float v = 0.0f;
-        const char *unit = "%";
-        int pct = 1;
-        switch (ui.fx_focus * 4 + i) {
-        case FX_RING * 4 + 0: v = f->ring_hz; unit = "HZ"; pct = 0; break;
-        case FX_RING * 4 + 3: v = f->ring_mix; break;
-        case FX_HPF * 4 + 0: v = f->hpf_hz; unit = "HZ"; pct = 0; break;
-        case FX_HPF * 4 + 1: v = f->hpf_res; break;
-        case FX_HPF * 4 + 2: v = f->hpf_spread; break;
-        case FX_FLANGER * 4 + 0: v = f->fl_rate * 100.0f; unit = "CHZ"; pct = 0; break;
-        case FX_FLANGER * 4 + 1: v = f->fl_depth; break;
-        case FX_FLANGER * 4 + 2: v = f->fl_fb; break;
-        case FX_FLANGER * 4 + 3: v = f->fl_mix; break;
-        case FX_DEGRADE * 4 + 0: v = f->deg_bits; unit = "BIT"; pct = 0; break;
-        case FX_DEGRADE * 4 + 1: v = f->deg_rate; unit = "HZ"; pct = 0; break;
-        case FX_DEGRADE * 4 + 2: v = f->deg_drive; break;
-        default: text_cat(t, NONE); return;
-        }
-        int_text((int32_t)(pct ? v * 100.0f : v), t);
-        text_cat(t, unit);
-    }
+    } else
+        fx_value(ui.fx_focus, i, t);
 }
 
 /* the header: the break and the tempo, a play / stop mark; or a message for a moment */
@@ -1422,6 +1531,57 @@ static void draw_global(const brk_status_t *st)
     cv_blit(0, 140);
 }
 
+/* the FX page: the chain as four tiles in order, IN to OUT (the focused one outlined), then the focused slot */
+static void draw_chain(void)
+{
+    const brk_fx_t *f = &set.fx;
+    uint32_t k, i;
+    char t[24], v[16];
+    cv_begin(240, 52, C_BLACK);
+    for (k = 0; k < BRK_FX_SLOTS; k++) {
+        const brk_fxslot_t *sl = &f->slot[k];
+        int32_t x = 2 + (int32_t)k * 60, foc = k == (ui.fx_focus & 3u), on = sl->on && sl->type != FXT_EMPTY;
+        cv_rect(x, 4, 54, 44, foc ? C_WHITE : C_BLOCK);
+        cv_rect(x + 2, 6, 50, 40, on ? C_BLOCK_HI : C_BLOCK);
+        int_text((int32_t)k + 1, t);
+        cv_text(x + 5, 8, &FONT_T, t, on ? C_BLACK : C_AMB);
+        cv_text(x + 5, 22, &FONT_XS, sl->type == FXT_EMPTY ? "-" : BRK_FXT_NAME[sl->type],
+                on ? C_BLACK : sl->type == FXT_EMPTY ? C_LINE : C_GRAY);
+        if (sl->type != FXT_EMPTY) {     /* its mix, a bar along the bottom */
+            cv_rect(x + 5, 38, 44, 3, on ? C_AMB : C_LINE);
+            cv_rect(x + 5, 38, (int32_t)(44.0f * sl->mix), 3, on ? C_BLACK : C_GRAY);
+        }
+        if (k + 1u < BRK_FX_SLOTS)       /* the signal on to the next */
+            for (i = 0; i < 3u; i++)
+                cv_rect(x + 55 + (int32_t)i, 22 + (int32_t)i, 1, 5 - 2 * (int32_t)i, C_GRAY);   /* > */
+    }
+    cv_blit(0, 88);
+    cv_begin(240, 52, C_BLACK);          /* the focused slot: its effect, its settings, what the controls do */
+    {
+        const brk_fxslot_t *sl = &f->slot[ui.fx_focus & 3u];
+        const char *state = sl->type == FXT_EMPTY ? "" : sl->on ? "ON" : "BYPASS";
+        int32_t x;
+        t[0] = 0;
+        text_cat(t, "SLOT ");
+        int_text((int32_t)(ui.fx_focus & 3u) + 1, v);
+        text_cat(t, v);
+        x = cv_text(6, 0, &FONT_T, t, C_GRAY);
+        cv_text(x + 8, 0, &FONT_T, BRK_FXT_NAME[sl->type < BRK_NFXT ? sl->type : 0],
+                sl->on && sl->type != FXT_EMPTY ? C_HI : C_DIM);
+        cv_text(234 - text_w(&FONT_XS, state), 2, &FONT_XS, state, sl->on ? C_HI : C_DIM);
+        for (i = 0; i < 4u && sl->type != FXT_EMPTY; i++) {   /* the settings as bars, over K1-K4 */
+            float val = i == 3u ? sl->mix : sl->p[i];
+            if (!fx_param_name(ui.fx_focus, (int)i)[0])
+                continue;
+            cv_rect(6 + (int32_t)i * 58, 16, 52, 4, C_BLOCK);
+            cv_rect(6 + (int32_t)i * 58, 16, (int32_t)(52.0f * val), 4, sl->on ? C_HI : C_GRAY);
+        }
+        cv_text(6, 26, &FONT_XS, "ALGO: SLOT   PRESETS: EFFECT", C_DIM);
+        cv_text(6, 38, &FONT_XS, "FX: ON / BYPASS   SEL+ALGO: MOVE", C_DIM);
+    }
+    cv_blit(0, 140);
+}
+
 static void draw_blocks(const brk_status_t *st, uint32_t keys)
 {
     uint32_t row, k, c;
@@ -1452,7 +1612,7 @@ static void draw_blocks(const brk_status_t *st, uint32_t keys)
 /* the foot: the pads, then the page and its knobs with their values */
 static void draw_foot(const brk_status_t *st)
 {
-    static const char *const KN[NPAGES][4] = {{"FILTER", "SWING", "GATE", "CRUNCH"},
+    static const char *const KN[NPAGES][4] = {{"FILTER", "SWING", "GATE", "FX"},
                                               {"CMPLX", "ANCHOR", "ROLL", "FILL"},
                                               {"P1", "P2", "P3", "MIX"},
                                               {"LEVEL", "PITCH", "ECHO", "LENGTH"},
@@ -1484,10 +1644,10 @@ static void draw_foot(const brk_status_t *st)
             cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
             continue;
         }
-        if (ui.page == PG_FX && i == 0u)
-            name = FX_NAME[ui.fx_focus];
-        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.page == PG_FX && i == 0u
-                ? (set.fx.on[ui.fx_focus] ? C_HI : C_DIM) : C_GRAY);
+        if (ui.page == PG_FX)            /* the focused slot's effect: its settings, then MIX */
+            name = fx_param_name(ui.fx_focus, (int)i);
+        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.page == PG_FX
+                ? (set.fx.slot[ui.fx_focus & 3u].on ? C_HI : C_DIM) : C_GRAY);
         knob_value((int)i, t);
         cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
     }
@@ -1898,7 +2058,9 @@ void app_frame(void)
         } else if (ui.page == PG_GLOBAL) {
             draw_global(&st);
             ui.sfx_drawn = now;
-        } else
+        } else if (ui.page == PG_FX)
+            draw_chain();
+        else
             draw_blocks(&st, ui.keys);
     }
     if (ui.redraw & RG_FOOT)

@@ -2,7 +2,8 @@
 
 CHOPPAH turns the M-VAVE FM-1 into an Amen chopper: a breakbeat cut into sixteen slices on the white keys,
 momentary effect pads on the black keys (rolls, reverse, freeze, half speed, tape stop, gate), a generator that
-rearranges the break as it plays, and ring modulator, hi-pass, flanger, degrader and a DJ filter on the way out.
+rearranges the break as it plays, a master effects chain you stack and reorder (filter, crunch, drive, punch, flanger,
+ring mod, tremolo) and a DJ filter on the way out.
 
 ![CHOPPAH playing: the break's waveform with the slice sounding lit, sixteen slice blocks below, the pads and the knobs](manual/img/screen-slicer.png "CHOPPAH's slicer view")
 

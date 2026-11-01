@@ -158,6 +158,7 @@ ABG's four, plus the master section a live unit needs.
 | A-42 | **Flanger:** rate (sync/free), depth, feedback (±), mix | P0 | |
 | A-43 | **Degrader:** bit depth (16→2), sample-rate reduction (44.1k→2k), drive | P0 | |
 | A-44 | FX page: one FX focused at a time on K1–K4; each FX on/off by SEL+K1..K4 press; fixed order ring → HPF → flanger → degrader | P0 | Total DSP < 60 % of the render budget, all FX on |
+| A-45 | **Master FX chain (replaces A-44's fixed order, 1 Nov 2026):** four slots in series, each any effect of the library (FILTER LP/BP/HP, CRUNCH = A-43, DRIVE, PUNCH compressor, FLANGER = A-42, RING MOD = A-40, TREMOLO on the tempo; A-41's stereo hi-pass is FILTER in HP), three settings, mix, bypass; ALGORITHM picks the slot, PRESETS the effect, SEL + ALGORITHM moves it; per-slot state (two of one effect never share). HOME K4 is FX, the chain's dry/wet (CRUNCH moved into the chain). Settings CHP5 | P0 | *Done; engine tests: every effect alone bounded and audible, the order matters, FX 0 all dry* |
 | A-45 | **Master bus:** DJ filter (one knob LP↔HP), compressor with drive, brickwall limiter | P1 | No output clipping at max settings |
 | A-46 | Send FX: tape/dub delay (tempo-synced, feedback, filter in loop) and small reverb | P1 | |
 
