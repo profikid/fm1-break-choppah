@@ -5,6 +5,9 @@ tap GLO
 wait 200
 tap GLO
 wait 300
+shot g_pitch_default.png
+turn K1 -1 10
+wait 300
 shot g_pitch_speed.png
 tap PLAY
 wait 200

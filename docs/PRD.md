@@ -291,7 +291,7 @@ on the keys, eyes on the crowd.
 | E-6 | Character: optional 12-bit / 26 kHz "SP-1200" output stage, separate from the Degrader | P2 |
 | E-7 | Overload guard: if the render exceeds 85 %, drop poly voices first, then FX quality, never audio (`APP_OVERLOAD`) | P0 |
 | E-8 | FX chain can run on the second core (`plat_cpu2_run`) with fallback to one core | P1 |
-| E-9 | **Pitch mode** (GLOBAL, second half): SPEED (repitch) or KEEP LENGTH, a granular pitch shift in the voices (two triangle grains of 10–80 ms reading at the pitch while the voice runs at the tempo's speed) for every semitone pitch; speed effects stay speed. *Done 31 Oct 2026; engine test: +12 on a 1 kHz tone sounds at 2 kHz with the voice at 1x* | P1 |
+| E-9 | **Pitch mode** (GLOBAL, second half): KEEP LENGTH (the default since 1 Nov 2026) or SPEED (repitch); KEEP LENGTH is a granular pitch shift in the voices (two triangle grains of 10–80 ms reading at the pitch while the voice runs at the tempo's speed) for every semitone pitch; speed effects stay speed. *Done 31 Oct 2026; engine test: +12 on a 1 kHz tone sounds at 2 kHz with the voice at 1x* | P1 |
 | E-10 | **Roll level and swell:** the rolls' K4 LEVEL (5–100 %, the repeats' start level: ghost notes) and DECAY both ways (down: each repeat quieter; up: a swell to full). *Done 31 Oct 2026; engine tests* | P1 |
 
 ---

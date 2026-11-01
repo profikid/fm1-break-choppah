@@ -36,11 +36,12 @@ typedef struct {
     uint8_t clk_out;                     /* MIDI clock out: 0 off, 1 on (24 a beat while playing, start / stop) */
     uint8_t ble_off;                     /* Bluetooth MIDI: 0 on (the default), 1 off */
     uint8_t midi_to;                     /* where MIDI goes: 0 USB and Bluetooth, 1 USB, 2 Bluetooth */
-    uint8_t pitch_keep;                  /* pitch: 0 SPEED (repitch), 1 KEEP LENGTH (granular) */
+    uint8_t pitch_keep;                  /* pitch: 0 or 1 KEEP LENGTH (granular; the default), 2 SPEED (repitch).
+                                          * (0 is older saves': they load as KEEP LENGTH, a choice of it stays) */
     uint8_t grain_ms;                    /* its grains, 10..80 ms (0: 30) */
     uint8_t gate;                        /* how much of each slice sounds, 5..100 % (0: 100, off) */
-    uint8_t rsv[8];                      /* (zero in older saves: so these load as off, off, on, both, SPEED, 30,
-                                          * no gate) */
+    uint8_t rsv[8];                      /* (zero in older saves: so these load as off, off, on, both, KEEP
+                                          * LENGTH, 30, no gate) */
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
@@ -71,6 +72,8 @@ static void settings_defaults(void)
     }
 }
 
+static int pitch_keeps(void) { return set.pitch_keep != 2u; }   /* KEEP LENGTH unless SPEED was chosen */
+
 static void settings_apply(void)
 {
     brk_tempo((float)set.tempo_x10 * 0.1f);
@@ -80,7 +83,7 @@ static void settings_apply(void)
     brk_fx_set(&set.fx);
     brk_fx_tempo((float)set.tempo_x10 * 0.1f);
     brk_padset(&set.pads);
-    brk_pitch_mode(set.pitch_keep, (float)(set.grain_ms ? set.grain_ms : 30u));
+    brk_pitch_mode(pitch_keeps(), (float)(set.grain_ms ? set.grain_ms : 30u));
     brk_gate((float)(set.gate ? set.gate : 100u) * 0.01f);
     sfx_set(&set.sfx);
     {
@@ -480,7 +483,7 @@ static void global_value(int i, char *t)
     t[0] = 0;
     if (ui.gpage) {                      /* the pitch: speed or keep length, the grains */
         if (i == 0)
-            text_cat(t, set.pitch_keep ? "KEEP LEN" : "SPEED");
+            text_cat(t, pitch_keeps() ? "KEEP LEN" : "SPEED");
         else if (i == 1) {
             int_text(set.grain_ms ? set.grain_ms : 30, t);
             text_cat(t, " MS");
@@ -497,13 +500,13 @@ static void global_turn(int i, int32_t d)
     char t[16];
     if (ui.gpage) {
         if (i == 0)
-            set.pitch_keep = d > 0;
+            set.pitch_keep = d > 0 ? 1u : 2u;   /* right KEEP LENGTH, left SPEED */
         else if (i == 1)
             set.grain_ms = (uint8_t)clamp((int32_t)(set.grain_ms ? set.grain_ms : 30u) + d * 5, 10, 80);
         else
             return;
         global_value(i, t);
-        app_say(i == 0 ? "PITCH" : "GRAIN", i == 0 && set.pitch_keep ? "KEEP LENGTH" : t);
+        app_say(i == 0 ? "PITCH" : "GRAIN", i == 0 && pitch_keeps() ? "KEEP LENGTH" : t);
         changed();
         return;
     }
@@ -1330,8 +1333,8 @@ static void draw_global(const brk_status_t *st)
     if (ui.gpage) {                      /* the pitch: what the mode does, the pitch now */
         cv_begin(240, 52, C_BLACK);
         cv_text(6, 2, &FONT_T, "PITCH", C_GRAY);
-        cv_text(96, 2, &FONT_T, set.pitch_keep ? "KEEP LENGTH" : "SPEED", C_HI);
-        cv_text(96, 16, &FONT_XS, set.pitch_keep ? "SLICES KEEP LENGTH" : "PITCH CHANGES LENGTH", C_DIM);
+        cv_text(96, 2, &FONT_T, pitch_keeps() ? "KEEP LENGTH" : "SPEED", C_HI);
+        cv_text(96, 16, &FONT_XS, pitch_keeps() ? "SLICES KEEP LENGTH" : "PITCH CHANGES LENGTH", C_DIM);
         cv_text(6, 30, &FONT_T, "NOW", C_GRAY);
         t[0] = set.pitch > 0 ? '+' : 0;
         t[1] = 0;
@@ -1343,7 +1346,7 @@ static void draw_global(const brk_status_t *st)
         cv_text(6, 2, &FONT_T, "GRAIN", C_GRAY);
         int_text(set.grain_ms ? set.grain_ms : 30, t);
         text_cat(t, " MS");
-        cv_text(96, 2, &FONT_T, t, set.pitch_keep ? C_WHITE : C_DIM);
+        cv_text(96, 2, &FONT_T, t, pitch_keeps() ? C_WHITE : C_DIM);
         cv_text(96, 16, &FONT_XS, "LOWER: TIGHTER HITS", C_DIM);
         cv_text(6, 30, &FONT_XS, "FOR OCT, KEYS, ROLL, FREEZE AND STEPS", C_DIM);
         cv_blit(0, 140);

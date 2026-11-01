@@ -145,7 +145,7 @@ connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings →
 
 | Knob | Sets | |
 | --- | --- | --- |
-| K1 PITCH | SPEED · KEEP LENGTH | SPEED is the classic repitch: up plays faster and shorter, down slower and longer. KEEP LENGTH changes the pitch only: each slice keeps its length (a granular pitch shift), so a key pitched +7 still fills its loop |
+| K1 PITCH | KEEP LENGTH (the default) · SPEED | KEEP LENGTH changes the pitch only: each slice keeps its length (a granular pitch shift), so a key pitched +7 still fills its loop. SPEED is the classic repitch: up plays faster and shorter, down slower and longer (K1 left) |
 | K2 GRAIN | 10 … 80 ms | KEEP LENGTH's grains: shorter keeps hits tight, longer sounds smoother on held sounds |
 
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
