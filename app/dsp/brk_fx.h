@@ -14,8 +14,12 @@
  *   PUNCH    amount (a drum-bus compressor), attack (0.1..30 ms), release (20..500 ms)
  *   FLANGER  rate (0.02..10 Hz), depth, feedback (-0.9..+0.9)
  *   RING     frequency (20..2000 Hz), spread (the right side higher), -
- *   TREMOLO  rate (1/2 1/4 1/8 1/16 1/32 1/8T, on the tempo), depth, pan (0 tremolo .. 1 auto-pan) */
-enum { FXT_EMPTY, FXT_FILTER, FXT_CRUNCH, FXT_DRIVE, FXT_PUNCH, FXT_FLANGER, FXT_RING, FXT_TREMOLO, BRK_NFXT };
+ *   TREMOLO  rate (1/2 1/4 1/8 1/16 1/32 1/8T, on the tempo), depth, pan (0 tremolo .. 1 auto-pan)
+ *   REVERB   size (decay 0.25..0.97), tone (bright .. dark), pre-delay (0..60 ms); its mix is the reverb's level over
+ *            the dry sound. A Dattorro plate (stereo, modulated) at 22.05 kHz inside, 16-bit lines: there is one, so
+ *            a second REVERB slot passes the sound on */
+enum { FXT_EMPTY, FXT_FILTER, FXT_CRUNCH, FXT_DRIVE, FXT_PUNCH, FXT_FLANGER, FXT_RING, FXT_TREMOLO, FXT_REVERB,
+       BRK_NFXT };
 extern const char *const BRK_FXT_NAME[BRK_NFXT];
 #define BRK_TREM_DIVS 6u
 extern const char *const BRK_TREM_DIV_NAME[BRK_TREM_DIVS];

@@ -948,6 +948,83 @@ static void test_snap(void)
     brk_snap(1.0f);
 }
 
+/* the reverb: an impulse rings on, decays, comes out different left and right; a bigger size rings longer; a second
+ * REVERB slot passes the sound on */
+static float rv_energy(float size, uint32_t from, uint32_t to, int two, float *corr)
+{
+    brk_fx_t p;
+    uint32_t i, n = BRK_SR * 4u;
+    float e = 0.0f, lr = 0.0f, ll = 0.0f, rr = 0.0f;
+    for (i = 0; i < n; i++)
+        buf[i] = i == 100u ? 1.0f : 0.0f;
+    brk_fx_defaults(&p);
+    brk_fx_slot_defaults(&p.slot[0], FXT_REVERB);
+    p.slot[0].on = 1u;
+    p.slot[0].mix = 1.0f;
+    p.slot[0].p[0] = size;
+    p.slot[0].p[2] = 0.0f;
+    if (two) {
+        p.slot[2] = p.slot[0];
+    }
+    fx_run(&p, n);
+    for (i = from; i < to; i++) {
+        e += bl[i] * bl[i] + br[i] * br[i];
+        lr += bl[i] * br[i];
+        ll += bl[i] * bl[i];
+        rr += br[i] * br[i];
+    }
+    if (corr)
+        *corr = lr / sqrtf(ll * rr + 1e-12f);
+    return e;
+}
+
+static void test_reverb(void)
+{
+    float early, late, big_late, corr, one, two;
+    early = rv_energy(0.6f, BRK_SR / 10u, BRK_SR / 2u, 0, &corr);
+    late = rv_energy(0.6f, BRK_SR * 2u, BRK_SR * 3u, 0, 0);
+    big_late = rv_energy(1.0f, BRK_SR * 2u, BRK_SR * 3u, 0, 0);
+    CHECK(early > 1e-3f && late < early * 0.05f, "reverb: an impulse rings (%.4f) and dies away (%.6f 2 s on)", early, late);
+    CHECK(corr < 0.5f && corr > -0.5f, "reverb: left and right differ (correlation %.2f)", corr);
+    CHECK(big_late > late * 4.0f, "reverb: a bigger size rings longer (%.6f against %.6f 2 s on)", big_late, late);
+    one = rv_energy(0.6f, 0u, BRK_SR, 0, 0);
+    two = rv_energy(0.6f, 0u, BRK_SR, 1, 0);
+    CHECK(fabsf(two - one) < one * 0.01f, "reverb: a second REVERB slot passes the sound on (%.4f, %.4f)", one, two);
+    {   /* a listen: the break through the plate */
+        brk_fx_t p;
+        uint32_t n = BRK_SR * 4u;
+        fresh(1);
+        brk_play(1);
+        render(buf, n, 0, 0, 0);
+        brk_fx_defaults(&p);
+        brk_fx_slot_defaults(&p.slot[0], FXT_REVERB);
+        p.slot[0].on = 1u;
+        p.slot[0].mix = 0.5f;
+        fx_run(&p, n);
+        wav("reverb.wav", bl, br, n);
+    }
+}
+
+/* STOP: the break fades out at once (a key held loops on) */
+static void test_stop(void)
+{
+    fresh(1);
+    brk_play(1);
+    render(buf, brk_step_len_samples() * 4u + 100u, 0, 0, 0);
+    brk_play(0);
+    render(buf, 441u, 0, 0, 0);          /* 10 ms */
+    CHECK(render(buf, BLOCK * 4u, 0, 0, 0) == 0.0f, "stop: the break is quiet 10 ms on");
+    fresh(1);
+    brk_play(1);
+    render(buf, brk_step_len_samples() * 2u, 0, 0, 0);
+    brk_play(0);
+    render(buf, BLOCK, 0, 0, 0);
+    brk_key(5, 1);                       /* stopped, a key still plays and loops */
+    render(buf, brk_step_len_samples() * 3u, 0, 0, 0);
+    CHECK(render(buf, brk_step_len_samples(), 0, 0, 0) > 0.05f, "stop: a key pressed after still loops");
+    brk_key(5, 0);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -962,6 +1039,8 @@ int main(int argc, char **argv)
     test_keep_length();
     test_gate();
     test_snap();
+    test_reverb();
+    test_stop();
     test_generator();
     test_pads();
     test_fx();

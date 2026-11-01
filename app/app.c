@@ -491,7 +491,8 @@ static void times_text(float v, char *t);
 /* each effect's settings, as the foot names them (K1-K3; K4 is MIX) */
 static const char *const FXP_NAME[BRK_NFXT][3] = {
     {"", "", ""}, {"CUTOFF", "RESO", "MODE"}, {"BITS", "RATE", "DRIVE"}, {"GAIN", "TONE", "LEVEL"},
-    {"AMOUNT", "ATTACK", "RELEASE"}, {"RATE", "DEPTH", "FEEDBK"}, {"FREQ", "SPREAD", ""}, {"RATE", "DEPTH", "PAN"}};
+    {"AMOUNT", "ATTACK", "RELEASE"}, {"RATE", "DEPTH", "FEEDBK"}, {"FREQ", "SPREAD", ""}, {"RATE", "DEPTH", "PAN"},
+    {"SIZE", "TONE", "PRE"}};
 
 static const char *fx_param_name(uint32_t slot, int i)
 {
@@ -554,6 +555,14 @@ static void fx_value(uint32_t slot, int i, char *t)
         return;
     }
     case FXT_RING * 4 + 0: hz_text(20.0f * brk_exp2f(v * 6.64f), t); return;
+    case FXT_REVERB * 4 + 1: text_cat(t, v < 0.34f ? "BRIGHT " : v < 0.67f ? "WARM " : "DARK ");
+        {
+            char d[8];
+            pct_text(v, d);
+            text_cat(t, d);
+        }
+        return;
+    case FXT_REVERB * 4 + 2: int_text((int32_t)(v * 60.0f + 0.5f), t); text_cat(t, "MS"); return;
     case FXT_TREMOLO * 4 + 0: {
         uint32_t d = (uint32_t)(v * (float)(BRK_TREM_DIVS - 1u) + 0.5f);
         text_cat(t, BRK_TREM_DIV_NAME[d < BRK_TREM_DIVS ? d : 0u]);

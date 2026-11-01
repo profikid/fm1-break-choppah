@@ -151,9 +151,16 @@ its settings as bars over K1–K4.
 | FLANGER | Rate (0.02 – 10 Hz) | Depth | Feedback (−90 … +90 %) |
 | RING MOD | Frequency (20 Hz – 2 kHz) | Spread (the right side higher) | |
 | TREMOLO | Rate on the tempo (1/2 … 1/32, 1/8T) | Depth | Pan (0 tremolo … 100 % auto-pan) |
+| REVERB | Size (short room … long hall) | Tone (bright … dark) | Pre-delay (0 – 60 ms) |
+
+**REVERB** is a plate (after Dattorro's design: diffusers, then a modulated stereo tank): its MIX is how much reverb
+goes over the dry sound. The tail rings on after STOP. There is one: a second REVERB slot passes the sound on. Put it
+late in the chain to reverb the effects before it, or early to crunch or drive the reverb itself.
 
 The chain starts as CRUNCH → FILTER → FLANGER → RING MOD, all bypassed: FX on the page switches the focused one on.
 CRUNCH used to be HOME's K4; it is slot 1 now.
+
+STOP fades the break out at once (a white key held keeps looping); the reverb's and the dub delay's tails ring on.
 
 ## 7. GLOBAL: MIDI clock, Bluetooth, pitch
 

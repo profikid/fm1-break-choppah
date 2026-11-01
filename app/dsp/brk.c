@@ -91,6 +91,7 @@ static uint32_t clk_cnt;
 static float clk_left;                   /* samples to the next tick */
 static uint32_t clk_k = 12u;             /* ticks given in this pair of 16ths (12: done until the next pair) */
 static uint32_t steps_total;             /* steps begun since the reset (the outside clock counts from its start) */
+static int was_playing;                  /* the transport at the last render: a stop fades the break out */
 static volatile uint32_t n_renders;
 
 static inline float pcm_at(const brk_break_t *b, int32_t i)
@@ -532,6 +533,21 @@ void brk_render(float *out, uint32_t n)
         steps_total = 0u;
     }
     clk_cnt = 0u;
+    if (was_playing && !playing) {       /* stopped: the break fades out (2 ms), but a key held loops on */
+        uint32_t k;
+        pending = BRK_NO_SLICE;
+        roll_slice = -1;
+        roll_arm = 0u;
+        rat_count = 0u;
+        if (key_slice < 0)
+            for (k = 0; k < 2u; k++)
+                if (v[k].active) {
+                    v[k].amp_to = 0.0f;
+                    v[k].amp_step = v[k].amp / FADE_OUT + 1e-6f;
+                    v[k].loop = v[k].wrap = 0u;
+                }
+    }
+    was_playing = playing;
     while (q_r != q_w) {                 /* the keys */
         kev_t e = q[q_r % QLEN];
         q_r++;
@@ -779,6 +795,7 @@ void brk_init(void)
     key_pitch = 0.0f;
     key_n = 0u;
     steps_total = 0u;
+    was_playing = 0;
     clk_cnt = 0u;
     clk_k = 12u;
     {

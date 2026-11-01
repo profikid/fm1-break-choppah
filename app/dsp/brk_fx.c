@@ -4,7 +4,7 @@
 #include "brk.h"
 #include "brk_math.h"
 
-#define FL_LEN 512u                      /* a flanger's line: 11.6 ms (it reaches 5.2 ms back) */
+#define FL_LEN 256u                      /* a flanger's line: 5.8 ms (it reaches 230 samples back) */
 
 typedef struct { float ic1, ic2; } svf_t;  /* a TPT state-variable filter (Simper) */
 typedef struct { float a1, a2, a3, k; } svf_c;
@@ -14,7 +14,7 @@ static brk_fx_t fx;                      /* the render's copy */
 static float lim_gain = 1.0f, dj_s;      /* the limiter; the DJ filter's smoothed position */
 static svf_t dj_l, dj_r;
 const char *const BRK_FXT_NAME[BRK_NFXT] = {"EMPTY", "FILTER", "CRUNCH", "DRIVE", "PUNCH", "FLANGER", "RING MOD",
-                                            "TREMOLO"};
+                                            "TREMOLO", "REVERB"};
 const char *const BRK_TREM_DIV_NAME[BRK_TREM_DIVS] = {"1/2", "1/4", "1/8", "1/16", "1/32", "1/8T"};
 static const float TREM_STEPS[BRK_TREM_DIVS] = {8.0f, 4.0f, 2.0f, 1.0f, 0.5f, 4.0f / 3.0f};   /* 16ths a cycle */
 
@@ -31,6 +31,115 @@ typedef struct {
     uint32_t w;
 } slot_st_t;
 static slot_st_t st[BRK_FX_SLOTS];
+
+/* ------------------------------------------------------------------- reverb --- */
+/* a plate after Jon Dattorro, "Effect Design, Part 1" (JAES 45/9, 1997): a pre-delay, four input diffusers, then a
+ * tank of two cross-fed halves (a modulated allpass, a delay, damping, an allpass, a delay each) read at fourteen taps
+ * for left and right. It runs at 22.05 kHz (every other sample; the tail needs no more) on 16-bit lines, ~35 KB, its
+ * lengths Dattorro's at 29.76 kHz scaled. One in the chain: the first REVERB slot has it */
+#define RV(n) ((uint32_t)(((uint32_t)(n) * 22050u + 14880u) / 29761u))
+#define RV_EXC 12u                       /* the tank's modulation: up to 12 samples */
+#define RV_PRE 1324u                     /* 60 ms */
+#define RV_Q 8192.0f                     /* a line's 1.0 (headroom to 4.0) */
+enum { RV_LPRE, RV_LAP1, RV_LAP2, RV_LAP3, RV_LAP4, RV_LMAP1, RV_LDL1, RV_LAP5, RV_LDL2, RV_LMAP2, RV_LDL3, RV_LAP6,
+       RV_LDL4, RV_NL };
+static const uint16_t RV_LEN[RV_NL] = {RV_PRE, RV(142), RV(107), RV(379), RV(277), RV(672) + RV_EXC + 2u, RV(4453),
+                                       RV(1800), RV(3720), RV(908) + RV_EXC + 2u, RV(4217), RV(2656), RV(3163)};
+#define RV_MEM (RV_PRE + RV(142) + RV(107) + RV(379) + RV(277) + RV(672) + RV(4453) + RV(1800) + RV(3720) + \
+                RV(908) + RV(4217) + RV(2656) + RV(3163) + 2u * (RV_EXC + 2u))
+static int16_t rv_mem[RV_MEM];
+static struct {
+    uint16_t base[RV_NL], w[RV_NL];
+    float damp_l, damp_r, last_l, last_r, ph, in_prev, y_l, y_r, yo_l, yo_r;
+    uint8_t odd;
+} rv;
+
+static void rv_clear(void)
+{
+    uint32_t i, b = 0u;
+    for (i = 0; i < RV_MEM; i++)
+        rv_mem[i] = 0;
+    for (i = 0; i < RV_NL; i++) {
+        rv.base[i] = (uint16_t)b;
+        rv.w[i] = 0u;
+        b += RV_LEN[i];
+    }
+    rv.damp_l = rv.damp_r = rv.last_l = rv.last_r = rv.in_prev = 0.0f;
+    rv.y_l = rv.y_r = rv.yo_l = rv.yo_r = 0.0f;
+    rv.odd = 0u;
+}
+
+static inline void rv_put(uint32_t l, float x)
+{
+    float v = x * RV_Q;
+    rv_mem[rv.base[l] + rv.w[l]] = (int16_t)(v > 32767.0f ? 32767.0f : v < -32767.0f ? -32767.0f : v);
+    if (++rv.w[l] >= RV_LEN[l])
+        rv.w[l] = 0u;
+}
+
+static inline float rv_tap(uint32_t l, uint32_t d)   /* d samples back (1 .. its length) */
+{
+    int32_t i = (int32_t)rv.w[l] - (int32_t)d;
+    if (i < 0)
+        i += RV_LEN[l];
+    return (float)rv_mem[rv.base[l] + (uint32_t)i] * (1.0f / RV_Q);
+}
+
+static inline float rv_tapf(uint32_t l, float d)  /* (linear between two: the modulated allpasses) */
+{
+    uint32_t i = (uint32_t)d;
+    float t = d - (float)i;
+    return rv_tap(l, i) * (1.0f - t) + rv_tap(l, i + 1u) * t;
+}
+
+/* an allpass on line l, d samples long, coefficient g */
+static inline float rv_ap(uint32_t l, float x, float d, float g)
+{
+    float z = d == (float)(uint32_t)d ? rv_tap(l, (uint32_t)d) : rv_tapf(l, d), v = x - g * z;
+    rv_put(l, v);
+    return z + g * v;
+}
+
+/* one 22.05 kHz sample: in mono, out the plate's left and right */
+static void rv_tick(float x, float decay, float damp, uint32_t pre, float *yl, float *yr)
+{
+    float a, m1, m2;
+    rv_put(RV_LPRE, x);
+    a = pre ? rv_tap(RV_LPRE, pre) : x;
+    a = rv_ap(RV_LAP1, a, (float)RV(142), 0.75f);
+    a = rv_ap(RV_LAP2, a, (float)RV(107), 0.75f);
+    a = rv_ap(RV_LAP3, a, (float)RV(379), 0.625f);
+    a = rv_ap(RV_LAP4, a, (float)RV(277), 0.625f);
+    rv.ph += 0.9f / 22050.0f;            /* the tank's slow wobble: no metallic ring */
+    if (rv.ph >= 1.0f)
+        rv.ph -= 1.0f;
+    m1 = (float)RV(672) + 1.0f + (float)RV_EXC * (0.5f + 0.5f * brk_sin_turns(rv.ph));
+    m2 = (float)RV(908) + 1.0f + (float)RV_EXC * (0.5f + 0.5f * brk_sin_turns(rv.ph + 0.5f));
+    {                                    /* the left half, fed by the right's end */
+        float t = rv_ap(RV_LMAP1, a + decay * rv.last_r, m1, -0.7f), u;
+        rv_put(RV_LDL1, t);
+        u = rv_tap(RV_LDL1, RV(4453));
+        rv.damp_l += (u - rv.damp_l) * (1.0f - damp);
+        u = rv_ap(RV_LAP5, rv.damp_l * decay, (float)RV(1800), 0.5f);
+        rv_put(RV_LDL2, u);
+        rv.last_l = rv_tap(RV_LDL2, RV(3720));
+    }
+    {                                    /* the right half, fed by the left's end */
+        float t = rv_ap(RV_LMAP2, a + decay * rv.last_l, m2, -0.7f), u;
+        rv_put(RV_LDL3, t);
+        u = rv_tap(RV_LDL3, RV(4217));
+        rv.damp_r += (u - rv.damp_r) * (1.0f - damp);
+        u = rv_ap(RV_LAP6, rv.damp_r * decay, (float)RV(2656), 0.5f);
+        rv_put(RV_LDL4, u);
+        rv.last_r = rv_tap(RV_LDL4, RV(3163));
+    }
+    *yl = 0.6f * (rv_tap(RV_LDL3, RV(266)) + rv_tap(RV_LDL3, RV(2974)) - rv_tap(RV_LAP6, RV(1913)) +
+                  rv_tap(RV_LDL4, RV(1996)) - rv_tap(RV_LDL1, RV(1990)) - rv_tap(RV_LAP5, RV(187)) -
+                  rv_tap(RV_LDL2, RV(1066)));
+    *yr = 0.6f * (rv_tap(RV_LDL1, RV(353)) + rv_tap(RV_LDL1, RV(3627)) - rv_tap(RV_LAP5, RV(1228)) +
+                  rv_tap(RV_LDL2, RV(2673)) - rv_tap(RV_LDL3, RV(2111)) - rv_tap(RV_LAP6, RV(335)) -
+                  rv_tap(RV_LDL4, RV(121)));
+}
 /* the dub delay: a 16-bit line the app hands over, its tone filter, the send's level */
 const char *const BRK_DUB_DIV_NAME[BRK_DUB_DIVS] = {"1/8", "3/16", "1/4", "3/8"};
 static const float DUB_STEPS[BRK_DUB_DIVS] = {2.0f, 3.0f, 4.0f, 6.0f};
@@ -97,6 +206,7 @@ void brk_fx_slot_defaults(brk_fxslot_t *s, int type)
         {0.4f, 0.6f, 0.75f, 0.5f},       /* FLANGER: 0.25 Hz, feedback +0.45 */
         {0.35f, 0.0f, 0.0f, 0.5f},       /* RING MOD: 100 Hz */
         {0.6f, 0.7f, 0.0f, 1.0f},        /* TREMOLO: 1/16 */
+        {0.6f, 0.4f, 0.25f, 0.3f},       /* REVERB: a medium plate, 15 ms ahead */
     };
     uint32_t t = (uint32_t)type < BRK_NFXT ? (uint32_t)type : 0u;
     s->type = (uint8_t)t;
@@ -141,6 +251,7 @@ float brk_fx_dj_now(void) { return dj_s; }
 
 void brk_fx_init(void)
 {
+    rv_clear();
     brk_fx_t d;
     brk_fx_defaults(&d);
     brk_fx_set(&d);
@@ -160,6 +271,7 @@ typedef struct {
     float a, b, g;                       /* the effect's own: see slot_block */
 } slot_c_t;
 static slot_c_t sc[BRK_FX_SLOTS];
+static int rv_taken;                     /* a slot has the reverb this block (the first REVERB in the chain) */
 
 static void slot_block(uint32_t k)
 {
@@ -176,6 +288,8 @@ static void slot_block(uint32_t k)
         s->type = (uint8_t)t;
         s->hz_s = 30.0f * brk_exp2f(p0 * 9.06f);
         s->gr = 1.0f;
+        if (t == FXT_REVERB)
+            rv_clear();                  /* a reverb put in: its tail from silence */
     }
     c->type = (uint8_t)t;
     c->on = (uint8_t)(f->on && t != FXT_EMPTY);
@@ -209,6 +323,16 @@ static void slot_block(uint32_t k)
     case FXT_RING:                       /* a: left's step, b: right's */
         c->a = 20.0f * brk_exp2f(p0 * 6.64f) / (float)BRK_SR;
         c->b = c->a * (1.0f + p1);
+        break;
+    case FXT_REVERB:                     /* a: decay, b: damping, g: pre-delay (22.05 kHz samples) */
+        if (rv_taken || !c->on) {        /* (one reverb: a second passes the sound on) */
+            c->on = 0u;
+            break;
+        }
+        rv_taken = 1;
+        c->a = 0.25f + 0.72f * p0;
+        c->b = 0.0005f + 0.7f * p1;
+        c->g = (float)(uint32_t)(p2 * (float)(RV_PRE - 2u));
         break;
     case FXT_TREMOLO: {                  /* a: the cycle's step (on the tempo), b: depth, g: pan */
         uint32_t d = (uint32_t)(p0 * (float)(BRK_TREM_DIVS - 1u) + 0.5f);
@@ -292,6 +416,24 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
         if (s->ph2 >= 1.0f)
             s->ph2 -= 1.0f;
         break;
+    case FXT_REVERB: {                   /* the plate at half the rate: a new pair of outputs every other sample */
+        float in = 0.5f * (yl + yr), ol, or_;
+        if (rv.odd) {
+            rv.yo_l = rv.y_l;
+            rv.yo_r = rv.y_r;
+            rv_tick(0.5f * (in + rv.in_prev), c->a, c->b, (uint32_t)c->g, &rv.y_l, &rv.y_r);
+            ol = 0.5f * (rv.yo_l + rv.y_l);
+            or_ = 0.5f * (rv.yo_r + rv.y_r);
+        } else {
+            ol = rv.y_l;
+            or_ = rv.y_r;
+        }
+        rv.in_prev = in;
+        rv.odd ^= 1u;
+        yl += ol;                        /* the dry sound and the plate: MIX is the plate's level */
+        yr += or_;
+        break;
+    }
     case FXT_TREMOLO: {                  /* a sine on the tempo: both sides together, or across (pan) */
         float m = 0.5f + 0.5f * brk_sin_turns(s->ph), gl, gr;
         gl = 1.0f - c->b * m;
@@ -334,6 +476,7 @@ void brk_fx_process(const float *in, const float *aux, float aux_send, float *l,
         dub_lpk = 0.05f + 0.9f * brk_clampf(fx.dub_tone, 0.0f, 1.0f) * brk_clampf(fx.dub_tone, 0.0f, 1.0f);
         dub_fb = brk_clampf(fx.dub_fb, 0.0f, 0.95f);
     }
+    rv_taken = 0;
     for (k = 0; k < BRK_FX_SLOTS; k++)   /* the chain's settings, once a block */
         slot_block(k);
     for (i = 0; i < n; i++) {
