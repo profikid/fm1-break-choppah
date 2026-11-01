@@ -1,0 +1,23 @@
+# CHOPPAH: the snap (GLOBAL, second half, K3): where a key pressed while playing lands, in slices
+#   app/build/host/choppah_host tests/scenarios/snap.txt app/build/scenarios
+wait 2600
+tap GLO
+wait 200
+tap GLO
+wait 300
+shot s_default.png
+turn K3 -3 10
+wait 300
+shot s_off.png
+tap PLAY
+wait 500
+tapkey w9
+wait 300
+peakreset
+wait 500
+expect peak_db_max >-30
+turn K3 5 10
+wait 300
+shot s_two.png
+tapkey w4
+wait 900

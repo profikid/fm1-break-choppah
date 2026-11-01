@@ -40,8 +40,9 @@ typedef struct {
                                           * (0 is older saves': they load as KEEP LENGTH, a choice of it stays) */
     uint8_t grain_ms;                    /* its grains, 10..80 ms (0: 30) */
     uint8_t gate;                        /* how much of each slice sounds, 5..100 % (0: 100, off) */
-    uint8_t rsv[8];                      /* (zero in older saves: so these load as off, off, on, both, KEEP
-                                          * LENGTH, 30, no gate) */
+    uint8_t snap;                        /* where a key lands while playing: SNAP_SL index + 1 (0: 1/2 slice) */
+    uint8_t rsv[7];                      /* (zero in older saves: so these load as off, off, on, both, KEEP
+                                          * LENGTH, 30, no gate, 1/2 slice) */
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
@@ -74,6 +75,14 @@ static void settings_defaults(void)
 
 static int pitch_keeps(void) { return set.pitch_keep != 2u; }   /* KEEP LENGTH unless SPEED was chosen */
 
+/* the snap: where a white key pressed while playing lands, in slices (GLOBAL, second half, K3) */
+#define SNAPS 7u
+static const float SNAP_SL[SNAPS] = {0.0f, 0.125f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f};
+static const char *const SNAP_NAME[SNAPS] = {"OFF", "1/8 SLICE", "1/4 SLICE", "1/2 SLICE", "1 SLICE", "2 SLICES",
+                                             "4 SLICES"};
+static const char *const SNAP_SHORT[SNAPS] = {"OFF", "1/8 SL", "1/4 SL", "1/2 SL", "1 SL", "2 SL", "4 SL"};
+static uint32_t snap_index(void) { return set.snap && set.snap <= SNAPS ? set.snap - 1u : 3u; }
+
 static void settings_apply(void)
 {
     brk_tempo((float)set.tempo_x10 * 0.1f);
@@ -85,6 +94,7 @@ static void settings_apply(void)
     brk_padset(&set.pads);
     brk_pitch_mode(pitch_keeps(), (float)(set.grain_ms ? set.grain_ms : 30u));
     brk_gate((float)(set.gate ? set.gate : 100u) * 0.01f);
+    brk_snap(SNAP_SL[snap_index()]);
     sfx_set(&set.sfx);
     {
         uint32_t k;
@@ -487,7 +497,8 @@ static void global_value(int i, char *t)
         else if (i == 1) {
             int_text(set.grain_ms ? set.grain_ms : 30, t);
             text_cat(t, " MS");
-        }
+        } else if (i == 2)
+            text_cat(t, SNAP_SHORT[snap_index()]);
         return;
     }
     text_cat(t, i == 0 ? (set.clk_in ? "FOLLOW" : "OFF") : i == 1 ? (set.clk_out ? "ON" : "OFF")
@@ -503,10 +514,13 @@ static void global_turn(int i, int32_t d)
             set.pitch_keep = d > 0 ? 1u : 2u;   /* right KEEP LENGTH, left SPEED */
         else if (i == 1)
             set.grain_ms = (uint8_t)clamp((int32_t)(set.grain_ms ? set.grain_ms : 30u) + d * 5, 10, 80);
+        else if (i == 2)
+            set.snap = (uint8_t)(clamp((int32_t)snap_index() + (d > 0 ? 1 : -1), 0, SNAPS - 1) + 1);
         else
             return;
         global_value(i, t);
-        app_say(i == 0 ? "PITCH" : "GRAIN", i == 0 && pitch_keeps() ? "KEEP LENGTH" : t);
+        app_say(i == 0 ? "PITCH" : i == 1 ? "GRAIN" : "SNAP", i == 0 && pitch_keeps() ? "KEEP LENGTH"
+                : i == 2 ? SNAP_NAME[snap_index()] : t);
         changed();
         return;
     }
@@ -955,7 +969,7 @@ static void input(void)
         ui.gpage = ui.page == PG_GLOBAL ? (uint8_t)!ui.gpage : 0u;
         ui.page = PG_GLOBAL;
         ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
-        app_say("GLOBAL", ui.gpage ? "PITCH" : "MIDI");
+        app_say("GLOBAL", ui.gpage ? "PITCH, SNAP" : "MIDI");
     }
     if (bdn & 1u << B_ENV) {             /* ENV: the soundboard */
         ui.page = PG_SOUND;
@@ -1347,8 +1361,17 @@ static void draw_global(const brk_status_t *st)
         int_text(set.grain_ms ? set.grain_ms : 30, t);
         text_cat(t, " MS");
         cv_text(96, 2, &FONT_T, t, pitch_keeps() ? C_WHITE : C_DIM);
-        cv_text(96, 16, &FONT_XS, "LOWER: TIGHTER HITS", C_DIM);
-        cv_text(6, 30, &FONT_XS, "FOR OCT, KEYS, ROLL, FREEZE AND STEPS", C_DIM);
+        cv_text(96, 14, &FONT_XS, "LOWER: TIGHTER HITS", C_DIM);
+        cv_text(6, 30, &FONT_T, "SNAP", C_GRAY);   /* where a key lands, and what that is in this break */
+        t[0] = 0;
+        text_cat(t, SNAP_NAME[snap_index()]);
+        if (snap_index()) {
+            const brk_break_t *b = brk_get_break();
+            text_cat(t, " = ");
+            sixteenths_text(SNAP_SL[snap_index()] * key_sps(b), v);
+            text_cat(t, v);
+        }
+        cv_text(96, 30, &FONT_T, t, C_HI);
         cv_blit(0, 140);
         return;
     }
@@ -1444,7 +1467,7 @@ static void draw_foot(const brk_status_t *st)
         cv_text(x + (20 - text_w(&FONT_T, PAD_NAME[i])) / 2, 1, &FONT_T, PAD_NAME[i], on ? C_BLACK : C_GRAY);
     }
     for (i = 0; i < 4u; i++) {
-        static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "", ""};
+        static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", ""};
         const char *name = ui.page == PG_GLOBAL && ui.gpage ? KN_PITCH[i] : KN[ui.page][i];
         if (ui.shown >= 100) {           /* a white key held: its loop */
             cv_text(4 + (int32_t)i * 60, 18, &FONT_T, KEY_KNOB[i], C_HI);

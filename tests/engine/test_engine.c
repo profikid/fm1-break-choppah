@@ -31,6 +31,7 @@ static void fresh(uint32_t bars)
     brk_tempo(BPM);
     brk_pitch(0.0f);
     brk_swing(0.5f);
+    brk_snap(1.0f);                      /* (keys at the next step: a slice is a step on these 1-bar breaks) */
     brk_seed(1u);
     {
         uint32_t p;
@@ -854,6 +855,56 @@ static void test_gate(void)
           early[1], late[1], late[0]);
 }
 
+/* the snap: where a key pressed while playing begins. A 1-bar break of 16 slices: a slice is a 16th */
+static void test_snap(void)
+{
+    uint32_t sl, t;
+    int32_t at;
+    brk_status_t st;
+    /* 2 slices: pressed in step 0, it waits for step 2 (not 1) */
+    fresh(1);
+    sl = brk_step_len_samples();
+    brk_snap(2.0f);
+    brk_play(1);
+    render(buf, sl / 2u, 0, 0, 0);
+    brk_key(9, 1);
+    brk_key(9, 0);
+    render(buf, sl, 0, 0, 0);            /* well into step 1 */
+    brk_status(&st);
+    CHECK(st.step == 1 && st.slice == 1, "snap 2 slices: not yet at step 1 (slice %d)", st.slice);
+    render(buf, sl, 0, 0, 0);            /* into step 2 */
+    brk_status(&st);
+    CHECK(st.step == 2 && st.slice == 9, "snap 2 slices: the key begins at step 2 (slice %d)", st.slice);
+    /* OFF: at once, mid-step; and a quarter slice: a quarter step on */
+    {
+        float q[2] = {0.0f, 0.25f};
+        int k;
+        for (k = 0; k < 2; k++) {
+            fresh(1);
+            sl = brk_step_len_samples();
+            brk_snap(q[k]);
+            brk_play(1);
+            render(buf, sl + sl / 10u, 0, 0, 0);   /* a tenth into step 1 */
+            brk_key(12, 1);
+            for (t = 0, at = -1; t < sl; t += 16u) {
+                brk_render(buf, 16);
+                brk_status(&st);
+                if (st.slice == 12) {
+                    at = (int32_t)t;
+                    break;
+                }
+            }
+            brk_key(12, 0);
+            if (k == 0)
+                CHECK(at >= 0 && at < 64, "snap OFF: the key at once (%d samples)", at);
+            else
+                CHECK(at > (int32_t)(sl * 3u / 20u) - 64 && at < (int32_t)(sl * 3u / 20u) + 64,
+                      "snap 1/4 slice: the key a quarter step in (%d samples, want %u)", at, sl * 3u / 20u);
+        }
+    }
+    brk_snap(1.0f);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -867,6 +918,7 @@ int main(int argc, char **argv)
     test_clock();
     test_keep_length();
     test_gate();
+    test_snap();
     test_generator();
     test_pads();
     test_fx();

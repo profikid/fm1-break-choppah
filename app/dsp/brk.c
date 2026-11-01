@@ -19,6 +19,7 @@ static volatile uint32_t p_rewind;       /* a count: changed = a rewind starts *
 static volatile uint32_t p_len;          /* pattern length, 0 = the break's own */
 static volatile int p_keep;              /* pitch keeps the length (granular), not the speed */
 static volatile float p_gate = 1.0f;     /* how much of each of the loop's slices sounds */
+static volatile float p_snap = 0.5f;     /* where a key pressed while playing begins: slices (0 at once) */
 static volatile float p_grain = 1323.0f; /* its grains, samples (30 ms) */
 static brk_gen_t p_gen;
 static brk_padset_t p_ps;                /* the pads' settings (brk_padset) */
@@ -52,6 +53,8 @@ typedef struct {
 static voice_t v[2];
 static int cur;                          /* the voice that plays; the other fades out */
 static int32_t step = -1, last_slice = -1, pending = BRK_NO_SLICE;
+static uint32_t pending_at;              /* the snap: the step (counted from the reset) the key pressed begins on */
+static float pending_wait = -1.0f;       /* or, less than a step apart, the samples until it does (< 0: a step) */
 static uint32_t bar, held_mask, reset_seen, pads_now, rng = 0x1234567u;
 static float to_next;                    /* samples to the next step */
 static float tape = 1.0f;                /* tape stop: 1 running .. 0 stopped */
@@ -285,6 +288,44 @@ static void roll_begin(const brk_break_t *b)   /* the roll repeats the slice sou
         roll_gain = 1.0f;
 }
 
+/* a key pressed while playing, at its snap point: its loop starts here (released already: one hit) */
+static void key_snapped(const brk_break_t *b)
+{
+    int32_t s = pending;
+    pending = BRK_NO_SLICE;
+    pending_wait = -1.0f;
+    key_n = 0u;
+    key_begin(b, s);
+    key_left = key_steps * step_len();
+    if ((held_mask >> s) & 1u)
+        key_slice = s;
+    else
+        key_let_go(b);                   /* a tap: one hit */
+}
+
+/* a key pressed while playing: where it begins (brk_snap). Whole steps wait for that step (the swing's); less than a
+ * step counts samples, straight. now_len: the step playing's length */
+static void key_snap(const brk_break_t *b, int32_t s)
+{
+    float sps = (float)(b->bars * BRK_STEPS_PER_BAR) / (float)b->nslices, snap = p_snap * sps, pos, target;
+    pending = s;
+    pending_wait = -1.0f;
+    if (!steps_total || !step_in_len) {  /* not begun yet: the first step */
+        pending_at = steps_total;
+        return;
+    }
+    pos = (float)(steps_total - 1u) + ((float)step_in_len - to_next) / (float)step_in_len;   /* in 16ths */
+    if (snap <= 0.0f) {                  /* OFF: now */
+        pending_wait = 0.0f;
+        return;
+    }
+    target = snap * (float)((uint32_t)(pos / snap) + 1u);    /* the next grid point after now */
+    if (snap >= 0.999f && target - (float)(uint32_t)(target + 0.001f) < 0.002f)
+        pending_at = (uint32_t)(target + 0.5f);   /* a whole step: on_step begins it */
+    else
+        pending_wait = (target - pos) * step_len();
+}
+
 static void on_step(const brk_break_t *b)
 {
     uint32_t n = loop_steps(b);
@@ -302,16 +343,8 @@ static void on_step(const brk_break_t *b)
     if (suppressed())
         return;
     p = &pat[step];
-    if (pending != BRK_NO_SLICE) {       /* a key pressed since the last step: its loop starts here */
-        s = pending;
-        pending = BRK_NO_SLICE;
-        key_n = 0u;
-        key_begin(b, s);
-        key_left = key_steps * step_len();
-        if ((held_mask >> s) & 1u)
-            key_slice = s;
-        else
-            key_let_go(b);               /* a tap: one hit */
+    if (pending != BRK_NO_SLICE && pending_wait < 0.0f && steps_total >= pending_at) {   /* the snap point */
+        key_snapped(b);
         if (roll_arm)
             roll_begin(b);
         return;
@@ -507,7 +540,7 @@ void brk_render(float *out, uint32_t n)
         if (e.down) {
             held_mask |= 1u << e.slice;
             if (playing)
-                pending = e.slice;       /* quantised: the next step */
+                key_snap(b, e.slice);    /* quantised: the next snap point */
             else {                       /* free play: now, looping while held */
                 key_n = 0u;
                 key_begin(b, e.slice);
@@ -523,7 +556,7 @@ void brk_render(float *out, uint32_t n)
                     while (!((held_mask >> k) & 1u))
                         k++;
                     if (playing)
-                        pending = k;
+                        key_snap(b, k);
                     else {
                         key_n = 0u;
                         key_begin(b, k);
@@ -596,6 +629,11 @@ void brk_render(float *out, uint32_t n)
                     step_pitch = rat_pitch;
                 }
             }
+        }
+        if (pending != BRK_NO_SLICE && pending_wait >= 0.0f && playing && !suppressed()) {
+            pending_wait -= 1.0f;        /* a snap less than a step (or OFF): its moment */
+            if (pending_wait <= 0.0f)
+                key_snapped(b);
         }
         if (key_slice >= 0 && !suppressed()) {   /* the key loop: its window again, every key_steps 16ths */
             key_left -= 1.0f;
@@ -721,6 +759,7 @@ void brk_init(void)
     step = -1;
     last_slice = -1;
     pending = BRK_NO_SLICE;
+    pending_wait = -1.0f;
     bar = held_mask = pads_now = p_pads = 0u;
     p_playing = 0;
     p_len = 0u;
@@ -818,6 +857,7 @@ void brk_pitch_mode(int keep_length, float grain_ms)
 }
 void brk_swing(float s) { p_swing = brk_clampf(s, 0.5f, 0.75f); }
 void brk_gate(float g) { p_gate = brk_clampf(g, 0.05f, 1.0f); }
+void brk_snap(float slices) { p_snap = brk_clampf(slices, 0.0f, 16.0f); }
 void brk_gen(const brk_gen_t *g) { p_gen = *g; }
 void brk_seed(uint32_t seed) { rng = seed ? seed : 1u; }
 void brk_pattern_len(uint32_t len) { p_len = len > BRK_MAX_STEPS ? BRK_MAX_STEPS : len; }

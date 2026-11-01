@@ -49,7 +49,7 @@ The slicer view, top to bottom:
 | Control | Does |
 | --- | --- |
 | PLAY | Play / stop. HOME + PLAY: back to bar 1 |
-| White keys | Slices 1–16. Playing: at the next 16th. Stopped: at once. Held: the key loops (below), playing or stopped |
+| White keys | Slices 1–16. Playing: at the next snap point (GLOBAL: 1/2 slice, a 16th, by default; OFF, 1/8 … 4 slices). Stopped: at once. Held: the key loops (below), playing or stopped |
 | SELECT | Tempo, 1 BPM a detent (0.1 with SEL held). Tap SEL four times: tap tempo |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
 | ALGORITHM | The next or previous break: AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
@@ -141,12 +141,13 @@ stopped), the clock going out, and a light for MIDI in and out on each port. The
 out over USB and Bluetooth only. On an iPhone or iPad, Bluetooth MIDI devices never show in Settings → Bluetooth:
 connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings → Advanced → Bluetooth MIDI Devices).
 
-**The pitch (GLO twice):**
+**Pitch and snap (GLO twice):**
 
 | Knob | Sets | |
 | --- | --- | --- |
 | K1 PITCH | KEEP LENGTH (the default) · SPEED | KEEP LENGTH changes the pitch only: each slice keeps its length (a granular pitch shift), so a key pitched +7 still fills its loop. SPEED is the classic repitch: up plays faster and shorter, down slower and longer (K1 left) |
 | K2 GRAIN | 10 … 80 ms | KEEP LENGTH's grains: shorter keeps hits tight, longer sounds smoother on held sounds |
+| K3 SNAP | OFF · 1/8 · 1/4 · 1/2 (the default) · 1 · 2 · 4 slices | Where a white key pressed while playing lands: at once (OFF), or at the next point of a grid that many slices apart, counted from the top of the pattern. The panel says what it is in this break (on the 2-bar breaks 1/2 slice = 1/16, 2 slices = 1/4). Stopped, keys always play at once |
 
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
 tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay speed effects.
@@ -160,7 +161,7 @@ tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay sp
 | FX | the focused effect's settings and mix (ALGORITHM picks the effect, FX again turns it on or off) | | | |
 | ENV (soundboard) | Level | Pitch | Echo | Length |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
-| GLO again (pitch) | Speed / keep length | Grain | | |
+| GLO again (pitch, snap) | Keep length / speed | Grain | Snap | |
 
 **Gate** (HOME K3) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then
 quiet until the next; down to 5 % for clipped, staccato chops; 100 % is off. It follows the tempo and the pitch, and

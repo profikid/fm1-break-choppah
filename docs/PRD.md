@@ -253,6 +253,7 @@ on the keys, eyes on the crowd.
 | B-24 | Copy/paste step, page, pattern (SEL+SAVE / SEL+key) | P1 | |
 | B-25 | Knob motion recording (one lane per FX param, P-lock style) | P2 | |
 | B-30 | **Gate** (PERFORM K3, global): every slice the loop plays sounds for 5–100 % of its own length, then a 3 ms fade; follows tempo and pitch; for the loop, ratchets and RANDOM (key loops and rolls have their own lengths; FREEZE ungates). Replaced the PERFORM page's copy of CMPLX (still on GENERATOR). *Done 31 Oct 2026; engine test: at 25 % the second half of each slice is silent* | P1 | |
+| B-31 | **Snap** (GLOBAL, second half, K3): where a white key pressed while playing lands: OFF (at once) or the next point of a grid 1/8, 1/4, 1/2 (default: the old next-16th on 2-bar breaks), 1, 2 or 4 slices apart from the pattern's start; whole steps follow the swing (on_step), less than a step is counted in samples. *Done 1 Nov 2026; engine tests: 2 slices waits a step more, OFF at once, 1/4 slice a quarter step on* | P1 | |
 
 ### 5.4 Performance screen (HOME)
 

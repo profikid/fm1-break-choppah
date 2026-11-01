@@ -132,9 +132,13 @@ void brk_swing(float s);                 /* 0.5 straight .. 0.75 */
  * fades out once it has played g of its own length (at whatever speed), so it follows the tempo and the pitch. For
  * the loop's slices, ratchets and the RANDOM pad; key loops and rolls have their own lengths */
 void brk_gate(float g);
+/* the snap (PRD B-31): where a white key pressed while playing begins, in slices of the break: 0 at once, else at the
+ * next point of a grid that many slices apart from the pattern's start (1/8 .. 4; 0.5 is the next 16th on a 2-bar
+ * break of 16 slices, the default). Whole steps follow the swing; less than a step is timed straight */
+void brk_snap(float slices);
 
-/* the white keys: a press plays slice s at the next step (or at once when stopped: free play); held, it loops its
- * window (brk_keyset) until released, the last key pressed winning */
+/* the white keys: a press plays slice s at the next snap point (brk_snap; at once when stopped: free play); held, it
+ * loops its window (brk_keyset) until released, the last key pressed winning */
 void brk_key(int slice, int down);
 void brk_keyset_defaults(brk_keyset_t *k);   /* one slice, no pitch, from the slice's start, LOOP */
 void brk_keyset(uint32_t key, const brk_keyset_t *k);   /* main loop; the next repeat follows it */
