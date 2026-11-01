@@ -16,7 +16,7 @@ static brk_fx_t fx;                      /* the render's copy */
 static float lim_gain = 1.0f, dj_s;      /* the limiter; the DJ filter's smoothed position */
 static svf_t dj_l, dj_r;
 const char *const BRK_FXT_NAME[BRK_NFXT] = {"EMPTY", "FILTER", "CRUNCH", "DRIVE", "PUNCH", "FLANGER", "RING MOD",
-                                            "TREMOLO", "REVERB", "DELAY"};
+                                            "TREMOLO", "REVERB", "DELAY", "EQ", "TAPE"};
 const char *const BRK_DLY_DIV_NAME[BRK_DLY_DIVS] = {"1/16", "1/8", "3/16", "1/4", "3/8", "1/2", "1/8T", "1/4T"};
 static const float DLY_STEPS[BRK_DLY_DIVS] = {1.0f, 2.0f, 3.0f, 4.0f, 6.0f, 8.0f, 4.0f / 3.0f, 8.0f / 3.0f};
 const char *const BRK_TREM_DIV_NAME[BRK_TREM_DIVS] = {"1/2", "1/4", "1/8", "1/16", "1/32", "1/8T"};
@@ -31,8 +31,9 @@ typedef struct {
     float hold[2], hph;                  /* CRUNCH: held samples, the rate's phase */
     float lp[2];                         /* DRIVE: its tone */
     float env, gr;                       /* PUNCH: the level followed, the gain */
-    float fl[2][FL_LEN];                 /* FLANGER */
+    float fl[2][FL_LEN];                 /* FLANGER; TAPE's wow */
     uint32_t w;
+    svf_t eq[3][2];                      /* EQ: low, mid, high, left and right; TAPE: eq[0] its head bump */
 } slot_st_t;
 static slot_st_t st[BRK_FX_SLOTS];
 
@@ -274,6 +275,8 @@ void brk_fx_slot_defaults(brk_fxslot_t *s, int type)
         {0.6f, 0.7f, 0.0f, 1.0f},        /* TREMOLO: 1/16 */
         {0.6f, 0.4f, 0.25f, 0.3f},       /* REVERB: a medium plate, 15 ms ahead */
         {2.0f / 7.0f, 0.5f, 0.5f, 0.35f},   /* DELAY: 3/16, feedback 0.47 */
+        {0.5f, 0.5f, 0.5f, 0.5f},        /* EQ: flat, the mid at 1 kHz */
+        {0.4f, 0.5f, 0.15f, 1.0f},       /* TAPE: 10 dB of drive, a little wow */
     };
     uint32_t t = (uint32_t)type < BRK_NFXT ? (uint32_t)type : 0u;
     s->type = (uint8_t)t;
@@ -330,6 +333,43 @@ void brk_fx_set(const brk_fx_t *p)
     *(brk_fx_t *)&p_fx = *p;             /* written whole from the main loop; the render copies it per block */
 }
 
+/* Andrew Simper's state-variable EQ bands (SvfLinearTrapOptimised2): g from the frequency, k the damping, and the
+ * mix of the input, band and low outputs. A = 10^(dB/40) = 2^(dB * 0.0830), sqrt(A) = 2^(dB * 0.0415) */
+enum { BAND_LOWSHELF, BAND_BELL, BAND_HIGHSHELF };
+static void eq_band(svf_c *c, float *m, int kind, float hz, float q, float db)
+{
+    float A = brk_exp2f(db * 0.08304f), sA = brk_exp2f(db * 0.04152f), g = brk_tan_pi(hz / (float)BRK_SR);
+    if (kind == BAND_LOWSHELF)
+        g /= sA;
+    else if (kind == BAND_HIGHSHELF)
+        g *= sA;
+    c->k = kind == BAND_BELL ? 1.0f / (q * A) : 1.0f / q;
+    c->a1 = 1.0f / (1.0f + g * (g + c->k));
+    c->a2 = g * c->a1;
+    c->a3 = g * c->a2;
+    if (kind == BAND_LOWSHELF) {
+        m[0] = 1.0f;
+        m[1] = c->k * (A - 1.0f);
+        m[2] = A * A - 1.0f;
+    } else if (kind == BAND_BELL) {
+        m[0] = 1.0f;
+        m[1] = c->k * (A * A - 1.0f);
+        m[2] = 0.0f;
+    } else {
+        m[0] = A * A;
+        m[1] = c->k * (1.0f - A) * A;
+        m[2] = 1.0f - A * A;
+    }
+}
+
+static inline float eq_run(svf_t *s, const svf_c *c, const float *m, float x)
+{
+    float v3 = x - s->ic2, v1 = c->a1 * s->ic1 + c->a2 * v3, v2 = s->ic2 + c->a2 * s->ic1 + c->a3 * v3;
+    s->ic1 = 2.0f * v1 - s->ic1;
+    s->ic2 = 2.0f * v2 - s->ic2;
+    return m[0] * x + m[1] * v1 + m[2] * v2;
+}
+
 /* a slot's settings for this block, mapped from 0..1 */
 typedef struct {
     uint8_t on, type;
@@ -337,6 +377,8 @@ typedef struct {
     svf_c c;                             /* FILTER */
     uint8_t mode;                        /* FILTER: 0 low-pass, 1 band-pass, 2 high-pass */
     float a, b, g;                       /* the effect's own: see slot_block */
+    svf_c e[3];                          /* EQ's bands (TAPE: e[0] the bump) */
+    float m[3][3];                       /* and their mixes: out = v0 * m0 + v1 * m1 + v2 * m2 */
 } slot_c_t;
 static slot_c_t sc[BRK_FX_SLOTS];
 static int rv_taken;                     /* a slot has the reverb this block (the first REVERB in the chain) */
@@ -413,6 +455,22 @@ static void slot_block(uint32_t k)
         dl_taken = 1;
         dl_settings(&dl_slot_c, (uint32_t)(p0 * (float)(BRK_DLY_DIVS - 1u) + 0.5f), p1 * 0.95f, p2, 1.0f);
         break;
+    case FXT_EQ:                         /* three bands; mix is the mid's frequency */
+        eq_band(&c->e[0], c->m[0], BAND_LOWSHELF, 120.0f, 0.707f, (p0 - 0.5f) * 24.0f);
+        eq_band(&c->e[1], c->m[1], BAND_BELL, 200.0f * brk_exp2f(c->mix * 4.64f), 0.9f, (p1 - 0.5f) * 24.0f);
+        eq_band(&c->e[2], c->m[2], BAND_HIGHSHELF, 8000.0f, 0.707f, (p2 - 0.5f) * 24.0f);
+        break;
+    case FXT_TAPE: {                     /* g: the drive, a: its make-up, b: the top's roll-off, e[0]: the bump;
+                                          * the wow's depth in samples in m[1][0] */
+        float d = p0 * 24.0f;            /* 0 dB: barely bent (0.3 into the curve); 24 dB: deep into it. The make-up
+                                          * keeps a peak of 0.9 at 0.9, so the drive packs the quiet parts in */
+        c->g = 0.3f * brk_exp2f(d * 0.1661f);
+        c->a = 0.9f / (soft(c->g * 0.9f + 0.12f) - soft(0.12f));
+        c->b = brk_clampf(brk_tan_pi((18000.0f * brk_exp2f(-p1 * 1.85f)) / (float)BRK_SR) * 2.0f, 0.05f, 1.0f);
+        eq_band(&c->e[0], c->m[0], BAND_BELL, 90.0f, 1.2f, p1 * 4.0f);
+        c->m[1][0] = p2 * 66.0f;
+        break;
+    }
     case FXT_TREMOLO: {                  /* a: the cycle's step (on the tempo), b: depth, g: pan */
         uint32_t d = (uint32_t)(p0 * (float)(BRK_TREM_DIVS - 1u) + 0.5f);
         c->a = 1.0f / (TREM_STEPS[d < BRK_TREM_DIVS ? d : 0u] * (float)BRK_SR * 60.0f / (p_bpm * 4.0f));
@@ -430,6 +488,7 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
     slot_st_t *s = &st[k];
     const slot_c_t *c = &sc[k];
     float yl = *xl, yr = *xr, lp;
+    uint32_t i;
     switch (c->type) {
     case FXT_FILTER: {
         float hl = svf_run(&s->f[0], &c->c, yl, &lp), lpl = lp;
@@ -495,6 +554,39 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
         if (s->ph2 >= 1.0f)
             s->ph2 -= 1.0f;
         break;
+    case FXT_EQ:                         /* (no mix: the bands are the sound) */
+        for (i = 0; i < 3u; i++) {
+            yl = eq_run(&s->eq[i][0], &c->e[i], c->m[i], yl);
+            yr = eq_run(&s->eq[i][1], &c->e[i], c->m[i], yr);
+        }
+        *xl = yl;
+        *xr = yr;
+        return;
+    case FXT_TAPE: {                     /* the wow first (a short line read wandering), then the drive into a curve
+                                          * leaning one way (even harmonics), the bump, the top rolled off */
+        float d, rl, rr, bias = 0.12f;
+        s->ph += 0.55f / (float)BRK_SR;  /* wow */
+        if (s->ph >= 1.0f)
+            s->ph -= 1.0f;
+        s->ph2 += 6.3f / (float)BRK_SR;  /* flutter */
+        if (s->ph2 >= 1.0f)
+            s->ph2 -= 1.0f;
+        d = 80.0f + c->m[1][0] * (0.8f * brk_sin_turns(s->ph) + 0.2f * brk_sin_turns(s->ph2));
+        s->fl[0][s->w] = yl;
+        s->fl[1][s->w] = yr;
+        rl = c->m[1][0] > 0.5f ? fl_read(s->fl[0], s->w, d) : yl;
+        rr = c->m[1][0] > 0.5f ? fl_read(s->fl[1], s->w, d) : yr;
+        s->w = (s->w + 1u) % FL_LEN;
+        rl = (soft(rl * c->g + bias) - soft(bias)) * c->a;
+        rr = (soft(rr * c->g + bias) - soft(bias)) * c->a;
+        rl = eq_run(&s->eq[0][0], &c->e[0], c->m[0], rl);
+        rr = eq_run(&s->eq[0][1], &c->e[0], c->m[0], rr);
+        s->lp[0] += (rl - s->lp[0]) * c->b;
+        s->lp[1] += (rr - s->lp[1]) * c->b;
+        yl = s->lp[0];
+        yr = s->lp[1];
+        break;
+    }
     case FXT_DELAY: {                    /* in: what reaches it at the send, and the throws; out: the dry and the
                                           * echoes at full */
         float el, er;

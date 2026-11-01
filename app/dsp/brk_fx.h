@@ -21,9 +21,13 @@
  *   DELAY    time on the tempo (1/16 1/8 3/16 1/4 3/8 1/2 1/8T 1/4T), feedback, tone (dark .. bright repeats); its mix
  *            is the SEND into it (the echoes come back at full): a stereo ping-pong at 22.05 kHz on the DUB pad's
  *            line (0.74 s at most). One: it is also where the DUB pad, the soundboard's echo and the slices' ECHO
- *            throw; without a DELAY slot the delay sits after the chain with the DUB pad's settings */
+ *            throw; without a DELAY slot the delay sits after the chain with the DUB pad's settings
+ *   EQ       low (a shelf at 120 Hz), mid (a bell), high (a shelf at 8 kHz): -12..+12 dB each, 0.5 flat; its mix is
+ *            the mid's frequency (200 Hz..5 kHz)
+ *   TAPE     drive (0..24 dB into a tape curve, even harmonics, made up), warmth (the head bump and the top rolled
+ *            off), wow (and flutter: the pitch wanders) */
 enum { FXT_EMPTY, FXT_FILTER, FXT_CRUNCH, FXT_DRIVE, FXT_PUNCH, FXT_FLANGER, FXT_RING, FXT_TREMOLO, FXT_REVERB,
-       FXT_DELAY, BRK_NFXT };
+       FXT_DELAY, FXT_EQ, FXT_TAPE, BRK_NFXT };
 #define BRK_DLY_DIVS 8u
 extern const char *const BRK_DLY_DIV_NAME[BRK_DLY_DIVS];
 extern const char *const BRK_FXT_NAME[BRK_NFXT];

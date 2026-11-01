@@ -1113,6 +1113,67 @@ static void test_delay_slices(void)
     }
 }
 
+/* EQ: flat at 0.5; LOW +12 dB lifts 60 Hz four times, HIGH -12 dB drops 12 kHz to a quarter. TAPE: drive puts
+ * harmonics on a pure tone; wow makes its pitch wander */
+static float tone_peak(float hz, int type, float p0, float p1, float p2, float mix, uint32_t from)
+{
+    brk_fx_t p;
+    uint32_t i, n = BRK_SR;
+    float pk = 0.0f;
+    for (i = 0; i < n; i++)
+        buf[i] = 0.25f * sinf(6.2831853f * hz * (float)i / (float)BRK_SR);
+    brk_fx_defaults(&p);
+    brk_fx_slot_defaults(&p.slot[0], type);
+    p.slot[0].on = 1u;
+    p.slot[0].p[0] = p0;
+    p.slot[0].p[1] = p1;
+    p.slot[0].p[2] = p2;
+    p.slot[0].mix = mix;
+    fx_run(&p, n);
+    for (i = from; i < n; i++)
+        if (fabsf(bl[i]) > pk)
+            pk = fabsf(bl[i]);
+    return pk;
+}
+
+static void test_eq_tape(void)
+{
+    float flat = tone_peak(1000.0f, FXT_EQ, 0.5f, 0.5f, 0.5f, 0.5f, 4000u);
+    float low = tone_peak(60.0f, FXT_EQ, 1.0f, 0.5f, 0.5f, 0.5f, 8000u);
+    float high = tone_peak(12000.0f, FXT_EQ, 0.5f, 0.5f, 0.0f, 0.5f, 4000u);
+    float mid = tone_peak(1000.0f, FXT_EQ, 0.5f, 1.0f, 0.5f, 0.5f, 4000u);
+    CHECK(fabsf(flat - 0.25f) < 0.01f, "EQ flat: a 1 kHz tone through unchanged (%.3f of 0.25)", flat);
+    CHECK(low > 0.85f && low < 1.15f, "EQ LOW +12 dB: 60 Hz four times (%.3f from 0.25)", low);
+    CHECK(high > 0.05f && high < 0.08f, "EQ HIGH -12 dB: 12 kHz to a quarter (%.3f from 0.25)", high);
+    CHECK(mid > 0.85f && mid < 1.15f, "EQ MID +12 dB at 1 kHz: four times (%.3f)", mid);
+    {   /* TAPE: the drive's harmonics (what is left after a notch at the tone), and the wow's wandering */
+        uint32_t i, last = 0, nz = 0;
+        float lo = 1e9f, hi = 0.0f, res = 0.0f, x1 = 0.0f, x2 = 0.0f;
+        float w0 = 6.2831853f * 1000.0f / (float)BRK_SR, cw = 2.0f * cosf(w0);
+        tone_peak(1000.0f, FXT_TAPE, 1.0f, 0.0f, 0.0f, 1.0f, 0u);
+        for (i = 4000u; i < BRK_SR; i++) {   /* a notch at 1 kHz: x[n] - 2cos(w) x[n-1] + x[n-2] */
+            float y = bl[i] - cw * x1 + x2;
+            x2 = x1;
+            x1 = bl[i];
+            if (i > 4010u && fabsf(y) > res)
+                res = fabsf(y);
+        }
+        CHECK(res > 0.02f, "TAPE drive: harmonics on a pure tone (%.3f left past a notch at it)", res);
+        tone_peak(1000.0f, FXT_TAPE, 0.0f, 0.0f, 1.0f, 1.0f, 0u);
+        for (i = 4001u; i < BRK_SR; i++)  /* the periods between upward zero crossings */
+            if (bl[i - 1] < 0.0f && bl[i] >= 0.0f) {
+                float at = (float)(i - 1u) + bl[i - 1] / (bl[i - 1] - bl[i]);
+                if (nz++) {
+                    float per = at - (float)last * 0.001f;
+                    if (per < lo) lo = per;
+                    if (per > hi) hi = per;
+                }
+                last = (uint32_t)(at * 1000.0f);
+            }
+        CHECK(hi - lo > 0.15f, "TAPE wow: the pitch wanders (periods %.2f .. %.2f samples)", lo, hi);
+    }
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -1130,6 +1191,7 @@ int main(int argc, char **argv)
     test_reverb();
     test_stop();
     test_delay_slices();
+    test_eq_tape();
     test_generator();
     test_pads();
     test_fx();

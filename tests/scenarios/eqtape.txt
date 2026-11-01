@@ -1,0 +1,27 @@
+# CHOPPAH: EQ and TAPE in the FX chain
+#   app/build/host/choppah_host tests/scenarios/eqtape.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 400
+tap FX
+wait 200
+turn ALGO 1 10
+turn PRESET 9 10
+wait 200
+turn K1 8 10
+turn K3 -5 10
+turn K4 6 10
+wait 400
+shot e_eq.png
+turn ALGO 1 10
+turn PRESET 9 10
+wait 200
+turn K1 10 10
+turn K3 10 10
+wait 400
+shot e_tape.png
+wav eq_tape.wav
+peakreset
+wait 2500
+expect peak_db_max >-30
+wavstop

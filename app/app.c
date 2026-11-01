@@ -512,18 +512,19 @@ static void tap_tempo(uint32_t now)
 
 /* ------------------------------------------------------------- the FX chain --- */
 static void pct_text(float v, char *t);  /* (below, with the pads') */
+static void signed_tenths(float v, const char *unit, char *t);
 static void times_text(float v, char *t);
 /* each effect's settings, as the foot names them (K1-K3; K4 is MIX) */
 static const char *const FXP_NAME[BRK_NFXT][3] = {
     {"", "", ""}, {"CUTOFF", "RESO", "MODE"}, {"BITS", "RATE", "DRIVE"}, {"GAIN", "TONE", "LEVEL"},
     {"AMOUNT", "ATTACK", "RELEASE"}, {"RATE", "DEPTH", "FEEDBK"}, {"FREQ", "SPREAD", ""}, {"RATE", "DEPTH", "PAN"},
-    {"SIZE", "TONE", "PRE"}, {"TIME", "FEEDBK", "TONE"}};
+    {"SIZE", "TONE", "PRE"}, {"TIME", "FEEDBK", "TONE"}, {"LOW", "MID", "HIGH"}, {"DRIVE", "WARMTH", "WOW"}};
 
 static const char *fx_param_name(uint32_t slot, int i)
 {
     const brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
     if (i == 3)
-        return sl->type == FXT_EMPTY ? "" : sl->type == FXT_DELAY ? "SEND" : "MIX";
+        return sl->type == FXT_EMPTY ? "" : sl->type == FXT_DELAY ? "SEND" : sl->type == FXT_EQ ? "FREQ" : "MIX";
     return FXP_NAME[sl->type < BRK_NFXT ? sl->type : 0][i & 3];
 }
 
@@ -559,10 +560,24 @@ static void fx_value(uint32_t slot, int i, char *t)
     if (sl->type == FXT_EMPTY || !fx_param_name(slot, i)[0])
         return;
     if (i == 3) {
-        pct_text(v, t);
+        if (sl->type == FXT_EQ)          /* the EQ's K4: the mid's frequency */
+            hz_text(200.0f * brk_exp2f(v * 4.64f), t);
+        else
+            pct_text(v, t);
         return;
     }
     switch (sl->type * 4 + i) {
+    case FXT_EQ * 4 + 0:
+    case FXT_EQ * 4 + 1:
+    case FXT_EQ * 4 + 2: {               /* -12 .. +12 dB, flat in the middle */
+        float db = (v - 0.5f) * 24.0f;
+        if (db > -0.25f && db < 0.25f)
+            text_cat(t, "0 DB");
+        else
+            signed_tenths(db, "DB", t);
+        return;
+    }
+    case FXT_TAPE * 4 + 0: int_text((int32_t)(v * 24.0f + 0.5f), t); text_cat(t, " DB"); return;
     case FXT_FILTER * 4 + 0: hz_text(30.0f * brk_exp2f(v * 9.06f), t); return;
     case FXT_FILTER * 4 + 2: text_cat(t, v < 0.33f ? "LP" : v < 0.67f ? "BP" : "HP"); return;
     case FXT_CRUNCH * 4 + 0: int_text((int32_t)(16.0f - 14.0f * v + 0.5f), t); text_cat(t, " BIT"); return;
