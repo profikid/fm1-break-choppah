@@ -475,12 +475,15 @@ static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ"
                                                 "FLT", "DUB"};
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
 
+#define TAPS 8u                          /* tap tempo: the last eight taps (seven intervals) average */
 static struct {
     uint32_t keys, btn;
     uint8_t page, fx_focus;              /* fx_focus: the FX chain's slot the FX page tunes (0..3) */
     char msg[2][24];
     uint32_t msg_until;
-    uint32_t taps[4], ntaps;             /* tap tempo on SEL */
+    uint32_t taps[TAPS], ntaps;          /* tap tempo on SEL: the taps' times, how many in this run */
+    uint32_t tap_t;                      /* SEL went down then: a tap if it comes up alone */
+    uint8_t tap_pend, tap_combo;         /* SEL down as a tap; something else touched while it was held */
     uint32_t oct_t, oct_rep;             /* OCT- / OCT+ held: repeats that speed up */
     int32_t last_step, last_slice;
     uint32_t last_pads, last_keys, last_hdr;
@@ -569,26 +572,43 @@ static float knob_f(float v, int32_t d, float step, float lo, float hi)
     return v < lo ? lo : v > hi ? hi : v;
 }
 
-static void tap_tempo(uint32_t now)
+/* tap tempo (PRD A-38): SEL tapped in time, on any page. The tempo follows from the second tap on, the mean of the
+ * last eight taps; a pause of 2 s starts a new run, and a tap far off the run's pace (under 0.7 or over 1.4 of it)
+ * starts one from the tap before. A SEL that is part of a combination (SEL + ALGORITHM, + EDIT, + a knob ...) is no
+ * tap: the tap counts when SEL comes up alone, at the time it went down */
+static void tap_tempo(uint32_t t)
 {
-    uint32_t i;
-    if (ui.ntaps && now - ui.taps[(ui.ntaps - 1u) % 4u] > 2000u)
-        ui.ntaps = 0u;                   /* a pause starts a new count */
-    ui.taps[ui.ntaps % 4u] = now;
-    ui.ntaps++;
-    if (ui.ntaps >= 4u) {                /* the last four taps: three intervals */
-        uint32_t first = ui.taps[(ui.ntaps - 4u) % 4u], span = now - first;
-        if (span) {
-            i = 3u * 600000u / span;     /* BPM x 10 */
-            set.tempo_x10 = (uint16_t)(i < 400u ? 400u : i > 3000u ? 3000u : i);
-            changed();
-            {
-                char t[16];
-                tenths_text(set.tempo_x10, t);
-                app_say("TAP", t);
-            }
+    char a[12], v[16];
+    uint32_t n, span;
+    if (ui.ntaps && t - ui.taps[(ui.ntaps - 1u) % TAPS] > 2000u)
+        ui.ntaps = 0u;                   /* a pause starts a new run */
+    if (ui.ntaps >= 3u) {                /* far off the run's pace: a new run from the last tap */
+        uint32_t last = ui.taps[(ui.ntaps - 1u) % TAPS], m = ui.ntaps < TAPS ? ui.ntaps : TAPS;
+        uint32_t avg = (last - ui.taps[(ui.ntaps - m) % TAPS]) / (m - 1u), iv = t - last;
+        if (iv * 10u < avg * 7u || iv * 10u > avg * 14u) {
+            ui.taps[0] = last;
+            ui.ntaps = 1u;
         }
     }
+    ui.taps[ui.ntaps % TAPS] = t;
+    ui.ntaps++;
+    a[0] = 0;
+    text_cat(a, "TAP ");
+    int_text((int32_t)(ui.ntaps < 99u ? ui.ntaps : 99u), a + 4);
+    if (ui.ntaps < 2u) {
+        app_say(a, "AGAIN IN TIME");
+        return;
+    }
+    n = ui.ntaps < TAPS ? ui.ntaps : TAPS;
+    span = t - ui.taps[(ui.ntaps - n) % TAPS];
+    if (!span)
+        return;
+    n = (n - 1u) * 600000u / span;       /* BPM x 10 */
+    set.tempo_x10 = (uint16_t)(n < 400u ? 400u : n > 3000u ? 3000u : n);
+    changed();
+    tenths_text(set.tempo_x10, v);
+    text_cat(v, " BPM");
+    app_say(a, v);
 }
 
 /* ------------------------------------------------------------- the FX chain --- */
@@ -1924,9 +1944,22 @@ static void input(void)
         ui.key_turned = 1u;
         changed();
         app_say(ui.key_layer ? "SLICE FX" : "KEY", "RESET");
-    } else if (bdn & 1u << B_SEL && ui.page == PG_HOME && !(btn & 1u << B_ARP) && !ext_active() &&
-               !(btn & 1u << B_EDIT))
-        tap_tempo(now);
+    } else if (bdn & 1u << B_SEL) {      /* a tap, if it comes up alone (below) */
+        ui.tap_pend = 1u;
+        ui.tap_t = now;
+        ui.tap_combo = (uint8_t)((btn & ~(1u << B_SEL)) != 0u);   /* (another button already held: a combination) */
+    }
+    if (ui.tap_pend && (btn & 1u << B_SEL) && (bdn & ~(1u << B_SEL)))
+        ui.tap_combo = 1u;               /* another button with SEL held */
+    if (ui.tap_pend && !(btn & 1u << B_SEL)) {   /* SEL up: alone and short, a tap at its press */
+        ui.tap_pend = 0u;
+        if (!ui.tap_combo && now - ui.tap_t < 800u) {
+            if (ext_active())
+                app_say("TEMPO", "EXT CLOCK");
+            else
+                tap_tempo(ui.tap_t);
+        }
+    }
     if (bdn & 1u << B_SAVE) {
         app_say("SAVE", plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 ? "DONE" : "FAILED");
         set_dirty = 0u;
@@ -1959,6 +1992,8 @@ static void input(void)
         if (!d)
             continue;
         ui.touched = 1u;
+        if (btn & 1u << B_SEL)
+            ui.tap_combo = 1u;           /* (SEL + a knob is no tap) */
         if (k == EN_SELECT && ext_active()) {
             app_say("TEMPO", "EXT CLOCK");   /* the outside clock has the tempo */
         } else if (k == EN_SELECT) {     /* tempo: 1 BPM a detent, 0.1 with SEL held */

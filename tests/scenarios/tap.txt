@@ -1,0 +1,43 @@
+# CHOPPAH: tap tempo on SEL, any page. The tempo follows from the second tap (the mean of the last eight); a 2 s
+# pause starts again; SEL in a combination (SEL + a knob, SEL + ALGORITHM) is no tap
+#   app/build/host/choppah_host tests/scenarios/tap.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 300
+tap SEL
+wait 420
+tap SEL
+wait 100
+expect_bpm 119 121
+shot t_two.png
+wait 2500
+tap FX
+wait 300
+tap SEL
+wait 295
+tap SEL
+wait 295
+tap SEL
+wait 295
+tap SEL
+wait 295
+tap SEL
+wait 295
+tap SEL
+wait 100
+expect_bpm 159 161
+shot t_fx_page.png
+wait 2500
+press SEL
+turn ALGO 1 10
+release SEL
+wait 200
+press SEL
+turn ALGO -1 10
+release SEL
+wait 200
+press SEL
+turn K1 1 10
+release SEL
+wait 100
+expect_bpm 159 161

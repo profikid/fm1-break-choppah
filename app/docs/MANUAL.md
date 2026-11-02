@@ -55,7 +55,8 @@ The slicer view, top to bottom:
 | --- | --- |
 | PLAY | Play / stop. HOME + PLAY: back to bar 1 |
 | White keys | Slices 1–16. Playing: at the next snap point (GLOBAL: 1/2 slice, a 16th, by default; OFF, 1/8 … 4 slices). Stopped: at once. Held: the key loops (below), playing or stopped |
-| SELECT | Tempo, 1 BPM a detent (0.1 with SEL held). Tap SEL four times: tap tempo |
+| SELECT | Tempo, 1 BPM a detent (0.1 with SEL held) |
+| SEL (tapped) | **Tap tempo**, on any page: tap SEL in time. The tempo follows from the second tap and settles as you go on (the average of the last eight taps); the header shows the count and the tempo. Stop for 2 seconds to start a new count; a tap far off the pace starts a new count from the tap before it. SEL used with something else (SEL + a knob, SEL + ALGORITHM, SEL + EDIT…) is not a tap |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
 | ALGORITHM | The next or previous break: AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
 | MASTER | Volume |

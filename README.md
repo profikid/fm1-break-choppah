@@ -31,7 +31,7 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | White keys 1–16 | Slices: at the next 16th while playing, at once while stopped. **Hold to loop**: the key's view shows its window and playhead, and **K1–K4 set that key's loop**: length (1/64 … 2 bars), pitch, start, mode (loop, ping-pong, reverse, one shot); SEL resets it. **Key held + FX**: that slice's own effect instead (LO-PASS, HI-PASS, CRUNCH, DRIVE, RING MOD, ECHO / VERB throws, and its LEVEL) |
 | Black keys 1–11 | Pads, while held: ROLL 1/8 · 1/16 · 1/32 · REVERSE · FREEZE · HALF · TAPE STOP · GATE · RANDOM · FILTER THROW · DUB (a throw into the delay). Each shows its own animation while held, and **K1–K4 tune it** (rate, decay, length, speed, feedback…). The rolls have a LEVEL for quiet ghost-note rolls, and their DECAY fades down or swells up |
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
-| SELECT | Tempo (SEL held: 0.1 BPM) · tap SEL four times: tap tempo |
+| SELECT | Tempo (SEL held: 0.1 BPM) · **tap SEL in time** on any page: tap tempo (from the second tap, the average of the last eight) |
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
 | ALGORITHM | The next break: AMEN, DRUMMER, THE WORM, THINK, COLD SWEAT, HOT PANTS, APACHE, SPORT |
 | ENV | SOUNDBOARD: the white keys fire 16 sound-system effects over the break: air horn, dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank, scratch, rewind (pull-up). K1 level · K2 pitch · K3 echo into the dub delay · K4 length |

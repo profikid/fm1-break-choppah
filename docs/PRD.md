@@ -145,7 +145,7 @@ Based on the behaviour of BB Gen / X0X's break part and ABG's "randomizing algor
 | A-35 | **REVERSE as a gate:** reverse playback while held (not a toggle) | P0 | |
 | A-36 | **Pitch / speed ±** on OCT−/OCT+: semitone steps; holding accelerates; both buttons reset | P0 | ±24 semitones; fine mode with SEL (±100 cents) |
 | A-37 | **Pause** (PLAY) and **reset** (HOME+PLAY) | P0 | |
-| A-38 | **BPM display doubles as tap tempo** (tap SEL four times on HOME, or a dedicated black key in GLO) | P0 | Tempo within ±0.5 BPM after 4 taps |
+| A-38 | **Tap tempo on SEL, any page** (2 Nov 2026): the tempo from the second tap, the mean of the last eight; a 2 s pause or a tap off the pace (outside 0.7–1.4 of it) starts a new run; counted when SEL comes up alone (SEL in a combination is no tap), at its press time; waits while an outside clock leads. The header shows TAP n and the tempo | P0 | *Done; scenario tap.txt: two taps 500 ms apart give 120.0, six at 375 ms 160.0 on the FX page, SEL + knobs leave it* |
 
 ### 4.5 DSP effects
 
