@@ -88,6 +88,7 @@ static void settings_defaults(void)
     }
     kick_defaults(&set.kick);
     set.brk_level = 100u;
+    set.bta_on = 0u;                     /* (Bluetooth audio off until it is turned on) */
 }
 
 static int pitch_keeps(void) { return set.pitch_keep != 2u; }   /* KEEP LENGTH unless SPEED was chosen */
