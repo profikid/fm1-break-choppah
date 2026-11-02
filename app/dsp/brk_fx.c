@@ -14,7 +14,7 @@ typedef struct { float a1, a2, a3, k; } svf_c;
 static volatile brk_fx_t p_fx;
 static brk_fx_t fx;                      /* the render's copy */
 static float lim_gain = 1.0f, dj_s;      /* the limiter; the DJ filter's smoothed position */
-static svf_t dj_l, dj_r;
+static svf_t dj_b, dj_e, dj_v;           /* the DJ filter: on the break, its echo throw, its reverb throw */
 const char *const BRK_FXT_NAME[BRK_NFXT] = {"EMPTY", "FILTER", "CRUNCH", "DRIVE", "PUNCH", "FLANGER", "RING MOD",
                                             "TREMOLO", "REVERB", "DELAY", "EQ", "TAPE", "MB COMP", "CLIP"};
 const char *const BRK_DLY_DIV_NAME[BRK_DLY_DIVS] = {"1/16", "1/8", "3/16", "1/4", "3/8", "1/2", "1/8T", "1/4T"};
@@ -706,8 +706,8 @@ void brk_fx_gr(float *gr)
     gr[2] = mb_gr[2];
 }
 
-void brk_fx_process(const float *in, const float *aux, float aux_send, const float *echo, const float *verb,
-                    const float *post, float *l, float *r, uint32_t n, uint32_t pads)
+void brk_fx_process(const float *in, const float *thru, const float *aux, float aux_send, const float *echo,
+                    const float *verb, const float *post, float *l, float *r, uint32_t n, uint32_t pads)
 {
     uint32_t i, k;
     svf_c djc;
@@ -740,10 +740,21 @@ void brk_fx_process(const float *in, const float *aux, float aux_send, const flo
     if (!mb_shown)
         mb_gr[0] = mb_gr[1] = mb_gr[2] = 1.0f;
     for (i = 0; i < n; i++) {
-        float x = in[i], xl = x, xr = x, lp;
+        float x = in[i], xl, xr, lp, ec = echo ? echo[i] : 0.0f, vb = verb ? verb[i] : 0.0f;
+        if (dj_s < -0.01f || dj_s > 0.01f) {   /* the DJ filter: the break's alone (and its throws) */
+            float h = svf_run(&dj_b, &djc, x, &lp);
+            x = dj_hp ? h : lp;
+            h = svf_run(&dj_e, &djc, ec, &lp);
+            ec = dj_hp ? h : lp;
+            h = svf_run(&dj_v, &djc, vb, &lp);
+            vb = dj_hp ? h : lp;
+        }
+        if (thru)
+            x += thru[i];
+        xl = xr = x;
         dub_send += ((dub_on ? 1.0f : 0.0f) - dub_send) * 0.002f;
-        cur_throw = x * dub_send + (aux ? aux[i] * aux_send : 0.0f) + (echo ? echo[i] : 0.0f);
-        cur_verb = verb ? verb[i] : 0.0f;
+        cur_throw = x * dub_send + (aux ? aux[i] * aux_send : 0.0f) + ec;
+        cur_verb = vb;
         for (k = 0; k < BRK_FX_SLOTS; k++)   /* the chain, slot by slot */
             if (sc[k].on)
                 slot_run(k, &xl, &xr);
@@ -762,12 +773,6 @@ void brk_fx_process(const float *in, const float *aux, float aux_send, const flo
             dl_run(&dub_c, cur_throw, &el, &er);
             xl += el * dub_c.ret;
             xr += er * dub_c.ret;
-        }
-        if (dj_s < -0.01f || dj_s > 0.01f) {   /* the master DJ filter */
-            float hl = svf_run(&dj_l, &djc, xl, &lp);
-            xl = dj_hp ? hl : lp;
-            hl = svf_run(&dj_r, &djc, xr, &lp);
-            xr = dj_hp ? hl : lp;
         }
         {   /* the limiter: a fast attack, a slow release, then a soft clip for what gets past */
             float pk = brk_absf(xl) > brk_absf(xr) ? brk_absf(xl) : brk_absf(xr);

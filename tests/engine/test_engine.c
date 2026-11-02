@@ -264,7 +264,7 @@ static void fx_run(const brk_fx_t *p, uint32_t n)
     brk_fx_init();
     brk_fx_set(p);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0.0f, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
+        brk_fx_process(buf + i, 0, 0, 0.0f, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
 }
 
 static void test_fx(void)
@@ -517,14 +517,14 @@ static void test_dub(void)
     brk_play(1);
     render(buf, n, 0, 0, 0);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0.0f, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
+        brk_fx_process(buf + i, 0, 0, 0.0f, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
     brk_play(0);
     brk_pad(PAD_DUB, 0);
     for (i = 0; i < BLOCK; i++)
         buf[i] = 0.0f;
     for (i = 0; i < s * 8u; i += BLOCK) {    /* silence in, two bars of it */
         uint32_t j;
-        brk_fx_process(buf, 0, 0.0f, 0, 0, 0, bl, br, BLOCK, 0u);
+        brk_fx_process(buf, 0, 0, 0.0f, 0, 0, 0, bl, br, BLOCK, 0u);
         for (j = 0; j < BLOCK; j++)
             if (fabsf(bl[j]) > tail)
                 tail = fabsf(bl[j]);
@@ -648,7 +648,7 @@ static void test_sfx_echo(void)
     sfx_trigger(SFX_LASER);
     for (i = 0; i < BRK_SR * 2u; i += BLOCK) {
         sfx_render(a, BLOCK);
-        brk_fx_process(z, a, 0.8f, 0, 0, 0, bl, br, BLOCK, 0u);
+        brk_fx_process(z, 0, a, 0.8f, 0, 0, 0, bl, br, BLOCK, 0u);
         if (i > BRK_SR)                  /* the laser is long over by now */
             for (j = 0; j < BLOCK; j++)
                 if (fabsf(bl[j]) > tail)
@@ -1045,7 +1045,7 @@ static void test_delay_slices(void)
     p.slot[0].mix = 1.0f;
     brk_fx_set(&p);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0.0f, 0, 0, 0, bl + i, br + i, BLOCK, 0u);
+        brk_fx_process(buf + i, 0, 0, 0.0f, 0, 0, 0, bl + i, br + i, BLOCK, 0u);
     for (i = 1100u; i < 1000u + T + T / 2u; i++) {   /* the first echo: left only */
         if (fabsf(bl[i]) > ml) { ml = fabsf(bl[i]); pkl = i; }
         if (fabsf(br[i]) > mr) mr = fabsf(br[i]);
@@ -1178,6 +1178,39 @@ static void test_eq_tape(void)
             }
         CHECK(hi - lo > 0.15f, "TAPE wow: the pitch wanders (periods %.2f .. %.2f samples)", lo, hi);
     }
+}
+
+/* the DJ filter is the break's: a low-passed break goes dark while the kick joining through the chain and the
+ * soundboard stay bright */
+static void test_dj_break(void)
+{
+    static float tone[BLOCK], z[BLOCK];
+    brk_fx_t p;
+    uint32_t i, b;
+    float pk[3];
+    int which;
+    for (i = 0; i < BLOCK; i++) {
+        tone[i] = 0.25f * sinf(6.2831853f * 4000.0f * (float)i / (float)BRK_SR);
+        z[i] = 0.0f;
+    }
+    for (which = 0; which < 3; which++) {   /* the tone as the break, as thru (the kick), as aux (the soundboard) */
+        brk_fx_init();
+        brk_fx_defaults(&p);
+        p.dj = -1.0f;
+        brk_fx_set(&p);
+        pk[which] = 0.0f;
+        for (b = 0; b < 60u; b++) {
+            brk_fx_process(which == 0 ? tone : z, which == 1 ? tone : 0, which == 2 ? tone : 0, 0.0f, 0, 0, 0, bl, br,
+                           BLOCK, 0u);
+            if (b > 40u)
+                for (i = 0; i < BLOCK; i++)
+                    if (fabsf(bl[i]) > pk[which])
+                        pk[which] = fabsf(bl[i]);
+        }
+    }
+    CHECK(pk[0] < 0.01f && pk[1] > 0.2f && pk[2] > 0.2f,
+          "DJ filter low-passed: the break %.3f, the kick through the chain %.3f, the soundboard %.3f", pk[0], pk[1],
+          pk[2]);
 }
 
 /* MULTIBAND: the bands sum back to the input untouched; a band pressed holds its level, the others don't move; CLIP:
@@ -1390,6 +1423,7 @@ int main(int argc, char **argv)
     test_delay_slices();
     test_eq_tape();
     test_mb_clip();
+    test_dj_break();
     test_kick();
     test_generator();
     test_pads();

@@ -259,7 +259,8 @@ on the keys, eyes on the crowd.
 | B-25 | Knob motion recording (one lane per FX param, P-lock style) | P2 | |
 | B-30 | **Gate** (PERFORM K3, K1 since B-33, global): every slice the loop plays sounds for 5–100 % of its own length, then a 3 ms fade; follows tempo and pitch; for the loop, ratchets and RANDOM (key loops and rolls have their own lengths; FREEZE ungates). Replaced the PERFORM page's copy of CMPLX (still on GENERATOR). *Done 31 Oct 2026; engine test: at 25 % the second half of each slice is silent* | P1 | |
 | B-31 | **Snap** (GLOBAL, second half, K3): where a white key pressed while playing lands: OFF (at once) or the next point of a grid 1/8, 1/4, 1/2 (default: the old next-16th on 2-bar breaks), 1, 2 or 4 slices apart from the pattern's start; whole steps follow the swing (on_step), less than a step is counted in samples. *Done 1 Nov 2026; engine tests: 2 slices waits a step more, OFF at once, 1/4 slice a quarter step on* | P1 | |
-| B-33 | **MIXER on LFO** (2 Nov 2026): LEVELS: K1 BREAK (the break and its throws, eased), K2 KICK (= kick VOLUME), K3 DJ filter, K4 FX (the chain's dry/wet), as faders with the break's, the kick's and the output's meters; LFO again, GROOVE: K1 swing, K2 the kick's route, K3 the soundboard's level. The DJ filter, swing and FX moved off PERFORM, which keeps GATE on K1. BREAK level appended to the settings | P1 | *Done; scenario mixer.txt: the break down leaves the kick alone, both down is silence* |
+| B-33 | **MIXER on LFO** (2 Nov 2026): LEVELS: K1 BREAK (the break and its throws, eased), K2 KICK (= kick VOLUME), K3 FX MAIN (the chain's dry/wet), K4 FX OVERLAY (the soundboard's level), as faders with the break's, the kick's and the soundboard's meters and the chain's slots; LFO again, GROOVE: K1 swing, K2 the kick's route. Swing and FX moved off PERFORM, which keeps GATE (K1) and the DJ filter (K2). BREAK level appended to the settings | P1 | *Done; scenario mixer.txt: the break down leaves the kick alone, both down is silence* |
+| B-34 | **The DJ filter is the break's** (2 Nov 2026): it moved from the end of the output stage to the break's input of the chain (the break and its echo / reverb throws); the kick through the chain joins after it, the soundboard and the kick around the chain later still, so a sweep leaves them full. The FLT pad throws it the same way | P1 | *Done; engine test: low-passed, a 4 kHz break is gone while the kick and the soundboard pass* |
 | B-32 | **Slice effects:** each slice its own effect while it plays (loop, key, roll): LO-PASS, HI-PASS, CRUNCH, DRIVE, RING MOD, ECHO / VERB throws into the chain's delay and reverb, plus its LEVEL. A key held + FX flips K1–K4 to it (EFFECT, AMOUNT, TONE, LEVEL); blocks show a tag. Run per voice (a slice's state starts with its hit), the throws on two send buses out of the engine. Settings CHP6 | P1 | *Done 1 Nov 2026; engine tests: level 0 silences that slice alone, LO-PASS darkens it, ECHO throws it alone* |
 
 ### 5.4 Performance screen (HOME)
@@ -276,8 +277,8 @@ on the keys, eyes on the crowd.
 
 | Page (button) | K1 | K2 | K3 | K4 | SEL page |
 | --- | --- | --- | --- | --- | --- |
-| HOME (perform) | Gate (built: the rest moved to the MIXER) | | | | Tempo (tap) |
-| LFO (mixer, built) | Break level | Kick level | DJ filter | FX mix | LFO again: swing · kick route · soundboard level |
+| HOME (perform) | Gate (built) | DJ filter on the break (built) | | | Tempo (tap) |
+| LFO (mixer, built) | Break level | Kick level | FX main | FX overlay (soundboard) | LFO again: swing · kick route |
 | SEQ | Step slice | Step pitch | Ratchet | Probability | Gate · Reverse · FX lock · Page length |
 | ARP (generator) | Complexity | Anchor | Roll | Fill | Retrig 2× · 3× · 4× · 8× |
 | EDIT (break) | Slice select | Start nudge | Slice count | Native BPM | Gain · Trim · Name · Mode (repitch/stretch) |
@@ -424,7 +425,7 @@ ENV opens a soundboard: the white keys fire 16 synthesised sound-system effects 
 dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank,
 scratch, rewind). Four voices; siren and riser sustain while held; REWIND also pulls the break up (spins back up to
 10x, then restarts from the top of the bar). K1 level, K2 pitch, K3 echo (send into the dub delay), K4 length.
-Sounds join after the four effects, before the DJ filter and limiter. Built-in breaks were then five synthesised styles and 12 recorded Amens (8 classic breaks since
+Sounds join after the four effects, before the limiter (and not through the DJ filter: B-34). Built-in breaks were then five synthesised styles and 12 recorded Amens (8 classic breaks since
 1 Nov 2026, Q1).
 
 ## 11b. Kick (built 1 Nov 2026)
@@ -441,7 +442,7 @@ unit); settings appended to OBJ_SETTINGS (140 B).
 | K-4 | **KICK page on EDIT:** EDIT again steps MIX (K1–K4 the layers' levels) → LAYER (LEVEL PITCH DECAY TONE) → LAYER FX (EFFECT, A, B, WET) → MACRO (SUB, PUNCH, GRIT, INTENSITY) → OUT (VOLUME, ROUTE); ALGORITHM the layer; the strip shows the kick's shape (600 ms), the layers' levels, the 16 steps with the playhead | P0 | *Done; simulator scenario kick.txt* |
 | K-5 | **Steps:** on the KICK page the white keys toggle the kick on the bar's 16 steps (default four to the floor; LEDs show them, the step playing flipped). The engine marks each step's sample offset (`brk_step_events`) so the kick lands sample-accurate, swing included | P0 | *Done; engine test: 16 events a bar, a step apart, places 0–15* |
 | K-6 | **Presets:** PRESETS loads a built-in kick (909, TECHNO, EARLY HC, ROTTERDAM the default, INDUSTRIAL, DISTORTO); the steps, routing and volume stay; SAVE keeps the kick with the settings | P0 | *Done; six presets in range and distinct* |
-| K-7 | **Routing:** through the FX chain with the break (default) or around it (joins after the chain like the soundboard, into the DJ filter and limiter, thrown nowhere); SEL + EDIT or OUT K2 | P1 | *Done* |
+| K-7 | **Routing:** through the FX chain with the break (default) or around it (joins after the chain like the soundboard, into the limiter, thrown nowhere); never through the break's DJ filter (B-34); SEL + EDIT, OUT K2 or MIXER GROOVE K2 | P1 | *Done* |
 | K-8 | **MIDI:** note 36 (C1) note-on on any channel plays the kick at the next block, also while stopped | P1 | *Done; scenario: a note sounds while stopped* |
 | K-9 | Retrigger without clicks: the kick still sounding fades out under the new hit; no work while silent | P0 | *Done; engine test* |
 

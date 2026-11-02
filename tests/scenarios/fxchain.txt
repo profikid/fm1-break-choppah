@@ -1,5 +1,5 @@
 # CHOPPAH: the FX chain. FX opens it; ALGORITHM picks a slot, PRESETS its effect, K1-K4 its settings and mix, FX
-# bypasses it, SEL + ALGORITHM moves it along; PERFORM's K4 FX fades the whole chain
+# bypasses it, SEL + ALGORITHM moves it along; the MIXER's K3 FX MAIN fades the whole chain
 #   app/build/host/choppah_host tests/scenarios/fxchain.txt app/build/scenarios
 wait 2600
 tap PLAY
@@ -34,6 +34,6 @@ expect peak_db_min -30
 wavstop
 tap LFO
 wait 200
-turn K4 -50 10
+turn K3 -50 10
 wait 300
 shot c_fx0.png

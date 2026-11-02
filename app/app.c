@@ -141,7 +141,8 @@ static uint8_t wave_px[240];             /* the waveform's height per column, fo
 static uint8_t blk_px[BLK_N][BLK_W];     /* each slice's waveform, 0..19 */
 static uint8_t blk_n;                    /* blocks with a slice behind them */
 static volatile uint8_t muted;
-static volatile float meter_brk, meter_kick;   /* the MIXER's channels: the break and the kick, before the chain */
+static volatile float meter_brk, meter_kick, meter_sfx;   /* the MIXER's channels: the break, the kick and the
+                                                           * soundboard, before the chain */
 static volatile float meter_l, meter_r;  /* the output's peaks as it leaves (after MASTER: 1 = full scale), falling
                                           * ~20 dB a second: the render writes, the header's meter reads */
 
@@ -417,13 +418,21 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
                 }
                 meter_kick = pk > f ? pk : f;
             }
-            if (set.kick.chain)          /* through the chain with the break, or around it */
-                for (i = 0; i < m; i++)
-                    mono[i] += kick[i];
         }
         sfx_render(fx, m);               /* the soundboard, over the break, into the delay at its echo */
+        {
+            float pk = 0.0f, f = meter_sfx * 0.987f;
+            for (i = 0; i < m; i++) {
+                float a = fx[i] < 0.0f ? -fx[i] : fx[i];
+                if (a > pk)
+                    pk = a;
+            }
+            meter_sfx = pk > f ? pk : f;
+        }
         brk_status(&st);
-        brk_fx_process(mono, fx, sfx_echo(), echo, verb, set.kick.chain ? 0 : kick, l, r, m, st.pads);
+        /* the break through the DJ filter, the kick joining it into the chain (or around it), the soundboard after */
+        brk_fx_process(mono, set.kick.chain ? kick : 0, fx, sfx_echo(), echo, verb, set.kick.chain ? 0 : kick, l, r, m,
+                       st.pads);
         {                                /* the meter: this block's peaks as they leave, or the last ones falling */
             float pl = 0.0f, pr = 0.0f, fl = meter_l * 0.987f, fr = meter_r * 0.987f, out = gain * (1.0f / 8388608.0f);
             for (i = 0; i < m; i++) {
@@ -984,25 +993,13 @@ static void mix_value(uint32_t h, int i, char *t)
             text_cat(t, "%");
         } else if (i == 1)
             text_cat(t, set.kick.chain ? "THRU FX" : "AROUND FX");
-        else if (i == 2)
-            pct_text(set.sfx.level, t);
         return;
     }
     if (i == 0) {
         int_text(set.brk_level, t);
         text_cat(t, "%");
-    } else if (i == 1)
-        pct_text(set.kick.volume, t);
-    else if (i == 2) {
-        int32_t v = (int32_t)(set.fx.dj * 100.0f);
-        if (v > -2 && v < 2)
-            text_cat(t, "OFF");
-        else {
-            text_cat(t, v < 0 ? "LP " : "HP ");
-            int_text(v < 0 ? -v : v, t + 3);
-        }
     } else
-        pct_text(set.fx.wet, t);
+        pct_text(i == 1 ? set.kick.volume : i == 2 ? set.fx.wet : set.sfx.level, t);
 }
 
 static void knob_turn(int k, int32_t d)
@@ -1037,8 +1034,8 @@ static void knob_turn(int k, int32_t d)
         changed();
         return;
     }
-    if (ui.page == PG_MIX) {             /* LEVELS: break, kick, DJ filter, FX; GROOVE: swing, the kick's route,
-                                          * the soundboard */
+    if (ui.page == PG_MIX) {             /* LEVELS: break, kick, FX MAIN (the chain), OVERLAY (the soundboard);
+                                          * GROOVE: swing, the kick's route */
         char t[16];
         if (ui.mpage) {
             if (k == EN_K1) {
@@ -1047,9 +1044,6 @@ static void knob_turn(int k, int32_t d)
             } else if (k == EN_K2) {
                 set.kick.chain = d > 0 ? 0u : 1u;   /* right: around the chain, left: through it */
                 app_say("KICK", set.kick.chain ? "THRU FX" : "AROUND FX");
-            } else if (k == EN_K3) {
-                set.sfx.level = knob_f(set.sfx.level, d, 0.02f, 0.0f, 1.0f);
-                say_int("SOUNDS", (int32_t)(set.sfx.level * 100.0f + 0.5f), "%");
             } else
                 return;
         } else if (k == EN_K1) {
@@ -1059,12 +1053,12 @@ static void knob_turn(int k, int32_t d)
             set.kick.volume = knob_f(set.kick.volume, d, 0.02f, 0.0f, 1.0f);
             pct_text(set.kick.volume, t);
             app_say("KICK", t);
-        } else if (k == EN_K3) {         /* the DJ filter: left low-pass, right high-pass */
-            f->dj = knob_f(f->dj, d, 0.02f, -1.0f, 1.0f);
-            say_int("DJ FILTER", (int32_t)(f->dj * 100.0f), "");
-        } else {                         /* FX: the whole chain against the dry sound */
+        } else if (k == EN_K3) {         /* FX MAIN: the whole chain against the dry sound */
             f->wet = knob_f(f->wet, d, 0.02f, 0.0f, 1.0f);
-            say_int("FX", (int32_t)(f->wet * 100.0f + 0.5f), "%");
+            say_int("FX MAIN", (int32_t)(f->wet * 100.0f + 0.5f), "%");
+        } else {                         /* FX OVERLAY: the soundboard over it all */
+            set.sfx.level = knob_f(set.sfx.level, d, 0.02f, 0.0f, 1.0f);
+            say_int("OVERLAY", (int32_t)(set.sfx.level * 100.0f + 0.5f), "%");
         }
         ui.redraw |= RG_BLOCKS;
     } else if (ui.page == PG_HOME) {
@@ -1074,6 +1068,9 @@ static void knob_turn(int k, int32_t d)
                 app_say("GATE", "OFF");
             else
                 say_int("GATE", set.gate, "%");
+        } else if (k == EN_K2) {         /* the break's DJ filter: left low-pass, right high-pass */
+            f->dj = knob_f(f->dj, d, 0.02f, -1.0f, 1.0f);
+            say_int("DJ FILTER", (int32_t)(f->dj * 100.0f), "");
         } else
             return;
     } else if (ui.page == PG_GEN) {
@@ -1537,7 +1534,7 @@ static void input(void)
         ui.redraw |= RG_FOOT | RG_BLOCKS;
         app_say("KICK", KPAGE_NAME[ui.kpage]);
     }
-    if (bdn & 1u << B_LFO) {             /* LFO: the MIXER (the break, the kick, the filter, FX); again, the groove */
+    if (bdn & 1u << B_LFO) {             /* LFO: the MIXER (the break, the kick, FX main, FX overlay); again, groove */
         ui.mpage = ui.page == PG_MIX ? (uint8_t)!ui.mpage : 0u;
         ui.page = PG_MIX;
         ui.redraw |= RG_FOOT | RG_BLOCKS;
@@ -1827,6 +1824,14 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
             else {
                 int_text(set.gate, t);
                 text_cat(t, "%");
+            }
+        } else if (i == 1) {
+            int32_t v = (int32_t)(set.fx.dj * 100.0f);
+            if (v > -2 && v < 2)
+                text_cat(t, "OFF");
+            else {
+                text_cat(t, v < 0 ? "LP " : "HP ");
+                int_text(v < 0 ? -v : v, t + 3);
             }
         }
     } else if (ui.page == PG_GEN) {
@@ -2175,7 +2180,7 @@ static void mix_fader(int32_t x, float v, int on)   /* 0..1 from the bottom */
 }
 static void mix_picture(int32_t top)
 {
-    static const char *const NAME[2][4] = {{"BREAK", "KICK", "FILTER", "FX / OUT"}, {"SWING", "KICK", "SOUNDS", ""}};
+    static const char *const NAME[2][4] = {{"BREAK", "KICK", "FX MAIN", "OVERLAY"}, {"SWING", "KICK", "", ""}};
     uint32_t c;
     cv_oy = -top;                        /* (this strip's rows of the picture) */
     for (c = 0; c < 4u; c++) {
@@ -2194,29 +2199,23 @@ static void mix_picture(int32_t top)
             cv_rect(66, 62, 48, 26, thru ? C_BLOCK : C_BLOCK_HI);
             cv_text(70, 67, &FONT_XS, "AROUND", thru ? C_GRAY : C_BLACK);
         }
-        mix_fader(130, set.sfx.level, set.sfx.level > 0.0f);
-        cv_text(186, 40, &FONT_XS, "LFO:", C_DIM);
-        cv_text(186, 54, &FONT_XS, "LEVELS", C_DIM);
+        cv_text(126, 40, &FONT_XS, "LFO: LEVELS", C_DIM);
         return;
     }
     mix_fader(10, (float)set.brk_level * 0.01f, set.brk_level > 0u);
     mix_meter(30, meter_brk);
     mix_fader(70, set.kick.volume, set.kick.volume > 0.0f && set.kick.steps);
     mix_meter(90, meter_kick);
-    {                                    /* the DJ filter: from the middle, up high-pass, down low-pass */
-        float dj = set.fx.dj;
-        int32_t h = (int32_t)(brk_absf(dj) * (float)(MX_H / 2 - 1) + 0.5f);
-        int32_t mid = MX_Y + MX_H / 2;
-        cv_rect(130, MX_Y, 14, MX_H, C_BLOCK);
-        cv_rect(128, mid - 1, 18, 2, C_LINE);
-        if (h > 0 && (dj > 0.015f || dj < -0.015f))
-            cv_rect(132, dj > 0.0f ? mid - h : mid, 10, h, C_HI);
-        cv_text(150, MX_Y, &FONT_XS, "HP", dj > 0.015f ? C_HI : C_DIM);
-        cv_text(150, MX_Y + MX_H - 15, &FONT_XS, "LP", dj < -0.015f ? C_HI : C_DIM);
+    mix_fader(130, set.fx.wet, set.fx.wet > 0.005f);
+    for (c = 0; c < BRK_FX_SLOTS; c++) { /* the chain's four slots, lit while on */
+        const brk_fxslot_t *sl = &set.fx.slot[c];
+        int on = sl->on && sl->type != FXT_EMPTY;
+        cv_rect(150, MX_Y + (int32_t)c * 21, 6, 17, on ? C_BLOCK_HI : sl->type == FXT_EMPTY ? C_BLACK : C_BLOCK);
+        if (sl->type == FXT_EMPTY)
+            cv_rect(150, MX_Y + (int32_t)c * 21 + 8, 6, 1, C_LINE);
     }
-    mix_fader(190, set.fx.wet, set.fx.wet > 0.005f);
-    mix_meter(210, meter_l);
-    mix_meter(217, meter_r);
+    mix_fader(190, set.sfx.level, set.sfx.level > 0.0f);
+    mix_meter(210, meter_sfx);
 }
 static void draw_mixer(void)
 {
@@ -2263,13 +2262,13 @@ static void draw_blocks(const brk_status_t *st, uint32_t keys)
 /* the foot: the pads, then the page and its knobs with their values */
 static void draw_foot(const brk_status_t *st)
 {
-    static const char *const KN[NPAGES][4] = {{"GATE", "", "", ""},
+    static const char *const KN[NPAGES][4] = {{"GATE", "FILTER", "", ""},
                                               {"CMPLX", "ANCHOR", "ROLL", "FILL"},
                                               {"P1", "P2", "P3", "MIX"},
                                               {"LEVEL", "PITCH", "ECHO", "LENGTH"},
                                               {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"},
                                               {"", "", "", ""},
-                                              {"BREAK", "KICK", "FILTER", "FX"}};
+                                              {"BREAK", "KICK", "FX MAIN", "OVERLAY"}};
     uint32_t i;
     char t[16];
     cv_begin(240, 48, C_BLACK);
@@ -2281,7 +2280,7 @@ static void draw_foot(const brk_status_t *st)
     }
     for (i = 0; i < 4u; i++) {
         static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", ""};
-        static const char *const KN_GROOVE[4] = {"SWING", "KICK ROUTE", "SOUNDS", ""};
+        static const char *const KN_GROOVE[4] = {"SWING", "KICK ROUTE", "", ""};
         const char *name = ui.page == PG_GLOBAL && ui.gpage ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
                            ? KN_GROOVE[i] : KN[ui.page][i];
         if (ui.shown >= 100) {           /* a white key held: its loop, or its slice's effect */

@@ -148,8 +148,8 @@ synthesised on the FM-1, so nothing is sampled. HOME goes back to the slicer.
 
 ## 6. The FX chain
 
-**FX** opens the master effects chain: four slots in series, the break through slot 1, then 2, 3 and 4, then on to the
-soundboard, the DUB pad's delay, the DJ filter and the limiter. Each slot holds any effect (two of one are fine), with
+**FX** opens the master effects chain: four slots in series, the break (through its DJ filter, with the kick when it
+goes through the chain) into slot 1, then 2, 3 and 4, then on to the soundboard, the DUB pad's delay and the limiter. Each slot holds any effect (two of one are fine), with
 three settings, a mix and a bypass. The tiles show the chain in order (lit: on), the one you tune outlined; below,
 its settings as bars over K1–K4.
 
@@ -162,7 +162,7 @@ its settings as bars over K1–K4.
 | K1–K3 · K4 | Its settings · its mix |
 | FX (on the page) | That slot on / bypassed |
 | SEL + ALGORITHM | Moves that slot along the chain (the order is the sound: DRIVE before a FILTER is not a FILTER before DRIVE) |
-| MIXER K4 FX | The whole chain against the dry sound: fade every effect in or out at once (the FX page shows it, bottom right) |
+| MIXER K3 FX MAIN | The whole chain against the dry sound: fade every effect in or out at once (the FX page shows it, bottom right) |
 
 | Effect | K1 | K2 | K3 |
 | --- | --- | --- | --- |
@@ -258,7 +258,7 @@ The kick is four layers summed and pushed into a clipper:
 | White keys | The kick's 16 steps of the bar, on and off (lit: on; the step playing flips). Four to the floor to start |
 | ALGORITHM | The layer LAYER and LAYER FX edit |
 | PRESETS | A built-in kick: 909, TECHNO, EARLY HC, ROTTERDAM (the start), INDUSTRIAL, DISTORTO. The steps, routing and volume stay |
-| SEL + EDIT | The kick through the FX chain (with the break) or around it (clean, straight to the DJ filter and the limiter) |
+| SEL + EDIT | The kick through the FX chain (with the break) or around it (clean, straight to the limiter) |
 | MIDI note 36 (C1) | Plays the kick, from any channel, also while stopped |
 
 | Sub-page | K1 | K2 | K3 | K4 |
@@ -276,27 +276,29 @@ slices again on every other page. SAVE keeps the kick with the rest.
 
 ## 9. The mixer
 
-**LFO** opens the MIXER: the break and the kick side by side, each with its fader and a level meter, then the DJ
-filter and FX with the output's meter (left and right). **LFO again** turns to GROOVE.
+**LFO** opens the MIXER: four channels side by side, each a fader. The break, the kick and the overlay have a level
+meter; FX MAIN shows the chain's four slots (lit: on). **LFO again** turns to GROOVE.
 
-![The MIXER: the break at 60 %, the kick at 40 %, the DJ filter low-passing, FX full, the output's meter](img/screen-mixer.png "The MIXER")
+![The MIXER: the break at 60 %, the kick at 40 %, FX MAIN at 60 %, the overlay's horn playing](img/screen-mixer.png "The MIXER")
 
 | Half | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too) | KICK: the kick's level (the KICK page's VOLUME) | FILTER: the DJ filter, left low-pass, right high-pass | FX: the whole chain against the dry sound |
-| GROOVE | SWING (50–75 %) | KICK ROUTE: through the FX chain or around it | SOUNDS: the soundboard's level | |
+| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too) | KICK: the kick's level (the KICK page's VOLUME) | FX MAIN: the master FX chain against the dry sound | FX OVERLAY: the soundboard's level (ENV's K1) |
+| GROOVE | SWING (50–75 %) | KICK ROUTE: through the FX chain or around it | | |
 
-The DJ filter and FX were HOME's, swing too; HOME keeps the gate. Bring BREAK down to drop the break and let the kick
-run alone, then up again for the drop. The DJ filter sits on the output, so it sweeps the break, the kick and the
-soundboard together; FX only fades what goes through the chain (the kick routed around it stays dry).
+The two kinds of effects have their own faders: FX MAIN is how much of the chain you hear (the kick routed around it
+stays dry), OVERLAY how loud the soundboard plays over everything. Bring BREAK down to drop the break and let the kick
+run alone, then up again for the drop. Swing and FX were HOME's; HOME keeps the gate and the **DJ filter** (K2), which
+now filters the break alone: sweep it down and the kick and the soundboard stay full on top. The FLT pad throws it
+the same way.
 
 ## 10. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| HOME (perform) | Gate | | | |
-| LFO (mixer) | Break level | Kick level | DJ filter (left low-pass, right high-pass) | FX (the chain, dry to wet) |
-| LFO again (groove) | Swing | Kick route: through the chain or around it | Soundboard level | |
+| HOME (perform) | Gate | DJ filter on the break (left low-pass, right high-pass) | | |
+| LFO (mixer) | Break level | Kick level | FX MAIN (the chain, dry to wet) | FX OVERLAY (the soundboard) |
+| LFO again (groove) | Swing | Kick route: through the chain or around it | | |
 | ARP (generator) | Complexity | Anchor | Roll | Fill |
 | FX (the chain) | the focused slot's effect: its three settings | | | Its mix |
 | ENV (soundboard) | Level | Pitch | Echo | Length |

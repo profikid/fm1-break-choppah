@@ -25,9 +25,9 @@ key b1 down
 wait 300
 shot u7_roll.png
 key b1 up
-tap LFO
+tap HOME
 wait 100
-turn K3 -30
+turn K2 -30
 wait 200
 shot u8_filter.png
 wavstop
