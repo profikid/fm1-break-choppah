@@ -17,9 +17,10 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 6. The FX chain
 7. GLOBAL: MIDI clock, Bluetooth, pitch
 8. The kick
-9. Pages and knobs
-10. Saving
-11. Troubleshooting
+9. The mixer
+10. Pages and knobs
+11. Saving
+12. Troubleshooting
 
 ---
 
@@ -161,7 +162,7 @@ its settings as bars over K1–K4.
 | K1–K3 · K4 | Its settings · its mix |
 | FX (on the page) | That slot on / bypassed |
 | SEL + ALGORITHM | Moves that slot along the chain (the order is the sound: DRIVE before a FILTER is not a FILTER before DRIVE) |
-| HOME K4 FX | The whole chain against the dry break: fade every effect in or out at once (the FX page shows it, bottom right) |
+| MIXER K4 FX | The whole chain against the dry sound: fade every effect in or out at once (the FX page shows it, bottom right) |
 
 | Effect | K1 | K2 | K3 |
 | --- | --- | --- | --- |
@@ -273,11 +274,29 @@ flattens into the long, distorted gabber kick. The strip shows the kick's shape 
 levels (the layer edited outlined, amber with an effect on) and the 16 steps with the playhead. The white keys play
 slices again on every other page. SAVE keeps the kick with the rest.
 
-## 9. Pages and knobs
+## 9. The mixer
+
+**LFO** opens the MIXER: the break and the kick side by side, each with its fader and a level meter, then the DJ
+filter and FX with the output's meter (left and right). **LFO again** turns to GROOVE.
+
+![The MIXER: the break at 60 %, the kick at 40 %, the DJ filter low-passing, FX full, the output's meter](img/screen-mixer.png "The MIXER")
+
+| Half | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- |
+| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too) | KICK: the kick's level (the KICK page's VOLUME) | FILTER: the DJ filter, left low-pass, right high-pass | FX: the whole chain against the dry sound |
+| GROOVE | SWING (50–75 %) | KICK ROUTE: through the FX chain or around it | SOUNDS: the soundboard's level | |
+
+The DJ filter and FX were HOME's, swing too; HOME keeps the gate. Bring BREAK down to drop the break and let the kick
+run alone, then up again for the drop. The DJ filter sits on the output, so it sweeps the break, the kick and the
+soundboard together; FX only fades what goes through the chain (the kick routed around it stays dry).
+
+## 10. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| HOME (perform) | DJ filter (left low-pass, right high-pass) | Swing | Gate | FX (the chain, dry to wet) |
+| HOME (perform) | Gate | | | |
+| LFO (mixer) | Break level | Kick level | DJ filter (left low-pass, right high-pass) | FX (the chain, dry to wet) |
+| LFO again (groove) | Swing | Kick route: through the chain or around it | Soundboard level | |
 | ARP (generator) | Complexity | Anchor | Roll | Fill |
 | FX (the chain) | the focused slot's effect: its three settings | | | Its mix |
 | ENV (soundboard) | Level | Pitch | Echo | Length |
@@ -285,7 +304,7 @@ slices again on every other page. SAVE keeps the kick with the rest.
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | |
 | EDIT (kick) | see §8: MIX, LAYER, LAYER FX, MACRO, OUT | | | |
 
-**Gate** (HOME K3) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then
+**Gate** (HOME K1) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then
 quiet until the next; down to 5 % for clipped, staccato chops; 100 % is off. It follows the tempo and the pitch, and
 the slice lit in the waveform shrinks with it. It covers the loop's slices, ratchets and the RANDOM pad; key loops
 (their LENGTH) and rolls keep their own; FREEZE holds the slice whole.
@@ -294,13 +313,13 @@ The generator rearranges the break as it plays: **complexity** is how often it j
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
 of a phrase. SEL + ARP writes a random pattern.
 
-## 10. Saving
+## 11. Saving
 
-SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop, the kick and the
-GLOBAL settings; SAVE is lit when something changed. A new version keeps what an older one saved: new settings start
-at their defaults.
+SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop, the kick, the
+mixer and the GLOBAL settings; SAVE is lit when something changed. A new version keeps what an older one saved: new
+settings start at their defaults.
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 - **No sound:** turn MASTER up; press PLAY.
 - **A crash screen:** press a key to restart. Two failed starts in a row start safe mode, which the installer can

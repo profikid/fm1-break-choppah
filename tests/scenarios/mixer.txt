@@ -1,0 +1,31 @@
+# CHOPPAH: the MIXER on LFO. LEVELS: K1 the break, K2 the kick, K3 the DJ filter, K4 FX (each channel's meter, the
+# output's beside FX); LFO again, GROOVE: K1 swing, K2 the kick through the chain or around it, K3 the soundboard
+#   app/build/host/choppah_host tests/scenarios/mixer.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 400
+tap LFO
+wait 1200
+shot x_levels.png
+turn K1 -50 10
+wait 600
+peakreset
+wait 1500
+expect peak_db_min -24
+shot x_kick_only.png
+turn K2 -50 10
+wait 800
+peakreset
+wait 1200
+expect peak_db_max -60
+turn K1 30 10
+turn K2 20 10
+turn K3 -20 10
+wait 800
+shot x_filter.png
+tap LFO
+wait 200
+turn K1 10 10
+turn K2 1 10
+wait 400
+shot x_groove.png

@@ -35,7 +35,8 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
 | ALGORITHM | The next break: AMEN, DRUMMER, THE WORM, THINK, COLD SWEAT, HOT PANTS, APACHE, SPORT |
 | ENV | SOUNDBOARD: the white keys fire 16 sound-system effects over the break: air horn, dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank, scratch, rewind (pull-up). K1 level · K2 pitch · K3 echo into the dub delay · K4 length |
-| HOME | PERFORM: K1 DJ filter · K2 swing · K3 **gate** (how much of every slice sounds: 100 % off, down to 5 % for tight, clipped chops) · K4 **FX** (the whole effects chain, dry to wet) |
+| HOME | PERFORM: K1 **gate** (how much of every slice sounds: 100 % off, down to 5 % for tight, clipped chops) |
+| LFO | **MIXER**: K1 break level · K2 kick level (each with a meter) · K3 DJ filter · K4 **FX** (the whole effects chain, dry to wet) · **LFO again**: K1 swing · K2 the kick through the chain or around it · K3 soundboard level |
 | ARP | GENERATOR: complexity · anchor · roll · fill · SEL + ARP: random pattern |
 | FX | The **master FX chain**: four slots in series. ALGORITHM picks a slot, PRESETS puts an effect in it (FILTER, CRUNCH, DRIVE, PUNCH, FLANGER, RING MOD, TREMOLO, REVERB, DELAY, EQ, TAPE, MB COMP, CLIP, or EMPTY), K1–K3 its settings and K4 its mix, FX bypasses it, SEL + ALGORITHM moves it along the chain |
 | EDIT | **KICK**: a synthesised kick of four layers (SUB, PUNCH, GRIT, CLICK) into a clipper. The white keys are its 16 steps; EDIT again steps MIX (the layers' levels) → LAYER (level, pitch, decay, tone) → LAYER FX (drive, crunch, filter, ring mod) → MACRO (SUB, PUNCH, GRIT, INTENSITY) → OUT (volume, route); ALGORITHM the layer, PRESETS six kicks (909 … ROTTERDAM … DISTORTO), SEL + EDIT through the FX chain or around it; MIDI note 36 plays it |

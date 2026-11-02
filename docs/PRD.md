@@ -158,7 +158,7 @@ ABG's four, plus the master section a live unit needs.
 | A-42 | **Flanger:** rate (sync/free), depth, feedback (±), mix | P0 | |
 | A-43 | **Degrader:** bit depth (16→2), sample-rate reduction (44.1k→2k), drive | P0 | |
 | A-44 | FX page: one FX focused at a time on K1–K4; each FX on/off by SEL+K1..K4 press; fixed order ring → HPF → flanger → degrader | P0 | Total DSP < 60 % of the render budget, all FX on |
-| A-45 | **Master FX chain (replaces A-44's fixed order, 1 Nov 2026):** four slots in series, each any effect of the library (FILTER LP/BP/HP, CRUNCH = A-43, DRIVE, PUNCH compressor, FLANGER = A-42, RING MOD = A-40, TREMOLO on the tempo; A-41's stereo hi-pass is FILTER in HP), three settings, mix, bypass; ALGORITHM picks the slot, PRESETS the effect, SEL + ALGORITHM moves it; per-slot state (two of one effect never share). HOME K4 is FX, the chain's dry/wet (CRUNCH moved into the chain). Settings CHP5 | P0 | *Done; engine tests: every effect alone bounded and audible, the order matters, FX 0 all dry* |
+| A-45 | **Master FX chain (replaces A-44's fixed order, 1 Nov 2026):** four slots in series, each any effect of the library (FILTER LP/BP/HP, CRUNCH = A-43, DRIVE, PUNCH compressor, FLANGER = A-42, RING MOD = A-40, TREMOLO on the tempo; A-41's stereo hi-pass is FILTER in HP), three settings, mix, bypass; ALGORITHM picks the slot, PRESETS the effect, SEL + ALGORITHM moves it; per-slot state (two of one effect never share). HOME K4 was FX, the chain's dry/wet (on the MIXER since B-33) (CRUNCH moved into the chain). Settings CHP5 | P0 | *Done; engine tests: every effect alone bounded and audible, the order matters, FX 0 all dry* |
 | A-47 | **DELAY** in the chain: a stereo ping-pong at 22.05 kHz on the DUB line (0.74 s per side), time on the tempo (1/16 … 1/2, 1/8T, 1/4T), feedback, tone (each repeat darker), K4 SEND (echoes return at full). One delay: also where the DUB pad, the soundboard's echo and the slices' ECHO throw; the DUB pad's K1–K4 edit it when it is in the chain; without it the delay sits after the chain with the pad's settings | P1 | *Done 1 Nov 2026; engine tests: the first echo left at 3/16, the second right* |
 | A-48 | **EQ** (3 bands: a low shelf at 120 Hz, a mid bell 200 Hz – 5 kHz on K4, a high shelf at 8 kHz, ±12 dB; Simper's SVF bands) and **TAPE** (drive 0–24 dB into an asymmetric soft curve, peak-matched make-up; warmth: a head bump and the top rolled off; wow and flutter on the slot's short line) in the chain | P1 | *Done 1 Nov 2026; engine tests: EQ flat, +12 dB low ×4, −12 dB high ÷4, mid ×4; TAPE harmonics on a pure tone, wow wanders the pitch* |
 | A-46 | **REVERB** in the chain: a Dattorro plate (pre-delay, four input diffusers, a modulated two-half tank, fourteen output taps), at 22.05 kHz inside on 16-bit lines (~35 KB RAM; the flangers' lines shortened to 256 to pay for it); SIZE (decay), TONE (damping), PRE (0–60 ms), MIX its level over the dry; one in the chain. STOP now fades the break out (it looped on before) so tails ring alone | P1 | *Done 1 Nov 2026; engine tests: an impulse rings and dies, left and right decorrelated, a bigger size rings longer, a second REVERB passes; RAM 79 KB of 96* |
@@ -257,8 +257,9 @@ on the keys, eyes on the crowd.
 | B-23 | Pattern change quantised to the bar; chain patterns (song mode, up to 32 entries) | P1 | |
 | B-24 | Copy/paste step, page, pattern (SEL+SAVE / SEL+key) | P1 | |
 | B-25 | Knob motion recording (one lane per FX param, P-lock style) | P2 | |
-| B-30 | **Gate** (PERFORM K3, global): every slice the loop plays sounds for 5–100 % of its own length, then a 3 ms fade; follows tempo and pitch; for the loop, ratchets and RANDOM (key loops and rolls have their own lengths; FREEZE ungates). Replaced the PERFORM page's copy of CMPLX (still on GENERATOR). *Done 31 Oct 2026; engine test: at 25 % the second half of each slice is silent* | P1 | |
+| B-30 | **Gate** (PERFORM K3, K1 since B-33, global): every slice the loop plays sounds for 5–100 % of its own length, then a 3 ms fade; follows tempo and pitch; for the loop, ratchets and RANDOM (key loops and rolls have their own lengths; FREEZE ungates). Replaced the PERFORM page's copy of CMPLX (still on GENERATOR). *Done 31 Oct 2026; engine test: at 25 % the second half of each slice is silent* | P1 | |
 | B-31 | **Snap** (GLOBAL, second half, K3): where a white key pressed while playing lands: OFF (at once) or the next point of a grid 1/8, 1/4, 1/2 (default: the old next-16th on 2-bar breaks), 1, 2 or 4 slices apart from the pattern's start; whole steps follow the swing (on_step), less than a step is counted in samples. *Done 1 Nov 2026; engine tests: 2 slices waits a step more, OFF at once, 1/4 slice a quarter step on* | P1 | |
+| B-33 | **MIXER on LFO** (2 Nov 2026): LEVELS: K1 BREAK (the break and its throws, eased), K2 KICK (= kick VOLUME), K3 DJ filter, K4 FX (the chain's dry/wet), as faders with the break's, the kick's and the output's meters; LFO again, GROOVE: K1 swing, K2 the kick's route, K3 the soundboard's level. The DJ filter, swing and FX moved off PERFORM, which keeps GATE on K1. BREAK level appended to the settings | P1 | *Done; scenario mixer.txt: the break down leaves the kick alone, both down is silence* |
 | B-32 | **Slice effects:** each slice its own effect while it plays (loop, key, roll): LO-PASS, HI-PASS, CRUNCH, DRIVE, RING MOD, ECHO / VERB throws into the chain's delay and reverb, plus its LEVEL. A key held + FX flips K1–K4 to it (EFFECT, AMOUNT, TONE, LEVEL); blocks show a tag. Run per voice (a slice's state starts with its hit), the throws on two send buses out of the engine. Settings CHP6 | P1 | *Done 1 Nov 2026; engine tests: level 0 silences that slice alone, LO-PASS darkens it, ECHO throws it alone* |
 
 ### 5.4 Performance screen (HOME)
@@ -275,13 +276,14 @@ on the keys, eyes on the crowd.
 
 | Page (button) | K1 | K2 | K3 | K4 | SEL page |
 | --- | --- | --- | --- | --- | --- |
-| HOME (perform) | Filter | Pitch | Complexity | FX mix | Swing · Volume · Tempo · Generator on/off |
+| HOME (perform) | Gate (built: the rest moved to the MIXER) | | | | Tempo (tap) |
+| LFO (mixer, built) | Break level | Kick level | DJ filter | FX mix | LFO again: swing · kick route · soundboard level |
 | SEQ | Step slice | Step pitch | Ratchet | Probability | Gate · Reverse · FX lock · Page length |
 | ARP (generator) | Complexity | Anchor | Roll | Fill | Retrig 2× · 3× · 4× · 8× |
 | EDIT (break) | Slice select | Start nudge | Slice count | Native BPM | Gain · Trim · Name · Mode (repitch/stretch) |
 | FX | Focused FX param 1 | param 2 | param 3 | Mix | Next FX · on/off |
 | ENV | Attack | Decay | Gate length | Choke (mono/poly) | Fade length |
-| LFO | Rate (sync) | Depth | Target | Shape | Retrigger on bar |
+| LFO (planned; the button is the MIXER now: an LFO needs another home) | Rate (sync) | Depth | Target | Shape | Retrigger on bar |
 | GLO | MIDI channel | Clock source | Clock out | Looper length | Pad map · Velocity · Brightness |
 
 ---

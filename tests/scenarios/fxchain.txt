@@ -32,7 +32,7 @@ wav fx_chain.wav
 wait 2000
 expect peak_db_min -30
 wavstop
-tap HOME
+tap LFO
 wait 200
 turn K4 -50 10
 wait 300

@@ -1,4 +1,4 @@
-# CHOPPAH: the gate (PERFORM K3): every slice of the loop cut short; the playing slice's lit part shrinks with it
+# CHOPPAH: the gate (PERFORM K1): every slice of the loop cut short; the playing slice's lit part shrinks with it
 #   app/build/host/choppah_host tests/scenarios/gate.txt app/build/scenarios
 wait 2600
 tap PLAY
@@ -6,7 +6,7 @@ wait 600
 wav gate_off.wav
 wait 2000
 wavstop
-turn K3 -15 10
+turn K1 -15 10
 wait 400
 shot gate_25.png
 wav gate_25.wav
@@ -14,6 +14,6 @@ peakreset
 wait 2000
 expect peak_db_min -30
 wavstop
-turn K3 15 10
+turn K1 15 10
 wait 300
 shot gate_off.png

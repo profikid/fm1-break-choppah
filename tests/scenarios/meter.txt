@@ -1,4 +1,4 @@
-# CHOPPAH: the header's level meter beside the BPM, and the FX page showing the chain's mix (HOME K4)
+# CHOPPAH: the header's level meter beside the BPM, and the FX page showing the chain's mix (MIXER K4)
 #   app/build/host/choppah_host tests/scenarios/meter.txt app/build/scenarios
 wait 2600
 tap PLAY
@@ -7,7 +7,7 @@ shot m_meter.png
 tap FX
 wait 1600
 shot m_fx_mix.png
-tap HOME
+tap LFO
 wait 200
 turn K4 -30 10
 wait 1600
