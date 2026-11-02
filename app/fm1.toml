@@ -5,6 +5,7 @@ usb_manufacturer = "CHOPPAH"
 usb_product = "CHOPPAH FM-1"
 ble = true                     # Bluetooth MIDI (PRD A-71): on and off on the GLOBAL page
 ble_stack = "own"              # fm1-base's own stack: nothing of JieLi's, ~40 KB
+bt_audio = true                # Bluetooth audio out (A2DP source to headphones and speakers, PRD A-72): GLOBAL
 usb_audio_in = true            # the FM-1 recordable over USB (PRD A-50)
 usb_audio_out = false
 words = "words.tsv"

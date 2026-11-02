@@ -54,6 +54,9 @@ typedef struct {
     kick_t kick;                         /* the kick (PRD K-*): its sound, its 16 steps, chain or around */
     uint8_t brk_level;                   /* the MIXER's BREAK fader, 0..100 % (the kick's is kick.volume) */
     uint8_t mix_rsv[3];
+    uint8_t bta_on;                      /* Bluetooth audio out (GLOBAL, third half): on at power-on, the last device
+                                          * connected again */
+    uint8_t bta_rsv[3];
 } settings_t;
 #define SET_SIZE_CHP6 __builtin_offsetof(settings_t, kick)   /* the shortest save that loads */
 _Static_assert(sizeof(settings_t) <= 3840u, "a store object holds 3840 bytes");
@@ -129,7 +132,7 @@ static void changed(void)
 
 /* ------------------------------------------------------------------- engine --- */
 static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
-#define CH_DUB_LEN 32768u                /* the dub delay's line: 0.74 s, 3/8 down to 91 BPM */
+#define CH_DUB_LEN 30720u                /* the dub delay's line: 0.70 s a side, 3/8 down to 97 BPM, 1/2 to 172 */
 static int16_t dub_line[CH_DUB_LEN] PLAT_POOL;
 static brk_break_t brk0;
 static brk_break_t brk_cur;              /* the bank's break playing (pcm_a holds it) */
@@ -220,8 +223,10 @@ static void break_load(uint32_t i)
     } else {                             /* a built-in style, played into RAM now */
         if (i >= n_synth)
             i = 0u;
+#if !CH_HAVE_BANK                        /* (a bank build has no synthesised breaks: their code stays out) */
         if (brk_synth_style_len(i, CH_RATE) <= CH_PCM_MAX)
             brk_synth_style(pcm_a, CH_RATE, i, &brk0);
+#endif
     }
     set.brk = (uint8_t)i;
     wave_build(b);
@@ -489,7 +494,8 @@ static struct {
     uint8_t key_turned;                  /* a knob turned while it is held: its view at once */
     uint32_t key_since;                  /* when it was pressed */
     int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
-    uint8_t gpage;                       /* the GLOBAL page's half: 0 MIDI and Bluetooth, 1 pitch */
+    uint8_t gpage;                       /* the GLOBAL page's part: 0 MIDI and Bluetooth, 1 pitch, 2 BT audio */
+    uint8_t bta_sel, bta_booted;         /* BT AUDIO: the device chosen in its list; the boot's reconnect done */
     uint8_t kpage, klayer, kpreset;      /* the KICK page: its sub-page (KP_*), the layer it edits, the preset */
     uint8_t mpage;                       /* the MIXER's half: 0 LEVELS (break, kick, filter, FX), 1 GROOVE */
     uint32_t mix_drawn;                  /* its faders' meters: when last drawn */
@@ -783,11 +789,342 @@ static void fx_algo(int32_t d, uint32_t sel)
     ui.redraw |= RG_BLOCKS | RG_FOOT;
 }
 
+/* ---- Bluetooth audio out (PRD A-72; fm1-base's A2DP source, plat_bta_*): GLOBAL's third part. K1 on / off, K2 the
+ * device (the remembered ones first, then what a scan found), K3 a scan, K4 right connect / left hang up (SEL held,
+ * left: forget a remembered one). On at power-on as saved, connecting the last device again. The host has no radio:
+ * there it is "not in this build", or with the scenario command bta_sim a pretend one for the page */
+#define BTA_LIST 8u
+static uint8_t bta_sim_on;
+#if !FM1B_BT_AUDIO
+static struct {                          /* the pretend radio (host scenarios) */
+    int st;
+    uint32_t t, nfound, nknown;
+    char known[4][18];
+} sim;
+static const char *const SIM_FOUND[2] = {"WH-1000XM4", "JBL FLIP 6"};
+static void sim_copy(char *d, const char *s)
+{
+    uint32_t i;
+    for (i = 0; i < 17u && s[i]; i++)
+        d[i] = s[i];
+    d[i] = 0;
+}
+#endif
+static int ch_bta_have(void)                /* a radio for it in this build */
+{
+#if FM1B_BT_AUDIO
+    return 1;
+#else
+    return bta_sim_on;
+#endif
+}
+static int ch_bta_state(void)
+{
+#if FM1B_BT_AUDIO
+    return plat_bta_state();
+#else
+    return bta_sim_on ? sim.st : PLAT_BTA_OFF;
+#endif
+}
+static void ch_bta_on(int on)
+{
+#if FM1B_BT_AUDIO
+    plat_bta_on(on);
+#else
+    sim.st = on ? PLAT_BTA_READY : PLAT_BTA_OFF;
+#endif
+}
+static void ch_bta_scan(void)
+{
+#if FM1B_BT_AUDIO
+    plat_bta_scan(1);
+#else
+    sim.st = PLAT_BTA_SCANNING;
+    sim.t = plat_ms();
+    sim.nfound = 0u;
+#endif
+}
+static int ch_bta_found(int i, char *name)
+{
+#if FM1B_BT_AUDIO
+    return plat_bta_found(i, name);
+#else
+    if (i < 0 || (uint32_t)i >= sim.nfound)
+        return 0;
+    sim_copy(name, SIM_FOUND[i]);
+    return 1;
+#endif
+}
+static int ch_bta_known(int i, char *name)
+{
+#if FM1B_BT_AUDIO
+    return plat_bta_known(i, name);
+#else
+    if (i < 0 || (uint32_t)i >= sim.nknown)
+        return 0;
+    sim_copy(name, sim.known[i]);
+    return 1;
+#endif
+}
+#if !FM1B_BT_AUDIO
+static void sim_remember(const char *n)  /* the device connected: first in the remembered list */
+{
+    uint32_t i, at = sim.nknown < 4u ? sim.nknown : 3u;
+    for (i = 0; i < sim.nknown; i++) {
+        uint32_t k;
+        for (k = 0; n[k] && n[k] == sim.known[i][k]; k++)
+            ;
+        if (!n[k] && !sim.known[i][k])
+            at = i;
+    }
+    for (i = at; i > 0u; i--)
+        sim_copy(sim.known[i], sim.known[i - 1u]);
+    sim_copy(sim.known[0], n);
+    if (at >= sim.nknown)
+        sim.nknown++;
+    sim.st = PLAT_BTA_PAGING;
+    sim.t = plat_ms();
+}
+#endif
+static void ch_bta_connect(int found_i, int known_i)   /* one of them, the other -1 */
+{
+#if FM1B_BT_AUDIO
+    if (known_i >= 0)
+        (void)plat_bta_reconnect(known_i);
+    else
+        plat_bta_pick(found_i);
+#else
+    char n[18];
+    if (known_i >= 0 ? ch_bta_known(known_i, n) : ch_bta_found(found_i, n))
+        sim_remember(n);
+#endif
+}
+static void ch_bta_hangup(void)
+{
+#if FM1B_BT_AUDIO
+    plat_bta_hangup();
+#else
+    sim.st = PLAT_BTA_READY;
+#endif
+}
+static void ch_bta_forget(int i)
+{
+#if FM1B_BT_AUDIO
+    plat_bta_forget(i);
+#else
+    uint32_t k;
+    if (i < 0 || (uint32_t)i >= sim.nknown)
+        return;
+    for (k = (uint32_t)i; k + 1u < sim.nknown; k++)
+        sim_copy(sim.known[k], sim.known[k + 1u]);
+    sim.nknown--;
+#endif
+}
+
+/* the list K2 picks from: the remembered devices, then the found ones not among them; entry i -> its name, and
+ * which it is (*known >= 0: remembered device *known; else found device *found) -> 0: no entry i */
+static int same_name(const char *a, const char *b)
+{
+    while (*a && *a == *b) {
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+static int ch_bta_entry(uint32_t i, char *name, int *known, int *found)
+{
+    char n[18], m[18];
+    int k, f, nk = 0;
+    for (k = 0; ch_bta_known(k, n); k++, nk++)
+        if ((uint32_t)k == i) {
+            name[0] = 0;
+            text_cat(name, n);
+            *known = k;
+            *found = -1;
+            return 1;
+        }
+    i -= (uint32_t)nk;
+    for (f = 0; ch_bta_found(f, n); f++) {
+        int dup = 0;
+        for (k = 0; ch_bta_known(k, m); k++)
+            if (same_name(n, m))
+                dup = 1;
+        if (dup)
+            continue;
+        if (!i--) {
+            name[0] = 0;
+            text_cat(name, n);
+            *known = -1;
+            *found = f;
+            return 1;
+        }
+    }
+    return 0;
+}
+static uint32_t ch_bta_count(void)
+{
+    char n[18];
+    int k, f;
+    uint32_t c = 0;
+    while (c < BTA_LIST && ch_bta_entry(c, n, &k, &f))
+        c++;
+    return c;
+}
+
+static const char *ch_bta_state_name(int st)
+{
+    static const char *const N[] = {"OFF", "SCANNING", "FOUND", "NONE FOUND", "CONNECTING", "LINKED", "SETTING UP",
+                                    "STREAMING", "REFUSED", "NO DEVICE YET", "FAILED", "READY"};
+    return st >= 0 && st <= PLAT_BTA_READY ? N[st] : "?";
+}
+static void ch_bta_value(int i, char *t)
+{
+    char n[18];
+    int k, f, st = ch_bta_state();
+    t[0] = 0;
+    if (!ch_bta_have()) {
+        if (i == 0)
+            text_cat(t, "NOT BUILT");
+        return;
+    }
+    if (i == 0)
+        text_cat(t, st == PLAT_BTA_OFF ? "OFF" : "ON");
+    else if (i == 1) {
+        if (ch_bta_entry(ui.bta_sel, n, &k, &f)) {
+            n[9] = 0;                    /* (the foot's width) */
+            text_cat(t, n);
+        } else
+            text_cat(t, "-");
+    } else if (i == 2)
+        text_cat(t, st == PLAT_BTA_SCANNING ? "SCANNING" : st == PLAT_BTA_OFF ? "-" : "TURN");
+    else
+        text_cat(t, st == PLAT_BTA_STREAMING || st == PLAT_BTA_SETUP || st == PLAT_BTA_LINKED ||
+                    st == PLAT_BTA_PAGING ? "< HANG UP" : st == PLAT_BTA_OFF ? "-" : "CONNECT >");
+}
+static void ch_bta_turn(int i, int32_t d)
+{
+    char n[18];
+    int k, f, st = ch_bta_state();
+    if (!ch_bta_have()) {
+        app_say("BT AUDIO", "NOT IN THIS BUILD");
+        return;
+    }
+    if (i == 0) {
+        uint8_t on = d > 0;
+        if (on == (st != PLAT_BTA_OFF))
+            return;
+        ch_bta_on(on);
+        set.bta_on = on;
+        set_dirty = 1u;
+        app_say("BT AUDIO", on ? "ON" : "OFF");
+    } else if (st == PLAT_BTA_OFF)
+        app_say("BT AUDIO", "TURN K1 ON");
+    else if (i == 1) {
+        uint32_t c = ch_bta_count();
+        ui.bta_sel = (uint8_t)(c ? (uint32_t)clamp((int32_t)ui.bta_sel + (d > 0 ? 1 : -1), 0, (int32_t)c - 1) : 0u);
+        if (ch_bta_entry(ui.bta_sel, n, &k, &f))
+            app_say(k >= 0 ? "KNOWN" : "FOUND", n);
+    } else if (i == 2) {
+        ch_bta_scan();
+        app_say("BT AUDIO", "SCANNING");
+    } else if (d > 0) {                  /* connect the device chosen */
+        if (ch_bta_entry(ui.bta_sel, n, &k, &f)) {
+            ch_bta_connect(f, k);
+            ui.bta_sel = 0u;             /* (it becomes the last one: first in the list) */
+            app_say("CONNECT", n);
+        } else
+            app_say("BT AUDIO", "SCAN FIRST (K3)");
+    } else if (ui.btn & 1u << B_SEL) {   /* SEL held, left: forget a remembered device */
+        if (ch_bta_entry(ui.bta_sel, n, &k, &f) && k >= 0) {
+            ch_bta_forget(k);
+            ui.bta_sel = 0u;
+            app_say("FORGOT", n);
+        }
+    } else {
+        ch_bta_hangup();
+        app_say("BT AUDIO", "HUNG UP");
+    }
+    ui.redraw |= RG_BLOCKS | RG_FOOT;
+}
+/* every frame: the pretend radio's steps; at boot, on as saved, then the last device once it is ready */
+static void ch_bta_poll(uint32_t now)
+{
+#if !FM1B_BT_AUDIO
+    if (bta_sim_on) {
+        if (sim.st == PLAT_BTA_SCANNING && now - sim.t > 2000u) {
+            sim.nfound = 2u;
+            sim.st = PLAT_BTA_FOUND;
+        } else if (sim.st == PLAT_BTA_PAGING && now - sim.t > 800u) {
+            sim.st = PLAT_BTA_SETUP;
+            sim.t = now;
+        } else if (sim.st == PLAT_BTA_SETUP && now - sim.t > 500u)
+            sim.st = PLAT_BTA_STREAMING;
+    }
+#endif
+    (void)now;
+    if (ui.bta_booted || !ch_bta_have())
+        return;
+    if (!set.bta_on) {
+        ui.bta_booted = 1u;
+        return;
+    }
+    if (ch_bta_state() == PLAT_BTA_OFF)
+        ch_bta_on(1);
+    else if (ch_bta_state() == PLAT_BTA_READY) {
+        char n[18];
+        if (ch_bta_known(0, n))
+            ch_bta_connect(-1, 0);
+        ui.bta_booted = 1u;
+    }
+}
+/* GLOBAL's third part: the state and the device; the list, the one K2 points at outlined */
+static void draw_bta(void)
+{
+    char n[18], t[32];
+    int st = ch_bta_state(), k, f;
+    uint32_t i, c = ch_bta_count(), first;
+    uint16_t sc = st == PLAT_BTA_STREAMING ? C_HI : st == PLAT_BTA_FAILED || st == PLAT_BTA_REFUSED ? C_AMB
+                  : st == PLAT_BTA_OFF ? C_DIM : C_WHITE;
+    cv_begin(240, 52, C_BLACK);
+    cv_text(6, 2, &FONT_T, "BT AUDIO", C_GRAY);
+    cv_text(96, 2, &FONT_T, ch_bta_have() ? ch_bta_state_name(st) : "NOT IN THIS BUILD", sc);
+    t[0] = 0;
+    if (st == PLAT_BTA_STREAMING && ch_bta_known(0, n)) {
+        text_cat(t, "TO ");
+        text_cat(t, n);
+    } else if (st == PLAT_BTA_OFF)
+        text_cat(t, ch_bta_have() ? "K1: ON" : "");
+    else if (!c)
+        text_cat(t, "K3: SCAN");
+    cv_text(96, 15, &FONT_XS, t, st == PLAT_BTA_STREAMING ? C_HI : C_DIM);
+    cv_text(6, 30, &FONT_XS, st == PLAT_BTA_STREAMING ? "FM-1 SPEAKER MUTED; 150-300 MS LATE" :
+            "FOR LISTENING: 150-300 MS LATE", C_DIM);
+    cv_blit(0, 88);
+    cv_begin(240, 52, C_BLACK);
+    first = ui.bta_sel > 2u ? ui.bta_sel - 2u : 0u;   /* three rows of the list, the chosen one in view */
+    for (i = first; i < first + 3u && i < c; i++) {
+        int32_t y = (int32_t)(i - first) * 16;
+        int sel = i == ui.bta_sel;
+        ch_bta_entry(i, n, &k, &f);
+        if (sel)
+            cv_rect(4, y + 1, 232, 15, C_LINE);
+        cv_text(10, y + 2, &FONT_XS, n, sel ? C_WHITE : C_GRAY);
+        cv_text(180, y + 2, &FONT_XS, k == 0 ? "LAST" : k > 0 ? "KNOWN" : "NEW", sel ? C_HI : C_DIM);
+    }
+    if (!c && st != PLAT_BTA_OFF)
+        cv_text(10, 2, &FONT_XS, st == PLAT_BTA_SCANNING ? "LOOKING (10 S)..." : "NO DEVICES YET", C_DIM);
+    cv_blit(0, 140);
+}
+
 /* the GLOBAL page's knobs: clock in, clock out, Bluetooth, where MIDI goes */
 static const char *const MIDI_TO_NAME[3] = {"USB+BT", "USB", "BT"};
 static void global_value(int i, char *t)
 {
     t[0] = 0;
+    if (ui.gpage == 2u) {
+        ch_bta_value(i, t);
+        return;
+    }
     if (ui.gpage) {                      /* the pitch: speed or keep length, the grains */
         if (i == 0)
             text_cat(t, pitch_keeps() ? "KEEP LEN" : "SPEED");
@@ -806,6 +1143,10 @@ static void global_turn(int i, int32_t d)
 {
     static const char *const NAME[4] = {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"};
     char t[16];
+    if (ui.gpage == 2u) {
+        ch_bta_turn(i, d);
+        return;
+    }
     if (ui.gpage) {
         if (i == 0)
             set.pitch_keep = d > 0 ? 1u : 2u;   /* right KEEP LENGTH, left SPEED */
@@ -1512,11 +1853,11 @@ static void input(void)
         ui.page = PG_HOME;
         ui.redraw |= 8u;               /* RG_FOOT: the page */
     }
-    if (bdn & 1u << B_GLO) {             /* GLOBAL: MIDI clock and Bluetooth; again, the pitch */
-        ui.gpage = ui.page == PG_GLOBAL ? (uint8_t)!ui.gpage : 0u;
+    if (bdn & 1u << B_GLO) {             /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, BT audio */
+        ui.gpage = ui.page == PG_GLOBAL ? (uint8_t)((ui.gpage + 1u) % 3u) : 0u;
         ui.page = PG_GLOBAL;
         ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
-        app_say("GLOBAL", ui.gpage ? "PITCH, SNAP" : "MIDI");
+        app_say("GLOBAL", ui.gpage == 2u ? "BT AUDIO" : ui.gpage ? "PITCH, SNAP" : "MIDI");
     }
     if (bdn & 1u << B_EDIT && btn & 1u << B_SEL) {   /* SEL + EDIT: the kick through the FX chain, or around it */
         set.kick.chain ^= 1u;
@@ -1717,9 +2058,42 @@ static void mark(int32_t y0, uint32_t shown, const uint8_t (*px)[BLK_W])
     }
 }
 
+/* big text: a font at twice its size, each of its pixels a 2 x 2 block (blended as cv_text blends). It stands in for
+ * a 31-pixel font: that one costs 20 KB of flash, which Bluetooth audio needed */
+static int32_t text2_w(const felucca_font_t *f, const char *s) { return 2 * text_w(f, s); }
+static int32_t cv_text2(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c)
+{
+    uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u;
+    for (; *s; s++) {
+        uint32_t gi = glyph(f, (uint8_t)*s), gx, gy, w = f->bw[gi], bpr = (w + 1u) / 2u;
+        const uint8_t *gd = f->data + f->off[gi];
+        for (gy = 0; gy < f->h; gy++)
+            for (gx = 0; gx < w; gx++) {
+                uint32_t a = gd[gy * bpr + gx / 2u], k;
+                a = (gx & 1u) ? (a & 15u) : (a >> 4);
+                if (!a)
+                    continue;
+                for (k = 0; k < 4u; k++) {
+                    int32_t px = x + 2 * ((int32_t)gx - f->pad) + (int32_t)(k & 1u),
+                            py = y + 2 * (int32_t)gy + (int32_t)(k >> 1) + cv_oy;
+                    uint32_t at, bg;
+                    if ((uint32_t)px >= cv_w || py < cv_y0 || py >= cv_y1)
+                        continue;
+                    at = (uint32_t)py * cv_w + (uint32_t)px;
+                    bg = swap16(cv_px[at]);
+                    cv_px[at] = swap16((((r * a + (bg >> 11) * (15u - a)) / 15u) << 11) |
+                                       (((g * a + ((bg >> 5) & 63u) * (15u - a)) / 15u) << 5) |
+                                       ((b * a + (bg & 31u) * (15u - a)) / 15u));
+                }
+            }
+        x += 2 * f->adv[gi];
+    }
+    return x;
+}
+
 static void title(int32_t y)             /* the name and the tagline, centred, into the current strip */
 {
-    cv_text((240 - text_w(&FONT_L, APP_NAME)) / 2, y, &FONT_L, APP_NAME, C_WHITE);
+    cv_text2((240 - text2_w(&FONT_B, APP_NAME)) / 2, y, &FONT_B, APP_NAME, C_WHITE);
     cv_text((240 - text_w(&FONT_XS, "AMEN CHOPPER  FOR THE FM-1")) / 2, y + 36, &FONT_XS,
             "AMEN CHOPPER  FOR THE FM-1", C_HI);
 }
@@ -1951,6 +2325,10 @@ static void draw_global(const brk_status_t *st)
     char t[32], v[16];
     uint32_t p;
     int bs = plat_ble_state();
+    if (ui.gpage == 2u) {
+        draw_bta();
+        return;
+    }
     if (ui.gpage) {                      /* the pitch: what the mode does, the pitch now */
         cv_begin(240, 52, C_BLACK);
         cv_text(6, 2, &FONT_T, "PITCH", C_GRAY);
@@ -2281,7 +2659,9 @@ static void draw_foot(const brk_status_t *st)
     for (i = 0; i < 4u; i++) {
         static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", ""};
         static const char *const KN_GROOVE[4] = {"SWING", "KICK ROUTE", "", ""};
-        const char *name = ui.page == PG_GLOBAL && ui.gpage ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
+        static const char *const KN_BTA[4] = {"BT AUDIO", "DEVICE", "SCAN", "CONNECT"};
+        const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_BTA[i] : ui.page == PG_GLOBAL && ui.gpage
+                           ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
                            ? KN_GROOVE[i] : KN[ui.page][i];
         if (ui.shown >= 100) {           /* a white key held: its loop, or its slice's effect */
             cv_text(4 + (int32_t)i * 60, 18, &FONT_T, ui.key_layer ? SLX_KNOB[i] : KEY_KNOB[i], C_HI);
@@ -2320,6 +2700,7 @@ static void draw_foot(const brk_status_t *st)
 #define C_DUB RGB(120, 230, 160)
 #define FX_Y 90                          /* the animation's strip: 240 x 96 where the slice blocks are */
 #define FX_MID 58                        /* its waveform's centre line, in the strip */
+#define FX_BAND 48                       /* drawn in two bands of 48 rows (the canvas holds 60) */
 
 static uint32_t fx_hash(uint32_t x)      /* a stable pseudo-random number from x (the screen's dice) */
 {
@@ -2361,14 +2742,15 @@ static void fx_slice(int32_t s, int32_t x, int32_t w, float h, uint16_t c)
 }
 
 /* the held pad's picture: what it does to the break, moving with it, and its settings */
-static void draw_fx(int pad, const brk_status_t *st, uint32_t now)
+static void draw_fx_band(int pad, const brk_status_t *st, uint32_t now, int32_t top)
 {
     const brk_padset_t *p = &set.pads;
     const brk_fx_t *f = &set.fx;
     char t[24];
     int32_t i, s = st->slice >= 0 ? st->slice : 0;
     uint32_t held = now - ui.pad_since;
-    cv_begin(240, 96, C_BLACK);
+    cv_begin(240, FX_BAND, C_BLACK);
+    cv_oy = -top;                        /* (this band's rows of the picture) */
     t[0] = 0;
     text_cat(t, PAD_TITLE[pad]);
     if (pad <= PAD_ROLL32) {
@@ -2467,7 +2849,7 @@ static void draw_fx(int pad, const brk_status_t *st, uint32_t now)
             cv_rect(x, y, 13, 28, i == s ? C_HI : (r & 3u) == 0u ? C_GRAY : C_BLOCK);
         }
         int_text(s + 1, t);
-        cv_text(20, 30, &FONT_L, t, C_WHITE);
+        cv_text2(20, 30, &FONT_B, t, C_WHITE);
         if (p->rnd_pitch > 0.0f)
             cv_text(20, 72, &FONT_T, "+ PITCH", C_AMB);
         break;
@@ -2507,7 +2889,15 @@ static void draw_fx(int pad, const brk_status_t *st, uint32_t now)
     }
     default: break;
     }
-    cv_blit(0, FX_Y);
+    cv_oy = 0;
+    cv_blit(0, FX_Y + (uint32_t)top);
+}
+
+/* (drawn in two bands of FX_BAND rows: the canvas is 60 rows) */
+static void draw_fx(int pad, const brk_status_t *st, uint32_t now)
+{
+    draw_fx_band(pad, st, now, 0);
+    draw_fx_band(pad, st, now, FX_BAND);
 }
 
 /* the held key's view: its loop window zoomed to the strip's width, the part this repeat has played lit, the
@@ -2527,7 +2917,7 @@ static void key_window(const brk_break_t *b, int key, float *lo, float *w)   /* 
         *w = 32.0f;
 }
 
-static void draw_key(int key, const brk_status_t *st, uint32_t now)
+static void draw_key_band(int key, const brk_status_t *st, uint32_t now, int32_t top)
 {
     const brk_break_t *b = brk_get_break();
     const brk_keyset_t *ks = &set.keys[key & 15];
@@ -2536,9 +2926,11 @@ static void draw_key(int key, const brk_status_t *st, uint32_t now)
     uint32_t c, sig, len;
     int32_t px = -1, x, live;
     (void)now;
-    cv_begin(240, 96, C_BLACK);
+    cv_begin(240, FX_BAND, C_BLACK);
+    cv_oy = -top;                        /* (this band's rows of the picture) */
     if (!b || !b->len || !b->pcm) {
-        cv_blit(0, FX_Y);
+        cv_oy = 0;
+        cv_blit(0, FX_Y + (uint32_t)top);
         return;
     }
     len = b->len;
@@ -2617,7 +3009,15 @@ static void draw_key(int key, const brk_status_t *st, uint32_t now)
         int on = live && c <= (uint32_t)(st->key_n % 16u);
         cv_rect(132 + (int32_t)c * 7, 86, 5, 6, on ? (c == st->key_n % 16u ? C_WHITE : C_AMB) : C_BLOCK);
     }
-    cv_blit(0, FX_Y);
+    cv_oy = 0;
+    cv_blit(0, FX_Y + (uint32_t)top);
+}
+
+/* (drawn in two bands of FX_BAND rows: the canvas is 60 rows) */
+static void draw_key(int key, const brk_status_t *st, uint32_t now)
+{
+    draw_key_band(key, st, now, 0);
+    draw_key_band(key, st, now, FX_BAND);
 }
 
 void app_ui_init(void)
@@ -2651,6 +3051,7 @@ void app_frame(void)
         }
     }
     ui.touched = 0u;
+    ch_bta_poll(now);
     brk_status(&st);
     b = brk_get_break();
     if (st.step != ui.last_step || st.slice != ui.last_slice) {   /* the playhead moved */
@@ -2765,6 +3166,10 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
     (void)a; (void)b; (void)c; (void)d;
     if (!strcmp(cmd, "splash")) {
         app_splash();
+        return 1;
+    }
+    if (!strcmp(cmd, "bta_sim")) {       /* bta_sim: a pretend Bluetooth audio (the host has no radio) for the page */
+        bta_sim_on = 1u;
         return 1;
     }
     if (!strcmp(cmd, "expect_bpm")) {    /* expect_bpm LO HI (whole BPM): the tempo the engine plays at */

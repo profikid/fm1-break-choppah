@@ -15,7 +15,7 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 4. The pads
 5. The soundboard
 6. The FX chain
-7. GLOBAL: MIDI clock, Bluetooth, pitch
+7. GLOBAL: MIDI clock, Bluetooth, pitch, Bluetooth audio
 8. The kick
 9. The mixer
 10. Pages and knobs
@@ -206,10 +206,10 @@ CRUNCH used to be HOME's K4; it is slot 1 now.
 
 STOP fades the break out at once (a white key held keeps looping); the reverb's and the dub delay's tails ring on.
 
-## 7. GLOBAL: MIDI clock, Bluetooth, pitch
+## 7. GLOBAL: MIDI clock, Bluetooth, pitch, Bluetooth audio
 
 **GLO** opens the GLOBAL page: the slice blocks give way to the state of MIDI, and K1–K4 set it (SAVE keeps it).
-**GLO again** turns to its second half, the pitch (below).
+**GLO again** turns to its second part, the pitch; **a third time**, Bluetooth audio (both below).
 
 ![GLOBAL, following a 119 BPM clock over USB](img/screen-global.png "The GLOBAL page")
 
@@ -235,6 +235,22 @@ connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings →
 
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
 tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay speed effects.
+
+**Bluetooth audio (GLO three times):** CHOPPAH plays through Bluetooth headphones or a Bluetooth speaker.
+
+![Bluetooth audio, streaming to a speaker](img/screen-btaudio.png "Bluetooth audio")
+
+| Knob | Does |
+| --- | --- |
+| K1 BT AUDIO | OFF · ON. On at power-on as saved (SAVE), and then it connects the last device again by itself |
+| K2 DEVICE | Picks from the list: the devices it remembers (LAST, KNOWN), then the ones a scan found (NEW) |
+| K3 SCAN | Any turn looks for headphones and speakers for about 10 seconds. Put the device in pairing mode first |
+| K4 CONNECT | Right: connect the device chosen (a new one pairs and is remembered; four are kept). Left: hang up. SEL held + left: forget the remembered device chosen |
+
+While it streams, the FM-1's own speaker and headphone output go quiet and MASTER still sets the level. Bluetooth
+audio runs late: 150–300 ms between a key and your ear, so it is for listening and showing, not for playing in time
+(use the FM-1's own output or USB for that). Bluetooth MIDI keeps working beside it on the same radio. Turning
+Bluetooth audio on starts the radio even when Bluetooth MIDI is off.
 
 ## 8. The kick
 
@@ -304,6 +320,7 @@ the same way.
 | ENV (soundboard) | Level | Pitch | Echo | Length |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | |
+| GLO a third time (BT audio) | On / off | Device | Scan | Connect / hang up |
 | EDIT (kick) | see §8: MIX, LAYER, LAYER FX, MACRO, OUT | | | |
 
 **Gate** (HOME K1) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then

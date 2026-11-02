@@ -9,11 +9,14 @@
 #define APP_NAME "CHOPPAH"
 #define APP_TAGLINE "AMEN CHOPPER"
 #define APP_SPLASH_RGB RGB(255, 184, 70)
+#define APP_BIG_FONT FONT_B             /* the platform's own screens' big face: the 31-pixel one (20 KB of flash) left
+                                          * out for Bluetooth audio; CHOPPAH draws its name with FONT_B doubled */
 #define APP_SPLASH                       /* the first screen at power-on is the app's (app_splash) */
 void app_splash(void);
 #define APP_PALETTE 1u                   /* gfx.c's amber */
 #define APP_BLOCK 256u                   /* frames per audio block: 5.8 ms at 44.1 kHz */
-#define APP_CANVAS_PX (240u * 96u)       /* draw in strips of 96 rows at most: the pool goes to the breaks */
+#define APP_CANVAS_PX (240u * 60u)       /* draw in strips of 60 rows at most: the pool goes to the breaks (and the
+                                          * Bluetooth audio queue) */
 #ifdef APP_VERSION
 #define CH_VERSION APP_VERSION
 #else
@@ -30,6 +33,9 @@ void app_tick(void);
 int app_ble_at_boot(void);
 #define APP_BLE_AT_BOOT (app_ble_at_boot())
 #define BLE_DEVICE_NAME "CHOPPAH"
+/* Bluetooth audio out (fm1.toml bt_audio, PRD A-72): its packet queue (40 x 332 B) in the pool, not RAM (the RAM is
+ * the tighter here: the reverb's lines are in it) */
+#define BP_MQ_ATTR PLAT_POOL
 
 /* the store (PRD 8.4): settings in Felucca's settings pair, the panel calibration where every fm1-base firmware
  * keeps it. The break bank will take 0x97000..0xD9FFF and PLAT_XDATA1 (M5), patterns 0xDA000 (M2). */
