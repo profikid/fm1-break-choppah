@@ -1,0 +1,40 @@
+# CHOPPAH: the demo. A minute untouched (stopped) and the four scenes run, eight seconds each, the lights with them;
+# a press ends it and does nothing else (here HOME's: the page stays PERFORM, the break stays stopped)
+#   app/build/host/choppah_host tests/scenarios/demo.txt app/build/scenarios
+wait 2600
+tap ARP
+wait 200
+expect page 9
+wait 58000
+expect demo 0
+wait 2500
+expect demo 1
+wait 1500
+shot d_bars.png
+leds
+wait 8000
+shot d_wave.png
+leds
+wait 8000
+shot d_tunnel.png
+leds
+wait 8000
+shot d_stars.png
+leds
+tap PLAY
+wait 200
+expect demo 0
+expect page 9
+tap PLAY
+wait 3000
+expect demo 0
+wait 180000
+expect demo 1
+wait 2000
+shot d_playing.png
+key w3 down
+wait 100
+expect demo 0
+key w3 up
+wait 200
+shot d_back.png

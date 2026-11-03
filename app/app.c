@@ -657,4 +657,5 @@ void app_panic(void)
 #include "ui/perc.c"
 #include "ui/mixer.c"
 #include "ui/screen.c"
+#include "ui/demo.c"
 #include "ui/main.c"

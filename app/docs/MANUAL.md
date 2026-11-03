@@ -69,6 +69,22 @@ lists its combinations (SEL again, or any other button, key or knob, closes it).
 
 ![SEL pressed: its combinations on the strip; the HOME knobs](img/screen-selhelp.png "SEL pressed")
 
+### The demo
+
+Leave CHOPPAH alone for a minute while it is stopped (three minutes while it plays: the break plays on) and it goes
+into its demo, four scenes of eight seconds each, in time with the tempo (with the break's own beat while it plays):
+
+- **BARS:** the mark's sixteen bars bouncing to an Amen beat, kick low, snare in the middle, hats high.
+- **WAVE:** the break's waveform scrolling under a playhead, a slice chopped out of line on each beat.
+- **TUNNEL:** squares rushing out from the name, a white one every second beat.
+- **STARS:** slice blocks flying out of the screen.
+
+The lights play along: a light runs round the buttons, and the keys follow the bars, the playhead, the tunnel
+(outwards from the middle keys) or twinkle with the stars. Touch any key, button or knob and the page you left comes
+back. That touch only ends the demo: it doesn't play a slice or start the break.
+
+![The demo's scenes: BARS, WAVE, TUNNEL, STARS](img/screen-demo.png "The demo")
+
 ## 3. Playing
 
 | Control | Does |

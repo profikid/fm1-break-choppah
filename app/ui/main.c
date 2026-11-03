@@ -208,7 +208,7 @@ static void input(void)
     int k;
     if (keys != ui.keys || btn != ui.btn)
         ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
-    if (ui.lobo_t) {                     /* RESET ALL's screen up: a press only ends it (app_frame), it does nothing */
+    if (ui.lobo_t || demo.on) {          /* RESET ALL's screen or the demo up: a press only ends it (app_frame) */
         for (i = 0; i < 16u; i++)        /* (but what is let go is let go: no key loop or pad left on) */
             if (kup >> WK[i] & 1u)
                 brk_key((int)i, 0);
@@ -521,6 +521,11 @@ static void leds(void)
     static uint8_t after_intro;
     brk_status_t st;
     uint32_t b = 0u, k = 0u, i;
+    if (demo.on) {                       /* the demo's own (demo.c) */
+        demo_leds(plat_ms());
+        after_intro = 1u;
+        return;
+    }
     if (intro_leds(plat_ms())) {         /* the start screen's own (screen.c) */
         after_intro = 1u;
         return;
@@ -830,6 +835,27 @@ void app_frame(void)
     uint32_t now = plat_ms(), hdr;
     input();
     break_poll();
+    if (ui.touched || !ui.idle_t)
+        ui.idle_t = now | 1u;
+    if (demo.on) {                       /* the demo: until anything is touched (that touch does nothing else) */
+        if (ui.touched) {
+            ui.touched = 0u;
+            demo_end();
+        } else {
+            leds();
+            ch_bta_poll(now);
+            demo_frame(now);
+            return;
+        }
+    } else if (!ui.intro && !ui.lobo_t &&
+               now - ui.idle_t > (playing_now() ? DEMO_IDLE_PLAY_MS : DEMO_IDLE_MS)) {
+        slices_let_go(ui.keys);
+        ui.help = 0u;
+        demo_start(now);
+        leds();
+        demo_frame(now);
+        return;
+    }
     leds();
     if (ui.intro) {                      /* any key or button opens the slicer (PLAY also starts the break) */
         if (ui.touched || now - ui.intro_t0 > 16u * INTRO_STEP + INTRO_HOLD)
@@ -1006,8 +1032,8 @@ int app_expect(const char *what, int *got)
 {
     static const char *const W[] = {"page", "gpage", "kpage", "seq_lane", "fx_focus", "fx_on", "lane_kick",
                                     "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo",
-                                    "ovl_on", "ovl_last", "ovl_latch", "roll_pitch_x10"};
-    int v[18];
+                                    "ovl_on", "ovl_last", "ovl_latch", "roll_pitch_x10", "demo"};
+    int v[19];
     uint32_t i;
     v[0] = ui.page;
     v[1] = ui.gpage;
@@ -1027,7 +1053,8 @@ int app_expect(const char *what, int *got)
     v[15] = ovl_last;
     v[16] = set.ovl_latch;
     v[17] = (int)(set.pads.roll_pitch * 10.0f + (set.pads.roll_pitch < 0.0f ? -0.5f : 0.5f));
-    for (i = 0; i < 18u; i++)
+    v[18] = demo.on;
+    for (i = 0; i < 19u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;
