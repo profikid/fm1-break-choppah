@@ -1,0 +1,17 @@
+# CHOPPAH: GLOBAL's RESET ALL (GLO twice, K4 turned twice within 3 s): every setting and pattern back to the start,
+# saved; the tempo back to 170
+#   app/build/host/choppah_host tests/scenarios/reset.txt app/build/scenarios
+wait 2600
+turn SELECT 20 10
+wait 200
+expect_bpm 189 191
+tap GLO
+tap GLO
+wait 200
+turn K4 1 10
+wait 200
+shot r_ask.png
+turn K4 1 10
+wait 500
+shot r_done.png
+expect_bpm 169 171

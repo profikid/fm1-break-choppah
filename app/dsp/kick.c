@@ -316,7 +316,4 @@ void kick_defaults(kick_t *k)
 {
     kick_preset(k, 3u);                  /* ROTTERDAM: CHOPPAH is for the hard stuff */
     k->volume = 0.8f;
-    k->steps = 0x1111u;                  /* four to the floor */
-    k->chain = 1u;
-    k->rsv = 0u;
 }

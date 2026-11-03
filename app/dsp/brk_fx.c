@@ -706,8 +706,8 @@ void brk_fx_gr(float *gr)
     gr[2] = mb_gr[2];
 }
 
-void brk_fx_process(const float *in, const float *thru, const float *aux, float aux_send, const float *echo,
-                    const float *verb, const float *post, float *l, float *r, uint32_t n, uint32_t pads)
+void brk_fx_process(const float *in, const float *thru, const float *echo, const float *verb, const float *post,
+                    float *l, float *r, uint32_t n, uint32_t pads)
 {
     uint32_t i, k;
     svf_c djc;
@@ -753,20 +753,18 @@ void brk_fx_process(const float *in, const float *thru, const float *aux, float 
             x += thru[i];
         xl = xr = x;
         dub_send += ((dub_on ? 1.0f : 0.0f) - dub_send) * 0.002f;
-        cur_throw = x * dub_send + (aux ? aux[i] * aux_send : 0.0f) + ec;
+        cur_throw = x * dub_send + ec;
         cur_verb = vb;
         for (k = 0; k < BRK_FX_SLOTS; k++)   /* the chain, slot by slot */
             if (sc[k].on)
                 slot_run(k, &xl, &xr);
-        if (wet < 0.999f) {              /* PERFORM's FX: the chain against the dry break */
+        if (wet < 0.999f) {              /* the MIXER's FX: the chain against the dry sound */
             xl = x + (xl - x) * wet;
             xr = x + (xr - x) * wet;
         }
-        {
-            float a = (aux ? aux[i] : 0.0f) + (post ? post[i] : 0.0f);   /* the soundboard (and the kick around
-                                                                         * the chain) join here, clean */
-            xl += a;
-            xr += a;
+        if (post) {                      /* the drums around the chain join here, clean */
+            xl += post[i];
+            xr += post[i];
         }
         if (dub_n && !dl_taken) {        /* the delay after the chain: the throws in, the echoes at the pad's mix */
             float el, er;

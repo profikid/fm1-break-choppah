@@ -4,7 +4,8 @@ CHOPPAH turns the [M-VAVE FM-1](https://www.m-vave.com/) into a breakbeat choppe
 on the white keys, momentary effect pads on the black keys, a generator that rearranges the break as it plays, and
 a master effects chain (four slots, any of filter, crunch, drive, punch, flanger, ring mod, tremolo, reverb,
 ping-pong delay, 3-band EQ, tape saturation, multiband compressor, clipper, in any order), effects per slice, a
-synthesised four-layer gabber kick with its own steps, a DJ filter on the break and a mixer. Built on
+16 patterns with a step sequencer and recording, a synthesised four-layer gabber kick, a snare and a hi-hat on the
+patterns' drum lanes, MIDI notes for the slices and drums, a DJ filter on the break and a mixer. Built on
 [fm1-base](https://github.com/charlesvestal/fm1-base) (MPL-2.0).
 
 ![CHOPPAH's screens: the splash, the start screen, the slicer view, playing, a slice held, a roll](docs/img/screens.png)
@@ -20,9 +21,8 @@ Installing is at your own risk; the installer can put M-VAVE's own firmware back
 twice comes up in a safe mode the installer can still reach. If your FM-1 runs M-VAVE's FM1 Open firmware, restore
 M-VAVE's original firmware first ([docs/FLASHING.md](docs/FLASHING.md)).
 
-**Status: early (0.x).** The engine, the slicer, the pads, the generator and the effects work on the device. Saved
-patterns, the step sequencer, the looper, MIDI sync and loading your own breaks are next: see the
-[PRD](docs/PRD.md) for the whole plan.
+**Status: early (0.x).** The engine, the slicer, the pads, the generator, the effects, the patterns and the drums work
+on the device. The looper and song mode are next: see the [PRD](docs/PRD.md) for the whole plan.
 
 ## Panel
 
@@ -34,14 +34,18 @@ patterns, the step sequencer, the looper, MIDI sync and loading your own breaks 
 | SELECT | Tempo (SEL held: 0.1 BPM) · **tap SEL in time** on any page: tap tempo (from the second tap, the average of the last eight) |
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
 | ALGORITHM | The next break: AMEN, DRUMMER, THE WORM, THINK, COLD SWEAT, HOT PANTS, APACHE, SPORT |
-| ENV | SOUNDBOARD: the white keys fire 16 sound-system effects over the break: air horn, dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank, scratch, rewind (pull-up). K1 level · K2 pitch · K3 echo into the dub delay · K4 length |
+| PRESETS | The pattern, P1–P16 (playing: from the end of the loop) |
+| SEQ | **PATTERN SEQUENCER**: the pattern's 32 break steps (each LOOP, a slice of its own, or off; K1 slice · K2 pitch · K3 hits ×1–×4 · K4 reverse) and its kick, snare and hat lanes (16 steps each). ALGORITHM picks the lane, the white keys edit it |
+| REC | Record the white keys and MIDI notes into the pattern as the break plays · SEL + REC: clear (on SEQ the lane, else the pattern) |
+| ENV | **SNARE / HAT**: two synthesised drums (snare: tuned body, band-passed noise, crack; hat: six 808-ratio squares and noise). ALGORITHM the voice, PRESETS four each, the white keys its 16 steps; K1 level · K2 tune · K3 decay · K4 tone · **ENV again**: snap / cut · drive |
+| MIDI notes | 48–63 (C3–D#4) play slices 1–16; 36 kick, 38 snare, 42 / 44 / 46 hat; any channel, recorded with REC |
 | HOME | PERFORM: K1 **gate** (how much of every slice sounds: 100 % off, down to 5 % for tight, clipped chops) · K2 **DJ filter** on the break alone (left low-pass, right high-pass) |
-| LFO | **MIXER**: K1 break level · K2 kick level · K3 **FX MAIN** (the whole effects chain, dry to wet) · K4 **FX OVERLAY** (the soundboard), with meters · **LFO again**: K1 swing · K2 the kick through the chain or around it |
+| LFO | **MIXER**: K1 break level · K2 kick level · K3 snare and hat level · K4 **FX** (the whole effects chain, dry to wet), with meters · **LFO again**: K1 swing · K2 the drums through the chain or around it |
 | ARP | GENERATOR: complexity · anchor · roll · fill · SEL + ARP: random pattern |
 | FX | The **master FX chain**: four slots in series. ALGORITHM picks a slot, PRESETS puts an effect in it (FILTER, CRUNCH, DRIVE, PUNCH, FLANGER, RING MOD, TREMOLO, REVERB, DELAY, EQ, TAPE, MB COMP, CLIP, or EMPTY), K1–K3 its settings and K4 its mix, FX bypasses it, SEL + ALGORITHM moves it along the chain |
-| EDIT | **KICK**: a synthesised kick of four layers (SUB, PUNCH, GRIT, CLICK) into a clipper. The white keys are its 16 steps; EDIT again steps MIX (the layers' levels) → LAYER (level, pitch, decay, tone) → LAYER FX (drive, crunch, filter, ring mod) → MACRO (SUB, PUNCH, GRIT, INTENSITY) → OUT (volume, route); ALGORITHM the layer, PRESETS six kicks (909 … ROTTERDAM … DISTORTO), SEL + EDIT through the FX chain or around it; MIDI note 36 plays it |
-| GLO | GLOBAL: K1 MIDI clock in (follow tempo and start / stop), K2 clock out (24 ppqn, start / stop), K3 Bluetooth MIDI on / off (shows up as "CHOPPAH XXXX" in a MIDI app's Bluetooth page), K4 where MIDI goes (USB, Bluetooth, both). **GLO again**: K1 pitch KEEP LENGTH (the default: pitch without changing the slices' length) or SPEED (the classic repitch), K2 grain size, K3 **snap**: where a key pressed while playing lands (OFF, 1/8, 1/4, 1/2, 1, 2, 4 slices). **GLO a third time**: **Bluetooth audio out** to headphones or a speaker: K1 on / off, K2 the device, K3 scan (while streaming: a left / right test; K2 then picks joint or plain stereo coding), K4 connect / hang up; stereo (150–300 ms late: for listening) |
-| SAVE | Keep the settings (a newer version keeps them: new settings start at their defaults) |
+| EDIT | **KICK**: a synthesised kick of four layers (SUB, PUNCH, GRIT, CLICK) into a clipper. The white keys are its lane's 16 steps; EDIT again steps MIX (the layers' levels) → LAYER (level, pitch, decay, tone) → LAYER FX (drive, crunch, filter, ring mod) → MACRO (SUB, PUNCH, GRIT, INTENSITY) → OUT (volume, route); ALGORITHM the layer, PRESETS six kicks (909 … ROTTERDAM … DISTORTO), SEL + EDIT the drums through the FX chain or around it; MIDI note 36 plays it |
+| GLO | GLOBAL: K1 MIDI clock in (follow tempo and start / stop), K2 clock out (24 ppqn, start / stop), K3 Bluetooth MIDI on / off (shows up as "CHOPPAH XXXX" in a MIDI app's Bluetooth page), K4 where MIDI goes (USB, Bluetooth, both). **GLO again**: K1 pitch KEEP LENGTH (the default: pitch without changing the slices' length) or SPEED (the classic repitch), K2 grain size, K3 **snap**: where a key pressed while playing lands (OFF, 1/8, 1/4, 1/2, 1, 2, 4 slices), K4 **RESET ALL** (turn twice: every setting and pattern back to the start, pairings kept). **GLO a third time**: **Bluetooth audio out** to headphones or a speaker: K1 on / off, K2 the device, K3 scan (while streaming: a left / right test; K2 then picks joint or plain stereo coding), K4 connect / hang up; stereo (150–300 ms late: for listening) |
+| SAVE | Keep the settings and the 16 patterns (a newer version keeps them: new settings start at their defaults) |
 
 ## Breaks
 
@@ -55,7 +59,7 @@ too, left out for room) and 60 royalty-free Amen loops by Dmitriy "Cyberworm" Va
 400 KB for breaks). `./build.sh` builds the marked ones into `app/bank_data.h` (generated,
 git-ignored) whenever the list or a WAV changes; to use other breaks, move the `*`s, or add WAVs and lines, and
 build. `./build.sh bank` builds just the bank and says whether it fits ([breaks/README.md](breaks/README.md)).
-Uploading breaks over USB without rebuilding is milestone M5.
+The breaks are built in: CHOPPAH does not load samples of your own.
 
 ## Building
 

@@ -12,7 +12,7 @@
 #include "brk_math.h"
 #include "brk_synth.h"
 #include "kick.h"
-#include "sfx.h"
+#include "perc.h"
 #if defined(__has_include)
 #if __has_include("bank_data.h")
 #include "bank_data.h"
@@ -24,9 +24,11 @@
 #endif
 
 /* ------------------------------------------------------------------ settings --- */
-#define SET_MAGIC 0x36504843u            /* "CHP6" (the slices' effects): another magic loads defaults */
-/* From CHP6 on the settings only grow at the end: a shorter save (an older firmware's) loads into the front and the
- * fields after it keep their defaults. A change that isn't an append needs a new magic (and loses the saves). */
+#define SET_MAGIC 0x37504843u            /* "CHP7" (the soundboard gone, the drums and patterns in): another magic
+                                          * loads defaults */
+/* From CHP7 on the settings only grow at the end: a shorter save (an older firmware's) loads into the front and the
+ * fields after it keep their defaults (SET_SIZE_MIN: CHP7's size; an append keeps it). A change that isn't an append
+ * needs a new magic (and loses the saves). */
 typedef struct {
     uint32_t magic;
     uint16_t tempo_x10;                  /* 400..3000 */
@@ -39,27 +41,24 @@ typedef struct {
     uint8_t clk_out;                     /* MIDI clock out: 0 off, 1 on (24 a beat while playing, start / stop) */
     uint8_t ble_off;                     /* Bluetooth MIDI: 0 on (the default), 1 off */
     uint8_t midi_to;                     /* where MIDI goes: 0 USB and Bluetooth, 1 USB, 2 Bluetooth */
-    uint8_t pitch_keep;                  /* pitch: 0 or 1 KEEP LENGTH (granular; the default), 2 SPEED (repitch).
-                                          * (0 is older saves': they load as KEEP LENGTH, a choice of it stays) */
-    uint8_t grain_ms;                    /* its grains, 10..80 ms (0: 30) */
-    uint8_t gate;                        /* how much of each slice sounds, 5..100 % (0: 100, off) */
-    uint8_t snap;                        /* where a key lands while playing: SNAP_SL index + 1 (0: 1/2 slice) */
-    uint8_t rsv[7];                      /* (zero in older saves: so these load as off, off, on, both, KEEP
-                                          * LENGTH, 30, no gate, 1/2 slice) */
-    brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
-    sfx_set_t sfx;                       /* the soundboard: level, pitch, echo, length */
-    brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
-    brk_slicefx_t slx[BRK_KEYS];         /* each slice's own effect and level (a key held, FX: its other layer) */
-    /* ---- CHP6 saves end here; appended since: */
-    kick_t kick;                         /* the kick (PRD K-*): its sound, its 16 steps, chain or around */
-    uint8_t brk_level;                   /* the MIXER's BREAK fader, 0..100 % (the kick's is kick.volume) */
-    uint8_t mix_rsv[3];
-    uint8_t bta_on;                      /* Bluetooth audio out (GLOBAL, third half): on at power-on, the last device
+    uint8_t pitch_keep;                  /* pitch: 1 KEEP LENGTH (granular; the default), 2 SPEED (repitch) */
+    uint8_t grain_ms;                    /* its grains, 10..80 ms */
+    uint8_t gate;                        /* how much of each slice sounds, 5..100 % (100: off) */
+    uint8_t snap;                        /* where a key lands while playing: SNAP_SL index + 1 */
+    uint8_t brk_level;                   /* the MIXER's BREAK fader, 0..100 % */
+    uint8_t drums_chain;                 /* the drums (kick, snare, hat): 1 through the FX chain, 0 around it */
+    uint8_t pattern;                     /* the pattern playing, 0..NPAT-1 (patterns: their own store object) */
+    uint8_t bta_on;                      /* Bluetooth audio out (GLOBAL, third part): on at power-on, the last device
                                           * connected again */
     uint8_t bta_codec;                   /* its SBC coding: 0 joint stereo (fm1-base's), 1 plain stereo */
-    uint8_t bta_rsv[2];
+    uint8_t rsv[2];
+    brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
+    brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
+    brk_slicefx_t slx[BRK_KEYS];         /* each slice's own effect and level (a key held, FX: its other layer) */
+    kick_t kick;                         /* the kick (PRD K-*): its sound and level */
+    perc_t perc;                         /* the snare and the hat (PRD K-10): their sounds and level */
 } settings_t;
-#define SET_SIZE_CHP6 __builtin_offsetof(settings_t, kick)   /* the shortest save that loads */
+#define SET_SIZE_MIN sizeof(settings_t)  /* the shortest save that loads (appending: the first new field's offset) */
 _Static_assert(sizeof(settings_t) <= 3840u, "a store object holds 3840 bytes");
 static settings_t set;
 static uint8_t set_dirty;
@@ -67,30 +66,31 @@ static uint8_t foot_dirty;               /* a setting changed: the slicer's foot
 
 static void settings_defaults(void)
 {
+    uint32_t k;
+    uint8_t *z = (uint8_t *)&set;
+    for (k = 0; k < sizeof set; k++)     /* (every field: no leftovers from a save that didn't load) */
+        z[k] = 0u;
     set.magic = SET_MAGIC;
-    set.tempo_x10 = 1700u;               /* jungle tempo; the built-in break is played at 136.9 */
-    set.pitch = 0;
+    set.tempo_x10 = 1700u;               /* jungle tempo */
     set.swing = 50u;
-    set.gen.complexity = 0.0f;
     set.gen.anchor = 0.7f;
     set.gen.roll = 0.3f;
     set.gen.fill = 0.5f;
     set.gen.phrase_bars = 4u;
     brk_fx_defaults(&set.fx);
-    set.brk = 0u;                        /* the first break: the bank's first when there is one (app_init) */
+    set.pitch_keep = 1u;
+    set.grain_ms = 30u;
+    set.gate = 100u;
+    set.snap = 4u;                       /* 1/2 slice */
+    set.brk_level = 100u;
+    set.drums_chain = 1u;
     brk_padset_defaults(&set.pads);
-    sfx_defaults(&set.sfx);
-    {
-        uint32_t k;
-        for (k = 0; k < BRK_KEYS; k++) {
-            brk_keyset_defaults(&set.keys[k]);
-            brk_slicefx_defaults(&set.slx[k]);
-        }
+    for (k = 0; k < BRK_KEYS; k++) {
+        brk_keyset_defaults(&set.keys[k]);
+        brk_slicefx_defaults(&set.slx[k]);
     }
     kick_defaults(&set.kick);
-    set.brk_level = 100u;
-    set.bta_on = 0u;                     /* (Bluetooth audio off until it is turned on) */
-    set.bta_codec = 0u;
+    perc_defaults(&set.perc);
 }
 
 static int pitch_keeps(void) { return set.pitch_keep != 2u; }   /* KEEP LENGTH unless SPEED was chosen */
@@ -115,8 +115,8 @@ static void settings_apply(void)
     brk_pitch_mode(pitch_keeps(), (float)(set.grain_ms ? set.grain_ms : 30u));
     brk_gate((float)(set.gate ? set.gate : 100u) * 0.01f);
     brk_snap(SNAP_SL[snap_index()]);
-    sfx_set(&set.sfx);
     kick_set(&set.kick);
+    perc_set(&set.perc);
     {
         uint32_t k;
         for (k = 0; k < BRK_KEYS; k++) {
@@ -133,6 +133,83 @@ static void changed(void)
     settings_apply();
 }
 
+/* ------------------------------------------------------------------ patterns --- */
+/* the pattern sequencer (PRD B-20..B-22): 16 patterns, each 32 steps of the break (2 bars: slice or follow, pitch,
+ * ratchet, reverse; the engine plays them, brk_step_set) and 16-step lanes for the kick, the snare and the hat (each
+ * bar). Saved with SAVE in their own store object. PRESETS picks one: while playing it takes over at the end of the
+ * loop */
+#define NPAT 16u
+#define PAT_STEPS 32u
+#define PAT_MAGIC 0x31544150u            /* "PAT1" */
+enum { LANE_KICK, LANE_SNARE, LANE_HAT, NLANES };
+typedef struct {
+    uint8_t st[PAT_STEPS][4];            /* per step: slice + 2 (0 off, 1 follow the loop, 2.. slice 1..), pitch
+                                          * (int8), flags (bit 0 reverse, bits 1-2 ratchet - 1), 0 */
+    uint16_t lane[NLANES];               /* bit n: the drum hits on step n of each bar */
+    uint16_t rsv;
+} pat_t;                                 /* 136 bytes */
+static struct {
+    uint32_t magic;
+    pat_t p[NPAT];
+} pats;
+_Static_assert(sizeof pats <= 3840u, "a store object holds 3840 bytes");
+static volatile uint16_t lane_now[NLANES];   /* the pattern playing's lanes, for the render */
+static int8_t pat_next = -1;             /* a pattern picked while playing: it starts at the loop's end */
+
+static void pat_defaults(void)
+{
+    uint32_t i, k;
+    pats.magic = PAT_MAGIC;
+    for (i = 0; i < NPAT; i++) {
+        pat_t *p = &pats.p[i];
+        for (k = 0; k < PAT_STEPS; k++) {
+            p->st[k][0] = 1u;            /* follow the loop */
+            p->st[k][1] = p->st[k][2] = p->st[k][3] = 0u;
+        }
+        p->lane[LANE_KICK] = 0x1111u;    /* four to the floor */
+        p->lane[LANE_SNARE] = p->lane[LANE_HAT] = 0u;
+        p->rsv = 0u;
+    }
+}
+static void pat_step_out(uint32_t k)     /* step k of the pattern playing, to the engine */
+{
+    const uint8_t *b = pats.p[set.pattern % NPAT].st[k];
+    brk_step_t s;
+    s.slice = (int8_t)(b[0] >= 2u ? (int32_t)b[0] - 2 : BRK_NO_SLICE);
+    s.on = (uint8_t)(b[0] != 0u);
+    s.pitch = (int8_t)b[1];
+    s.flags = (uint8_t)(b[2] & 1u ? STEP_REVERSE : 0u);
+    s.ratchet = (uint8_t)(((b[2] >> 1) & 3u) + 1u);
+    s.prob = 100u;
+    s.rsv[0] = s.rsv[1] = 0u;
+    brk_step_set(k, &s);
+}
+static void pat_lanes_out(void)
+{
+    uint32_t l;
+    for (l = 0; l < NLANES; l++)
+        lane_now[l] = pats.p[set.pattern % NPAT].lane[l];
+}
+static void pat_apply(void)              /* the pattern playing, all of it to the engine */
+{
+    uint32_t k;
+    for (k = 0; k < PAT_STEPS; k++)
+        pat_step_out(k);
+    pat_lanes_out();
+}
+static void pat_read_back(void)          /* the engine's steps into the pattern playing (after RANDOMIZE) */
+{
+    uint32_t k;
+    for (k = 0; k < PAT_STEPS; k++) {
+        brk_step_t s;
+        uint8_t *b = pats.p[set.pattern % NPAT].st[k];
+        brk_step_get(k, &s);
+        b[0] = (uint8_t)(!s.on ? 0u : s.slice >= 0 ? (uint32_t)s.slice + 2u : 1u);
+        b[1] = (uint8_t)s.pitch;
+        b[2] = (uint8_t)((s.flags & STEP_REVERSE ? 1u : 0u) | ((uint32_t)(s.ratchet ? s.ratchet - 1u : 0u) & 3u) << 1);
+    }
+}
+
 /* ------------------------------------------------------------------- engine --- */
 static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 #define CH_DUB_LEN 30720u                /* the dub delay's line: 0.70 s a side, 3/8 down to 97 BPM, 1/2 to 172 */
@@ -147,8 +224,8 @@ static uint8_t wave_px[240];             /* the waveform's height per column, fo
 static uint8_t blk_px[BLK_N][BLK_W];     /* each slice's waveform, 0..19 */
 static uint8_t blk_n;                    /* blocks with a slice behind them */
 static volatile uint8_t muted;
-static volatile float meter_brk, meter_kick, meter_sfx;   /* the MIXER's channels: the break, the kick and the
-                                                           * soundboard, before the chain */
+static volatile float meter_brk, meter_kick, meter_perc;   /* the MIXER's channels: the break, the kick, the snare
+                                                           * and hat, before the chain */
 static volatile float meter_l, meter_r;  /* the output's peaks as it leaves (after MASTER: 1 = full scale), falling
                                           * ~20 dB a second: the render writes, the header's meter reads */
 #define LR_TEST_LEN (4u * BRK_SR)
@@ -243,8 +320,8 @@ void app_init(void)
     brk_init();
     brk_fx_init();
     brk_fx_delay_buffer(dub_line, CH_DUB_LEN);
-    sfx_init();
     kick_init();
+    perc_init();
     n_synth = n_breaks = 0u;             /* the breaks are the bank's (breaks/breaks.txt) */
     while (n_breaks < BANK_SLOTS && bank_slot(n_breaks))
         n_breaks++;
@@ -253,7 +330,7 @@ void app_init(void)
     settings_defaults();                 /* (what a shorter, older save doesn't reach keeps these) */
     {
         int sz = plat_store_size(OBJ_SETTINGS);
-        if (sz < (int)SET_SIZE_CHP6 || sz > (int)sizeof set || plat_store_load(OBJ_SETTINGS, &set, (uint32_t)sz) != sz)
+        if (sz < (int)SET_SIZE_MIN || sz > (int)sizeof set || plat_store_load(OBJ_SETTINGS, &set, (uint32_t)sz) != sz)
             set.magic = 0u;
     }
     if (set.magic != SET_MAGIC || set.tempo_x10 < 400u || set.tempo_x10 > 3000u || set.swing < 50u ||
@@ -264,13 +341,18 @@ void app_init(void)
     }
     if (set.brk >= n_breaks)
         set.brk = 0u;
+    if (plat_store_load(OBJ_PAT, &pats, sizeof pats) != (int)sizeof pats || pats.magic != PAT_MAGIC)
+        pat_defaults();
     break_load(set.brk);                 /* boot: the audio isn't running yet */
     settings_apply();
+    pat_apply();
 }
 
 /* ------------------------------------------------------- MIDI clock, Bluetooth --- */
 #define PKT_RT(b) (0x0Fu | (uint32_t)(b) << 8)   /* a real-time byte as a USB-MIDI packet (CIN 0xF) */
-#define KICK_NOTE 36u
+#define MIDI_SLICE0 48u                  /* C3: slice 1 */
+static void midi_slice(int s, int on);   /* (with the UI: they play as the keys, and REC records them) */
+static void midi_drum(uint32_t lane);
 #define MS_PER_SAMPLE (1000.0f / (float)BRK_SR)
 #define CLKQ 64u
 /* (times in plat_ms: the 1 kHz tick sends at that grain anyway, a beat of ticks averages the tempo, and the host
@@ -318,8 +400,13 @@ void app_loop(void)
     int port;
     while (plat_midi_in(&pkt, &port)) {
         uint32_t st = pkt >> 8 & 0xFFu, t = plat_ms();
-        if ((st & 0xF0u) == 0x90u && (pkt >> 16 & 0x7Fu) == KICK_NOTE && (pkt >> 24 & 0x7Fu)) {
-            kick_hit();                  /* note 36 (C1, a drum machine's kick) on any channel: the kick */
+        if ((st & 0xE0u) == 0x80u) {     /* notes, any channel: 48..63 (C3..D#4) the slices, held as the white keys;
+                                          * 36 the kick, 38 the snare, 42 / 44 / 46 the hat (a drum machine's) */
+            uint32_t note = pkt >> 16 & 0x7Fu, on = (st & 0xF0u) == 0x90u && (pkt >> 24 & 0x7Fu);
+            if (note >= MIDI_SLICE0 && note < MIDI_SLICE0 + 16u)
+                midi_slice((int)(note - MIDI_SLICE0), (int)on);
+            else if (on && (note == 36u || note == 38u || note == 42u || note == 44u || note == 46u))
+                midi_drum(note == 36u ? LANE_KICK : note == 38u ? LANE_SNARE : LANE_HAT);
             continue;
         }
         if (!set.clk_in)
@@ -370,10 +457,24 @@ void app_tick(void)
     }
 }
 
+/* a meter: this block's peak, or the last one falling (about 20 dB a second) */
+static float meter(const float *x, uint32_t n, float last)
+{
+    float pk = 0.0f;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        float a = x[i] < 0.0f ? -x[i] : x[i];
+        if (a > pk)
+            pk = a;
+    }
+    last *= 0.987f;
+    return pk > last ? pk : last;
+}
+
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
-    static float mono[APP_BLOCK], fx[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK], echo[APP_BLOCK], verb[APP_BLOCK];
-    static float kick[APP_BLOCK];
+    static float mono[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK], echo[APP_BLOCK], verb[APP_BLOCK];
+    static float kick[APP_BLOCK], perc[APP_BLOCK];
     float gain = muted ? 0.0f : (float)master_q12 * (1.0f / 4096.0f) * 8300000.0f;
     brk_status_t st;
     uint32_t t0 = plat_ms(), done = 0u, total = n;
@@ -389,18 +490,14 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         brk_render(mono, m);
         {                                /* the MIXER's BREAK fader (eased: no zipper), on the break and its throws */
             static float lvl = 1.0f;
-            float want = (float)set.brk_level * 0.01f, pk = 0.0f, f = meter_brk * 0.987f;
+            float want = (float)set.brk_level * 0.01f;
             for (i = 0; i < m; i++) {
-                float a;
                 lvl += (want - lvl) * 0.002f;
                 mono[i] *= lvl;
                 echo[i] *= lvl;
                 verb[i] *= lvl;
-                a = mono[i] < 0.0f ? -mono[i] : mono[i];
-                if (a > pk)
-                    pk = a;
             }
-            meter_brk = pk > f ? pk : f;
+            meter_brk = meter(mono, m, meter_brk);
         }
         if (set.clk_out) {               /* clock out: each tick due as its sample plays (a block from now) */
             uint16_t off[16];
@@ -411,38 +508,30 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             }
         }
         done += m;
-        {                                /* the kick: on the steps of the bar its lane has, at their samples */
-            uint16_t off[8], at[8];
-            uint8_t idx[8];
-            uint32_t k, ne = brk_step_events(off, idx, 8u), na = 0u, steps = set.kick.steps;
-            for (k = 0; k < ne; k++)
-                if (steps >> idx[k] & 1u)
-                    at[na++] = off[k];
-            kick_render(kick, m, at, na);
-            {
-                float pk = 0.0f, f = meter_kick * 0.987f;
-                for (i = 0; i < m; i++) {
-                    float a = kick[i] < 0.0f ? -kick[i] : kick[i];
-                    if (a > pk)
-                        pk = a;
+        {                                /* the drums: on the steps of the bar their lanes have, at their samples */
+            uint16_t off[8], ka[8], pa[8];
+            uint8_t idx[8], who[8];
+            uint32_t k, ne = brk_step_events(off, idx, 8u), nk = 0u, np = 0u;
+            uint32_t lk = lane_now[LANE_KICK], ls = lane_now[LANE_SNARE], lh = lane_now[LANE_HAT];
+            for (k = 0; k < ne; k++) {
+                uint32_t w = (ls >> idx[k] & 1u) << PV_SNARE | (lh >> idx[k] & 1u) << PV_HAT;
+                if (lk >> idx[k] & 1u)
+                    ka[nk++] = off[k];
+                if (w) {
+                    pa[np] = off[k];
+                    who[np++] = (uint8_t)w;
                 }
-                meter_kick = pk > f ? pk : f;
             }
-        }
-        sfx_render(fx, m);               /* the soundboard, over the break, into the delay at its echo */
-        {
-            float pk = 0.0f, f = meter_sfx * 0.987f;
-            for (i = 0; i < m; i++) {
-                float a = fx[i] < 0.0f ? -fx[i] : fx[i];
-                if (a > pk)
-                    pk = a;
-            }
-            meter_sfx = pk > f ? pk : f;
+            kick_render(kick, m, ka, nk);
+            perc_render(perc, m, pa, who, np);
+            meter_kick = meter(kick, m, meter_kick);
+            meter_perc = meter(perc, m, meter_perc);
+            for (i = 0; i < m; i++)
+                kick[i] += perc[i];
         }
         brk_status(&st);
-        /* the break through the DJ filter, the kick joining it into the chain (or around it), the soundboard after */
-        brk_fx_process(mono, set.kick.chain ? kick : 0, fx, sfx_echo(), echo, verb, set.kick.chain ? 0 : kick, l, r, m,
-                       st.pads);
+        /* the break through the DJ filter, the drums joining it into the chain (or around it) */
+        brk_fx_process(mono, set.drums_chain ? kick : 0, echo, verb, set.drums_chain ? 0 : kick, l, r, m, st.pads);
         if (lr_test) {                   /* the left / right test: a low beep on the left, then a high one on the
                                           * right, twice (4 s), over everything else */
             static float ph;
@@ -461,19 +550,10 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             }
             lr_test = left > 1u ? left : 0u;
         }
-        {                                /* the meter: this block's peaks as they leave, or the last ones falling */
-            float pl = 0.0f, pr = 0.0f, fl = meter_l * 0.987f, fr = meter_r * 0.987f, out = gain * (1.0f / 8388608.0f);
-            for (i = 0; i < m; i++) {
-                float a = l[i] < 0.0f ? -l[i] : l[i], b2 = r[i] < 0.0f ? -r[i] : r[i];
-                if (a > pl)
-                    pl = a;
-                if (b2 > pr)
-                    pr = b2;
-            }
-            pl *= out;
-            pr *= out;
-            meter_l = pl > fl ? pl : fl;
-            meter_r = pr > fr ? pr : fr;
+        {                                /* the header's meter: as it leaves, after MASTER */
+            float out = gain * (1.0f / 8388608.0f), a = meter(l, m, 0.0f) * out, b = meter(r, m, 0.0f) * out;
+            meter_l = a > meter_l * 0.987f ? a : meter_l * 0.987f;
+            meter_r = b > meter_r * 0.987f ? b : meter_r * 0.987f;
         }
         for (i = 0; i < m; i++) {
             lr[2u * i] = (int32_t)(l[i] * gain);
@@ -491,2781 +571,15 @@ void app_panic(void)
 }
 
 /* ----------------------------------------------------------------------- UI --- */
-enum { PG_HOME, PG_GEN, PG_FX, PG_SOUND, PG_GLOBAL, PG_KICK, PG_MIX, NPAGES };
-static const char *const PAGE_NAME[NPAGES] = {"PERFORM", "GENERATOR", "FX", "SOUNDBOARD", "GLOBAL", "KICK", "MIXER"};
-static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
-                                                "FLT", "DUB"};
-static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
-
-#define TAPS 8u                          /* tap tempo: the last eight taps (seven intervals) average */
-static struct {
-    uint32_t keys, btn;
-    uint8_t page, fx_focus;              /* fx_focus: the FX chain's slot the FX page tunes (0..3) */
-    char msg[2][24];
-    uint32_t msg_until;
-    uint32_t taps[TAPS], ntaps;          /* tap tempo on SEL: the taps' times, how many in this run */
-    uint32_t tap_t;                      /* SEL went down then: a tap if it comes up alone */
-    uint8_t tap_pend, tap_combo;         /* SEL down as a tap; something else touched while it was held */
-    uint32_t oct_t, oct_rep;             /* OCT- / OCT+ held: repeats that speed up */
-    int32_t last_step, last_slice;
-    uint32_t last_pads, last_keys, last_hdr;
-    uint32_t intro_t0;                   /* the start screen: when it began (0: over) */
-    uint8_t intro, intro_drawn;          /* showing it; blocks drawn so far */
-    uint8_t touched;                     /* a key, button or encoder moved since app_frame last looked */
-    int8_t sfx_hit;                      /* the soundboard key pressed last, and when */
-    uint32_t sfx_hit_t, sfx_drawn, sfx_mask;
-    int8_t pad_focus;                    /* the pad held last (its animation, K1-K4 tune it); -1 none */
-    int8_t key_focus;                    /* the white key held that loops (its view, K1-K4 tune it); -1 none */
-    uint8_t key_layer;                   /* K1-K4 on a key held: 0 its loop, 1 its slice's effect (FX flips) */
-    uint8_t key_turned;                  /* a knob turned while it is held: its view at once */
-    uint32_t key_since;                  /* when it was pressed */
-    int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
-    uint8_t gpage;                       /* the GLOBAL page's part: 0 MIDI and Bluetooth, 1 pitch, 2 BT audio */
-    uint8_t bta_sel, bta_booted;         /* BT AUDIO: the device chosen in its list; the boot's reconnect done */
-    uint8_t kpage, klayer, kpreset;      /* the KICK page: its sub-page (KP_*), the layer it edits, the preset */
-    uint8_t mpage;                       /* the MIXER's half: 0 LEVELS (break, kick, filter, FX), 1 GROOVE */
-    uint32_t mix_drawn;                  /* its faders' meters: when last drawn */
-    int16_t meter_x;                     /* the header's level meter: where (0: not shown now, a message is) */
-    uint32_t meter_drawn;
-    uint32_t pad_since, fx_drawn;        /* when it was pressed; the animation's last frame */
-    float reel;                          /* the tape stop's reels, turns */
-    uint8_t redraw;                      /* RG_* bits: the regions to draw again */
-} ui;
-enum { RG_HEAD = 1, RG_WAVE = 2, RG_BLOCKS = 4, RG_FOOT = 8, RG_ALL = 15, RG_FX = 16 };
-
-static void text_cat(char *d, const char *s)
-{
-    while (*d)
-        d++;
-    while (*s)
-        *d++ = *s++;
-    *d = 0;
-}
-
-static void int_text(int32_t v, char *b)
-{
-    char t[12];
-    int n = 0;
-    uint32_t u = (uint32_t)(v < 0 ? -v : v);
-    do
-        t[n++] = (char)('0' + u % 10u);
-    while ((u /= 10u) && n < 11);
-    if (v < 0)
-        *b++ = '-';
-    while (n)
-        *b++ = t[--n];
-    *b = 0;
-}
-
-static void tenths_text(int32_t v, char *b)   /* 1700 -> "170.0" */
-{
-    char t[12];
-    int_text(v / 10, b);
-    t[0] = '.';
-    t[1] = (char)('0' + (v < 0 ? -v : v) % 10);
-    t[2] = 0;
-    text_cat(b, t);
-}
-
-void app_say(const char *a, const char *b)
-{
-    uint32_t i;
-    for (i = 0; i < 23u && a && a[i]; i++)
-        ui.msg[0][i] = a[i];
-    ui.msg[0][i] = 0;
-    for (i = 0; i < 23u && b && b[i]; i++)
-        ui.msg[1][i] = b[i];
-    ui.msg[1][i] = 0;
-    ui.msg_until = plat_ms() + 1300u;
-    ui.redraw |= 1u;               /* RG_HEAD: the message */
-}
-
-static void say_int(const char *what, int32_t v, const char *unit)
-{
-    char t[24];
-    int_text(v, t);
-    text_cat(t, unit);
-    app_say(what, t);
-}
-
-static float knob_f(float v, int32_t d, float step, float lo, float hi)
-{
-    v += (float)d * step;
-    return v < lo ? lo : v > hi ? hi : v;
-}
-
-/* tap tempo (PRD A-38): SEL tapped in time, on any page. The tempo follows from the second tap on, the mean of the
- * last eight taps; a pause of 2 s starts a new run, and a tap far off the run's pace (under 0.7 or over 1.4 of it)
- * starts one from the tap before. A SEL that is part of a combination (SEL + ALGORITHM, + EDIT, + a knob ...) is no
- * tap: the tap counts when SEL comes up alone, at the time it went down */
-static void tap_tempo(uint32_t t)
-{
-    char a[12], v[16];
-    uint32_t n, span;
-    if (ui.ntaps && t - ui.taps[(ui.ntaps - 1u) % TAPS] > 2000u)
-        ui.ntaps = 0u;                   /* a pause starts a new run */
-    if (ui.ntaps >= 3u) {                /* far off the run's pace: a new run from the last tap */
-        uint32_t last = ui.taps[(ui.ntaps - 1u) % TAPS], m = ui.ntaps < TAPS ? ui.ntaps : TAPS;
-        uint32_t avg = (last - ui.taps[(ui.ntaps - m) % TAPS]) / (m - 1u), iv = t - last;
-        if (iv * 10u < avg * 7u || iv * 10u > avg * 14u) {
-            ui.taps[0] = last;
-            ui.ntaps = 1u;
-        }
-    }
-    ui.taps[ui.ntaps % TAPS] = t;
-    ui.ntaps++;
-    a[0] = 0;
-    text_cat(a, "TAP ");
-    int_text((int32_t)(ui.ntaps < 99u ? ui.ntaps : 99u), a + 4);
-    if (ui.ntaps < 2u) {
-        app_say(a, "AGAIN IN TIME");
-        return;
-    }
-    n = ui.ntaps < TAPS ? ui.ntaps : TAPS;
-    span = t - ui.taps[(ui.ntaps - n) % TAPS];
-    if (!span)
-        return;
-    n = (n - 1u) * 600000u / span;       /* BPM x 10 */
-    set.tempo_x10 = (uint16_t)(n < 400u ? 400u : n > 3000u ? 3000u : n);
-    changed();
-    tenths_text(set.tempo_x10, v);
-    text_cat(v, " BPM");
-    app_say(a, v);
-}
-
-/* ------------------------------------------------------------- the FX chain --- */
-static void pct_text(float v, char *t);  /* (below, with the pads') */
-static void signed_tenths(float v, const char *unit, char *t);
-static void times_text(float v, char *t);
-/* each effect's settings, as the foot names them (K1-K3; K4 is MIX) */
-static const char *const FXP_NAME[BRK_NFXT][3] = {
-    {"", "", ""}, {"CUTOFF", "RESO", "MODE"}, {"BITS", "RATE", "DRIVE"}, {"GAIN", "TONE", "LEVEL"},
-    {"AMOUNT", "ATTACK", "RELEASE"}, {"RATE", "DEPTH", "FEEDBK"}, {"FREQ", "SPREAD", ""}, {"RATE", "DEPTH", "PAN"},
-    {"SIZE", "TONE", "PRE"}, {"TIME", "FEEDBK", "TONE"}, {"LOW", "MID", "HIGH"}, {"DRIVE", "WARMTH", "WOW"},
-    {"LOW", "MID", "HIGH"}, {"DRIVE", "KNEE", "CEILING"}};
-
-static const char *fx_param_name(uint32_t slot, int i)
-{
-    const brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
-    if (i == 3)
-        return sl->type == FXT_EMPTY ? "" : sl->type == FXT_DELAY ? "SEND" : sl->type == FXT_EQ ? "FREQ" : "MIX";
-    return FXP_NAME[sl->type < BRK_NFXT ? sl->type : 0][i & 3];
-}
-
-static void hz_text(float hz, char *t)   /* 340 -> "340HZ", 1234 -> "1.2K" */
-{
-    t[0] = 0;
-    if (hz >= 1000.0f) {
-        tenths_text((int32_t)(hz / 100.0f + 0.5f), t);
-        text_cat(t, "K");
-    } else {
-        int_text((int32_t)(hz + 0.5f), t);
-        text_cat(t, "HZ");
-    }
-}
-
-static void hundredths_text(float v, char *t)   /* 0.25 -> "0.25" (0..99.99) */
-{
-    int32_t c = (int32_t)(v * 100.0f + 0.5f);
-    char d[4];
-    int_text(c / 100, t);
-    text_cat(t, ".");
-    d[0] = (char)('0' + c / 10 % 10);
-    d[1] = (char)('0' + c % 10);
-    d[2] = 0;
-    text_cat(t, d);
-}
-
-static void fx_value(uint32_t slot, int i, char *t)
-{
-    const brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
-    float v = i == 3 ? sl->mix : sl->p[i & 3];
-    t[0] = 0;
-    if (sl->type == FXT_EMPTY || !fx_param_name(slot, i)[0])
-        return;
-    if (i == 3) {
-        if (sl->type == FXT_EQ)          /* the EQ's K4: the mid's frequency */
-            hz_text(200.0f * brk_exp2f(v * 4.64f), t);
-        else
-            pct_text(v, t);
-        return;
-    }
-    switch (sl->type * 4 + i) {
-    case FXT_EQ * 4 + 0:
-    case FXT_EQ * 4 + 1:
-    case FXT_EQ * 4 + 2: {               /* -12 .. +12 dB, flat in the middle */
-        float db = (v - 0.5f) * 24.0f;
-        if (db > -0.25f && db < 0.25f)
-            text_cat(t, "0 DB");
-        else
-            signed_tenths(db, "DB", t);
-        return;
-    }
-    case FXT_TAPE * 4 + 0: int_text((int32_t)(v * 24.0f + 0.5f), t); text_cat(t, " DB"); return;
-    case FXT_CLIP * 4 + 0: text_cat(t, "+"); int_text((int32_t)(v * 24.0f + 0.5f), t + 1); text_cat(t, " DB"); return;
-    case FXT_CLIP * 4 + 1: text_cat(t, v < 0.34f ? "SOFT " : v < 0.67f ? "MID " : "HARD ");
-        {
-            char d[8];
-            pct_text(v, d);
-            text_cat(t, d);
-        }
-        return;
-    case FXT_CLIP * 4 + 2:
-        if (v < 0.005f)
-            text_cat(t, "0 DB");
-        else
-            signed_tenths(-v * 12.0f, "DB", t);
-        return;
-    case FXT_MBCOMP * 4 + 0:
-    case FXT_MBCOMP * 4 + 1:
-    case FXT_MBCOMP * 4 + 2: {           /* its amount as the band's ratio */
-        int32_t r10 = (int32_t)((1.0f + 7.0f * v) * 10.0f + 0.5f);
-        if (r10 <= 10)
-            text_cat(t, "OFF");
-        else {
-            tenths_text(r10, t);
-            text_cat(t, ":1");
-        }
-        return;
-    }
-    case FXT_FILTER * 4 + 0: hz_text(30.0f * brk_exp2f(v * 9.06f), t); return;
-    case FXT_FILTER * 4 + 2: text_cat(t, v < 0.33f ? "LP" : v < 0.67f ? "BP" : "HP"); return;
-    case FXT_CRUNCH * 4 + 0: int_text((int32_t)(16.0f - 14.0f * v + 0.5f), t); text_cat(t, " BIT"); return;
-    case FXT_CRUNCH * 4 + 1: hz_text(44100.0f * brk_exp2f(-v * 5.46f), t); return;
-    case FXT_DRIVE * 4 + 0: times_text(1.0f + 29.0f * v * v, t); return;
-    case FXT_PUNCH * 4 + 1: tenths_text((int32_t)((0.1f + 29.9f * v * v) * 10.0f + 0.5f), t); text_cat(t, "MS"); return;
-    case FXT_PUNCH * 4 + 2: int_text((int32_t)(20.0f + 480.0f * v + 0.5f), t); text_cat(t, "MS"); return;
-    case FXT_FLANGER * 4 + 0: hundredths_text(0.02f * brk_exp2f(v * 9.0f), t); text_cat(t, "HZ"); return;
-    case FXT_FLANGER * 4 + 2: {
-        int32_t x = (int32_t)((2.0f * v - 1.0f) * 90.0f + (v < 0.5f ? -0.5f : 0.5f));
-        t[0] = x > 0 ? '+' : x < 0 ? '-' : 0;
-        t[1] = 0;
-        int_text(x < 0 ? -x : x, t + (x != 0));
-        text_cat(t, "%");
-        return;
-    }
-    case FXT_RING * 4 + 0: hz_text(20.0f * brk_exp2f(v * 6.64f), t); return;
-    case FXT_REVERB * 4 + 1: text_cat(t, v < 0.34f ? "BRIGHT " : v < 0.67f ? "WARM " : "DARK ");
-        {
-            char d[8];
-            pct_text(v, d);
-            text_cat(t, d);
-        }
-        return;
-    case FXT_REVERB * 4 + 2: int_text((int32_t)(v * 60.0f + 0.5f), t); text_cat(t, "MS"); return;
-    case FXT_DELAY * 4 + 0: {
-        uint32_t d = (uint32_t)(v * (float)(BRK_DLY_DIVS - 1u) + 0.5f);
-        text_cat(t, BRK_DLY_DIV_NAME[d < BRK_DLY_DIVS ? d : 0u]);
-        return;
-    }
-    case FXT_DELAY * 4 + 1: pct_text(v * 0.95f, t); return;
-    case FXT_TREMOLO * 4 + 0: {
-        uint32_t d = (uint32_t)(v * (float)(BRK_TREM_DIVS - 1u) + 0.5f);
-        text_cat(t, BRK_TREM_DIV_NAME[d < BRK_TREM_DIVS ? d : 0u]);
-        return;
-    }
-    default:
-        pct_text(v, t);
-        return;
-    }
-}
-
-static void fx_knob_turn(uint32_t slot, int i, int32_t d)
-{
-    brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
-    char t[16];
-    float step = 0.02f;
-    if (sl->type == FXT_EMPTY || i < 0 || i > 3 || !fx_param_name(slot, i)[0])
-        return;
-    if (i == 3)
-        sl->mix = knob_f(sl->mix, d, 0.02f, 0.0f, 1.0f);
-    else {
-        if (sl->type == FXT_FILTER && i == 2)
-            step = 0.5f;                 /* LP, BP, HP */
-        else if (sl->type == FXT_TREMOLO && i == 0)
-            step = 1.0f / (float)(BRK_TREM_DIVS - 1u);
-        else if (sl->type == FXT_DELAY && i == 0)
-            step = 1.0f / (float)(BRK_DLY_DIVS - 1u);
-        sl->p[i] = knob_f(sl->p[i], d, step, 0.0f, 1.0f);
-    }
-    fx_value(slot, i, t);
-    app_say(fx_param_name(slot, i), t);
-    ui.redraw |= RG_BLOCKS;
-    changed();
-}
-
-/* PRESETS on the FX page: the focused slot's effect, through the library (EMPTY first), with its own starting
- * settings, on at once */
-static void fx_type_turn(int32_t d)
-{
-    brk_fxslot_t *sl = &set.fx.slot[ui.fx_focus & 3u];
-    int32_t t = clamp((int32_t)sl->type + (d > 0 ? 1 : -1), 0, BRK_NFXT - 1);
-    char n[16];
-    if ((uint32_t)t == sl->type)
-        return;
-    brk_fx_slot_defaults(sl, (int)t);
-    sl->on = (uint8_t)(t != FXT_EMPTY);
-    n[0] = 0;
-    text_cat(n, "SLOT ");
-    int_text((int32_t)(ui.fx_focus & 3u) + 1, n + 5);
-    app_say(n, BRK_FXT_NAME[t]);
-    ui.redraw |= RG_BLOCKS | RG_FOOT;
-    changed();
-}
-
-/* ALGORITHM on the FX page: the next or previous slot; with SEL held, the focused slot moves along the chain */
-static void fx_algo(int32_t d, uint32_t sel)
-{
-    uint32_t a = ui.fx_focus & 3u, b = (a + (d > 0 ? 1u : 3u)) & 3u;
-    char n[8];
-    if (sel) {
-        brk_fxslot_t tmp = set.fx.slot[a];
-        if ((d > 0 && a == 3u) || (d < 0 && a == 0u))
-            return;                      /* (the ends stay the ends) */
-        set.fx.slot[a] = set.fx.slot[b];
-        set.fx.slot[b] = tmp;
-        changed();
-    }
-    ui.fx_focus = (uint8_t)b;
-    int_text((int32_t)b + 1, n);
-    app_say(sel ? "MOVED TO" : "SLOT", n);
-    ui.redraw |= RG_BLOCKS | RG_FOOT;
-}
-
-/* ---- Bluetooth audio out (PRD A-72; fm1-base's A2DP source, plat_bta_*): GLOBAL's third part. K1 on / off, K2 the
- * device (the remembered ones first, then what a scan found), K3 a scan, K4 right connect / left hang up (SEL held,
- * left: forget a remembered one). On at power-on as saved, connecting the last device again. The host has no radio:
- * there it is "not in this build", or with the scenario command bta_sim a pretend one for the page */
-#define BTA_LIST 8u
-static uint8_t bta_sim_on;
-#if !FM1B_BT_AUDIO
-static struct {                          /* the pretend radio (host scenarios) */
-    int st;
-    uint32_t t, nfound, nknown;
-    char known[4][18];
-} sim;
-static const char *const SIM_FOUND[2] = {"WH-1000XM4", "JBL FLIP 6"};
-static void sim_copy(char *d, const char *s)
-{
-    uint32_t i;
-    for (i = 0; i < 17u && s[i]; i++)
-        d[i] = s[i];
-    d[i] = 0;
-}
-#endif
-static int ch_bta_have(void)                /* a radio for it in this build */
-{
-#if FM1B_BT_AUDIO
-    return 1;
-#else
-    return bta_sim_on;
-#endif
-}
-static int ch_bta_state(void)
-{
-#if FM1B_BT_AUDIO
-    return plat_bta_state();
-#else
-    return bta_sim_on ? sim.st : PLAT_BTA_OFF;
-#endif
-}
-static void ch_bta_on(int on)
-{
-#if FM1B_BT_AUDIO
-    plat_bta_on(on);
-#else
-    sim.st = on ? PLAT_BTA_READY : PLAT_BTA_OFF;
-#endif
-}
-static void ch_bta_scan(void)
-{
-#if FM1B_BT_AUDIO
-    plat_bta_scan(1);
-#else
-    sim.st = PLAT_BTA_SCANNING;
-    sim.t = plat_ms();
-    sim.nfound = 0u;
-#endif
-}
-static int ch_bta_found(int i, char *name)
-{
-#if FM1B_BT_AUDIO
-    return plat_bta_found(i, name);
-#else
-    if (i < 0 || (uint32_t)i >= sim.nfound)
-        return 0;
-    sim_copy(name, SIM_FOUND[i]);
-    return 1;
-#endif
-}
-static int ch_bta_known(int i, char *name)
-{
-#if FM1B_BT_AUDIO
-    return plat_bta_known(i, name);
-#else
-    if (i < 0 || (uint32_t)i >= sim.nknown)
-        return 0;
-    sim_copy(name, sim.known[i]);
-    return 1;
-#endif
-}
-#if !FM1B_BT_AUDIO
-static void sim_remember(const char *n)  /* the device connected: first in the remembered list */
-{
-    uint32_t i, at = sim.nknown < 4u ? sim.nknown : 3u;
-    for (i = 0; i < sim.nknown; i++) {
-        uint32_t k;
-        for (k = 0; n[k] && n[k] == sim.known[i][k]; k++)
-            ;
-        if (!n[k] && !sim.known[i][k])
-            at = i;
-    }
-    for (i = at; i > 0u; i--)
-        sim_copy(sim.known[i], sim.known[i - 1u]);
-    sim_copy(sim.known[0], n);
-    if (at >= sim.nknown)
-        sim.nknown++;
-    sim.st = PLAT_BTA_PAGING;
-    sim.t = plat_ms();
-}
-#endif
-static void ch_bta_connect(int found_i, int known_i)   /* one of them, the other -1 */
-{
-#if FM1B_BT_AUDIO
-    if (known_i >= 0)
-        (void)plat_bta_reconnect(known_i);
-    else
-        plat_bta_pick(found_i);
-#else
-    char n[18];
-    if (known_i >= 0 ? ch_bta_known(known_i, n) : ch_bta_found(found_i, n))
-        sim_remember(n);
-#endif
-}
-static void ch_bta_hangup(void)
-{
-#if FM1B_BT_AUDIO
-    plat_bta_hangup();
-#else
-    sim.st = PLAT_BTA_READY;
-#endif
-}
-static void ch_bta_forget(int i)
-{
-#if FM1B_BT_AUDIO
-    plat_bta_forget(i);
-#else
-    uint32_t k;
-    if (i < 0 || (uint32_t)i >= sim.nknown)
-        return;
-    for (k = (uint32_t)i; k + 1u < sim.nknown; k++)
-        sim_copy(sim.known[k], sim.known[k + 1u]);
-    sim.nknown--;
-#endif
-}
-
-/* the list K2 picks from: the remembered devices, then the found ones not among them; entry i -> its name, and
- * which it is (*known >= 0: remembered device *known; else found device *found) -> 0: no entry i */
-static int same_name(const char *a, const char *b)
-{
-    while (*a && *a == *b) {
-        a++;
-        b++;
-    }
-    return *a == *b;
-}
-static int ch_bta_entry(uint32_t i, char *name, int *known, int *found)
-{
-    char n[18], m[18];
-    int k, f, nk = 0;
-    for (k = 0; ch_bta_known(k, n); k++, nk++)
-        if ((uint32_t)k == i) {
-            name[0] = 0;
-            text_cat(name, n);
-            *known = k;
-            *found = -1;
-            return 1;
-        }
-    i -= (uint32_t)nk;
-    for (f = 0; ch_bta_found(f, n); f++) {
-        int dup = 0;
-        for (k = 0; ch_bta_known(k, m); k++)
-            if (same_name(n, m))
-                dup = 1;
-        if (dup)
-            continue;
-        if (!i--) {
-            name[0] = 0;
-            text_cat(name, n);
-            *known = -1;
-            *found = f;
-            return 1;
-        }
-    }
-    return 0;
-}
-static uint32_t ch_bta_count(void)
-{
-    char n[18];
-    int k, f;
-    uint32_t c = 0;
-    while (c < BTA_LIST && ch_bta_entry(c, n, &k, &f))
-        c++;
-    return c;
-}
-
-static const char *ch_bta_state_name(int st)
-{
-    static const char *const N[] = {"OFF", "SCANNING", "FOUND", "NONE FOUND", "CONNECTING", "LINKED", "SETTING UP",
-                                    "STREAMING", "REFUSED", "NO DEVICE YET", "FAILED", "READY"};
-    return st >= 0 && st <= PLAT_BTA_READY ? N[st] : "?";
-}
-static void ch_bta_value(int i, char *t)
-{
-    char n[18];
-    int k, f, st = ch_bta_state();
-    t[0] = 0;
-    if (!ch_bta_have()) {
-        if (i == 0)
-            text_cat(t, "NOT BUILT");
-        return;
-    }
-    if (i == 0)
-        text_cat(t, st == PLAT_BTA_OFF ? "OFF" : "ON");
-    else if (i == 1 && st == PLAT_BTA_STREAMING)
-        text_cat(t, set.bta_codec ? "STEREO" : "JOINT");
-    else if (i == 1) {
-        if (ch_bta_entry(ui.bta_sel, n, &k, &f)) {
-            n[9] = 0;                    /* (the foot's width) */
-            text_cat(t, n);
-        } else
-            text_cat(t, "-");
-    } else if (i == 2)
-        text_cat(t, st == PLAT_BTA_STREAMING ? (lr_test ? "PLAYING" : "TURN") : st == PLAT_BTA_SCANNING ? "SCANNING"
-                    : st == PLAT_BTA_OFF ? "-" : "TURN");
-    else
-        text_cat(t, st == PLAT_BTA_STREAMING || st == PLAT_BTA_SETUP || st == PLAT_BTA_LINKED ||
-                    st == PLAT_BTA_PAGING ? "< HANG UP" : st == PLAT_BTA_OFF ? "-" : "CONNECT >");
-}
-static void ch_bta_turn(int i, int32_t d)
-{
-    char n[18];
-    int k, f, st = ch_bta_state();
-    if (!ch_bta_have()) {
-        app_say("BT AUDIO", "NOT IN THIS BUILD");
-        return;
-    }
-    if (i == 0) {
-        uint8_t on = d > 0;
-        if (on == (st != PLAT_BTA_OFF))
-            return;
-        ch_bta_on(on);
-        set.bta_on = on;
-        set_dirty = 1u;
-        app_say("BT AUDIO", on ? "ON" : "OFF");
-    } else if (st == PLAT_BTA_OFF)
-        app_say("BT AUDIO", "TURN K1 ON");
-    else if (i == 1 && st == PLAT_BTA_STREAMING) {   /* streaming: K2 the SBC coding, joint or plain stereo */
-        set.bta_codec = d > 0;
-        set_dirty = 1u;
-        app_say("BT CODEC", set.bta_codec ? "STEREO" : "JOINT STEREO");
-    } else if (i == 1) {
-        uint32_t c = ch_bta_count();
-        ui.bta_sel = (uint8_t)(c ? (uint32_t)clamp((int32_t)ui.bta_sel + (d > 0 ? 1 : -1), 0, (int32_t)c - 1) : 0u);
-        if (ch_bta_entry(ui.bta_sel, n, &k, &f))
-            app_say(k >= 0 ? "KNOWN" : "FOUND", n);
-    } else if (i == 2 && st == PLAT_BTA_STREAMING) {   /* streaming: K3 tests left and right */
-        lr_test = LR_TEST_LEN;
-        app_say("TEST", "LOW: LEFT, HIGH: RIGHT");
-    } else if (i == 2) {
-        ch_bta_scan();
-        app_say("BT AUDIO", "SCANNING");
-    } else if (d > 0) {                  /* connect the device chosen */
-        if (ch_bta_entry(ui.bta_sel, n, &k, &f)) {
-            ch_bta_connect(f, k);
-            ui.bta_sel = 0u;             /* (it becomes the last one: first in the list) */
-            app_say("CONNECT", n);
-        } else
-            app_say("BT AUDIO", "SCAN FIRST (K3)");
-    } else if (ui.btn & 1u << B_SEL) {   /* SEL held, left: forget a remembered device */
-        if (ch_bta_entry(ui.bta_sel, n, &k, &f) && k >= 0) {
-            ch_bta_forget(k);
-            ui.bta_sel = 0u;
-            app_say("FORGOT", n);
-        }
-    } else {
-        ch_bta_hangup();
-        app_say("BT AUDIO", "HUNG UP");
-    }
-    ui.redraw |= RG_BLOCKS | RG_FOOT;
-}
-/* every frame: the pretend radio's steps; at boot, on as saved, then the last device once it is ready */
-static void ch_bta_poll(uint32_t now)
-{
-    static int last_st = -1;
-#if FM1B_BT_AUDIO
-    {   /* the SBC coding chosen (K2 while streaming), into fm1-base's encoder (bt/br/bt_acl.c: one translation unit
-         * with this, so its state is in reach). Its own set-up is joint stereo, once a boot at the first stream; this
-         * sets it again as chosen, its bitpool kept, with the interrupts off (the audio interrupt encodes) */
-        static int8_t applied = -1;
-        if (ba_sbc_init_done && applied != (int8_t)set.bta_codec) {
-            uint32_t f = irq_save();
-            bt_sbc_init(&ba_sbc, 44100, (uint8_t)ba_sbc.p.s16BitPool, set.bta_codec ? 0u : 1u);
-            irq_restore(f);
-            applied = (int8_t)set.bta_codec;
-        }
-    }
-#endif
-    if (ch_bta_state() != last_st) {     /* (the foot's K3 is SCAN or TEST L/R by the state) */
-        last_st = ch_bta_state();
-        foot_dirty = 1u;
-    }
-#if !FM1B_BT_AUDIO
-    if (bta_sim_on) {
-        if (sim.st == PLAT_BTA_SCANNING && now - sim.t > 2000u) {
-            sim.nfound = 2u;
-            sim.st = PLAT_BTA_FOUND;
-        } else if (sim.st == PLAT_BTA_PAGING && now - sim.t > 800u) {
-            sim.st = PLAT_BTA_SETUP;
-            sim.t = now;
-        } else if (sim.st == PLAT_BTA_SETUP && now - sim.t > 500u)
-            sim.st = PLAT_BTA_STREAMING;
-    }
-#endif
-    (void)now;
-    if (ui.bta_booted || !ch_bta_have())
-        return;
-    if (!set.bta_on) {
-        ui.bta_booted = 1u;
-        return;
-    }
-    if (ch_bta_state() == PLAT_BTA_OFF)
-        ch_bta_on(1);
-    else if (ch_bta_state() == PLAT_BTA_READY) {
-        char n[18];
-        if (ch_bta_known(0, n))
-            ch_bta_connect(-1, 0);
-        ui.bta_booted = 1u;
-    }
-}
-/* GLOBAL's third part: the state and the device; the list, the one K2 points at outlined */
-static void draw_bta(void)
-{
-    char n[18], t[32];
-    int st = ch_bta_state(), k, f;
-    uint32_t i, c = ch_bta_count(), first;
-    uint16_t sc = st == PLAT_BTA_STREAMING ? C_HI : st == PLAT_BTA_FAILED || st == PLAT_BTA_REFUSED ? C_AMB
-                  : st == PLAT_BTA_OFF ? C_DIM : C_WHITE;
-    cv_begin(240, 52, C_BLACK);
-    cv_text(6, 2, &FONT_T, "BT AUDIO", C_GRAY);
-    cv_text(96, 2, &FONT_T, ch_bta_have() ? ch_bta_state_name(st) : "NOT IN THIS BUILD", sc);
-    t[0] = 0;
-    if (st == PLAT_BTA_STREAMING && ch_bta_known(0, n)) {
-        text_cat(t, "TO ");
-        text_cat(t, n);
-    } else if (st == PLAT_BTA_OFF)
-        text_cat(t, ch_bta_have() ? "K1: ON" : "");
-    else if (!c)
-        text_cat(t, "K3: SCAN");
-    cv_text(96, 15, &FONT_XS, t, st == PLAT_BTA_STREAMING ? C_HI : C_DIM);
-    cv_text(6, 30, &FONT_XS, st == PLAT_BTA_STREAMING ? (lr_test ? "TEST: LOW BEEP LEFT, HIGH BEEP RIGHT" :
-            "K2: CODEC   K3: TEST LEFT / RIGHT") :
-            "FOR LISTENING: 150-300 MS LATE", C_DIM);
-    cv_blit(0, 88);
-    cv_begin(240, 52, C_BLACK);
-    first = ui.bta_sel > 2u ? ui.bta_sel - 2u : 0u;   /* three rows of the list, the chosen one in view */
-    for (i = first; i < first + 3u && i < c; i++) {
-        int32_t y = (int32_t)(i - first) * 16;
-        int sel = i == ui.bta_sel;
-        ch_bta_entry(i, n, &k, &f);
-        if (sel)
-            cv_rect(4, y + 1, 232, 15, C_LINE);
-        cv_text(10, y + 2, &FONT_XS, n, sel ? C_WHITE : C_GRAY);
-        cv_text(180, y + 2, &FONT_XS, k == 0 ? "LAST" : k > 0 ? "KNOWN" : "NEW", sel ? C_HI : C_DIM);
-    }
-    if (!c && st != PLAT_BTA_OFF)
-        cv_text(10, 2, &FONT_XS, st == PLAT_BTA_SCANNING ? "LOOKING (10 S)..." : "NO DEVICES YET", C_DIM);
-    cv_blit(0, 140);
-}
-
-/* the GLOBAL page's knobs: clock in, clock out, Bluetooth, where MIDI goes */
-static const char *const MIDI_TO_NAME[3] = {"USB+BT", "USB", "BT"};
-static void global_value(int i, char *t)
-{
-    t[0] = 0;
-    if (ui.gpage == 2u) {
-        ch_bta_value(i, t);
-        return;
-    }
-    if (ui.gpage) {                      /* the pitch: speed or keep length, the grains */
-        if (i == 0)
-            text_cat(t, pitch_keeps() ? "KEEP LEN" : "SPEED");
-        else if (i == 1) {
-            int_text(set.grain_ms ? set.grain_ms : 30, t);
-            text_cat(t, " MS");
-        } else if (i == 2)
-            text_cat(t, SNAP_SHORT[snap_index()]);
-        return;
-    }
-    text_cat(t, i == 0 ? (set.clk_in ? "FOLLOW" : "OFF") : i == 1 ? (set.clk_out ? "ON" : "OFF")
-                : i == 2 ? (set.ble_off ? "OFF" : "ON") : MIDI_TO_NAME[set.midi_to % 3u]);
-}
-
-static void global_turn(int i, int32_t d)
-{
-    static const char *const NAME[4] = {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"};
-    char t[16];
-    if (ui.gpage == 2u) {
-        ch_bta_turn(i, d);
-        return;
-    }
-    if (ui.gpage) {
-        if (i == 0)
-            set.pitch_keep = d > 0 ? 1u : 2u;   /* right KEEP LENGTH, left SPEED */
-        else if (i == 1)
-            set.grain_ms = (uint8_t)clamp((int32_t)(set.grain_ms ? set.grain_ms : 30u) + d * 5, 10, 80);
-        else if (i == 2)
-            set.snap = (uint8_t)(clamp((int32_t)snap_index() + (d > 0 ? 1 : -1), 0, SNAPS - 1) + 1);
-        else
-            return;
-        global_value(i, t);
-        app_say(i == 0 ? "PITCH" : i == 1 ? "GRAIN" : "SNAP", i == 0 && pitch_keeps() ? "KEEP LENGTH"
-                : i == 2 ? SNAP_NAME[snap_index()] : t);
-        changed();
-        return;
-    }
-    if (i == 0) {
-        set.clk_in = d > 0;
-        if (!set.clk_in) {               /* the tempo is the knob's again */
-            ext.i = ext.n = 0u;
-            ext.run = 0u;
-            ext.bpm = 0.0f;
-        }
-    } else if (i == 1)
-        set.clk_out = d > 0;
-    else if (i == 2) {
-        uint8_t off = d < 0;
-        if (off != set.ble_off) {
-            set.ble_off = off;
-            plat_ble_enable(!off);       /* off ends the link and stops advertising */
-        }
-    } else
-        set.midi_to = (uint8_t)clamp((int32_t)set.midi_to + (d > 0 ? 1 : -1), 0, 2);
-    global_value(i, t);
-    app_say(NAME[i], t);
-    changed();
-}
-
-
-/* ---- the KICK page (PRD K-*): EDIT opens it, EDIT again the next sub-page. The white keys are the kick's 16
- * steps, ALGORITHM the layer, PRESETS the built-in kicks, SEL + EDIT through the FX chain or around it */
-enum { KP_MIX, KP_LAYER, KP_FX, KP_MACRO, KP_OUT, KPAGES };
-static const char *const KPAGE_NAME[KPAGES] = {"MIX", "LAYER", "LAYER FX", "MACRO", "OUT"};
-static const char *const KN_KICK[KPAGES][4] = {{"SUB", "PUNCH", "GRIT", "CLICK"},
-                                               {"LEVEL", "PITCH", "DECAY", "TONE"},
-                                               {"EFFECT", "", "", "WET"},
-                                               {"SUB", "PUNCH", "GRIT", "INTENSITY"},
-                                               {"VOLUME", "ROUTE", "", ""}};
-static const char *const KFX_PARAM[KICK_FX][2] = {{"", ""}, {"GAIN", "TONE"}, {"BITS", "RATE"},
-                                                  {"CUTOFF", "RESO"}, {"FREQ", ""}};
-/* the macros: each moves a few of the sound's settings together */
-#define KM_N 3u
-static float *kick_macro(int m, uint32_t j)
-{
-    kick_t *k = &set.kick;
-    switch (m) {
-    case 0:                              /* SUB: its level, its tail, its weight */
-        return j == 0u ? &k->l[KL_SUB].level : j == 1u ? &k->l[KL_SUB].decay : &k->l[KL_SUB].tone;
-    case 1:                              /* PUNCH: its level, its sweep, the click */
-        return j == 0u ? &k->l[KL_PUNCH].level : j == 1u ? &k->l[KL_PUNCH].tone : &k->l[KL_CLICK].level;
-    default:                             /* GRIT: its level, its dirt, its tail */
-        return j == 0u ? &k->l[KL_GRIT].level : j == 1u ? &k->l[KL_GRIT].tone : &k->l[KL_GRIT].decay;
-    }
-}
-static float kick_macro_value(int m)
-{
-    uint32_t j;
-    float v = 0.0f;
-    for (j = 0; j < KM_N; j++)
-        v += *kick_macro(m, j);
-    return v * (1.0f / (float)KM_N);
-}
-static const char *kick_knob_name(int i)
-{
-    if (ui.kpage == KP_FX && (i == 1 || i == 2))
-        return KFX_PARAM[set.kick.l[ui.klayer % KICK_LAYERS].fx % KICK_FX][i - 1];
-    return KN_KICK[ui.kpage % KPAGES][i];
-}
-static void kick_value(int i, char *t)
-{
-    const kick_t *k = &set.kick;
-    const kick_layer_t *l = &k->l[ui.klayer % KICK_LAYERS];
-    t[0] = 0;
-    switch (ui.kpage) {
-    case KP_MIX:
-        pct_text(k->l[i].level, t);
-        break;
-    case KP_LAYER:
-        if (i == 1)
-            hz_text(kick_pitch_hz(ui.klayer, l->pitch), t);
-        else if (i == 2) {
-            int_text((int32_t)(kick_decay_ms(ui.klayer, l->decay) + 0.5f), t);
-            text_cat(t, " MS");
-        } else
-            pct_text(i == 0 ? l->level : l->tone, t);
-        break;
-    case KP_FX:
-        if (i == 0)
-            text_cat(t, KICK_FX_NAME[l->fx % KICK_FX]);
-        else if (i == 3)
-            pct_text(l->wet, t);
-        else if (!kick_knob_name(i)[0])
-            ;
-        else if (l->fx == KFX_CRUNCH && i == 1) {
-            int_text((int32_t)kick_fx_bits(l->fa), t);
-            text_cat(t, " BIT");
-        } else if ((l->fx == KFX_FILTER || l->fx == KFX_RING) && i == 1)
-            hz_text(kick_fx_hz(l->fx, l->fa), t);
-        else
-            pct_text(i == 1 ? l->fa : l->fb, t);
-        break;
-    case KP_MACRO:
-        pct_text(i == 3 ? k->intensity : kick_macro_value(i), t);
-        break;
-    default:
-        if (i == 0)
-            pct_text(k->volume, t);
-        else if (i == 1)
-            text_cat(t, k->chain ? "THRU FX" : "AROUND FX");
-        break;
-    }
-}
-static void kick_knob_turn(int i, int32_t d)
-{
-    kick_t *k = &set.kick;
-    kick_layer_t *l = &k->l[ui.klayer % KICK_LAYERS];
-    char t[16];
-    switch (ui.kpage) {
-    case KP_MIX:
-        k->l[i].level = knob_f(k->l[i].level, d, 0.02f, 0.0f, 1.0f);
-        break;
-    case KP_LAYER: {
-        float *p = i == 0 ? &l->level : i == 1 ? &l->pitch : i == 2 ? &l->decay : &l->tone;
-        *p = knob_f(*p, d, i == 1 ? 0.01f : 0.02f, 0.0f, 1.0f);
-        break;
-    }
-    case KP_FX:
-        if (i == 0)
-            l->fx = (uint8_t)clamp((int32_t)l->fx + (d > 0 ? 1 : -1), 0, KICK_FX - 1);
-        else if (i == 3)
-            l->wet = knob_f(l->wet, d, 0.02f, 0.0f, 1.0f);
-        else if (kick_knob_name(i)[0]) {
-            float *p = i == 1 ? &l->fa : &l->fb;
-            *p = knob_f(*p, d, 0.02f, 0.0f, 1.0f);
-        }
-        break;
-    case KP_MACRO:
-        if (i == 3)
-            k->intensity = knob_f(k->intensity, d, 0.02f, 0.0f, 1.0f);
-        else {
-            uint32_t j;
-            for (j = 0; j < KM_N; j++)
-                *kick_macro(i, j) = knob_f(*kick_macro(i, j), d, 0.02f, 0.0f, 1.0f);
-        }
-        break;
-    default:
-        if (i == 0)
-            k->volume = knob_f(k->volume, d, 0.02f, 0.0f, 1.0f);
-        else if (i == 1)
-            k->chain = d > 0 ? 0u : 1u;  /* right: around the chain, left: through it */
-        else
-            return;
-        break;
-    }
-    kick_value(i, t);
-    if (ui.kpage == KP_LAYER || (ui.kpage == KP_FX && i)) {   /* "GRIT  DECAY 240 MS" */
-        char w[24];
-        w[0] = 0;
-        text_cat(w, kick_knob_name(i));
-        text_cat(w, " ");
-        text_cat(w, t);
-        app_say(KICK_LAYER_NAME[ui.klayer % KICK_LAYERS], w);
-    } else
-        app_say(kick_knob_name(i), t);
-    ui.redraw |= RG_BLOCKS;
-    changed();
-}
-
-/* the MIXER's knob i on half h, as the foot and the strip show it */
-static void mix_value(uint32_t h, int i, char *t)
-{
-    t[0] = 0;
-    if (h) {
-        if (i == 0) {
-            int_text(set.swing, t);
-            text_cat(t, "%");
-        } else if (i == 1)
-            text_cat(t, set.kick.chain ? "THRU FX" : "AROUND FX");
-        return;
-    }
-    if (i == 0) {
-        int_text(set.brk_level, t);
-        text_cat(t, "%");
-    } else
-        pct_text(i == 1 ? set.kick.volume : i == 2 ? set.fx.wet : set.sfx.level, t);
-}
-
-static void knob_turn(int k, int32_t d)
-{
-    brk_fx_t *f = &set.fx;
-    if (ui.page == PG_GLOBAL) {
-        global_turn(k - EN_K1, d);
-        return;
-    }
-    if (ui.page == PG_KICK) {
-        kick_knob_turn(k - EN_K1, d);
-        return;
-    }
-    if (ui.page == PG_SOUND) {           /* the soundboard's level, pitch, echo and length */
-        sfx_set_t *x = &set.sfx;
-        char t[16];
-        if (k == EN_K1) {
-            x->level = knob_f(x->level, d, 0.02f, 0.0f, 1.0f);
-            say_int("LEVEL", (int32_t)(x->level * 100.0f), "%");
-        } else if (k == EN_K2) {
-            x->pitch = knob_f(x->pitch, d, 1.0f, -12.0f, 12.0f);
-            int_text((int32_t)x->pitch, t);
-            text_cat(t, " ST");
-            app_say("PITCH", t);
-        } else if (k == EN_K3) {
-            x->echo = knob_f(x->echo, d, 0.02f, 0.0f, 1.0f);
-            say_int("ECHO", (int32_t)(x->echo * 100.0f), "%");
-        } else {
-            x->length = knob_f(x->length, d, 0.05f, 0.5f, 2.0f);
-            say_int("LENGTH", (int32_t)(x->length * 100.0f), "%");
-        }
-        changed();
-        return;
-    }
-    if (ui.page == PG_MIX) {             /* LEVELS: break, kick, FX MAIN (the chain), OVERLAY (the soundboard);
-                                          * GROOVE: swing, the kick's route */
-        char t[16];
-        if (ui.mpage) {
-            if (k == EN_K1) {
-                set.swing = (uint8_t)clamp((int32_t)set.swing + d, 50, 75);
-                say_int("SWING", set.swing, "%");
-            } else if (k == EN_K2) {
-                set.kick.chain = d > 0 ? 0u : 1u;   /* right: around the chain, left: through it */
-                app_say("KICK", set.kick.chain ? "THRU FX" : "AROUND FX");
-            } else
-                return;
-        } else if (k == EN_K1) {
-            set.brk_level = (uint8_t)clamp((int32_t)set.brk_level + d * 2, 0, 100);
-            say_int("BREAK", set.brk_level, "%");
-        } else if (k == EN_K2) {
-            set.kick.volume = knob_f(set.kick.volume, d, 0.02f, 0.0f, 1.0f);
-            pct_text(set.kick.volume, t);
-            app_say("KICK", t);
-        } else if (k == EN_K3) {         /* FX MAIN: the whole chain against the dry sound */
-            f->wet = knob_f(f->wet, d, 0.02f, 0.0f, 1.0f);
-            say_int("FX MAIN", (int32_t)(f->wet * 100.0f + 0.5f), "%");
-        } else {                         /* FX OVERLAY: the soundboard over it all */
-            set.sfx.level = knob_f(set.sfx.level, d, 0.02f, 0.0f, 1.0f);
-            say_int("OVERLAY", (int32_t)(set.sfx.level * 100.0f + 0.5f), "%");
-        }
-        ui.redraw |= RG_BLOCKS;
-    } else if (ui.page == PG_HOME) {
-        if (k == EN_K1) {                /* the gate: how much of every slice sounds (complexity: GENERATOR) */
-            set.gate = (uint8_t)clamp((int32_t)(set.gate ? set.gate : 100u) + d * 5, 5, 100);
-            if (set.gate >= 100u)
-                app_say("GATE", "OFF");
-            else
-                say_int("GATE", set.gate, "%");
-        } else if (k == EN_K2) {         /* the break's DJ filter: left low-pass, right high-pass */
-            f->dj = knob_f(f->dj, d, 0.02f, -1.0f, 1.0f);
-            say_int("DJ FILTER", (int32_t)(f->dj * 100.0f), "");
-        } else
-            return;
-    } else if (ui.page == PG_GEN) {
-        float *p = k == EN_K1 ? &set.gen.complexity : k == EN_K2 ? &set.gen.anchor : k == EN_K3 ? &set.gen.roll
-                 : &set.gen.fill;
-        static const char *const N[4] = {"COMPLEXITY", "ANCHOR", "ROLL", "FILL"};
-        *p = knob_f(*p, d, 0.02f, 0.0f, 1.0f);
-        say_int(N[k - EN_K1], (int32_t)(*p * 100.0f), "%");
-    } else {                             /* FX: the focused slot's three settings and its mix */
-        fx_knob_turn(ui.fx_focus, k - EN_K1, d);
-        return;
-    }
-    changed();
-}
-
-/* a break change while running, without blocking: the render gets no break (silence), and once two renders have
- * passed (it has let go of pcm_a) app_frame loads the new one */
-static int32_t brk_next = -1;
-static uint32_t brk_mark;
-static void break_ask(uint32_t i)
-{
-    set.brk = (uint8_t)i;                /* turning on fast just moves the target */
-    if (brk_next < 0) {
-        brk_set_break(0);
-        brk_mark = brk_renders();
-    }
-    brk_next = (int32_t)i;
-    set_dirty = 1u;
-}
-static void break_poll(void)
-{
-    if (brk_next >= 0 && brk_renders() - brk_mark >= 2u) {
-        break_load((uint32_t)brk_next);
-        brk_next = -1;
-        app_say("BREAK", brk_get_break()->name);
-    }
-}
-
-/* -------------------------------------------------- the pads' own settings --- */
-/* what K1-K4 tune while a pad is held, by pad (brk.h PAD_*); 0: that knob does nothing for it */
-static const char *const PAD_KNOB[BRK_NPADS][4] = {
-    {"RATE", "DECAY", "PITCH", "LEVEL"}, {"RATE", "DECAY", "PITCH", "LEVEL"}, {"RATE", "DECAY", "PITCH", "LEVEL"},
-    {"SPEED", 0, 0, 0}, {"LENGTH", "PITCH", 0, 0}, {"SPEED", 0, 0, 0}, {"STOP", "SPIN UP", 0, 0},
-    {"RATE", "LENGTH", 0, 0}, {"AMOUNT", "PITCH", 0, 0}, {"TARGET", "RESO", "SPEED", 0},
-    {"TIME", "FEEDBACK", "TONE", "MIX"}};
-static const char *const PAD_TITLE[BRK_NPADS] = {"ROLL", "ROLL", "ROLL", "REVERSE", "FREEZE", "HALF SPEED",
-                                                  "TAPE STOP", "GATE", "RANDOM", "FILTER", "DUB"};
-static const char *const FRZ_LEN_NAME[4] = {"SLICE", "1/2", "1/4", "1/8"};
-
-static void pct_text(float v, char *t)   /* 0.42 -> "42%" */
-{
-    int_text((int32_t)(v * 100.0f + (v < 0.0f ? -0.5f : 0.5f)), t);
-    text_cat(t, "%");
-}
-static void signed_tenths(float v, const char *unit, char *t)   /* -1.5 -> "-1.5ST" */
-{
-    int32_t x = (int32_t)(v * 10.0f + (v < 0.0f ? -0.5f : 0.5f));
-    t[0] = x > 0 ? '+' : 0;
-    t[1] = 0;
-    tenths_text(x, t + (x > 0));
-    if (x < 0 && x > -10) {              /* tenths_text drops the sign of -0.x */
-        t[0] = '-';
-        tenths_text(-x, t + 1);
-    }
-    text_cat(t, unit);
-}
-static void times_text(float v, char *t) /* 0.5 -> "x0.50" */
-{
-    int32_t x = (int32_t)(v * 100.0f + 0.5f);
-    char d[8];
-    t[0] = 'x';
-    int_text(x / 100, t + 1);
-    text_cat(t, ".");
-    d[0] = (char)('0' + x / 10 % 10);
-    d[1] = (char)('0' + x % 10);
-    d[2] = 0;
-    text_cat(t, d);
-}
-
-/* -1..1 as the DJ filter's frequency: "LP 340HZ" / "HP 1.2K" */
-static void dj_text(float dj, char *t)
-{
-    float hz = dj > 0.0f ? 20.0f * brk_exp2f(dj * 8.2f) : 18000.0f * brk_exp2f(dj * 7.8f);
-    t[0] = 0;
-    text_cat(t, dj > 0.0f ? "HP " : "LP ");
-    if (hz >= 1000.0f) {
-        tenths_text((int32_t)(hz / 100.0f), t + 3);
-        text_cat(t, "K");
-    } else {
-        int_text((int32_t)hz, t + 3);
-        text_cat(t, "HZ");
-    }
-}
-
-/* the roll's decay: "DOWN 20%" each repeat quieter, "UP 20%" a swell, "OFF" */
-static void roll_decay_text(float dc, char *t)
-{
-    char v[8];
-    t[0] = 0;
-    if (dc > -0.01f && dc < 0.01f) {
-        text_cat(t, "OFF");
-        return;
-    }
-    text_cat(t, dc > 0.0f ? "DOWN " : "UP ");
-    pct_text(dc > 0.0f ? dc : -dc, v);
-    text_cat(t, v);
-}
-
-static void fx_value(uint32_t slot, int i, char *t);
-static void fx_knob_turn(uint32_t slot, int i, int32_t d);
-static int delay_slot(void)              /* the chain's DELAY in use (the first one on), -1 none */
-{
-    uint32_t k;
-    for (k = 0; k < BRK_FX_SLOTS; k++)
-        if (set.fx.slot[k].type == FXT_DELAY && set.fx.slot[k].on)
-            return (int)k;
-    return -1;
-}
-
-static void pad_knob_value(int pad, int k, char *t)
-{
-    const brk_padset_t *p = &set.pads;
-    const brk_fx_t *f = &set.fx;
-    t[0] = 0;
-    switch (pad <= PAD_ROLL32 ? 0 : pad) {
-    case 0:
-        if (k == 0) text_cat(t, BRK_ROLL_DIV_NAME[p->roll_div[pad] % BRK_ROLL_DIVS]);
-        else if (k == 1) roll_decay_text(p->roll_decay, t);
-        else if (k == 2) signed_tenths(p->roll_pitch, "ST", t);
-        else pct_text((float)(p->roll_level ? p->roll_level : 100u) * 0.01f, t);
-        break;
-    case PAD_REVERSE: times_text(p->rev_speed, t); break;
-    case PAD_FREEZE:
-        if (k == 0) text_cat(t, FRZ_LEN_NAME[p->frz_len & 3u]);
-        else signed_tenths(p->frz_pitch, "ST", t);
-        break;
-    case PAD_HALF: times_text(p->half_speed, t); break;
-    case PAD_TAPESTOP:
-        if (k == 0) { signed_tenths(p->stop_beats, " BT", t); if (t[0] == '+') t[0] = ' '; }
-        else { signed_tenths(p->spin_steps, " ST", t); if (t[0] == '+') t[0] = ' '; }
-        break;
-    case PAD_GATE:
-        if (k == 0) text_cat(t, BRK_GATE_DIV_NAME[p->gate_div % BRK_GATE_DIVS]);
-        else pct_text(p->gate_len, t);
-        break;
-    case PAD_RANDOM:
-        if (k == 0) pct_text(p->rnd_amount, t);
-        else { int_text((int32_t)p->rnd_pitch, t); text_cat(t, "ST"); }
-        break;
-    case PAD_FILTER:
-        if (k == 0) dj_text(f->flt_target, t);
-        else if (k == 1) pct_text(f->flt_res, t);
-        else pct_text(f->flt_speed, t);
-        break;
-    case PAD_DUB:                        /* with a DELAY in the chain, the pad throws into it: its settings */
-        if (delay_slot() >= 0) fx_value((uint32_t)delay_slot(), k, t);
-        else if (k == 0) text_cat(t, BRK_DUB_DIV_NAME[f->dub_div % BRK_DUB_DIVS]);
-        else pct_text(k == 1 ? f->dub_fb : k == 2 ? f->dub_tone : f->dub_mix, t);
-        break;
-    default: break;
-    }
-}
-
-static void pad_knob_turn(int pad, int k, int32_t d)
-{
-    brk_padset_t *p = &set.pads;
-    brk_fx_t *f = &set.fx;
-    char t[16];
-    if (pad < 0 || pad >= BRK_NPADS || k < 0 || k > 3 || !PAD_KNOB[pad][k])
-        return;
-    switch (pad <= PAD_ROLL32 ? 0 : pad) {
-    case 0:
-        if (k == 0) p->roll_div[pad] = (uint8_t)clamp((int32_t)p->roll_div[pad] + d, 0, BRK_ROLL_DIVS - 1);
-        else if (k == 1) p->roll_decay = knob_f(p->roll_decay, d, 0.02f, -0.9f, 0.9f);
-        else if (k == 2) p->roll_pitch = knob_f(p->roll_pitch, d, 0.5f, -3.0f, 3.0f);
-        else p->roll_level = (uint8_t)clamp((int32_t)(p->roll_level ? p->roll_level : 100u) + d * 5, 5, 100);
-        break;
-    case PAD_REVERSE: p->rev_speed = knob_f(p->rev_speed, d, 0.05f, 0.5f, 2.0f); break;
-    case PAD_FREEZE:
-        if (k == 0) p->frz_len = (uint8_t)clamp((int32_t)p->frz_len + d, 0, 3);
-        else p->frz_pitch = knob_f(p->frz_pitch, d, 1.0f, -12.0f, 12.0f);
-        break;
-    case PAD_HALF: p->half_speed = knob_f(p->half_speed, d, 0.05f, 0.25f, 0.75f); break;
-    case PAD_TAPESTOP:
-        if (k == 0) p->stop_beats = knob_f(p->stop_beats, d, 0.25f, 0.25f, 4.0f);
-        else p->spin_steps = knob_f(p->spin_steps, d, 0.25f, 0.25f, 8.0f);
-        break;
-    case PAD_GATE:
-        if (k == 0) p->gate_div = (uint8_t)clamp((int32_t)p->gate_div + d, 0, BRK_GATE_DIVS - 1);
-        else p->gate_len = knob_f(p->gate_len, d, 0.05f, 0.1f, 0.9f);
-        break;
-    case PAD_RANDOM:
-        if (k == 0) p->rnd_amount = knob_f(p->rnd_amount, d, 0.05f, 0.0f, 1.0f);
-        else p->rnd_pitch = knob_f(p->rnd_pitch, d, 1.0f, 0.0f, 12.0f);
-        break;
-    case PAD_FILTER:
-        if (k == 0) f->flt_target = knob_f(f->flt_target, d, 0.04f, -1.0f, 1.0f);
-        else if (k == 1) f->flt_res = knob_f(f->flt_res, d, 0.02f, 0.0f, 0.95f);
-        else f->flt_speed = knob_f(f->flt_speed, d, 0.02f, 0.0f, 1.0f);
-        break;
-    case PAD_DUB:
-        if (delay_slot() >= 0) {         /* the DELAY slot's own settings */
-            fx_knob_turn((uint32_t)delay_slot(), k, d);
-            return;
-        }
-        if (k == 0) f->dub_div = (uint8_t)clamp((int32_t)f->dub_div + d, 0, BRK_DUB_DIVS - 1);
-        else if (k == 1) f->dub_fb = knob_f(f->dub_fb, d, 0.02f, 0.0f, 0.95f);
-        else if (k == 2) f->dub_tone = knob_f(f->dub_tone, d, 0.02f, 0.0f, 1.0f);
-        else f->dub_mix = knob_f(f->dub_mix, d, 0.02f, 0.0f, 1.0f);
-        break;
-    default: break;
-    }
-    pad_knob_value(pad, k, t);
-    app_say(PAD_KNOB[pad][k], t);
-    changed();
-}
-
-/* ------------------------------------------------- the white keys' own loops --- */
-static const char *const KEY_KNOB[4] = {"LENGTH", "PITCH", "START", "MODE"};
-static const char *const SLX_KNOB[4] = {"EFFECT", "AMOUNT", "TONE", "LEVEL"};
-static const char *const SLX_TAG[BRK_SLX] = {"", "LP", "HP", "CR", "DR", "RM", "EC", "VB"};
-
-/* a key's other layer (a key held, FX): its slice's own effect, amount, tone (the filters' resonance, RING's mix)
- * and level */
-static void slx_knob_value(int key, int k, char *t)
-{
-    const brk_slicefx_t *f = &set.slx[key & 15];
-    t[0] = 0;
-    if (k == 0)
-        text_cat(t, BRK_SLX_NAME[f->type < BRK_SLX ? f->type : 0]);
-    else if (k == 1)
-        pct_text(f->type == SLX_OFF ? 0.0f : (float)f->amount * 0.01f, t);
-    else if (k == 2) {
-        if (f->type == SLX_LOPASS || f->type == SLX_HIPASS || f->type == SLX_RING)
-            pct_text((float)f->tone * 0.01f, t);
-        else
-            text_cat(t, "-");
-    } else
-        pct_text((float)f->level * 0.01f, t);
-}
-
-static void slx_knob_turn(int key, int k, int32_t d)
-{
-    brk_slicefx_t *f = &set.slx[key & 15];
-    char t[16];
-    if (k == 0)
-        f->type = (uint8_t)clamp((int32_t)f->type + (d > 0 ? 1 : -1), 0, BRK_SLX - 1);
-    else if (k == 1)
-        f->amount = (uint8_t)clamp((int32_t)f->amount + d * 2, 0, 100);
-    else if (k == 2)
-        f->tone = (uint8_t)clamp((int32_t)f->tone + d * 2, 0, 100);
-    else if (k == 3)
-        f->level = (uint8_t)clamp((int32_t)f->level + d * 2, 0, 100);
-    else
-        return;
-    ui.key_turned = 1u;
-    slx_knob_value(key, k, t);
-    app_say(SLX_KNOB[k], t);
-    changed();
-}
-#define KEY_SHOW_MS 160u                 /* a key held this long (or a knob turned) takes the strip: taps don't */
-
-/* the key K1-K4 tune: the white key held, unless a pad was pressed after it */
-static int key_tuned(void)
-{
-    if (ui.key_focus < 0 || ui.page == PG_SOUND)
-        return -1;
-    return ui.pad_focus >= 0 && ui.pad_since > ui.key_since ? -1 : ui.key_focus;
-}
-
-static float key_sps(const brk_break_t *b)   /* 16ths in a slice of this break */
-{
-    return b && b->nslices ? (float)(b->bars * BRK_STEPS_PER_BAR) / (float)b->nslices : 1.0f;
-}
-
-/* a length in 16ths as music: 0.5 -> "1/32", 2 -> "1/8", 16 -> "1 BAR", 24 -> "1.5 BAR" */
-static void sixteenths_text(float steps, char *t)
-{
-    static const uint32_t DEN[7] = {2u, 4u, 8u, 16u, 32u, 64u, 128u};
-    uint32_t i;
-    t[0] = 0;
-    if (steps >= 16.0f) {
-        tenths_text((int32_t)(steps / 16.0f * 10.0f + 0.5f), t);
-        if (t[1] == '.' && t[2] == '0')
-            t[1] = 0;                    /* "1.0" -> "1" */
-        else if (t[2] == '.' && t[3] == '0')
-            t[2] = 0;
-        text_cat(t, " BAR");
-        return;
-    }
-    for (i = 0; i < 7u; i++) {           /* the smallest denominator it is a whole number of */
-        float n = steps * (float)DEN[i] / 16.0f;
-        if (n - (float)(int32_t)(n + 0.001f) < 0.01f && n >= 0.99f) {
-            char d[8];
-            int_text((int32_t)(n + 0.5f), t);
-            text_cat(t, "/");
-            int_text((int32_t)DEN[i], d);
-            text_cat(t, d);
-            return;
-        }
-    }
-    text_cat(t, "1/128");
-}
-
-static void key_knob_value(int key, int k, char *t)
-{
-    const brk_keyset_t *ks = &set.keys[key & 15];
-    t[0] = 0;
-    if (k == 0)
-        sixteenths_text(BRK_KEY_SLICES[ks->len % BRK_KEY_LENS] * key_sps(brk_get_break()), t);
-    else if (k == 1) {
-        t[0] = ks->pitch > 0 ? '+' : 0;
-        t[1] = 0;
-        int_text(ks->pitch, t + (ks->pitch > 0));
-        text_cat(t, " ST");
-    } else if (k == 2)
-        pct_text((float)ks->start / 16.0f, t);
-    else
-        text_cat(t, BRK_KEY_MODE_NAME[ks->mode % BRK_KEY_MODES]);
-}
-
-static void key_knob_turn(int key, int k, int32_t d)
-{
-    brk_keyset_t *ks = &set.keys[key & 15];
-    char t[16], n[16];
-    if (ui.key_layer) {                  /* the slice's effect layer */
-        slx_knob_turn(key, k, d);
-        return;
-    }
-    if (k == 0)
-        ks->len = (uint8_t)clamp((int32_t)ks->len + d, 0, BRK_KEY_LENS - 1);
-    else if (k == 1)
-        ks->pitch = (int8_t)clamp((int32_t)ks->pitch + d, -12, 12);
-    else if (k == 2)
-        ks->start = (uint8_t)clamp((int32_t)ks->start + d, 0, 15);
-    else if (k == 3)
-        ks->mode = (uint8_t)clamp((int32_t)ks->mode + d, 0, BRK_KEY_MODES - 1);
-    else
-        return;
-    ui.key_turned = 1u;
-    key_knob_value(key, k, t);
-    n[0] = 0;
-    text_cat(n, KEY_KNOB[k]);
-    app_say(n, t);
-    changed();
-}
-
-static int key_custom(int key)           /* the key has settings of its own (a dot on its block) */
-{
-    const brk_keyset_t *ks = &set.keys[key & 15];
-    return ks->len != 3u || ks->pitch || ks->start || ks->mode != KEY_LOOP;
-}
-
-/* white keys held into a page where they don't play slices: let the engine's loops go */
-static void slices_let_go(uint32_t keys)
-{
-    uint32_t i;
-    if (ui.page == PG_SOUND || ui.page == PG_KICK)
-        return;
-    for (i = 0; i < 16u; i++)
-        if (keys >> WK[i] & 1u)
-            brk_key((int)i, 0);
-}
-
-static void input(void)
-{
-    uint32_t keys = plat_keys(), btn = plat_buttons(), now = plat_ms(), i;
-    uint32_t kdn = keys & ~ui.keys, kup = ui.keys & ~keys, bdn = btn & ~ui.btn;
-    int k;
-    if (keys != ui.keys || btn != ui.btn)
-        ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
-    for (i = 0; i < 16u; i++) {          /* white keys: slices, or on the soundboard its sounds */
-        if (ui.page == PG_KICK) {        /* the KICK page: the kick's 16 steps, on and off */
-            if (kdn >> WK[i] & 1u) {
-                set.kick.steps ^= (uint16_t)(1u << i);
-                say_int(set.kick.steps >> i & 1u ? "KICK ON" : "KICK OFF", (int32_t)i + 1, "");
-                ui.redraw |= RG_BLOCKS;
-                set_dirty = 1u;
-            }
-            continue;
-        }
-        if (ui.page == PG_SOUND) {
-            if (kdn >> WK[i] & 1u) {
-                sfx_trigger((int)i);
-                if (i == SFX_REWIND)
-                    brk_rewind();        /* the pull-up: the break spins back and starts again */
-                ui.sfx_hit = (int8_t)i;
-                ui.sfx_hit_t = now;
-                app_say(SFX_NAME[i], "");
-            }
-            if (kup >> WK[i] & 1u)
-                sfx_release((int)i);
-            continue;
-        }
-        if (kdn >> WK[i] & 1u) {
-            brk_key((int)i, 1);
-            ui.key_focus = (int8_t)i;    /* the engine loops the key pressed last */
-            ui.key_since = now;
-            ui.key_turned = 0u;
-        }
-        if (kup >> WK[i] & 1u)
-            brk_key((int)i, 0);
-    }
-    if (ui.key_focus >= 0 && (ui.page == PG_SOUND || ui.page == PG_KICK || !(keys >> WK[ui.key_focus] & 1u))) {
-        ui.key_focus = -1;               /* let go: the lowest key still held loops (as in the engine), or none */
-        if (ui.page != PG_SOUND && ui.page != PG_KICK)
-            for (i = 16u; i-- > 0u;)
-                if (keys >> WK[i] & 1u) {
-                    ui.key_focus = (int8_t)i;
-                    ui.key_since = now;
-                }
-    }
-    for (i = 0; i < 11u; i++) {          /* black keys: the pads, held; the last one pressed has the screen */
-        if (kdn >> BK[i] & 1u) {
-            brk_pad((int)i, 1);
-            ui.pad_focus = (int8_t)i;
-            ui.pad_since = now;
-        }
-        if (kup >> BK[i] & 1u)
-            brk_pad((int)i, 0);
-    }
-    if (ui.pad_focus >= 0 && !(keys >> BK[ui.pad_focus] & 1u)) {   /* let go: another pad still held, or none */
-        ui.pad_focus = -1;
-        for (i = 0; i < 11u; i++)
-            if (keys >> BK[i] & 1u)
-                ui.pad_focus = (int8_t)i;
-    }
-    if (bdn & 1u << B_PLAY) {
-        brk_status_t st;
-        brk_status(&st);
-        if (btn & 1u << B_HOME) {        /* HOME + PLAY: back to bar 1 */
-            transport(st.playing, 1);
-            app_say("RESET", "");
-        } else
-            transport(!st.playing, 0);
-        muted = 0u;
-    }
-    if (bdn & 1u << B_HOME) {
-        ui.page = PG_HOME;
-        ui.redraw |= 8u;               /* RG_FOOT: the page */
-    }
-    if (bdn & 1u << B_GLO) {             /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, BT audio */
-        ui.gpage = ui.page == PG_GLOBAL ? (uint8_t)((ui.gpage + 1u) % 3u) : 0u;
-        ui.page = PG_GLOBAL;
-        ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
-        app_say("GLOBAL", ui.gpage == 2u ? "BT AUDIO" : ui.gpage ? "PITCH, SNAP" : "MIDI");
-    }
-    if (bdn & 1u << B_EDIT && btn & 1u << B_SEL) {   /* SEL + EDIT: the kick through the FX chain, or around it */
-        set.kick.chain ^= 1u;
-        app_say("KICK", set.kick.chain ? "THRU FX" : "AROUND FX");
-        ui.redraw |= RG_BLOCKS | RG_FOOT;
-        changed();
-    } else if (bdn & 1u << B_EDIT) {     /* EDIT: the KICK page; again, its next sub-page */
-        if (ui.page == PG_KICK)
-            ui.kpage = (uint8_t)((ui.kpage + 1u) % KPAGES);
-        else {
-            slices_let_go(keys);
-            ui.kpage = KP_MIX;
-        }
-        ui.page = PG_KICK;
-        ui.redraw |= RG_FOOT | RG_BLOCKS;
-        app_say("KICK", KPAGE_NAME[ui.kpage]);
-    }
-    if (bdn & 1u << B_LFO) {             /* LFO: the MIXER (the break, the kick, FX main, FX overlay); again, groove */
-        ui.mpage = ui.page == PG_MIX ? (uint8_t)!ui.mpage : 0u;
-        ui.page = PG_MIX;
-        ui.redraw |= RG_FOOT | RG_BLOCKS;
-        app_say("MIXER", ui.mpage ? "GROOVE" : "LEVELS");
-    }
-    if (bdn & 1u << B_ENV) {             /* ENV: the soundboard */
-        slices_let_go(keys);
-        ui.page = PG_SOUND;
-        ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
-        app_say("SOUNDBOARD", "");
-    }
-    if (bdn & 1u << B_ARP) {
-        if (btn & 1u << B_SEL) {         /* SEL + ARP: a random pattern */
-            brk_randomize();
-            app_say("RANDOMIZE", "");
-        }
-        ui.page = PG_GEN;
-        ui.redraw |= 8u;               /* RG_FOOT: the page */
-    }
-    if (bdn & 1u << B_FX && key_tuned() >= 0) {   /* FX with a key held: its knobs, loop <-> slice effect */
-        ui.key_layer ^= 1u;
-        ui.key_turned = 1u;
-        app_say("KEY", ui.key_layer ? "SLICE FX" : "LOOP");
-        foot_dirty = 1u;
-    } else if (bdn & 1u << B_FX) {       /* FX: the chain's page; again: the focused slot on / bypassed */
-        if (ui.page == PG_FX) {
-            brk_fxslot_t *sl = &set.fx.slot[ui.fx_focus & 3u];
-            if (sl->type == FXT_EMPTY)
-                app_say("EMPTY", "PRESETS");
-            else {
-                sl->on ^= 1u;
-                app_say(BRK_FXT_NAME[sl->type], sl->on ? "ON" : "BYPASS");
-                changed();
-            }
-        } else
-            app_say("FX CHAIN", "");
-        ui.page = PG_FX;
-        ui.redraw |= 8u | 4u;            /* RG_FOOT | RG_BLOCKS */
-    }
-    if (bdn & 1u << B_SEL && key_tuned() >= 0) {   /* SEL while a key is held: its loop back to the defaults */
-        if (ui.key_layer)
-            brk_slicefx_defaults(&set.slx[key_tuned()]);
-        else
-            brk_keyset_defaults(&set.keys[key_tuned()]);
-        ui.key_turned = 1u;
-        changed();
-        app_say(ui.key_layer ? "SLICE FX" : "KEY", "RESET");
-    } else if (bdn & 1u << B_SEL) {      /* a tap, if it comes up alone (below) */
-        ui.tap_pend = 1u;
-        ui.tap_t = now;
-        ui.tap_combo = (uint8_t)((btn & ~(1u << B_SEL)) != 0u);   /* (another button already held: a combination) */
-    }
-    if (ui.tap_pend && (btn & 1u << B_SEL) && (bdn & ~(1u << B_SEL)))
-        ui.tap_combo = 1u;               /* another button with SEL held */
-    if (ui.tap_pend && !(btn & 1u << B_SEL)) {   /* SEL up: alone and short, a tap at its press */
-        ui.tap_pend = 0u;
-        if (!ui.tap_combo && now - ui.tap_t < 800u) {
-            if (ext_active())
-                app_say("TEMPO", "EXT CLOCK");
-            else
-                tap_tempo(ui.tap_t);
-        }
-    }
-    if (bdn & 1u << B_SAVE) {
-        app_say("SAVE", plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 ? "DONE" : "FAILED");
-        set_dirty = 0u;
-    }
-    /* OCT- / OCT+: pitch in semitones, repeating faster while held; both: back to 0 */
-    if ((btn & (1u << B_OCTDN | 1u << B_OCTUP)) == (1u << B_OCTDN | 1u << B_OCTUP)) {
-        if (bdn & (1u << B_OCTDN | 1u << B_OCTUP) && set.pitch) {
-            set.pitch = 0;
-            changed();
-            app_say("PITCH", "0");
-        }
-    } else if (btn & (1u << B_OCTDN | 1u << B_OCTUP)) {
-        int32_t dir = btn & 1u << B_OCTUP ? 1 : -1;
-        if (bdn & (1u << B_OCTDN | 1u << B_OCTUP)) {
-            ui.oct_t = now + 400u;
-            ui.oct_rep = 0u;
-        } else if (now >= ui.oct_t) {
-            ui.oct_rep++;
-            ui.oct_t = now + (ui.oct_rep < 4u ? 150u : 50u);
-        } else
-            dir = 0;
-        if (dir) {
-            set.pitch = (int8_t)clamp(set.pitch + dir, -24, 24);
-            changed();
-            say_int("PITCH", set.pitch, " ST");
-        }
-    }
-    for (k = 0; k < NE; k++) {
-        int32_t d = plat_enc(k);
-        if (!d)
-            continue;
-        ui.touched = 1u;
-        if (btn & 1u << B_SEL)
-            ui.tap_combo = 1u;           /* (SEL + a knob is no tap) */
-        if (k == EN_SELECT && ext_active()) {
-            app_say("TEMPO", "EXT CLOCK");   /* the outside clock has the tempo */
-        } else if (k == EN_SELECT) {     /* tempo: 1 BPM a detent, 0.1 with SEL held */
-            set.tempo_x10 = (uint16_t)clamp((int32_t)set.tempo_x10 + d * (btn & 1u << B_SEL ? 1 : 10), 400, 3000);
-            changed();
-            {
-                char t[16];
-                tenths_text(set.tempo_x10, t);
-                app_say("BPM", t);
-            }
-        } else if (k == EN_ALGO) {       /* the break; on the FX page the slot (SEL held: moves it along) */
-            if (ui.page == PG_KICK) {    /* the KICK page: the layer its LAYER and LAYER FX pages edit */
-                ui.klayer = (uint8_t)((ui.klayer + (d > 0 ? 1u : KICK_LAYERS - 1u)) % KICK_LAYERS);
-                app_say("LAYER", KICK_LAYER_NAME[ui.klayer]);
-                ui.redraw |= RG_BLOCKS | RG_FOOT;
-            } else if (ui.page == PG_FX)
-                fx_algo(d, btn & 1u << B_SEL);
-            else {                     /* the next or previous break */
-                break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
-            }
-        } else if (k == EN_PRESET && ui.page == PG_FX)
-            fx_type_turn(d);             /* the focused slot's effect */
-        else if (k == EN_PRESET && ui.page == PG_KICK) {   /* a built-in kick (its steps and routing kept) */
-            ui.kpreset = (uint8_t)((ui.kpreset + (d > 0 ? 1u : KICK_PRESETS - 1u)) % KICK_PRESETS);
-            kick_preset(&set.kick, ui.kpreset);
-            app_say("KICK", KICK_PRESET_NAME[ui.kpreset]);
-            ui.redraw |= RG_BLOCKS | RG_FOOT;
-            changed();
-        }
-        else if (k == EN_PRESET)
-            app_say("PATTERN", "1");     /* patterns arrive in M2 */
-        else if (key_tuned() >= 0)       /* a white key held: K1-K4 tune its loop */
-            key_knob_turn(key_tuned(), k - EN_K1, d);
-        else if (ui.pad_focus >= 0)      /* a pad held: K1-K4 tune it */
-            pad_knob_turn(ui.pad_focus, k - EN_K1, d);
-        else
-            knob_turn(k, d);
-    }
-    ui.keys = keys;
-    ui.btn = btn;
-}
-
-void app_input_only(void) { input(); }
-
-static void leds(void)
-{
-    brk_status_t st;
-    uint32_t b = 0u, k = 0u, i;
-    brk_status(&st);
-    if (st.playing)
-        b |= 1u << B_PLAY;
-    b |= 1u << (ui.page == PG_HOME ? B_HOME : ui.page == PG_GEN ? B_ARP : ui.page == PG_SOUND ? B_ENV :
-                ui.page == PG_GLOBAL ? B_GLO : ui.page == PG_KICK ? B_EDIT : ui.page == PG_MIX ? B_LFO : B_FX);
-    if (set_dirty)
-        b |= 1u << B_SAVE;
-    if (ui.page == PG_KICK) {            /* the KICK page: its steps lit, the step playing flipped */
-        uint32_t m = set.kick.steps;
-        if (st.playing && st.bar16 >= 0)
-            m ^= 1u << st.bar16;
-        for (i = 0; i < 16u; i++)
-            if (m >> i & 1u)
-                k |= 1u << WK[i];
-    } else if (ui.page == PG_SOUND) {    /* the soundboard: the sounds playing */
-        uint32_t m = sfx_playing();
-        for (i = 0; i < 16u; i++)
-            if (m >> i & 1u)
-                k |= 1u << WK[i];
-    } else if (st.slice >= 0 && st.slice < 16)
-        k |= 1u << WK[st.slice];
-    for (i = 0; i < 11u; i++)
-        if (st.pads >> i & 1u)
-            k |= 1u << BK[i];
-    plat_glow(1);
-    plat_leds(b, k);
-}
-
-/* ------------------------------------------------------------- start screen --- */
-#define C_BLOCK RGB(24, 24, 30)          /* a slice block's ground */
-#define C_BLOCK_HI RGB(255, 184, 70)     /* the block sounding */
-#define INTRO_STEP 55u                   /* ms between two blocks dropping in */
-#define INTRO_HOLD 900u                  /* ms the finished screen stays before the slicer opens */
-
-/* the mark: sixteen bars like a break's hits, two of them chopped out of line */
-static const uint8_t MARK_H[16] = {30, 12, 26, 10, 34, 14, 11, 20, 12, 22, 28, 24, 34, 10, 13, 22};
-static void mark(int32_t y0, uint32_t shown, const uint8_t (*px)[BLK_W])
-{
-    uint32_t k, c;
-    for (k = 0; k < 16u && k < shown; k++) {
-        int32_t x = 8 + (int32_t)k * 14, lift = (k == 5u || k == 11u) ? -10 : 0;
-        uint16_t col = (k == 5u || k == 11u) ? C_WHITE : C_BLOCK_HI;
-        if (px) {                        /* the loaded break: each slice's own shape */
-            for (c = 0; c < 12u; c++) {
-                int32_t h = px[k][c * BLK_W / 12u] * 2 + 1;
-                cv_rect(x + (int32_t)c, y0 + lift + 20 - h / 2, 1, h, col);
-            }
-        } else                           /* the splash, before any break is in: the drawn mark */
-            cv_rect(x, y0 + lift + 20 - MARK_H[k] / 2, 12, MARK_H[k], col);
-    }
-}
-
-/* big text: a font at twice its size, each of its pixels a 2 x 2 block (blended as cv_text blends). It stands in for
- * a 31-pixel font: that one costs 20 KB of flash, which Bluetooth audio needed */
-static int32_t text2_w(const felucca_font_t *f, const char *s) { return 2 * text_w(f, s); }
-static int32_t cv_text2(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c)
-{
-    uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u;
-    for (; *s; s++) {
-        uint32_t gi = glyph(f, (uint8_t)*s), gx, gy, w = f->bw[gi], bpr = (w + 1u) / 2u;
-        const uint8_t *gd = f->data + f->off[gi];
-        for (gy = 0; gy < f->h; gy++)
-            for (gx = 0; gx < w; gx++) {
-                uint32_t a = gd[gy * bpr + gx / 2u], k;
-                a = (gx & 1u) ? (a & 15u) : (a >> 4);
-                if (!a)
-                    continue;
-                for (k = 0; k < 4u; k++) {
-                    int32_t px = x + 2 * ((int32_t)gx - f->pad) + (int32_t)(k & 1u),
-                            py = y + 2 * (int32_t)gy + (int32_t)(k >> 1) + cv_oy;
-                    uint32_t at, bg;
-                    if ((uint32_t)px >= cv_w || py < cv_y0 || py >= cv_y1)
-                        continue;
-                    at = (uint32_t)py * cv_w + (uint32_t)px;
-                    bg = swap16(cv_px[at]);
-                    cv_px[at] = swap16((((r * a + (bg >> 11) * (15u - a)) / 15u) << 11) |
-                                       (((g * a + ((bg >> 5) & 63u) * (15u - a)) / 15u) << 5) |
-                                       ((b * a + (bg & 31u) * (15u - a)) / 15u));
-                }
-            }
-        x += 2 * f->adv[gi];
-    }
-    return x;
-}
-
-static void title(int32_t y)             /* the name and the tagline, centred, into the current strip */
-{
-    cv_text2((240 - text2_w(&FONT_B, APP_NAME)) / 2, y, &FONT_B, APP_NAME, C_WHITE);
-    cv_text((240 - text_w(&FONT_XS, "AMEN CHOPPER  FOR THE FM-1")) / 2, y + 36, &FONT_XS,
-            "AMEN CHOPPER  FOR THE FM-1", C_HI);
-}
-
-/* the version, as the screens show it: "V0.7" (a release), "DEV" (any other build) */
-static void version_text(char *t)
-{
-    t[0] = 0;
-    if (CH_VERSION[0] >= '0' && CH_VERSION[0] <= '9')
-        text_cat(t, "V");
-    text_cat(t, CH_VERSION);
-}
-
-/* fm1-base's first screen at power-on, while the breaks are decoded (APP_SPLASH): the mark and the name */
-void app_splash(void)
-{
-    lcd_fill(0, 0, 240, 240, C_BLACK);
-    cv_begin(240, 60, C_BLACK);
-    mark(10, 16u, 0);
-    cv_blit(0, 50);
-    cv_begin(240, 56, C_BLACK);
-    title(0);
-    cv_blit(0, 118);
-    {
-        char t[16];
-        version_text(t);
-        cv_begin(240, 20, C_BLACK);
-        cv_text((240 - text_w(&FONT_T, t)) / 2, 2, &FONT_T, t, C_GRAY);
-        cv_blit(0, 210);
-    }
-}
-
-static void intro_draw(uint32_t now)
-{
-    uint32_t shown = (now - ui.intro_t0) / INTRO_STEP + 1u;
-    char t[32];
-    if (shown > 16u)
-        shown = 16u;
-    if (shown != ui.intro_drawn) {       /* the loaded break drops in, slice by slice */
-        ui.intro_drawn = (uint8_t)shown;
-        cv_begin(240, 60, C_BLACK);
-        mark(10, shown, blk_n ? (const uint8_t (*)[BLK_W])blk_px : 0);
-        cv_blit(0, 50);
-    }
-    if (ui.redraw & RG_HEAD) {
-        const brk_break_t *b = brk_get_break();
-        cv_begin(240, 20, C_BLACK);      /* the version, at the top */
-        version_text(t);
-        cv_text((240 - text_w(&FONT_T, t)) / 2, 2, &FONT_T, t, C_GRAY);
-        cv_blit(0, 16);
-        cv_begin(240, 56, C_BLACK);
-        title(0);
-        cv_blit(0, 118);
-        cv_begin(240, 40, C_BLACK);
-        t[0] = 0;
-        text_cat(t, b ? b->name : "");
-        cv_text((240 - text_w(&FONT_XS, t)) / 2, 2, &FONT_XS, t, C_GRAY);
-        cv_text((240 - text_w(&FONT_T, "PRESS PLAY")) / 2, 22, &FONT_T, "PRESS PLAY", C_AMB);
-        cv_blit(0, 190);
-        ui.redraw = 0u;
-    }
-}
-
-static void intro_end(void)
-{
-    ui.intro = 0u;
-    lcd_fill(0, 0, 240, 240, C_BLACK);
-    ui.redraw = RG_ALL;
-}
-
-/* ------------------------------------------------------------ slicer view --- */
-static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown under its name */
-{
-    t[0] = 0;
-    if (ui.page == PG_GLOBAL) {
-        global_value(i, t);
-        return;
-    }
-    if (ui.page == PG_KICK) {
-        kick_value(i, t);
-        return;
-    }
-    if (ui.page == PG_SOUND) {
-        const sfx_set_t *x = &set.sfx;
-        if (i == 1) {
-            int_text((int32_t)x->pitch, t);
-            text_cat(t, " ST");
-        } else {
-            int_text((int32_t)((i == 0 ? x->level : i == 2 ? x->echo : x->length) * 100.0f), t);
-            text_cat(t, "%");
-        }
-        return;
-    }
-    if (ui.page == PG_MIX) {
-        mix_value(ui.mpage, i, t);
-        return;
-    }
-    if (ui.page == PG_HOME) {
-        if (i == 0) {
-            if (!set.gate || set.gate >= 100u)
-                text_cat(t, "OFF");
-            else {
-                int_text(set.gate, t);
-                text_cat(t, "%");
-            }
-        } else if (i == 1) {
-            int32_t v = (int32_t)(set.fx.dj * 100.0f);
-            if (v > -2 && v < 2)
-                text_cat(t, "OFF");
-            else {
-                text_cat(t, v < 0 ? "LP " : "HP ");
-                int_text(v < 0 ? -v : v, t + 3);
-            }
-        }
-    } else if (ui.page == PG_GEN) {
-        float v = i == 0 ? set.gen.complexity : i == 1 ? set.gen.anchor : i == 2 ? set.gen.roll : set.gen.fill;
-        int_text((int32_t)(v * 100.0f), t);
-        text_cat(t, "%");
-    } else
-        fx_value(ui.fx_focus, i, t);
-}
-
-/* the header's level meter: what leaves, left and right, -48..0 dBFS in 18 steps of 2.7 dB; amber from -8 dB, the
- * top white near full scale */
-static void draw_meter(void)
-{
-    float lv[2];
-    uint32_t c;
-    int32_t h;
-    lv[0] = meter_l;
-    lv[1] = meter_r;
-    cv_begin(8, 20, C_BLACK);
-    for (c = 0; c < 2u; c++) {
-        for (h = 0; h < 18; h++)         /* the steps it is above: -48 dB + 2.67 dB each (2^(dB / 6.02)) */
-            if (lv[c] < brk_exp2f(((float)h * (48.0f / 18.0f) - 48.0f) * (1.0f / 6.0206f)))
-                break;
-        cv_rect((int32_t)c * 4, 1, 3, 18, C_BLOCK);
-        if (h)
-            cv_rect((int32_t)c * 4, 19 - h, 3, h, h >= 18 ? C_WHITE : h >= 15 ? C_AMB : C_HI);
-    }
-    cv_blit(ui.meter_x, 4);
-}
-
-/* the header: the break and the tempo, a play / stop mark; or a message for a moment */
-static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now)
-{
-    char t[24];
-    cv_begin(240, 28, C_BLACK);
-    ui.meter_x = 0;
-    if (now < ui.msg_until) {
-        int32_t x = cv_text(8, 6, &FONT_B, ui.msg[0], C_WHITE);
-        cv_text(x + 8, 6, &FONT_B, ui.msg[1], C_HI);
-    } else {
-        if (st->playing) {               /* a play triangle, or a stop square */
-            int32_t r;
-            for (r = 0; r < 6; r++)
-                cv_rect(8 + r, 8 + r, 1, 13 - 2 * r, C_HI);
-        } else
-            cv_rect(8, 9, 10, 10, C_DIM);
-        cv_text(24, 6, &FONT_B, b ? b->name : "NO BREAK", C_WHITE);
-        tenths_text(set.tempo_x10, t);
-        cv_text(232 - text_w(&FONT_B, t), 6, &FONT_B, t, C_HI);
-        ui.meter_x = (int16_t)(228 - text_w(&FONT_B, t) - text_w(&FONT_T, "BPM") - 12);   /* left of BPM */
-        cv_text(228 - text_w(&FONT_B, t) - text_w(&FONT_T, ext_active() ? "EXT" : "BPM"), 10, &FONT_T,
-                ext_active() ? "EXT" : "BPM", ext_active() ? C_AMB : C_GRAY);
-    }
-    cv_rect(0, 27, 240, 1, C_LINE);
-    cv_blit(0, 0);
-}
-
-/* the whole break: its waveform, the slice markers, the slice sounding lit, the playhead */
-static void draw_wave(const brk_status_t *st, const brk_break_t *b)
-{
-    uint32_t i;
-    cv_begin(240, 54, C_BLACK);
-    if (b && b->len) {
-        int32_t lit_a = -1, lit_z = -1;
-        if (st->slice >= 0) {
-            lit_a = (int32_t)(b->slice[st->slice] * 240u / b->len);
-            lit_z = (int32_t)(b->slice[st->slice + 1] * 240u / b->len);
-            cv_rect(lit_a, 2, lit_z - lit_a, 50, C_BLOCK);
-            if (set.gate && set.gate < 100u && st->key < 0)   /* gated: only the part that sounds lit */
-                lit_z = lit_a + ((lit_z - lit_a) * (int32_t)set.gate + 99) / 100;
-        }
-        for (i = 0; i < 240u; i++) {
-            int32_t h = wave_px[i];
-            cv_rect((int32_t)i, 27 - h, 1, 2 * h + 1, (int32_t)i >= lit_a && (int32_t)i < lit_z ? C_HI : C_DIM);
-        }
-        for (i = 1; i < b->nslices; i++)
-            cv_rect((int32_t)(b->slice[i] * 240u / b->len), 0, 1, 5, C_GRAY);
-        if (st->slice >= 0)
-            cv_rect((int32_t)((uint32_t)st->pos * 240u / b->len), 0, 1, 54, C_WHITE);
-    }
-    cv_blit(0, 30);
-}
-
-/* the slicer: sixteen blocks, one per white key, each with its slice's waveform and number; the one sounding is lit
- * and a key held is outlined */
-/* the soundboard: sixteen tiles in key order, 4 x 4; a sound playing fills its tile, burning down like a fuse */
-static void draw_sounds(uint32_t keys, uint32_t now)
-{
-    uint32_t row, k, m = sfx_playing();
-    char t[4];
-    for (row = 0; row < 2u; row++) {
-        cv_begin(240, 52, C_BLACK);
-        for (k = row * 8u; k < row * 8u + 8u; k++) {
-            int32_t x = 1 + (int32_t)(k % 4u) * 60, y = (int32_t)((k / 4u) % 2u) * 26;
-            int on = (m >> k) & 1u, held = (keys >> WK[k]) & 1u;
-            int fresh = ui.sfx_hit == (int8_t)k && now - ui.sfx_hit_t < 120u;
-            cv_rect(x, y, 58, 24, held || fresh ? C_WHITE : C_BLOCK);
-            if (held || fresh)
-                cv_rect(x + 2, y + 2, 54, 20, C_BLOCK);
-            if (on) {                    /* the fuse: what is left of the sound */
-                int32_t w = (int32_t)((1.0f - sfx_progress((int)k)) * 54.0f);
-                cv_rect(x + 2, y + 2, w < 2 ? 2 : w, 20, C_HI);
-            }
-            int_text((int32_t)k + 1, t);
-            cv_text(x + 4, y + 6, &FONT_T, t, on ? C_BLACK : C_AMB);
-            cv_text(x + 18, y + 5, &FONT_XS, SFX_NAME[k], on ? C_BLACK : C_WHITE);
-        }
-        cv_blit(0, 88u + row * 52u);
-    }
-}
-
-/* the GLOBAL page's panel: Bluetooth, the clock coming in, the clock going out, MIDI through each port */
-static void draw_global(const brk_status_t *st)
-{
-    static const char *const PORT_NAME[NPORTS] = {"USB", "BT", "TRS"};
-    char t[32], v[16];
-    uint32_t p;
-    int bs = plat_ble_state();
-    if (ui.gpage == 2u) {
-        draw_bta();
-        return;
-    }
-    if (ui.gpage) {                      /* the pitch: what the mode does, the pitch now */
-        cv_begin(240, 52, C_BLACK);
-        cv_text(6, 2, &FONT_T, "PITCH", C_GRAY);
-        cv_text(96, 2, &FONT_T, pitch_keeps() ? "KEEP LENGTH" : "SPEED", C_HI);
-        cv_text(96, 16, &FONT_XS, pitch_keeps() ? "SLICES KEEP LENGTH" : "PITCH CHANGES LENGTH", C_DIM);
-        cv_text(6, 30, &FONT_T, "NOW", C_GRAY);
-        t[0] = set.pitch > 0 ? '+' : 0;
-        t[1] = 0;
-        int_text(set.pitch, t + (set.pitch > 0));
-        text_cat(t, " ST  (OCT- / OCT+)");
-        cv_text(96, 30, &FONT_T, t, C_WHITE);
-        cv_blit(0, 88);
-        cv_begin(240, 52, C_BLACK);
-        cv_text(6, 2, &FONT_T, "GRAIN", C_GRAY);
-        int_text(set.grain_ms ? set.grain_ms : 30, t);
-        text_cat(t, " MS");
-        cv_text(96, 2, &FONT_T, t, pitch_keeps() ? C_WHITE : C_DIM);
-        cv_text(96, 14, &FONT_XS, "LOWER: TIGHTER HITS", C_DIM);
-        cv_text(6, 30, &FONT_T, "SNAP", C_GRAY);   /* where a key lands, and what that is in this break */
-        t[0] = 0;
-        text_cat(t, SNAP_NAME[snap_index()]);
-        if (snap_index()) {
-            const brk_break_t *b = brk_get_break();
-            text_cat(t, " = ");
-            sixteenths_text(SNAP_SL[snap_index()] * key_sps(b), v);
-            text_cat(t, v);
-        }
-        cv_text(96, 30, &FONT_T, t, C_HI);
-        cv_blit(0, 140);
-        return;
-    }
-    cv_begin(240, 52, C_BLACK);          /* Bluetooth, and the clock in */
-    cv_text(6, 2, &FONT_T, "BLUETOOTH", C_GRAY);
-    t[0] = 0;
-    text_cat(t, set.ble_off ? "OFF" : bs == BLE_STARTING ? "STARTING" : bs == BLE_FAILED ? "FAILED"
-                : plat_ble_connected() ? "CONNECTED" : plat_ble_linked() ? "LINKING" : bs == BLE_READY
-                ? "READY TO PAIR" : "OFF");
-    cv_text(96, 2, &FONT_T, t, plat_ble_connected() ? C_HI : set.ble_off ? C_DIM : C_WHITE);
-    if (!set.ble_off && !plat_ble_connected())
-        cv_text(96, 14, &FONT_XS, "NAME: CHOPPAH ....", C_DIM);
-    cv_text(6, 30, &FONT_T, "CLOCK IN", C_GRAY);
-    t[0] = 0;
-    if (!set.clk_in)
-        text_cat(t, "OFF");
-    else if (!ext_active())
-        text_cat(t, "WAITING FOR CLOCK");
-    else {
-        tenths_text((int32_t)(ext.bpm * 10.0f + 0.5f), v);
-        text_cat(t, v);
-        text_cat(t, " BPM ");
-        text_cat(t, PORT_NAME[ext.port % NPORTS]);
-        text_cat(t, ext.run ? "  RUNNING" : "  STOPPED");
-    }
-    cv_text(96, 30, &FONT_T, t, ext_active() ? C_HI : set.clk_in ? C_WHITE : C_DIM);
-    cv_blit(0, 88);
-    cv_begin(240, 52, C_BLACK);          /* the clock out, and MIDI through each port (lit: in the last 0.3 s) */
-    cv_text(6, 2, &FONT_T, "CLOCK OUT", C_GRAY);
-    t[0] = 0;
-    if (!set.clk_out)
-        text_cat(t, "OFF");
-    else {
-        text_cat(t, "TO ");
-        text_cat(t, MIDI_TO_NAME[set.midi_to % 3u]);
-        text_cat(t, st->playing ? "  SENDING" : "  (WHILE PLAYING)");
-    }
-    cv_text(96, 2, &FONT_T, t, set.clk_out && st->playing ? C_HI : set.clk_out ? C_WHITE : C_DIM);
-    cv_text(6, 30, &FONT_T, "MIDI", C_GRAY);
-    for (p = 0; p < NPORTS; p++) {
-        int32_t x = 96 + (int32_t)p * 48;
-        int in = plat_midi_ago((int)p, 0) < 300u, out = p != PORT_TRS && plat_midi_ago((int)p, 1) < 300u;
-        cv_rect(x, 28, 44, 18, C_BLOCK);
-        cv_text(x + 4, 30, &FONT_T, PORT_NAME[p], in || out ? C_WHITE : C_DIM);
-        cv_rect(x + 34, 31, 4, 4, in ? C_HI : C_LINE);       /* in */
-        cv_rect(x + 34, 38, 4, 4, out ? C_HI : C_LINE);      /* out */
-    }
-    cv_blit(0, 140);
-}
-
-/* the FX page: the chain as four tiles in order, IN to OUT (the focused one outlined), then the focused slot */
-static void draw_chain(void)
-{
-    const brk_fx_t *f = &set.fx;
-    uint32_t k, i;
-    char t[24], v[16];
-    cv_begin(240, 52, C_BLACK);
-    for (k = 0; k < BRK_FX_SLOTS; k++) {
-        const brk_fxslot_t *sl = &f->slot[k];
-        int32_t x = 2 + (int32_t)k * 60, foc = k == (ui.fx_focus & 3u), on = sl->on && sl->type != FXT_EMPTY;
-        cv_rect(x, 4, 54, 44, foc ? C_WHITE : C_BLOCK);
-        cv_rect(x + 2, 6, 50, 40, on ? C_BLOCK_HI : C_BLOCK);
-        int_text((int32_t)k + 1, t);
-        cv_text(x + 5, 8, &FONT_T, t, on ? C_BLACK : C_AMB);
-        cv_text(x + 5, 22, &FONT_XS, sl->type == FXT_EMPTY ? "-" : BRK_FXT_NAME[sl->type],
-                on ? C_BLACK : sl->type == FXT_EMPTY ? C_LINE : C_GRAY);
-        if (sl->type != FXT_EMPTY) {     /* its mix, a bar along the bottom */
-            cv_rect(x + 5, 38, 44, 3, on ? C_AMB : C_LINE);
-            cv_rect(x + 5, 38, (int32_t)(44.0f * sl->mix), 3, on ? C_BLACK : C_GRAY);
-        }
-        if (k + 1u < BRK_FX_SLOTS)       /* the signal on to the next */
-            for (i = 0; i < 3u; i++)
-                cv_rect(x + 55 + (int32_t)i, 22 + (int32_t)i, 1, 5 - 2 * (int32_t)i, C_GRAY);   /* > */
-    }
-    cv_blit(0, 88);
-    cv_begin(240, 52, C_BLACK);          /* the focused slot: its effect, its settings, what the controls do */
-    {
-        const brk_fxslot_t *sl = &f->slot[ui.fx_focus & 3u];
-        const char *state = sl->type == FXT_EMPTY ? "" : sl->on ? "ON" : "BYPASS";
-        int32_t x;
-        t[0] = 0;
-        text_cat(t, "SLOT ");
-        int_text((int32_t)(ui.fx_focus & 3u) + 1, v);
-        text_cat(t, v);
-        x = cv_text(6, 0, &FONT_T, t, C_GRAY);
-        cv_text(x + 8, 0, &FONT_T, BRK_FXT_NAME[sl->type < BRK_NFXT ? sl->type : 0],
-                sl->on && sl->type != FXT_EMPTY ? C_HI : C_DIM);
-        cv_text(234 - text_w(&FONT_XS, state), 2, &FONT_XS, state, sl->on ? C_HI : C_DIM);
-        for (i = 0; i < 4u && sl->type != FXT_EMPTY; i++) {   /* the settings as bars, over K1-K4 */
-            float val = i == 3u ? sl->mix : sl->p[i];
-            if (!fx_param_name(ui.fx_focus, (int)i)[0])
-                continue;
-            cv_rect(6 + (int32_t)i * 58, 16, 52, 4, C_BLOCK);
-            cv_rect(6 + (int32_t)i * 58, 16, (int32_t)(52.0f * val), 4, sl->on ? C_HI : C_GRAY);
-        }
-        if (sl->type == FXT_MBCOMP && sl->on) {   /* each band's reduction now, under its knob (0..-24 dB) */
-            float gr[3];
-            brk_fx_gr(gr);
-            for (i = 0; i < 3u; i++) {
-                float db = gr[i] < 0.999f ? -6.0206f * brk_log2f(gr[i] > 0.01f ? gr[i] : 0.01f) : 0.0f;
-                cv_rect(6 + (int32_t)i * 58, 21, (int32_t)(52.0f * brk_clampf(db / 24.0f, 0.0f, 1.0f)), 2, C_AMB);
-            }
-        }
-        cv_text(6, 26, &FONT_XS, "ALGO: SLOT   PRESETS: EFFECT", C_DIM);
-        cv_text(6, 38, &FONT_XS, "FX: ON / BYPASS   SEL+ALGO: MOVE", C_DIM);
-        {                                /* the whole chain's mix (MIXER K4), to see, not to set */
-            char w[16];
-            pct_text(f->wet, v);
-            w[0] = 0;
-            text_cat(w, "FX ");
-            text_cat(w, v);
-            cv_text(234 - text_w(&FONT_T, w), 25, &FONT_T, w, f->wet > 0.005f ? C_HI : C_DIM);
-            cv_rect(194, 41, 40, 3, C_BLOCK);
-            cv_rect(194, 41, (int32_t)(40.0f * f->wet + 0.5f), 3, f->wet > 0.005f ? C_HI : C_DIM);
-        }
-    }
-    cv_blit(0, 140);
-}
-
-/* the KICK page's strip: the kick's shape and its layers' levels; then its 16 steps (the one playing outlined),
- * what the page edits and where the kick goes */
-#define KS_W 160u                        /* the shape's columns: its first 600 ms */
-static uint8_t kick_px[KS_W];
-static uint32_t kick_px_sig = 1u;
-static void draw_kick(const brk_status_t *st)
-{
-    const kick_t *k = &set.kick;
-    uint32_t i, sig = 2166136261u;
-    char t[40];
-    for (i = 0; i < __builtin_offsetof(kick_t, steps); i++)   /* the sound's bytes (not the steps): changed? */
-        sig = (sig ^ ((const uint8_t *)k)[i]) * 16777619u;
-    if (sig != kick_px_sig) {
-        kick_px_sig = sig;
-        kick_shape(k, kick_px, KS_W, 600u, 36u);
-    }
-    cv_begin(240, 52, C_BLACK);
-    for (i = 0; i < KS_W; i++)           /* the shape, mirrored about its centre line */
-        if (kick_px[i])
-            cv_rect(4 + (int32_t)i, 26 - kick_px[i] / 2, 1, kick_px[i] | 1, k->volume > 0.0f ? C_HI : C_DIM);
-    cv_rect(4, 26, KS_W, 1, C_LINE);
-    cv_text(6, 0, &FONT_XS, KPAGE_NAME[ui.kpage % KPAGES], C_GRAY);
-    for (i = 0; i < KICK_LAYERS; i++) {  /* the layers' levels, the one edited outlined */
-        int32_t x = 172 + (int32_t)i * 17, h = (int32_t)(k->l[i].level * 36.0f + 0.5f);
-        int sel = i == ui.klayer && (ui.kpage == KP_LAYER || ui.kpage == KP_FX);
-        cv_rect(x, 2, 14, 38, sel ? C_WHITE : C_BLOCK);
-        cv_rect(x + 1, 3, 12, 36, C_BLOCK);
-        if (h)
-            cv_rect(x + 1, 39 - h, 12, h, sel ? C_HI : k->l[i].fx ? C_AMB : C_GRAY);
-        t[0] = KICK_LAYER_NAME[i][0];
-        t[1] = 0;
-        cv_text(x + 4, 41, &FONT_XS, t, sel ? C_HI : C_GRAY);
-    }
-    cv_blit(0, 88);
-    cv_begin(240, 52, C_BLACK);
-    for (i = 0; i < 16u; i++) {          /* the steps: one per white key */
-        int32_t x = 1 + (int32_t)i * 15;
-        int on = k->steps >> i & 1u, now = st->playing && st->bar16 == (int8_t)i;
-        cv_rect(x, 2, 13, 20, now ? C_WHITE : on ? C_BLOCK_HI : (i & 3u) ? C_BLOCK : C_LINE);
-        if (now)
-            cv_rect(x + 2, 4, 9, 16, on ? C_BLOCK_HI : C_BLOCK);
-    }
-    t[0] = 0;
-    text_cat(t, KICK_LAYER_NAME[ui.klayer % KICK_LAYERS]);
-    if (k->l[ui.klayer % KICK_LAYERS].fx) {
-        text_cat(t, " + ");
-        text_cat(t, KICK_FX_NAME[k->l[ui.klayer % KICK_LAYERS].fx % KICK_FX]);
-    }
-    cv_text(6, 26, &FONT_XS, t, C_HI);
-    cv_text(234 - text_w(&FONT_XS, k->chain ? "THRU FX" : "AROUND FX"), 26, &FONT_XS,
-            k->chain ? "THRU FX" : "AROUND FX", k->chain ? C_GRAY : C_AMB);
-    cv_text(6, 38, &FONT_XS, "KEYS: STEPS  ALGO: LAYER  PRESETS: KICK", C_DIM);
-    cv_blit(0, 140);
-}
-
-/* the MIXER's strip: four channels side by side (a fader, its value; BREAK and KICK with their level meters, FX with
- * the output's; their values are in the foot), drawn as one 240 x 104 picture in two 52-row strips. GROOVE: swing, the kick's route, the
- * soundboard */
-#define MX_Y 18                          /* the faders and meters: from row 18, 80 rows (the values are in the foot) */
-#define MX_H 80
-static int32_t meter_px(float lv, int32_t h)   /* a level's height on an h-pixel meter: -48..0 dBFS */
-{
-    float db = lv > 0.0039f ? 6.0206f * brk_log2f(lv) : -48.0f;
-    return (int32_t)(brk_clampf((db + 48.0f) * (1.0f / 48.0f), 0.0f, 1.0f) * (float)h + 0.5f);
-}
-static void mix_meter(int32_t x, float lv)
-{
-    int32_t h = meter_px(lv, MX_H);
-    cv_rect(x, MX_Y, 5, MX_H, C_BLOCK);
-    if (h)
-        cv_rect(x, MX_Y + MX_H - h, 5, h, h >= MX_H - 2 ? C_WHITE : h >= MX_H * 5 / 6 ? C_AMB : C_HI);
-}
-static void mix_fader(int32_t x, float v, int on)   /* 0..1 from the bottom */
-{
-    int32_t h = (int32_t)(brk_clampf(v, 0.0f, 1.0f) * (float)MX_H + 0.5f);
-    cv_rect(x, MX_Y, 14, MX_H, C_BLOCK);
-    if (h)
-        cv_rect(x + 2, MX_Y + MX_H - h, 10, h, on ? C_HI : C_DIM);
-    cv_rect(x - 1, MX_Y + MX_H - h - 1, 16, 2, C_WHITE);   /* the cap */
-}
-static void mix_picture(int32_t top)
-{
-    static const char *const NAME[2][4] = {{"BREAK", "KICK", "FX MAIN", "OVERLAY"}, {"SWING", "KICK", "", ""}};
-    uint32_t c;
-    cv_oy = -top;                        /* (this strip's rows of the picture) */
-    for (c = 0; c < 4u; c++) {
-        int32_t x = (int32_t)c * 60;
-        if (c)
-            cv_rect(x, 4, 1, 96, C_LINE);
-        if (NAME[ui.mpage][c][0])
-            cv_text(x + 6, 1, &FONT_XS, NAME[ui.mpage][c], C_GRAY);
-    }
-    if (ui.mpage) {
-        mix_fader(10, (float)(set.swing - 50u) * (1.0f / 25.0f), set.swing > 50u);
-        {                                /* the kick's route: two boxes, the one taken lit */
-            int thru = set.kick.chain;
-            cv_rect(66, 26, 48, 26, thru ? C_BLOCK_HI : C_BLOCK);
-            cv_text(70, 31, &FONT_XS, "THRU FX", thru ? C_BLACK : C_GRAY);
-            cv_rect(66, 62, 48, 26, thru ? C_BLOCK : C_BLOCK_HI);
-            cv_text(70, 67, &FONT_XS, "AROUND", thru ? C_GRAY : C_BLACK);
-        }
-        cv_text(126, 40, &FONT_XS, "LFO: LEVELS", C_DIM);
-        return;
-    }
-    mix_fader(10, (float)set.brk_level * 0.01f, set.brk_level > 0u);
-    mix_meter(30, meter_brk);
-    mix_fader(70, set.kick.volume, set.kick.volume > 0.0f && set.kick.steps);
-    mix_meter(90, meter_kick);
-    mix_fader(130, set.fx.wet, set.fx.wet > 0.005f);
-    for (c = 0; c < BRK_FX_SLOTS; c++) { /* the chain's four slots, lit while on */
-        const brk_fxslot_t *sl = &set.fx.slot[c];
-        int on = sl->on && sl->type != FXT_EMPTY;
-        cv_rect(150, MX_Y + (int32_t)c * 21, 6, 17, on ? C_BLOCK_HI : sl->type == FXT_EMPTY ? C_BLACK : C_BLOCK);
-        if (sl->type == FXT_EMPTY)
-            cv_rect(150, MX_Y + (int32_t)c * 21 + 8, 6, 1, C_LINE);
-    }
-    mix_fader(190, set.sfx.level, set.sfx.level > 0.0f);
-    mix_meter(210, meter_sfx);
-}
-static void draw_mixer(void)
-{
-    cv_begin(240, 52, C_BLACK);
-    mix_picture(0);
-    cv_oy = 0;
-    cv_blit(0, 88);
-    cv_begin(240, 52, C_BLACK);
-    mix_picture(52);
-    cv_oy = 0;
-    cv_blit(0, 140);
-}
-
-static void draw_blocks(const brk_status_t *st, uint32_t keys)
-{
-    uint32_t row, k, c;
-    char t[4];
-    for (row = 0; row < 2u; row++) {
-        cv_begin(240, 52, C_BLACK);
-        for (k = row * 8u; k < row * 8u + 8u; k++) {
-            int32_t x = 1 + (int32_t)(k % 8u) * 30, held = (keys >> WK[k]) & 1u;
-            int on = st->slice == (int32_t)k, have = k < blk_n;
-            uint16_t ground = on ? C_BLOCK_HI : C_BLOCK, ink = on ? C_BLACK : have ? C_GRAY : C_LINE;
-            cv_rect(x, 0, 28, 50, held ? C_WHITE : ground);
-            if (held)
-                cv_rect(x + 2, 2, 24, 46, ground);
-            if (have)
-                for (c = 0; c < BLK_W - 4u; c++) {   /* the slice's shape, 22 columns of its 26 */
-                    int32_t h = blk_px[k][c * BLK_W / (BLK_W - 4u)];
-                    cv_rect(x + 3 + (int32_t)c, 19 - h / 2, 1, h + 1, ink);
-                }
-            int_text((int32_t)k + 1, t);
-            cv_text(x + 3, 35, &FONT_T, t, on ? C_BLACK : have ? C_AMB : C_LINE);
-            if (have && key_custom((int)k))  /* a loop of its own: a dot */
-                cv_rect(x + 21, 39, 4, 4, on ? C_BLACK : C_HI);
-            if (have && (set.slx[k].type || set.slx[k].level < 100u))   /* an effect of its own: its tag */
-                cv_text(x + 13, 35, &FONT_XS, set.slx[k].type ? SLX_TAG[set.slx[k].type] : "LV",
-                        on ? C_BLACK : C_HI);
-        }
-        cv_blit(0, 88u + row * 52u);
-    }
-}
-
-/* the foot: the pads, then the page and its knobs with their values */
-static void draw_foot(const brk_status_t *st)
-{
-    static const char *const KN[NPAGES][4] = {{"GATE", "FILTER", "", ""},
-                                              {"CMPLX", "ANCHOR", "ROLL", "FILL"},
-                                              {"P1", "P2", "P3", "MIX"},
-                                              {"LEVEL", "PITCH", "ECHO", "LENGTH"},
-                                              {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"},
-                                              {"", "", "", ""},
-                                              {"BREAK", "KICK", "FX MAIN", "OVERLAY"}};
-    uint32_t i;
-    char t[16];
-    cv_begin(240, 48, C_BLACK);
-    for (i = 0; i < 11u; i++) {
-        int on = (st->pads >> i) & 1u;
-        int32_t x = 2 + (int32_t)i * 21;
-        cv_rect(x, 0, 20, 14, on ? C_HI : C_BLOCK);
-        cv_text(x + (20 - text_w(&FONT_T, PAD_NAME[i])) / 2, 1, &FONT_T, PAD_NAME[i], on ? C_BLACK : C_GRAY);
-    }
-    for (i = 0; i < 4u; i++) {
-        static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", ""};
-        static const char *const KN_GROOVE[4] = {"SWING", "KICK ROUTE", "", ""};
-        static const char *const KN_BTA[4] = {"BT AUDIO", "DEVICE", "SCAN", "CONNECT"};
-        int bst = ui.page == PG_GLOBAL && ui.gpage == 2u && ch_bta_state() == PLAT_BTA_STREAMING;
-        const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? (bst && i == 2 ? "TEST L/R" : bst && i == 1
-                           ? "CODEC" : KN_BTA[i]) : ui.page == PG_GLOBAL && ui.gpage
-                           ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
-                           ? KN_GROOVE[i] : KN[ui.page][i];
-        if (ui.shown >= 100) {           /* a white key held: its loop, or its slice's effect */
-            cv_text(4 + (int32_t)i * 60, 18, &FONT_T, ui.key_layer ? SLX_KNOB[i] : KEY_KNOB[i], C_HI);
-            if (ui.key_layer)
-                slx_knob_value(ui.shown - 100, (int)i, t);
-            else
-                key_knob_value(ui.shown - 100, (int)i, t);
-            cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
-            continue;
-        }
-        if (ui.shown >= 0) {             /* a pad held: its own settings */
-            name = PAD_KNOB[ui.shown][i];
-            if (!name)
-                continue;
-            if (ui.shown == PAD_DUB && delay_slot() >= 0)
-                name = fx_param_name((uint32_t)delay_slot(), (int)i);   /* (TIME FEEDBK TONE SEND) */
-            cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, C_HI);
-            pad_knob_value(ui.shown, (int)i, t);
-            cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
-            continue;
-        }
-        if (ui.page == PG_FX)            /* the focused slot's effect: its settings, then MIX */
-            name = fx_param_name(ui.fx_focus, (int)i);
-        else if (ui.page == PG_KICK)
-            name = kick_knob_name((int)i);
-        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.page == PG_FX
-                ? (set.fx.slot[ui.fx_focus & 3u].on ? C_HI : C_DIM) : C_GRAY);
-        knob_value((int)i, t);
-        cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
-    }
-    cv_blit(0, 192);
-}
-
-/* ---------------------------------------------------------- pad animations --- */
-#define C_ICE RGB(150, 220, 255)
-#define C_DUB RGB(120, 230, 160)
-#define FX_Y 90                          /* the animation's strip: 240 x 96 where the slice blocks are */
-#define FX_MID 58                        /* its waveform's centre line, in the strip */
-#define FX_BAND 48                       /* drawn in two bands of 48 rows (the canvas holds 60) */
-
-static uint32_t fx_hash(uint32_t x)      /* a stable pseudo-random number from x (the screen's dice) */
-{
-    x ^= x >> 16;
-    x *= 0x7FEB352Du;
-    x ^= x >> 15;
-    x *= 0x846CA68Bu;
-    return x ^ (x >> 16);
-}
-
-static void fx_ring(int32_t cx, int32_t cy, int32_t r, uint16_t c)   /* a circle of dots */
-{
-    uint32_t a;
-    for (a = 0; a < 64u; a++) {
-        float t = (float)a / 64.0f;
-        cv_rect(cx + (int32_t)((float)r * brk_sin_turns(t + 0.25f)), cy + (int32_t)((float)r * brk_sin_turns(t)),
-                2, 2, c);
-    }
-}
-
-static void fx_line(int32_t x0, int32_t y0, int32_t x1, int32_t y1, uint16_t c)
-{
-    int32_t n = (x1 > x0 ? x1 - x0 : x0 - x1) > (y1 > y0 ? y1 - y0 : y0 - y1) ? (x1 > x0 ? x1 - x0 : x0 - x1)
-                                                                            : (y1 > y0 ? y1 - y0 : y0 - y1), i;
-    for (i = 0; i <= n; i++)
-        cv_rect(x0 + (x1 - x0) * i / (n ? n : 1), y0 + (y1 - y0) * i / (n ? n : 1), 2, 2, c);
-}
-
-/* a slice's shape (blk_px) stretched over w columns from x, h times as tall, in colour c */
-static void fx_slice(int32_t s, int32_t x, int32_t w, float h, uint16_t c)
-{
-    int32_t i;
-    if (s < 0 || s >= (int32_t)blk_n)
-        return;
-    for (i = 0; i < w; i++) {
-        int32_t v = (int32_t)((float)blk_px[s][(uint32_t)i * BLK_W / (uint32_t)w] * 1.7f * h);
-        cv_rect(x + i, FX_MID - v, 1, 2 * v + 1, c);
-    }
-}
-
-/* the held pad's picture: what it does to the break, moving with it, and its settings */
-static void draw_fx_band(int pad, const brk_status_t *st, uint32_t now, int32_t top)
-{
-    const brk_padset_t *p = &set.pads;
-    const brk_fx_t *f = &set.fx;
-    char t[24];
-    int32_t i, s = st->slice >= 0 ? st->slice : 0;
-    uint32_t held = now - ui.pad_since;
-    cv_begin(240, FX_BAND, C_BLACK);
-    cv_oy = -top;                        /* (this band's rows of the picture) */
-    t[0] = 0;
-    text_cat(t, PAD_TITLE[pad]);
-    if (pad <= PAD_ROLL32) {
-        text_cat(t, " ");
-        text_cat(t, BRK_ROLL_DIV_NAME[p->roll_div[pad] % BRK_ROLL_DIVS]);
-    }
-    cv_text(6, 0, &FONT_B, t, C_HI);
-    switch (pad <= PAD_ROLL32 ? 0 : pad) {
-    case 0: {                            /* ROLL: the caught slice again and again at its level, fading or
-                                          * swelling, the hit lit */
-        int32_t rs = st->roll_slice >= 0 ? st->roll_slice : s, cur = (int32_t)(st->roll_n % 8u);
-        float g = (float)(p->roll_level ? p->roll_level : 100u) * 0.01f;
-        for (i = 0; i < 8; i++) {
-            fx_slice(rs, 4 + i * 29, 27, g, i == cur ? C_HI : C_DIM);
-            g = p->roll_decay >= 0.0f ? g * (1.0f - p->roll_decay) : g + (1.0f - g) * -p->roll_decay;
-            if (g < 0.02f)
-                g = 0.02f;
-        }
-        int_text((int32_t)st->roll_n, t);
-        text_cat(t, " HITS");
-        cv_text(234 - text_w(&FONT_XS, t), 2, &FONT_XS, t, C_GRAY);
-        break;
-    }
-    case PAD_REVERSE: {                  /* REVERSE: the break running backwards past a fixed playhead, chevrons */
-        int32_t off = (int32_t)((float)held * 0.12f * p->rev_speed) % 240;
-        for (i = 0; i < 240; i++) {
-            int32_t h = wave_px[(uint32_t)(240 + off - i) % 240u] * 3 / 2;
-            cv_rect(i, FX_MID - h, 1, 2 * h + 1, i < 120 ? C_DIM : C_HI);
-        }
-        cv_rect(120, 20, 2, 76, C_WHITE);
-        for (i = 0; i < 2; i++) {        /* two chevrons pointing left, sliding */
-            int32_t cx = 40 + i * 22 - (int32_t)(held / 40u % 22u), r;
-            for (r = 0; r < 9; r++)
-                cv_rect(cx + r, FX_MID - r - 1, 3, 2, C_WHITE), cv_rect(cx + r, FX_MID + r, 3, 2, C_WHITE);
-        }
-        break;
-    }
-    case PAD_FREEZE: {                   /* FREEZE: the slice iced over, its loop bracketed, a cursor going round */
-        int32_t loop = 240 >> (p->frz_len & 3u), cx;
-        fx_slice(s, 0, 240, 1.0f, C_LINE);
-        fx_slice(s, 0, 240, 1.0f, C_ICE);
-        cv_rect(0, 22, loop, 2, C_WHITE);
-        cv_rect(0, 92, loop, 2, C_WHITE);
-        cv_rect(loop - 2, 22, 2, 72, C_WHITE);
-        cx = (int32_t)(held % 700u) * loop / 700;
-        cv_rect(cx, 22, 2, 72, C_HI);
-        for (i = 0; i < 24; i++) {       /* frost: dots that twinkle */
-            uint32_t r = fx_hash((uint32_t)i * 977u + held / 180u);
-            cv_rect((int32_t)(r % 236u), 24 + (int32_t)((r >> 8) % 66u), 2, 2, (r >> 20) & 1u ? C_WHITE : C_ICE);
-        }
-        break;
-    }
-    case PAD_HALF: {                     /* HALF SPEED: the break stretched, crawling */
-        int32_t off = (int32_t)((float)held * 0.05f * p->half_speed);
-        for (i = 0; i < 240; i++) {
-            int32_t h = wave_px[(uint32_t)((i + off) / 2) % 240u] * 3 / 2;
-            cv_rect(i, FX_MID - h, 1, 2 * h + 1, (i / 2) % 2 ? C_HI : C_AMB);
-        }
-        times_text(p->half_speed, t);
-        cv_text(234 - text_w(&FONT_B, t), 0, &FONT_B, t, C_WHITE);
-        break;
-    }
-    case PAD_TAPESTOP: {                 /* TAPE STOP: two reels slowing to a stop, the tape between them */
-        int32_t k;
-        for (k = 0; k < 2; k++) {
-            int32_t cx = k ? 176 : 64, j;
-            fx_ring(cx, FX_MID + 2, 30, C_GRAY);
-            fx_ring(cx, FX_MID + 2, 6, C_HI);
-            for (j = 0; j < 3; j++) {    /* the spokes, turning with the tape */
-                float a = ui.reel + (float)j / 3.0f + (k ? 0.1f : 0.0f);
-                fx_line(cx, FX_MID + 2, cx + (int32_t)(27.0f * brk_sin_turns(a + 0.25f)),
-                        FX_MID + 2 + (int32_t)(27.0f * brk_sin_turns(a)), C_HI);
-            }
-        }
-        cv_rect(64, FX_MID + 32, 112, 2, C_GRAY);
-        pct_text(st->tape, t);
-        cv_text(120 - text_w(&FONT_XS, t) / 2, 22, &FONT_XS, t, C_WHITE);
-        break;
-    }
-    case PAD_GATE: {                     /* GATE: the bar's gates, open part lit, the one playing bright */
-        int32_t cells = 8 << (p->gate_div % BRK_GATE_DIVS), w = 236 / cells, curc;
-        float pos = (float)(st->step < 0 ? 0 : st->step % 16) + st->phase;
-        curc = (int32_t)(pos * (float)cells / 16.0f) % cells;
-        for (i = 0; i < cells; i++) {
-            int32_t open = (int32_t)((float)(w - 1) * p->gate_len);
-            cv_rect(2 + i * w, 34, w - 1, 48, C_BLOCK);
-            cv_rect(2 + i * w, 34, open < 1 ? 1 : open, 48, i == curc ? (st->gate > 0.5f ? C_WHITE : C_HI) : C_AMB);
-        }
-        break;
-    }
-    case PAD_RANDOM: {                   /* RANDOM: dice over the slices, the one sounding big */
-        uint32_t seed = (uint32_t)(st->step + 1) * 2654435761u;
-        for (i = 0; i < 16; i++) {
-            int32_t x = 120 + (i % 8) * 15, y = 30 + (i / 8) * 32;
-            uint32_t r = fx_hash(seed + (uint32_t)i);
-            cv_rect(x, y, 13, 28, i == s ? C_HI : (r & 3u) == 0u ? C_GRAY : C_BLOCK);
-        }
-        int_text(s + 1, t);
-        cv_text2(20, 30, &FONT_B, t, C_WHITE);
-        if (p->rnd_pitch > 0.0f)
-            cv_text(20, 72, &FONT_T, "+ PITCH", C_AMB);
-        break;
-    }
-    case PAD_FILTER: {                   /* FILTER: the response curve, its cutoff sliding to the target */
-        float dj = brk_fx_dj_now(), xc = dj > 0.0f ? dj * 220.0f + 10.0f : (1.0f + dj) * 220.0f + 10.0f;
-        float res = f->flt_res;
-        for (i = 0; i < 240; i++) {
-            float x = (float)i, d = dj > 0.0f ? xc - x : x - xc, y;
-            y = d < 0.0f ? 1.0f : 1.0f / (1.0f + d * d * 0.004f);   /* past the cutoff: falls away */
-            if (d > -12.0f && d < 12.0f)
-                y += res * 0.8f * (1.0f - brk_absf(d) / 12.0f);     /* the resonance's bump */
-            {
-                int32_t h = (int32_t)(y * 34.0f);
-                cv_rect(i, 92 - h, 1, h, i % 2 ? C_AMB : C_HI);
-            }
-        }
-        cv_rect((int32_t)xc, 22, 2, 72, C_WHITE);
-        dj_text(dj, t);
-        cv_text(234 - text_w(&FONT_XS, t), 2, &FONT_XS, t, C_WHITE);
-        break;
-    }
-    case PAD_DUB: {                      /* DUB: echoes marching out, each one fainter and darker */
-        static const uint8_t SP[BRK_DUB_DIVS] = {2, 3, 4, 6};
-        float tempo = (float)set.tempo_x10 * 0.1f, step_ms = 60000.0f / (tempo * 4.0f);
-        float per = step_ms * (float)SP[f->dub_div % BRK_DUB_DIVS], ph = (float)(held % (uint32_t)per) / per;
-        int32_t sp = 26 + 8 * (int32_t)SP[f->dub_div % BRK_DUB_DIVS] / 2;
-        float g = 1.0f;
-        for (i = 0; i < 10; i++) {
-            int32_t x = 6 + i * sp + (int32_t)(ph * (float)sp);
-            if (x > 236)
-                break;
-            fx_slice(s, x, 18, g, g > 0.6f ? C_DUB : g > 0.3f ? C_GRAY : C_LINE);
-            g *= f->dub_fb;
-        }
-        break;
-    }
-    default: break;
-    }
-    cv_oy = 0;
-    cv_blit(0, FX_Y + (uint32_t)top);
-}
-
-/* (drawn in two bands of FX_BAND rows: the canvas is 60 rows) */
-static void draw_fx(int pad, const brk_status_t *st, uint32_t now)
-{
-    draw_fx_band(pad, st, now, 0);
-    draw_fx_band(pad, st, now, FX_BAND);
-}
-
-/* the held key's view: its loop window zoomed to the strip's width, the part this repeat has played lit, the
- * playhead, the slice lines inside it, and a counter of repeats along the bottom */
-#define KW_X 4
-#define KW_N 232                         /* columns of waveform */
-static uint8_t key_px[KW_N];             /* the window's shape (cached: it changes with the key or its settings) */
-static uint32_t key_px_sig;
-
-static void key_window(const brk_break_t *b, int key, float *lo, float *w)   /* (as the engine's key_begin) */
-{
-    const brk_keyset_t *ks = &set.keys[key & 15];
-    uint32_t s = (uint32_t)key < b->nslices ? (uint32_t)key : 0u;
-    *lo = (float)b->slice[s] + (float)(ks->start & 15u) / 16.0f * (float)(b->slice[s + 1] - b->slice[s]);
-    *w = BRK_KEY_SLICES[ks->len % BRK_KEY_LENS] * key_sps(b) * (float)b->len / (float)(b->bars * BRK_STEPS_PER_BAR);
-    if (*w < 32.0f)
-        *w = 32.0f;
-}
-
-static void draw_key_band(int key, const brk_status_t *st, uint32_t now, int32_t top)
-{
-    const brk_break_t *b = brk_get_break();
-    const brk_keyset_t *ks = &set.keys[key & 15];
-    char t[24], v[16];
-    float lo, w, ph;
-    uint32_t c, sig, len;
-    int32_t px = -1, x, live;
-    (void)now;
-    cv_begin(240, FX_BAND, C_BLACK);
-    cv_oy = -top;                        /* (this band's rows of the picture) */
-    if (!b || !b->len || !b->pcm) {
-        cv_oy = 0;
-        cv_blit(0, FX_Y + (uint32_t)top);
-        return;
-    }
-    len = b->len;
-    key_window(b, key, &lo, &w);
-    sig = (uint32_t)lo ^ (uint32_t)w << 9 ^ len << 3 ^ (uint32_t)key << 27;
-    if (sig != key_px_sig) {             /* the window's shape: the peak of each column (wrapping round the end) */
-        key_px_sig = sig;
-        for (c = 0; c < KW_N; c++) {
-            uint32_t i0 = (uint32_t)(lo + w * (float)c / (float)KW_N), i1 = (uint32_t)(lo + w * (float)(c + 1u) / (float)KW_N);
-            uint32_t i, stp = (i1 - i0) / 24u + 1u, pk = 0u;
-            for (i = i0; i <= i1; i += stp) {
-                int32_t a = b->pcm[i % len];
-                uint32_t m = (uint32_t)(a < 0 ? -a : a);
-                if (m > pk)
-                    pk = m;
-            }
-            key_px[c] = (uint8_t)(pk * 28u / 32768u);
-        }
-    }
-    live = st->key == key;
-    ph = live ? st->key_phase : 0.0f;
-    if (live) {                          /* the playhead, while it is inside the window */
-        float rel = st->pos - lo;
-        if (rel < 0.0f)
-            rel += (float)len;
-        if (rel >= 0.0f && rel < w)
-            px = (int32_t)(rel / w * (float)KW_N);
-    }
-    /* the title: KEY 5, its length and mode; on the right its pitch */
-    t[0] = 0;
-    text_cat(t, "KEY ");
-    int_text(key + 1, v);
-    text_cat(t, v);
-    text_cat(t, " ");
-    if (ui.key_layer) {                  /* the effect layer: the slice's effect */
-        const brk_slicefx_t *sf = &set.slx[key & 15];
-        text_cat(t, "FX");
-        x = cv_text(6, 0, &FONT_B, t, C_HI);
-        t[0] = 0;
-        text_cat(t, BRK_SLX_NAME[sf->type < BRK_SLX ? sf->type : 0]);
-        if (sf->level < 100u) {
-            text_cat(t, "  LEVEL ");
-            pct_text((float)sf->level * 0.01f, v);
-            text_cat(t, v);
-        }
-        cv_text(x + 8, 4, &FONT_XS, t, sf->type ? C_AMB : C_GRAY);
-    } else {
-        sixteenths_text(BRK_KEY_SLICES[ks->len % BRK_KEY_LENS] * key_sps(b), v);
-        text_cat(t, v);
-        x = cv_text(6, 0, &FONT_B, t, C_HI);
-        cv_text(x + 8, 4, &FONT_XS, BRK_KEY_MODE_NAME[ks->mode % BRK_KEY_MODES], C_GRAY);
-    }
-    if (ks->pitch) {
-        key_knob_value(key, 1, v);
-        cv_text(234 - text_w(&FONT_T, v), 2, &FONT_T, v, C_AMB);
-    }
-    /* the window: played this repeat lit (from the right when backwards), the rest dim */
-    for (c = 0; c < KW_N; c++) {
-        int32_t h = key_px[c];
-        int lit = live && (st->key_rev ? (int32_t)c >= px : (int32_t)c <= px) && px >= 0;
-        cv_rect(KW_X + (int32_t)c, FX_MID - 4 - h, 1, 2 * h + 1, lit ? C_HI : C_DIM);
-    }
-    for (c = 1; c <= b->nslices; c++) {  /* the slice lines inside the window */
-        float rel = (float)b->slice[c % b->nslices] - lo;
-        if (rel <= 0.0f)
-            rel += (float)len;
-        if (rel > 0.0f && rel < w)
-            cv_rect(KW_X + (int32_t)(rel / w * (float)KW_N), 22, 1, 5, C_GRAY);
-    }
-    if (px >= 0)
-        cv_rect(KW_X + px, 20, 2, 70, C_WHITE);
-    /* the bottom: this repeat's progress, then a dot for each repeat (sixteen, then round again) */
-    cv_rect(KW_X, 88, (int32_t)(ph * 120.0f), 3, live ? C_HI : C_LINE);
-    cv_rect(KW_X + (int32_t)(ph * 120.0f), 88, 120 - (int32_t)(ph * 120.0f), 3, C_BLOCK);
-    for (c = 0; c < 16u; c++) {
-        int on = live && c <= (uint32_t)(st->key_n % 16u);
-        cv_rect(132 + (int32_t)c * 7, 86, 5, 6, on ? (c == st->key_n % 16u ? C_WHITE : C_AMB) : C_BLOCK);
-    }
-    cv_oy = 0;
-    cv_blit(0, FX_Y + (uint32_t)top);
-}
-
-/* (drawn in two bands of FX_BAND rows: the canvas is 60 rows) */
-static void draw_key(int key, const brk_status_t *st, uint32_t now)
-{
-    draw_key_band(key, st, now, 0);
-    draw_key_band(key, st, now, FX_BAND);
-}
-
-void app_ui_init(void)
-{
-    lcd_fill(0, 0, 240, 240, C_BLACK);
-    ui.last_step = ui.last_slice = -2;
-    ui.intro = 1u;                       /* the start screen first */
-    ui.intro_t0 = plat_ms();
-    ui.intro_drawn = 0u;
-    ui.touched = 0u;
-    ui.pad_focus = ui.key_focus = -1;
-    ui.shown = -1;
-    ui.sfx_hit = -1;
-    ui.redraw = RG_HEAD;
-}
-
-void app_frame(void)
-{
-    brk_status_t st;
-    const brk_break_t *b;
-    uint32_t now = plat_ms(), hdr;
-    input();
-    break_poll();
-    leds();
-    if (ui.intro) {                      /* any key or button opens the slicer (PLAY also starts the break) */
-        if (ui.touched || now - ui.intro_t0 > 16u * INTRO_STEP + INTRO_HOLD)
-            intro_end();
-        else {
-            intro_draw(now);
-            return;
-        }
-    }
-    ui.touched = 0u;
-    ch_bta_poll(now);
-    brk_status(&st);
-    b = brk_get_break();
-    if (st.step != ui.last_step || st.slice != ui.last_slice) {   /* the playhead moved */
-        ui.last_step = st.step;
-        ui.last_slice = st.slice;
-        ui.redraw |= RG_WAVE | RG_BLOCKS;
-    }
-    if (ui.keys != ui.last_keys) {
-        ui.last_keys = ui.keys;
-        ui.redraw |= RG_BLOCKS;
-    }
-    if (ui.page == PG_GLOBAL && now - ui.sfx_drawn >= 200u)   /* the GLOBAL page's panel: five times a second */
-        ui.redraw |= RG_BLOCKS;
-    if (ui.page == PG_MIX && now - ui.mix_drawn >= 33u)   /* the MIXER's meters: about 30 times a second */
-        ui.redraw |= RG_BLOCKS;
-    if (ui.page == PG_FX && set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP && now - ui.sfx_drawn >= 50u)
-        ui.redraw |= RG_BLOCKS;          /* MULTIBAND focused: its reduction, twenty times a second */
-    if (ui.page == PG_SOUND) {           /* the soundboard's fuses burn at about 20 frames a second */
-        uint32_t m = sfx_playing();
-        if (m != ui.sfx_mask || (m && now - ui.sfx_drawn >= 50u) ||
-            (ui.sfx_hit >= 0 && now - ui.sfx_hit_t < 200u && now - ui.sfx_drawn >= 50u))
-            ui.redraw |= RG_BLOCKS;
-        ui.sfx_mask = m;
-    }
-    if (foot_dirty) {
-        foot_dirty = 0u;
-        ui.redraw |= RG_FOOT;
-    }
-    {                                    /* the strip: a held key's loop, a held pad's animation, or the blocks */
-        int16_t want = -1;
-        int kt = key_tuned();
-        if (kt >= 0 && (ui.key_turned || now - ui.key_since >= KEY_SHOW_MS))
-            want = (int16_t)(100 + kt);
-        else if (ui.pad_focus >= 0)
-            want = ui.pad_focus;
-        if (want != ui.shown) {
-            if (want >= 0 && ui.shown < 0)
-                lcd_fill(0, 86, 240, 106, C_BLACK);
-            ui.shown = want;
-            ui.redraw |= RG_FOOT | (want >= 0 ? RG_FX : RG_BLOCKS);
-            if (want < 0)
-                lcd_fill(0, 86, 240, 106, C_BLACK);
-        }
-    }
-    if (ui.shown >= 0) {                 /* the animation runs at about 30 frames a second */
-        if (ui.shown == PAD_TAPESTOP)
-            ui.reel += 0.06f * st.tape;
-        if (now - ui.fx_drawn >= 33u)
-            ui.redraw |= RG_FX;
-        ui.redraw &= ~(uint8_t)RG_BLOCKS;
-    }
-    if (st.pads != ui.last_pads) {
-        ui.last_pads = st.pads;
-        ui.redraw |= RG_FOOT;
-    }
-    if (ui.msg_until && now >= ui.msg_until) {
-        ui.msg_until = 0u;
-        ui.redraw |= RG_HEAD;
-    }
-    /* the header's own state: playing, the tempo, the break */
-    hdr = (uint32_t)st.playing | (uint32_t)set.tempo_x10 << 1 | (uint32_t)set.brk << 13 | (b ? 1u : 0u) << 20 |
-          (uint32_t)ext_active() << 21;
-    if (hdr != ui.last_hdr) {
-        ui.last_hdr = hdr;
-        ui.redraw |= RG_HEAD;
-    }
-    if (ui.redraw & RG_HEAD)
-        draw_head(&st, b, now);
-    if (ui.meter_x > 0 && now - ui.meter_drawn >= 33u) {   /* the level meter, about 30 times a second */
-        draw_meter();
-        ui.meter_drawn = now;
-    }
-    if (!ui.redraw)
-        return;
-    if (ui.redraw & RG_WAVE)
-        draw_wave(&st, b);
-    if (ui.redraw & RG_FX) {
-        if (ui.shown >= 100)
-            draw_key(ui.shown - 100, &st, now);
-        else if (ui.shown >= 0)
-            draw_fx(ui.shown, &st, now);
-        ui.fx_drawn = now;
-    }
-    if (ui.redraw & RG_BLOCKS) {
-        if (ui.page == PG_SOUND) {
-            draw_sounds(ui.keys, now);
-            ui.sfx_drawn = now;
-        } else if (ui.page == PG_GLOBAL) {
-            draw_global(&st);
-            ui.sfx_drawn = now;
-        } else if (ui.page == PG_FX) {
-            draw_chain();
-            ui.sfx_drawn = now;
-        } else if (ui.page == PG_KICK)
-            draw_kick(&st);
-        else if (ui.page == PG_MIX) {
-            draw_mixer();
-            ui.mix_drawn = now;
-        } else
-            draw_blocks(&st, ui.keys);
-    }
-    if (ui.redraw & RG_FOOT)
-        draw_foot(&st);
-    ui.redraw = 0u;
-}
-
-#ifdef PLAT_HOST
-/* the host simulator's commands: "splash" draws the power-on screen (the device draws it before app_init; the
- * simulator never does) */
-int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
-{
-    (void)a; (void)b; (void)c; (void)d;
-    if (!strcmp(cmd, "splash")) {
-        app_splash();
-        return 1;
-    }
-    if (!strcmp(cmd, "bta_sim")) {       /* bta_sim: a pretend Bluetooth audio (the host has no radio) for the page */
-        bta_sim_on = 1u;
-        return 1;
-    }
-    if (!strcmp(cmd, "expect_bpm")) {    /* expect_bpm LO HI (whole BPM): the tempo the engine plays at */
-        int32_t x100 = (int32_t)(brk_get_tempo() * 100.0f + 0.5f), bad = x100 < atoi(a) * 100 || x100 > atoi(b) * 100;
-        printf("%s tempo %d.%02d BPM (%s..%s)\n", bad ? "FAIL" : "  ok", (int)(x100 / 100), (int)(x100 % 100), a, b);
-        return 1;
-    }
-    return 0;
-}
-#endif
+#include "ui/common.c"
+#include "ui/fx.c"
+#include "ui/pads.c"
+#include "ui/keys.c"
+#include "ui/bta.c"
+#include "ui/global.c"
+#include "ui/seq.c"
+#include "ui/kick.c"
+#include "ui/perc.c"
+#include "ui/mixer.c"
+#include "ui/screen.c"
+#include "ui/main.c"

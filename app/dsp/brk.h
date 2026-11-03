@@ -115,7 +115,6 @@ typedef struct {
     float tape;                          /* tape speed: 1 running .. 0 stopped */
     float gate;                          /* the gate's level now, 0..1 */
     float phase;                         /* how far into the step, 0..1 */
-    float rewind;                        /* a rewind's progress, 0..1 (0: none) */
     int32_t key;                         /* the white key looping (its slice), -1 none */
     float key_lo, key_w;                 /* its window: from key_lo, key_w samples of the break (it may run on round
                                           * the break's end) */
@@ -131,15 +130,13 @@ const brk_break_t *brk_get_break(void);
 
 void brk_play(int on);
 void brk_reset(void);                    /* to the pattern's first step (the next step played is step 0) */
-void brk_rewind(void);                   /* the pull-up: the break spins back, faster and faster, then starts again
-                                          * from the top of the bar */
 void brk_tempo(float bpm);               /* 40..300 */
 float brk_get_tempo(void);
 void brk_pitch(float semitones);         /* -24..+24, on top of the tempo's repitch */
 /* how pitch sounds (PRD E-9): SPEED, the classic repitch (up is shorter, down longer), or KEEP LENGTH: the voices
  * run at the tempo's speed and two overlapping grains of grain_ms (10..80) read them at the pitch, so a slice keeps
  * its length. Applies to every pitch in semitones (OCT, steps, a key's, the roll's and the freeze's); the tempo's
- * repitch, HALF, REVERSE's speed, the tape stop and the rewind stay speed */
+ * repitch, HALF, REVERSE's speed and the tape stop stay speed */
 void brk_pitch_mode(int keep_length, float grain_ms);
 void brk_swing(float s);                 /* 0.5 straight .. 0.75 */
 /* the gate (PRD B-30): how much of each slice the loop plays sounds, 0.05..1 (1: all of it). A slice gated at g
@@ -166,11 +163,9 @@ void brk_padset_defaults(brk_padset_t *p);
 void brk_padset(const brk_padset_t *p);  /* main loop; the render follows it at once, also while a pad is held */
 void brk_seed(uint32_t seed);
 
-/* the pattern: steps 0..len-1 (len 0 = the break's own length in steps), all "follow, on" by default */
-void brk_pattern_len(uint32_t len);
+/* the pattern: the break's own length in steps, all "follow, on" by default (the app's sequencer writes it) */
 void brk_step_set(uint32_t i, const brk_step_t *s);
 void brk_step_get(uint32_t i, brk_step_t *s);
-void brk_pattern_clear(void);
 void brk_randomize(void);                /* writes random slices into the pattern (PRD A-11) */
 
 /* MIDI clock (PRD N-1, N-2). Out: while playing, the render marks MIDI's 24 ticks a beat (straight, whatever the

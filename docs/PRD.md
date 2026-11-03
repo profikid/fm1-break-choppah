@@ -23,7 +23,8 @@ a safe mode and a route back to stock firmware.
 2. **Performance:** a hands-on chop-and-FX mode that's playable live without looking at the screen.
 3. **Sound:** a crunchy, 90s-sampler character (repitch, not time-stretch, by default) with clean
    headroom: no clicks at slice edges and no dropouts.
-4. **Your own breaks:** a desktop tool and web uploader that slice, encode and send up to 8 breaks.
+4. **The breaks:** a desktop tool that slices, levels and encodes the breaks built into the firmware
+   (`breaks/breaks.txt`). Loading samples of your own onto the device is out of scope (3 Nov 2026, §4.7).
 5. **Safe to install:** never brick the device; always a way back to stock.
 
 ### 1.2 Non-goals (v1)
@@ -159,7 +160,7 @@ ABG's four, plus the master section a live unit needs.
 | A-43 | **Degrader:** bit depth (16→2), sample-rate reduction (44.1k→2k), drive | P0 | |
 | A-44 | FX page: one FX focused at a time on K1–K4; each FX on/off by SEL+K1..K4 press; fixed order ring → HPF → flanger → degrader | P0 | Total DSP < 60 % of the render budget, all FX on |
 | A-45 | **Master FX chain (replaces A-44's fixed order, 1 Nov 2026):** four slots in series, each any effect of the library (FILTER LP/BP/HP, CRUNCH = A-43, DRIVE, PUNCH compressor, FLANGER = A-42, RING MOD = A-40, TREMOLO on the tempo; A-41's stereo hi-pass is FILTER in HP), three settings, mix, bypass; ALGORITHM picks the slot, PRESETS the effect, SEL + ALGORITHM moves it; per-slot state (two of one effect never share). HOME K4 was FX, the chain's dry/wet (on the MIXER since B-33) (CRUNCH moved into the chain). Settings CHP5 | P0 | *Done; engine tests: every effect alone bounded and audible, the order matters, FX 0 all dry* |
-| A-47 | **DELAY** in the chain: a stereo ping-pong at 22.05 kHz on the DUB line (0.74 s per side), time on the tempo (1/16 … 1/2, 1/8T, 1/4T), feedback, tone (each repeat darker), K4 SEND (echoes return at full). One delay: also where the DUB pad, the soundboard's echo and the slices' ECHO throw; the DUB pad's K1–K4 edit it when it is in the chain; without it the delay sits after the chain with the pad's settings | P1 | *Done 1 Nov 2026; engine tests: the first echo left at 3/16, the second right* |
+| A-47 | **DELAY** in the chain: a stereo ping-pong at 22.05 kHz on the DUB line (0.74 s per side), time on the tempo (1/16 … 1/2, 1/8T, 1/4T), feedback, tone (each repeat darker), K4 SEND (echoes return at full). One delay: also where the DUB pad and the slices' ECHO throw; the DUB pad's K1–K4 edit it when it is in the chain; without it the delay sits after the chain with the pad's settings | P1 | *Done 1 Nov 2026; engine tests: the first echo left at 3/16, the second right* |
 | A-48 | **EQ** (3 bands: a low shelf at 120 Hz, a mid bell 200 Hz – 5 kHz on K4, a high shelf at 8 kHz, ±12 dB; Simper's SVF bands) and **TAPE** (drive 0–24 dB into an asymmetric soft curve, peak-matched make-up; warmth: a head bump and the top rolled off; wow and flutter on the slot's short line) in the chain | P1 | *Done 1 Nov 2026; engine tests: EQ flat, +12 dB low ×4, −12 dB high ÷4, mid ×4; TAPE harmonics on a pure tone, wow wanders the pitch* |
 | A-46 | **REVERB** in the chain: a Dattorro plate (pre-delay, four input diffusers, a modulated two-half tank, fourteen output taps), at 22.05 kHz inside on 16-bit lines (~35 KB RAM; the flangers' lines shortened to 256 to pay for it); SIZE (decay), TONE (damping), PRE (0–60 ms), MIX its level over the dry; one in the chain. STOP now fades the break out (it looped on before) so tails ring alone | P1 | *Done 1 Nov 2026; engine tests: an impulse rings and dies, left and right decorrelated, a bigger size rings longer, a second REVERB passes; RAM 79 KB of 96* |
 | A-49 | **MB COMP** (a 3-band compressor: splits at 200 Hz and 2.5 kHz that sum back exactly; per band an amount = threshold 0 … −30 dB and ratio 1 … 8:1 together, made up by half the reduction at full scale; attack/release per band, low slow, high fast; MIX parallel) and **CLIP** (drive 0 … +24 dB, knee soft … hard, ceiling 0 … −12 dB) in the chain. The FX page shows MB COMP's reduction per band under K1–K3 | P1 | *Done 1 Nov 2026; engine tests: the bands sum back at 0, LOW pressed: +14 dB in gives under +3.5 dB out and 1 kHz stays, CLIP clean below its edge and held at its ceiling* |
@@ -178,7 +179,7 @@ ABG's four, plus the master section a live unit needs.
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| A-60 | Import up to **8 custom loops** | P0 | |
+| A-60 | ~~Import up to **8 custom loops**~~ **Dropped 3 Nov 2026:** CHOPPAH does not load samples of its own; the breaks are the firmware's (`breaks/breaks.txt`, A-61). A-62–A-64 go with it | — | |
 | A-61 | **Prep tool** (`tools/prep_breaks.py`, Python stdlib only): WAV in → trim to whole bars (by BPM or detected) → loudness to −16 dBFS RMS of the loud parts with a look-ahead peak limiter (3 Nov 2026; was peak-normalised, THINK sat ~8 dB under DRUMMER) → slice markers (grid or transient) → resample → IMA ADPCM → bank image + manifest | P0 | Amen 2 bars fits in < 45 KB; the 8 breaks within 0.6 dB of each other at the output (simulator) |
 | A-62 | **Upload** over USB: CLI (`tools/fm1_breaks.py upload`) and a web page (Chrome/Edge, Web MIDI SysEx) | P0 | A full bank uploads in < 60 s; a failed upload leaves the old bank intact (A/B or verify-then-commit) |
 | A-63 | On-device slice editor (EDIT): move markers, nudge in 1 ms, set slice count, set native BPM, rename | P1 | |
@@ -191,7 +192,7 @@ ABG's four, plus the master section a live unit needs.
 | A-70 | Transport: Start/Stop/Continue in; **MIDI clock in** (USB and TRS) with tempo follow; clock out over USB | P0 | Locks to CDJ/DAW clock in < 2 beats; follows tempo changes. *Done 30 Oct 2026 on the GLOBAL page: clock in follows the tempo (a beat of ticks, smoothed), START/STOP/CONTINUE (continue starts again: no song position yet), phase eased every beat (`brk_sync`, jumps when > 1.5 steps off); clock out 24 ppqn sample-marked by the engine, sent on the 1 kHz tick, START/STOP with PLAY; MIDI TO picks USB / Bluetooth / both. Engine tests: 96 ticks a bar with and without swing, easing onto a clock 0.4 step off, jumping. Host scenario midi.txt* |
 | A-71 | **Bluetooth MIDI** (fm1-base's own stack): on/off on the GLOBAL page, at power-on as saved, advertised as "CHOPPAH XXXX"; clock in and out over it | P1 | *Done 30 Oct 2026 (~40 KB of flash)* |
 | A-72 | **Bluetooth audio out** (fm1-base's A2DP source, SBC, `bt_audio = true`): GLOBAL's third part: K1 on / off (at power-on as saved, the last device connected again), K2 the device (remembered, then found), K3 a 10 s scan, K4 connect / hang up (SEL + left: forget). The FM-1's own output mutes while it streams; stereo; K3 while streaming plays a left / right test (a 440 Hz beep left, 880 Hz right, twice: 3 Nov 2026, a user heard only the right side; the SBC encoder decodes both channels on a computer, with gcc, clang and libavcodec's decoder, and so does JieLi's clang 4.0.1's optimised IR for the FM-1, run on x86); K2 while streaming picks the SBC coding, JOINT (fm1-base's) or plain STEREO (the encoder set again in the same unit, its bitpool kept): the same user still heard only the right side; 150–300 ms late (listening, not playing). Paid for with the 31-pixel font (20 KB of flash: the title is FONT_B doubled, the platform's big face FONT_B), the bank build's synthesised-break code, the canvas cut to 240 × 60 (the pad and key views drawn in two bands: 17 KB of pool for the packet queue) and the DUB line to 0.70 s | P2 | *Built 2 Nov 2026; host scenario btaudio.txt with a pretend radio (the host has none); not yet heard from an FM-1* |
-| A-71 | Slice triggering by notes (default C2 = slice 1, chromatic up) | P0 | |
+| A-75 | **Notes play slices and drums** (3 Nov 2026): notes 48–63 (C3–D#4) on any channel play slices 1–16, held like the white keys (snap, key loops); 36 the kick, 38 the snare, 42 / 44 / 46 the hat, also while stopped; with REC on and playing they record into the pattern (B-22) | P0 | *Done; scenario seq.txt: a note recorded, a slice played by note* |
 | A-72 | Break select by notes (separate octave) and Program Change; pattern select by Program Change | P1 | |
 | A-73 | CC map for K1–K4 and all FX parameters; CC out on knob turns | P1 | Map documented in the manual |
 | A-74 | MIDI channel selectable (GLO) | P0 | |
@@ -252,16 +253,16 @@ on the keys, eyes on the crowd.
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| B-20 | **16 patterns**, each 16–64 steps (pages of 16, SEL+white key to pick a page) | P0 | |
-| B-21 | Per step: slice (or "follow loop"), on/off, reverse, pitch (±12), ratchet (1–4), gate length, probability (0–100 %), FX lock (one FX on/off mask) | P0 | |
-| B-22 | **Record live:** in SEQ with PLAY + REC, key presses record into steps (quantised) | P0 | |
-| B-23 | Pattern change quantised to the bar; chain patterns (song mode, up to 32 entries) | P1 | |
+| B-20 | **16 patterns** (3 Nov 2026), each the break's steps (32: the breaks are 2 bars; not changed to 1.5 bars) and three drum lanes of 16 steps (kick, snare, hat) repeating every bar. PRESETS picks one on most pages; while playing the change waits for the loop's end (the header shows "P2>"). Saved in OBJ_PAT (0xDA000, 1.6 KB) with SAVE | P0 | *Done; scenario seq.txt* |
+| B-21 | Per step: slice (LOOP = follow the break, where the generator works, a slice of its own, or OFF), pitch (±12), ratchet (HITS 1–4), reverse. SEQ page: ALGORITHM picks the lane (STEPS 1-16, STEPS 17-32, KICK, SNARE, HAT); on a break lane the white keys pick the step and K1–K4 set it, on a drum lane they toggle its steps. Gate length, probability and FX locks per step not built | P0 | *Done (partly: no per-step gate, probability or FX lock)* |
+| B-22 | **Record live:** REC (any page) while playing writes each white key into the pattern at the step it lands on (the step playing, or the next past its middle), MIDI notes too (A-75); SEL + REC clears the lane on SEQ, the pattern elsewhere | P0 | *Done; scenario seq.txt* |
+| B-23 | Pattern change at the loop's end (built, B-20); chain patterns (song mode, up to 32 entries) | P1 | |
 | B-24 | Copy/paste step, page, pattern (SEL+SAVE / SEL+key) | P1 | |
 | B-25 | Knob motion recording (one lane per FX param, P-lock style) | P2 | |
 | B-30 | **Gate** (PERFORM K3, K1 since B-33, global): every slice the loop plays sounds for 5–100 % of its own length, then a 3 ms fade; follows tempo and pitch; for the loop, ratchets and RANDOM (key loops and rolls have their own lengths; FREEZE ungates). Replaced the PERFORM page's copy of CMPLX (still on GENERATOR). *Done 31 Oct 2026; engine test: at 25 % the second half of each slice is silent* | P1 | |
 | B-31 | **Snap** (GLOBAL, second half, K3): where a white key pressed while playing lands: OFF (at once) or the next point of a grid 1/8, 1/4, 1/2 (default: the old next-16th on 2-bar breaks), 1, 2 or 4 slices apart from the pattern's start; whole steps follow the swing (on_step), less than a step is counted in samples. *Done 1 Nov 2026; engine tests: 2 slices waits a step more, OFF at once, 1/4 slice a quarter step on* | P1 | |
-| B-33 | **MIXER on LFO** (2 Nov 2026): LEVELS: K1 BREAK (the break and its throws, eased), K2 KICK (= kick VOLUME), K3 FX MAIN (the chain's dry/wet), K4 FX OVERLAY (the soundboard's level), as faders with the break's, the kick's and the soundboard's meters and the chain's slots; LFO again, GROOVE: K1 swing, K2 the kick's route. Swing and FX moved off PERFORM, which keeps GATE (K1) and the DJ filter (K2). BREAK level appended to the settings | P1 | *Done; scenario mixer.txt: the break down leaves the kick alone, both down is silence* |
-| B-34 | **The DJ filter is the break's** (2 Nov 2026): it moved from the end of the output stage to the break's input of the chain (the break and its echo / reverb throws); the kick through the chain joins after it, the soundboard and the kick around the chain later still, so a sweep leaves them full. The FLT pad throws it the same way | P1 | *Done; engine test: low-passed, a 4 kHz break is gone while the kick and the soundboard pass* |
+| B-33 | **MIXER on LFO** (2 Nov 2026; 3 Nov: the soundboard's OVERLAY gave way to PERC): LEVELS: K1 BREAK (the break and its throws, eased), K2 KICK (= kick VOLUME), K3 PERC (the snare and the hat), K4 FX (the chain's dry/wet), as faders with the break's, the kick's and the drums' meters and the chain's slots; LFO again, GROOVE: K1 swing, K2 DRUMS, the drums' route. Swing and FX moved off PERFORM, which keeps GATE (K1) and the DJ filter (K2). BREAK level appended to the settings | P1 | *Done; scenario mixer.txt: the break down leaves the kick alone, both down is silence* |
+| B-34 | **The DJ filter is the break's** (2 Nov 2026): it moved from the end of the output stage to the break's input of the chain (the break and its echo / reverb throws); the drums through the chain join after it, the drums around the chain later still, so a sweep leaves them full. The FLT pad throws it the same way | P1 | *Done; engine test: low-passed, a 4 kHz break is gone while the kick passes* |
 | B-32 | **Slice effects:** each slice its own effect while it plays (loop, key, roll): LO-PASS, HI-PASS, CRUNCH, DRIVE, RING MOD, ECHO / VERB throws into the chain's delay and reverb, plus its LEVEL. A key held + FX flips K1–K4 to it (EFFECT, AMOUNT, TONE, LEVEL); blocks show a tag. Run per voice (a slice's state starts with its hit), the throws on two send buses out of the engine. Settings CHP6 | P1 | *Done 1 Nov 2026; engine tests: level 0 silences that slice alone, LO-PASS darkens it, ECHO throws it alone* |
 
 ### 5.4 Performance screen (HOME)
@@ -279,12 +280,12 @@ on the keys, eyes on the crowd.
 | Page (button) | K1 | K2 | K3 | K4 | SEL page |
 | --- | --- | --- | --- | --- | --- |
 | HOME (perform) | Gate (built) | DJ filter on the break (built) | | | Tempo (tap) |
-| LFO (mixer, built) | Break level | Kick level | FX main | FX overlay (soundboard) | LFO again: swing · kick route |
-| SEQ | Step slice | Step pitch | Ratchet | Probability | Gate · Reverse · FX lock · Page length |
+| LFO (mixer, built) | Break level | Kick level | Snare and hat level | FX | LFO again: swing · drums route |
+| SEQ (built) | Step slice | Step pitch | Hits (ratchet) | Reverse | ALGORITHM: the lane |
 | ARP (generator) | Complexity | Anchor | Roll | Fill | Retrig 2× · 3× · 4× · 8× |
 | EDIT (break) | Slice select | Start nudge | Slice count | Native BPM | Gain · Trim · Name · Mode (repitch/stretch) |
 | FX | Focused FX param 1 | param 2 | param 3 | Mix | Next FX · on/off |
-| ENV | Attack | Decay | Gate length | Choke (mono/poly) | Fade length |
+| ENV (snare / hat, built) | Level | Tune | Decay | Tone | ENV again: snap / cut · drive |
 | LFO (planned; the button is the MIXER now: an LFO needs another home) | Rate (sync) | Depth | Target | Shape | Retrigger on bar |
 | GLO | MIDI channel | Clock source | Clock out | Looper length | Pad map · Velocity · Brightness |
 
@@ -313,9 +314,9 @@ on the keys, eyes on the crowd.
 
 ```
 app/
-  app.h, app.c      platform contract (init, render, frame, panic, store map)
-  ui.c              screens, pages, help cards
-  project.c         patterns, settings, persistence
+  app.h, app.c      platform contract (init, render, panic, store map), settings, patterns, MIDI, the render
+  ui/*.c            the pages, included by app.c in order (one unity build, 3 Nov 2026): common, fx, pads,
+                    keys, bta, global, seq, kick, perc, mixer, screen, main (input, LEDs, the frame)
   dsp/
     brk_bank.[ch]   sample bank format: header, slots, slice tables, IMA ADPCM data in flash
     adpcm.[ch]      IMA ADPCM decoder (into pool RAM)
@@ -323,6 +324,8 @@ app/
     brk_seq.[ch]    clock, steps, quantise, swing, looper, pattern chain
     brk_gen.[ch]    the generator (complexity, anchor, roll, fill, retrig)
     brk_fx.[ch]     ring mod, stereo HPF, flanger, degrader, DJ filter, comp/limiter, delay
+    kick.[ch]       the four-layer kick (§11b)
+    perc.[ch]       the snare and the hat (§11b, K-10)
 tools/
   prep_breaks.py    WAV → slices → ADPCM → bank image
   fm1_breaks.py     upload / dump / dry-run over USB-MIDI
@@ -338,7 +341,7 @@ on any computer, and in the browser emulator.
 
 | Region | Use | Budget |
 | --- | --- | --- |
-| Flash: app slot (581 KB) | code, UI assets, 1 built-in break | ≤ 450 KB (headroom) |
+| Flash: app slot (581 KB) | code, UI assets, the built-in breaks | ≤ 450 KB planned; 3 Nov 2026: 552.6 KB with Bluetooth MIDI and audio and 8 breaks (577.9 before: fm1-base updated to 2d8ed74 with `unity_opt = "z"` and `boot_pack`, the platform screens drawn in CHOPPAH's faces (`APP_SYS_TEXT`), the soundboard out) |
 | Flash: 0x97000–0xD9FFF + XDATA1 0xE5000–0xFBFFF | break bank (8 slots) | ≤ 356 KB |
 | Flash: 0xDA000, 0xDC000, 0xFC000 | store objects: patterns, panel calibration, settings | 2 sectors each |
 | Pool RAM (336 KB) | screen canvas 240 × 96 (45 KB, drawn in strips); **active break decoded to int16 PCM**: 2 × 112 KB (current + next/B-loop, so switching is instant); FX delay line 40 KB; scratch 8 KB | ≤ 320 KB |
@@ -364,10 +367,11 @@ data first, header last, so a cut upload leaves the old header valid or nothing 
 
 | Object | Content | Size |
 | --- | --- | --- |
-| OBJ_SETTINGS (0xFC000) | globals, MIDI, last break/pattern/tempo, FX state, the kick. Magic CHP6; since 1 Nov 2026 the struct only grows at the end and a shorter save loads into the front (the rest keeps its defaults) | < 1 KB |
-| OBJ_PAT0..3 | 16 patterns × 64 steps × 4 bytes, split over 4 objects | 4 × ~1 KB (fits 3840 B max) |
+| OBJ_SETTINGS (0xFC000) | globals, MIDI, last break/pattern/tempo, FX state, the drums. Magic CHP7 (3 Nov 2026: the soundboard's and the kick's steps out, the snare and hat in, so older saves start at the defaults once); the struct only grows at the end and a shorter save of CHP7 loads into the front (the rest keeps its defaults) | < 1 KB |
+| OBJ_PAT (0xDA000) | 16 patterns × (32 steps × 4 bytes + 3 lanes) | ~1.6 KB (fits 3840 B max) |
 | OBJ_SONG | chain | < 256 B |
 | OBJ_PANEL (0xDC000) | panel calibration (platform's) | |
+| OBJ_BLE (0xDE000) | Bluetooth pairings (platform's); RESET ALL keeps them | |
 
 ### 8.5 Timing
 
@@ -420,20 +424,16 @@ data first, header last, so a cut upload leaves the old header valid or nothing 
 
 ---
 
-## 11a. Soundboard (built 30 Oct 2026)
+## 11a. Soundboard (built 30 Oct 2026, removed 3 Nov 2026)
 
-ENV opens a soundboard: the white keys fire 16 synthesised sound-system effects over the playing break (air horn,
-dub siren, whoop, laser, zap, gunshot, brap, "FYAH!", "HEY!", riser, reverse cymbal, sub drop, horn stab, skank,
-scratch, rewind). Four voices; siren and riser sustain while held; REWIND also pulls the break up (spins back up to
-10x, then restarts from the top of the bar). K1 level, K2 pitch, K3 echo (send into the dub delay), K4 length.
-Sounds join after the four effects, before the limiter (and not through the DJ filter: B-34). Built-in breaks were then five synthesised styles and 12 recorded Amens (8 classic breaks since
-1 Nov 2026, Q1).
+ENV was a soundboard of 16 synthesised sound-system effects (air horn, siren, rewind…) over the break. It was taken
+out on 3 Nov 2026 with the REWIND pull-up, for the pattern sequencer and the snare and hat (ENV now opens SNARE / HAT).
 
-## 11b. Kick (built 1 Nov 2026)
+## 11b. Drums: kick (built 1 Nov 2026), snare and hat (3 Nov 2026)
 
 A synthesised kick over the break, from the Gabber Kick Designer brief: four layers summed into a drive and a
-clipper, its own 16-step lane, through the FX chain or around it. `app/dsp/kick.c` (platform-free, its own `o2`
-unit); settings appended to OBJ_SETTINGS (140 B).
+clipper, on the pattern's kick lane (B-20), through the FX chain or around it. `app/dsp/kick.c` (platform-free, its
+own `o2` unit); settings in OBJ_SETTINGS (136 B).
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
@@ -441,11 +441,13 @@ unit); settings appended to OBJ_SETTINGS (140 B).
 | K-2 | **Layer FX:** per layer OFF / DRIVE (gain, tone) / CRUNCH (bits 15–3, rate) / FILTER (low-pass 60 Hz–11.6 kHz, resonance) / RING MOD (30 Hz–1.9 kHz) with WET | P0 | *Done; every layer through every effect bounded* |
 | K-3 | **INTENSITY:** the sum's drive (0.3–30×) into a soft clip, turning hard over half (the distorted gabber kick), made up to full scale; VOLUME | P0 | *Done; INTENSITY raises the body* |
 | K-4 | **KICK page on EDIT:** EDIT again steps MIX (K1–K4 the layers' levels) → LAYER (LEVEL PITCH DECAY TONE) → LAYER FX (EFFECT, A, B, WET) → MACRO (SUB, PUNCH, GRIT, INTENSITY) → OUT (VOLUME, ROUTE); ALGORITHM the layer; the strip shows the kick's shape (600 ms), the layers' levels, the 16 steps with the playhead | P0 | *Done; simulator scenario kick.txt* |
-| K-5 | **Steps:** on the KICK page the white keys toggle the kick on the bar's 16 steps (default four to the floor; LEDs show them, the step playing flipped). The engine marks each step's sample offset (`brk_step_events`) so the kick lands sample-accurate, swing included | P0 | *Done; engine test: 16 events a bar, a step apart, places 0–15* |
+| K-5 | **Steps** (the pattern's kick lane since 3 Nov 2026): on the KICK page the white keys toggle the kick on the bar's 16 steps (default four to the floor; LEDs show them, the step playing flipped). The engine marks each step's sample offset (`brk_step_events`) so the kick lands sample-accurate, swing included | P0 | *Done; engine test: 16 events a bar, a step apart, places 0–15* |
 | K-6 | **Presets:** PRESETS loads a built-in kick (909, TECHNO, EARLY HC, ROTTERDAM the default, INDUSTRIAL, DISTORTO); the steps, routing and volume stay; SAVE keeps the kick with the settings | P0 | *Done; six presets in range and distinct* |
-| K-7 | **Routing:** through the FX chain with the break (default) or around it (joins after the chain like the soundboard, into the limiter, thrown nowhere); never through the break's DJ filter (B-34); SEL + EDIT, OUT K2 or MIXER GROOVE K2 | P1 | *Done* |
+| K-7 | **Routing** (the kick, the snare and the hat together since 3 Nov 2026): through the FX chain with the break (default) or around it (joins after the chain, into the limiter, thrown nowhere); never through the break's DJ filter (B-34); SEL + EDIT, OUT K2 or MIXER GROOVE K2 | P1 | *Done* |
 | K-8 | **MIDI:** note 36 (C1) note-on on any channel plays the kick at the next block, also while stopped | P1 | *Done; scenario: a note sounds while stopped* |
 | K-9 | Retrigger without clicks: the kick still sounding fades out under the new hit; no work while silent | P0 | *Done; engine test* |
+| K-10 | **SNARE / HAT on ENV** (`app/dsp/perc.c`): SNARE two sines (1 : 1.62) with a pitch drop, band-passed noise and a crack (LEVEL, TUNE 120–400 Hz, DECAY 60–700 ms, TONE, SNAP, DRIVE); HAT six squares at the 808's ratios plus noise through two high-passes (LEVEL, TUNE, DECAY 15–900 ms, METAL / NOISE, CUT, DRIVE); four presets each (909, TIGHT, FAT, GABBER; CLOSED, 808, OPEN, TRASH); ALGORITHM the voice, ENV again SOUND / SHAPE, the white keys its lane; MIXER K3 PERC; MIDI 38, 42 / 44 / 46 | P1 | *Done; engine tests: presets bounded, the snare's body at its tune; scenario perc.txt* |
+| K-11 | **RESET ALL** (GLOBAL's second part, K4 turned twice within 3 s): every setting and all 16 patterns back to the defaults, the first break, saved at once; Bluetooth pairings kept | P1 | *Done; scenario reset.txt* |
 
 From the brief and not built: a per-kick master chain of its own (the kick goes through CHOPPAH's chain instead,
 which now has MB COMP and CLIP, A-49), separate envelope pages per layer, a preset browser with categories and
@@ -470,7 +472,7 @@ user presets (the kick is saved with the settings), and the overload guard (E-7,
 | **M2 Sequencer + generator** | Steps, swing, generator, randomize, tap tempo, patterns, persistence | A-7, A-10, A-11, A-38, B-14, B-20, B-21 |
 | **M3 Remix FX + looper** | Freeze, reverse gate, retrigger, RMX, step random, pitch ±, looper with overdub | §4.3, §4.4 P0 rows |
 | **M4 DSP** | Ring mod, stereo HPF, flanger, degrader, master DJ filter + limiter; overload guard | §4.5 P0 rows, N-1, N-2 |
-| **M5 Custom breaks** | prep tool, CLI + web upload, 8 slots, on-device slice editor | §4.7 |
+| **M5 Breaks** | prep tool (built); loading your own breaks dropped 3 Nov 2026 | §4.7 |
 | **M6 Performance mode** | Black-key pads, hold-to-loop, scrub, tape stop, p-locks, chains | §5 P0 rows |
 | **M7 MIDI + sync** | Clock in/out, note/CC maps, USB audio recording flow | §4.8 |
 | **M8 Release 1.0** | Manual, help cards, emulator, web installer, soak test | All P0 + N-1..N-6 |

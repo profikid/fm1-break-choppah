@@ -10,7 +10,7 @@
 #include "brk_fx.h"
 #include "brk_synth.h"
 #include "kick.h"
-#include "sfx.h"
+#include "perc.h"
 
 #define RATE 22050u
 #define BPM 136.9f
@@ -264,7 +264,7 @@ static void fx_run(const brk_fx_t *p, uint32_t n)
     brk_fx_init();
     brk_fx_set(p);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0, 0.0f, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
+        brk_fx_process(buf + i, 0, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
 }
 
 static void test_fx(void)
@@ -517,14 +517,14 @@ static void test_dub(void)
     brk_play(1);
     render(buf, n, 0, 0, 0);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0, 0.0f, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
+        brk_fx_process(buf + i, 0, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 1u << PAD_DUB);
     brk_play(0);
     brk_pad(PAD_DUB, 0);
     for (i = 0; i < BLOCK; i++)
         buf[i] = 0.0f;
     for (i = 0; i < s * 8u; i += BLOCK) {    /* silence in, two bars of it */
         uint32_t j;
-        brk_fx_process(buf, 0, 0, 0.0f, 0, 0, 0, bl, br, BLOCK, 0u);
+        brk_fx_process(buf, 0, 0, 0, 0, bl, br, BLOCK, 0u);
         for (j = 0; j < BLOCK; j++)
             if (fabsf(bl[j]) > tail)
                 tail = fabsf(bl[j]);
@@ -555,108 +555,10 @@ static void test_styles(void)
 }
 
 /* the soundboard: every sound sounds, stays inside -1..1 and ends; the siren holds until let go */
-static void test_sfx(void)
-{
-    static float o[BRK_SR * 5u];
-    sfx_set_t set;
-    uint32_t id, silent = 0u, stuck = 0u, wild = 0u, i;
-    char name[64];
-    sfx_init();
-    sfx_defaults(&set);
-    set.level = 1.0f;
-    sfx_set(&set);
-    for (id = 0; id < SFX_N; id++) {
-        uint32_t n = BRK_SR * 3u;
-        float pk = 0.0f;
-        sfx_trigger((int)id);
-        for (i = 0; i < n; i += BLOCK) {
-            uint32_t j;
-            if (i / BLOCK == (BRK_SR / 2u) / BLOCK)
-                sfx_release((int)id);    /* the held ones let go after half a second */
-            sfx_render(o + i, BLOCK);
-            for (j = 0; j < BLOCK; j++) {
-                if (!(fabsf(o[i + j]) <= 1.0f))
-                    wild++;
-                if (fabsf(o[i + j]) > pk)
-                    pk = fabsf(o[i + j]);
-            }
-        }
-        if (pk < 0.05f) {
-            silent++;
-            printf("  silent: %s (peak %.3f)\n", SFX_NAME[id], pk);
-        }
-        if (sfx_playing())
-            stuck++;
-        snprintf(name, sizeof name, "sfx_%02u_%s.wav", id, SFX_NAME[id]);
-        wav(name, o, 0, BRK_SR * 2u);
-    }
-    CHECK(!silent, "every soundboard sound sounds (%u silent)", silent);
-    CHECK(!stuck, "every sound ends (%u still playing after 3 s)", stuck);
-    CHECK(!wild, "soundboard output stays inside -1..1 (%u samples outside)", wild);
-    /* the siren goes on while held */
-    sfx_init();
-    sfx_trigger(SFX_SIREN);
-    for (i = 0; i < BRK_SR * 2u; i += BLOCK)
-        sfx_render(o, BLOCK);
-    CHECK(sfx_playing() >> SFX_SIREN & 1u, "the siren still wails after 2 s held");
-    sfx_release(SFX_SIREN);
-    for (i = 0; i < BRK_SR; i += BLOCK)
-        sfx_render(o, BLOCK);
-    CHECK(!(sfx_playing() >> SFX_SIREN & 1u), "and stops once let go");
-}
 
 /* the pull-up: the break spins back, then starts again from step 0 */
-static void test_rewind(void)
-{
-    brk_status_t st;
-    uint32_t s = brk_step_len_samples();
-    float pk;
-    fresh(1);
-    brk_play(1);
-    render(buf, s * 6u, 0, 0, 0);
-    brk_rewind();
-    render(buf, BLOCK, 0, 0, 0);
-    brk_status(&st);
-    CHECK(st.rewind > 0.0f, "a rewind starts (%.2f)", st.rewind);
-    pk = render(buf, BRK_SR / 2u, 0, 0, 0);
-    CHECK(pk > 0.05f, "and is heard (peak %.3f)", pk);
-    render(buf, BRK_SR / 4u, 0, 0, 0);
-    brk_status(&st);
-    CHECK(st.rewind == 0.0f && st.step >= 0 && st.step < 4, "then the break starts again from the top (step %d)",
-          st.step);
-}
 
 /* the soundboard through the dub delay: echoes after the sound has stopped */
-static void test_sfx_echo(void)
-{
-    static int16_t line[32768];
-    static float a[BLOCK], z[BLOCK];
-    brk_fx_t p;
-    sfx_set_t ss;
-    uint32_t i, j;
-    float tail = 0.0f;
-    brk_fx_init();
-    brk_fx_defaults(&p);
-    brk_fx_set(&p);
-    brk_fx_delay_buffer(line, 32768u);
-    brk_fx_tempo(170.0f);
-    sfx_init();
-    sfx_defaults(&ss);
-    sfx_set(&ss);
-    for (j = 0; j < BLOCK; j++)
-        z[j] = 0.0f;
-    sfx_trigger(SFX_LASER);
-    for (i = 0; i < BRK_SR * 2u; i += BLOCK) {
-        sfx_render(a, BLOCK);
-        brk_fx_process(z, 0, a, 0.8f, 0, 0, 0, bl, br, BLOCK, 0u);
-        if (i > BRK_SR)                  /* the laser is long over by now */
-            for (j = 0; j < BLOCK; j++)
-                if (fabsf(bl[j]) > tail)
-                    tail = fabsf(bl[j]);
-    }
-    CHECK(tail > 0.005f, "soundboard echoes ring on in the dub delay (peak %.3f)", tail);
-    brk_fx_delay_buffer(0, 0u);
-}
 
 /* the white keys' own loops (brk_keyset): length, ping-pong, one shot, pitch, and the loop back after */
 static void test_key_loops(void)
@@ -1045,7 +947,7 @@ static void test_delay_slices(void)
     p.slot[0].mix = 1.0f;
     brk_fx_set(&p);
     for (i = 0; i < n; i += BLOCK)
-        brk_fx_process(buf + i, 0, 0, 0.0f, 0, 0, 0, bl + i, br + i, BLOCK, 0u);
+        brk_fx_process(buf + i, 0, 0, 0, 0, bl + i, br + i, BLOCK, 0u);
     for (i = 1100u; i < 1000u + T + T / 2u; i++) {   /* the first echo: left only */
         if (fabsf(bl[i]) > ml) { ml = fabsf(bl[i]); pkl = i; }
         if (fabsf(br[i]) > mr) mr = fabsf(br[i]);
@@ -1181,7 +1083,7 @@ static void test_eq_tape(void)
 }
 
 /* the DJ filter is the break's: a low-passed break goes dark while the kick joining through the chain and the
- * soundboard stay bright */
+ * drums around it stay bright */
 static void test_dj_break(void)
 {
     static float tone[BLOCK], z[BLOCK];
@@ -1193,15 +1095,15 @@ static void test_dj_break(void)
         tone[i] = 0.25f * sinf(6.2831853f * 4000.0f * (float)i / (float)BRK_SR);
         z[i] = 0.0f;
     }
-    for (which = 0; which < 3; which++) {   /* the tone as the break, as thru (the kick), as aux (the soundboard) */
+    for (which = 0; which < 3; which++) {   /* the tone as the break, as thru (drums through the chain), as post
+                                             * (drums around it) */
         brk_fx_init();
         brk_fx_defaults(&p);
         p.dj = -1.0f;
         brk_fx_set(&p);
         pk[which] = 0.0f;
         for (b = 0; b < 60u; b++) {
-            brk_fx_process(which == 0 ? tone : z, which == 1 ? tone : 0, which == 2 ? tone : 0, 0.0f, 0, 0, 0, bl, br,
-                           BLOCK, 0u);
+            brk_fx_process(which == 0 ? tone : z, which == 1 ? tone : 0, 0, 0, which == 2 ? tone : 0, bl, br, BLOCK, 0u);
             if (b > 40u)
                 for (i = 0; i < BLOCK; i++)
                     if (fabsf(bl[i]) > pk[which])
@@ -1209,7 +1111,7 @@ static void test_dj_break(void)
         }
     }
     CHECK(pk[0] < 0.01f && pk[1] > 0.2f && pk[2] > 0.2f,
-          "DJ filter low-passed: the break %.3f, the kick through the chain %.3f, the soundboard %.3f", pk[0], pk[1],
+          "DJ filter low-passed: the break %.3f, drums through the chain %.3f, drums around it %.3f", pk[0], pk[1],
           pk[2]);
 }
 
@@ -1239,6 +1141,73 @@ static void test_mb_clip(void)
     CHECK(k1 > 0.48f && k1 < 0.51f, "CLIP +24 dB into -6 dB: held at the ceiling (%.3f)", k1);
     k1 = tone_peak(1000.0f, FXT_CLIP, 1.0f, 1.0f, 0.5f, 1.0f, 4000u);
     CHECK(k1 > 0.48f && k1 < 0.51f, "CLIP hard: held at the ceiling too (%.3f)", k1);
+}
+
+/* the snare and the hat (PRD K-10): each sounds on its own, in range, and dies away; the presets differ; a hit lands
+ * on its sample; the snare's body is near its TUNE */
+static void test_perc(void)
+{
+    static float o[BRK_SR / 2];
+    perc_t p;
+    uint32_t v, k, i, n = BRK_SR / 2, bounded = 1;
+    perc_defaults(&p);
+    for (v = 0; v < PERC_VOICES; v++)
+        for (k = 0; k < PERC_PRESETS; k++) {
+            uint16_t at = 100u;
+            uint8_t who = (uint8_t)(1u << v);
+            float pk = 0.0f, tail = 0.0f, before = 0.0f;
+            perc_preset(&p.v[v], v, k);
+            perc_set(&p);
+            perc_init();
+            for (i = 0; i < n; i += BLOCK) {
+                uint32_t m = n - i < BLOCK ? n - i : BLOCK;
+                perc_render(o + i, m, &at, &who, i == 0 ? 1u : 0u);
+            }
+            for (i = 0; i < n; i++) {
+                float a = fabsf(o[i]);
+                if (i < 100u && a > before) before = a;
+                if (a > pk) pk = a;
+                if (i > n - 2205u && a > tail) tail = a;
+            }
+            if (!(pk > 0.1f && pk <= 1.0f && before == 0.0f && tail < pk * 0.2f)) {
+                bounded = 0;
+                printf("  perc %s %s: peak %.3f before %.4f tail %.3f\n", PERC_VOICE_NAME[v], PERC_PRESET_NAME[v][k], pk,
+                       before, tail);
+            }
+            if (k == 0) {
+                char name[24];
+                snprintf(name, sizeof name, "perc_%s.wav", PERC_VOICE_NAME[v]);
+                wav(name, o, o, n);
+            }
+        }
+    CHECK(bounded, "snare and hat: every preset silent before its hit, in range, and gone in half a second");
+    /* the snare's body alone (no noise, no drive) rings at its tune */
+    perc_defaults(&p);
+    p.v[PV_SNARE].snap = 0.0f;
+    p.v[PV_SNARE].drive = 0.0f;
+    p.v[PV_SNARE].decay = 1.0f;
+    p.v[PV_SNARE].tune = 0.5f;
+    p.v[PV_SNARE].tone = 0.0f;
+    perc_set(&p);
+    perc_init();
+    perc_hit(PV_SNARE);
+    for (i = 0; i < n; i += BLOCK)
+        perc_render(o + i, n - i < BLOCK ? n - i : BLOCK, 0, 0, 0u);
+    {                                    /* Goertzel: the energy at the tune against an octave and a half up */
+        float want = perc_tune_hz(PV_SNARE, 0.5f), e[2];
+        uint32_t f;
+        for (f = 0; f < 2u; f++) {
+            float w = 2.0f * cosf(6.2831853f * want * (f ? 2.9f : 1.0f) / (float)BRK_SR), a = 0.0f, b = 0.0f;
+            for (i = 0; i < 8820u; i++) {
+                float c = o[i] + w * a - b;
+                b = a;
+                a = c;
+            }
+            e[f] = a * a + b * b - w * a * b;
+        }
+        CHECK(e[0] > e[1] * 4.0f, "snare body at its tune (%.0f Hz): %.1f dB over 2.9x it", want,
+              10.0f * log10f(e[0] / (e[1] + 1e-9f)));
+    }
 }
 
 /* the kick (PRD K-*): its layers, its decay, its hits on their samples, the presets, the steps' events */
@@ -1276,7 +1245,7 @@ static void test_kick(void)
     float p, first = 0.0f, prev_peak = -1.0f;
     int differ = 0, bounded = 1;
     kick_defaults(&k);
-    CHECK(sizeof(kick_t) == 140u, "kick_t is %u bytes (140: the settings grow at the end)", (unsigned)sizeof(kick_t));
+    CHECK(sizeof(kick_t) == 136u, "kick_t is %u bytes (136)", (unsigned)sizeof(kick_t));
     p = kick_run(&k, n, 1000u);
     CHECK(span_peak(0, 1000u) == 0.0f, "kick: silent before its hit (%.4f)", span_peak(0, 1000u));
     CHECK(p > 0.4f && p <= 1.0f, "kick: a full hit (peak %.3f)", p);
@@ -1425,6 +1394,7 @@ int main(int argc, char **argv)
     test_mb_clip();
     test_dj_break();
     test_kick();
+    test_perc();
     test_generator();
     test_pads();
     test_fx();
@@ -1432,9 +1402,6 @@ int main(int argc, char **argv)
     test_pad_settings();
     test_dub();
     test_styles();
-    test_sfx();
-    test_rewind();
-    test_sfx_echo();
     printf("%d of %d checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;
 }

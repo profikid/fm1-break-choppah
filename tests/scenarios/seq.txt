@@ -1,0 +1,65 @@
+# CHOPPAH: the pattern sequencer on SEQ. ALGORITHM the lane (steps 1-16, 17-32, kick, snare, hat); white keys pick a
+# step (K1 slice, K2 pitch, K3 hits, K4 reverse) or a drum lane's steps; PRESETS the pattern (playing: at the loop's
+# end); REC records keys and MIDI notes (48.. the slices) into it; SEL + REC clears; SAVE keeps the patterns
+#   app/build/host/choppah_host tests/scenarios/seq.txt app/build/scenarios
+wait 2600
+tap SEQ
+wait 300
+shot q_seq.png
+tapkey w0
+turn K1 5 10
+tapkey w1
+turn K1 -1 10
+tapkey w3
+turn K1 9 10
+turn K3 2 10
+turn K4 1 10
+wait 200
+shot q_steps.png
+turn ALGO 3 10
+tapkey w4
+tapkey w12
+wait 200
+shot q_snare.png
+tap PLAY
+wait 1500
+turn PRESET 1 10
+wait 100
+shot q_next.png
+wait 3000
+shot q_p2.png
+tap HOME
+wait 100
+tap REC
+wait 100
+midi USB 90 31 64
+wait 50
+midi USB 80 31 00
+wait 400
+tapkey w7
+wait 600
+tap REC
+tap SEQ
+wait 100
+turn ALGO -3 10
+wait 300
+shot q_recorded.png
+turn ALGO 1 10
+wait 200
+shot q_recorded2.png
+turn ALGO -1 10
+wait 100
+press SEL
+tap REC
+release SEL
+wait 300
+shot q_cleared.png
+turn PRESET -1 10
+wait 3500
+tap SAVE
+wait 300
+reboot
+wait 3000
+tap SEQ
+wait 300
+shot q_reboot.png

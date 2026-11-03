@@ -9,8 +9,9 @@
 #define APP_NAME "CHOPPAH"
 #define APP_TAGLINE "AMEN CHOPPER"
 #define APP_SPLASH_RGB RGB(255, 184, 70)
-#define APP_BIG_FONT FONT_B             /* the platform's own screens' big face: the 31-pixel one (20 KB of flash) left
-                                          * out for Bluetooth audio; CHOPPAH draws its name with FONT_B doubled */
+#define APP_SYS_TEXT                     /* the platform's own screens (crash, safe mode, update, calibration) write in
+                                          * CHOPPAH's faces (app_sys_* in app.c): fm1-base's own 15- and 31-pixel ones
+                                          * stay out of the flash (28 KB) */
 #define APP_SPLASH                       /* the first screen at power-on is the app's (app_splash) */
 void app_splash(void);
 #define APP_PALETTE 1u                   /* gfx.c's amber */
@@ -39,8 +40,9 @@ int app_ble_at_boot(void);
 
 /* the store (PRD 8.4): settings in Felucca's settings pair, the panel calibration where every fm1-base firmware
  * keeps it. The break bank will take 0x97000..0xD9FFF and PLAT_XDATA1 (M5), patterns 0xDA000 (M2). */
-enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_BLE, OBJ_NOBJ };   /* OBJ_BLE: Bluetooth's address and pairing */
-#define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xDE000u}
+enum { OBJ_SETTINGS, OBJ_PANEL, OBJ_BLE, OBJ_PAT, OBJ_NOBJ };   /* OBJ_BLE: Bluetooth's address and pairing;
+                                                                 * OBJ_PAT: the 16 patterns */
+#define APP_STORE_MAP {0xFC000u, 0xDC000u, 0xDE000u, 0xDA000u}
 
 /* the pool: the break playing, decoded to 16-bit PCM (PRD 8.2). M1 has one buffer; M5 adds the second */
 #define CH_PCM_MAX 106496u               /* samples: 4.8 s at 22.05 kHz (2 bars at 99.4 BPM and up: Funky Drummer) */

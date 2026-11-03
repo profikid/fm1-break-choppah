@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 /* CHOPPAH's effects (PRD 4.5): the break's DJ filter (and the FILTER pad's throw), then the master chain, four slots
  * in series, each any effect of the library with three settings, a mix and a bypass (the order is the slots'); then
- * the soundboard joins, the DUB pad's delay and a limiter. Mono in (the break), stereo out. Parameters are set from
+ * the drums around it join, the DUB pad's delay and a limiter. Mono in (the break), stereo out. Parameters are set from
  * the main loop, read once a block. */
 #pragma once
 #include <stdint.h>
@@ -20,8 +20,7 @@
  *            a second REVERB slot passes the sound on
  *   DELAY    time on the tempo (1/16 1/8 3/16 1/4 3/8 1/2 1/8T 1/4T), feedback, tone (dark .. bright repeats); its mix
  *            is the SEND into it (the echoes come back at full): a stereo ping-pong at 22.05 kHz on the DUB pad's
- *            line (0.74 s at most). One: it is also where the DUB pad, the soundboard's echo and the slices' ECHO
- *            throw; without a DELAY slot the delay sits after the chain with the DUB pad's settings
+ *            line (0.74 s at most). One: it is also where the DUB pad and the slices' ECHO throw; without a DELAY slot the delay sits after the chain with the DUB pad's settings
  *   EQ       low (a shelf at 120 Hz), mid (a bell), high (a shelf at 8 kHz): -12..+12 dB each, 0.5 flat; its mix is
  *            the mid's frequency (200 Hz..5 kHz)
  *   TAPE     drive (0..24 dB into a tape curve, even harmonics, made up), warmth (the head bump and the top rolled
@@ -73,10 +72,9 @@ void brk_fx_tempo(float bpm);
 float brk_fx_dj_now(void);               /* where the DJ filter is right now, -1..1 (for the screen) */
 /* the first MB COMP slot's gain now, per band (low, mid, high; 1 = no reduction), for the screen; 1s for none */
 void brk_fx_gr(float *gr);
-/* in: the break, through the DJ filter, then the chain; thru: joins it after the DJ filter, into the chain (the kick
- * through the chain; 0 for none); aux: the soundboard (0 for none), joined after the chain, into the limiter, and
- * thrown into the delay at aux_send; echo, verb: the slices' throws into the delay and the reverb (brk_sends, the
- * DJ filter on them too; 0 for none); post: joined after the chain like aux but thrown nowhere (the kick around the
- * chain; 0 for none). pads: brk_status_t.pads */
-void brk_fx_process(const float *in, const float *thru, const float *aux, float aux_send, const float *echo,
-                    const float *verb, const float *post, float *l, float *r, uint32_t n, uint32_t pads);
+/* in: the break, through the DJ filter, then the chain; thru: joins it after the DJ filter, into the chain (the drums
+ * through the chain; 0 for none); echo, verb: the slices' throws into the delay and the reverb (brk_sends, the DJ
+ * filter on them too; 0 for none); post: joined after the chain, into the limiter, thrown nowhere (the drums around
+ * the chain; 0 for none). pads: brk_status_t.pads */
+void brk_fx_process(const float *in, const float *thru, const float *echo, const float *verb, const float *post,
+                    float *l, float *r, uint32_t n, uint32_t pads);

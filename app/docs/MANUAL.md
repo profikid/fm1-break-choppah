@@ -13,10 +13,10 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 2. The screens
 3. Playing
 4. The pads
-5. The soundboard
+5. Patterns and the sequencer
 6. The FX chain
-7. GLOBAL: MIDI clock, Bluetooth, pitch, Bluetooth audio
-8. The kick
+7. GLOBAL: MIDI, Bluetooth, pitch, Bluetooth audio, reset
+8. The drums: kick, snare, hat
 9. The mixer
 10. Pages and knobs
 11. Saving
@@ -28,8 +28,8 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 
 **Try it first:** the emulator runs the same code in the browser, with sound, played with the mouse.
 
-**Install:** open the install page in Chrome or Edge, connect the FM-1 by USB and press Install. When it is done, the page throws confetti. If the FM-1 runs
-M-VAVE's FM1 Open firmware, put M-VAVE's original firmware back first (M-VAVE's workbench, *Restore original*), then
+**Install:** open the install page in Chrome or Edge, connect the FM-1 by USB and press Install. When it is done,
+the page throws confetti. If the FM-1 runs M-VAVE's FM1 Open firmware, put M-VAVE's original firmware back first (M-VAVE's workbench, *Restore original*), then
 install CHOPPAH.
 
 ## 2. The screens
@@ -41,7 +41,8 @@ seconds, or at once on any key, the **slicer view** opens. PLAY on the start scr
 
 The slicer view, top to bottom:
 
-- **Header:** play or stop, the break's name, a level meter (left and right, what leaves after MASTER: amber from
+- **Header:** play or stop, the break's name, the pattern (P1–P16; "P2>" while P2 waits for the loop's end), REC
+  while recording, a level meter (left and right, what leaves after MASTER: amber from
   −8 dB, white near full scale), the tempo.
 - **The break:** its waveform, the slice markers, the slice sounding lit, the playhead.
 - **Slice blocks:** sixteen blocks, one per white key, each with its slice's waveform. The slice sounding is lit;
@@ -58,6 +59,9 @@ The slicer view, top to bottom:
 | SELECT | Tempo, 1 BPM a detent (0.1 with SEL held) |
 | SEL (tapped) | **Tap tempo**, on any page: tap SEL in time. The tempo follows from the second tap and settles as you go on (the average of the last eight taps); the header shows the count and the tempo. Stop for 2 seconds to start a new count; a tap far off the pace starts a new count from the tap before it. SEL used with something else (SEL + a knob, SEL + ALGORITHM, SEL + EDIT…) is not a tap |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
+| PRESETS | The pattern, P1–P16 (§5); while playing the new one starts at the end of the loop |
+| SEQ · REC | The sequencer; recording the keys into the pattern (§5). SEL + REC: clear the pattern |
+| MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 36 the kick, 38 the snare, 42 / 44 / 46 the hat (§8); any channel |
 | ALGORITHM | The next or previous break: AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
 | MASTER | Volume |
 
@@ -126,31 +130,35 @@ animation of what it does, and **K1–K4 tune that pad** (the foot shows its set
 ![ROLL held: the caught slice repeating, each copy quieter, RATE / DECAY / PITCH on K1-K3](img/pad-roll8.png "ROLL held")
 ![TAPE STOP held: two reels slowing down](img/pad-stop.png "TAPE STOP held") ![DUB held: echoes marching out](img/pad-dub.png "DUB held")
 
-## 5. The soundboard
+## 5. Patterns and the sequencer
 
-**ENV** opens the soundboard: the white keys fire sixteen sound-system effects over the break, which keeps playing
-(the black-key pads still work). Each tile burns down like a fuse while its sound plays.
+CHOPPAH holds **16 patterns**. Each is the break's 32 steps (2 bars), each step playing the loop's own slice (LOOP,
+where the generator can move it), a slice of its own, or nothing; and three drum lanes of 16 steps (kick, snare, hat)
+that repeat every bar. **PRESETS** picks the pattern on most pages; while playing, the next one starts when the loop
+comes round (the header shows "P2>").
 
-![The soundboard: sixteen tiles, BOOM and RISER playing](img/screen-soundboard.png "The soundboard")
+**SEQ** opens the sequencer. **ALGORITHM** picks what the white keys edit:
 
-| Key | Sound | Key | Sound |
-| --- | --- | --- | --- |
-| 1 | HORN: air horn, BAAP BAAP BAAAAP | 9 | HEY: a shout |
-| 2 | SIREN: dub siren, wails while held | 10 | RISER: noise sweeping up while held |
-| 3 | WHOOP | 11 | REVCYM: reverse cymbal |
-| 4 | LASER | 12 | SUBDRP: sub drop |
-| 5 | ZAP | 13 | STAB: horn stab |
-| 6 | BOOM: gunshot | 14 | SKANK: the offbeat guitar chop |
-| 7 | BRAP: five shots | 15 | SCRTCH: scratch |
-| 8 | FYAH: a "FYAH!" shout | 16 | REWIND: the pull-up; the break spins back and drops in again from the top |
+![SEQ: pattern 1, steps 1-16, step 9 a slice of its own being reversed; the kick, snare and hat lanes below](img/screen-seq.png "The SEQ page")
 
-K1 level · K2 pitch · K3 **echo** (how much goes into the dub delay: sirens ringing out) · K4 length. All sixteen are
-synthesised on the FM-1, so nothing is sampled. HOME goes back to the slicer.
+| Lane | White keys | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- | --- |
+| STEPS 1-16, STEPS 17-32 | Pick a step to edit (outlined) | SLICE: OFF · LOOP · 1–16 | PITCH: −12 … +12 | HITS: ×1–×4 (a ratchet in the step) | REVERSE |
+| KICK, SNARE, HAT | That lane's 16 steps, on and off | | | | |
+
+The upper strip shows the half's 16 steps (a number: its own slice; a dot: LOOP; a dash: off; a mark under it: hits
+or reverse), the step playing lit; the lower strip all three drum lanes.
+
+**REC** records: while it is lit and the break plays, every white key you press (on HOME and the other pages where
+the keys play slices) is written into the pattern at the step it lands on, and so are MIDI notes: 48–63 as slices,
+36 / 38 / 42 into the kick, snare and hat lanes. REC again stops. **SEL + REC** clears: on SEQ the lane shown, on any
+other page the whole pattern. SEL + ARP (a random pattern) writes into the pattern playing. SAVE keeps all 16.
 
 ## 6. The FX chain
 
 **FX** opens the master effects chain: four slots in series, the break (through its DJ filter, with the kick when it
-goes through the chain) into slot 1, then 2, 3 and 4, then on to the soundboard, the DUB pad's delay and the limiter. Each slot holds any effect (two of one are fine), with
+goes through the chain) into slot 1, then 2, 3 and 4, then on to the drums when they go around the chain, the DUB
+pad's delay and the limiter. Each slot holds any effect (two of one are fine), with
 three settings, a mix and a bypass. The tiles show the chain in order (lit: on), the one you tune outlined; below,
 its settings as bars over K1–K4.
 
@@ -163,7 +171,7 @@ its settings as bars over K1–K4.
 | K1–K3 · K4 | Its settings · its mix |
 | FX (on the page) | That slot on / bypassed |
 | SEL + ALGORITHM | Moves that slot along the chain (the order is the sound: DRIVE before a FILTER is not a FILTER before DRIVE) |
-| MIXER K3 FX MAIN | The whole chain against the dry sound: fade every effect in or out at once (the FX page shows it, bottom right) |
+| MIXER K4 FX | The whole chain against the dry sound: fade every effect in or out at once (the FX page shows it, bottom right) |
 
 | Effect | K1 | K2 | K3 |
 | --- | --- | --- | --- |
@@ -195,7 +203,7 @@ CLIP last in the chain is a loud master; CLIP before a FILTER is a fizzy one.
 
 **DELAY** is a stereo ping-pong: the echoes bounce left, right, left, each darker. Its K4 is **SEND**, how much of the
 sound reaching it goes in (the echoes come back at full), so with SEND low only throws ring out: the DUB pad, the
-soundboard's ECHO, the slices' ECHO. There is one delay (0.74 s at most: 1/2 at 162 BPM and up; slower, it holds the
+the slices' ECHO. There is one delay (0.74 s at most: 1/2 at 162 BPM and up; slower, it holds the
 longest it can).
 
 **REVERB** is a plate (after Dattorro's design: diffusers, then a modulated stereo tank): its MIX is how much reverb
@@ -207,7 +215,7 @@ CRUNCH used to be HOME's K4; it is slot 1 now.
 
 STOP fades the break out at once (a white key held keeps looping); the reverb's and the dub delay's tails ring on.
 
-## 7. GLOBAL: MIDI clock, Bluetooth, pitch, Bluetooth audio
+## 7. GLOBAL: MIDI, Bluetooth, pitch, Bluetooth audio, reset
 
 **GLO** opens the GLOBAL page: the slice blocks give way to the state of MIDI, and K1–K4 set it (SAVE keeps it).
 **GLO again** turns to its second part, the pitch; **a third time**, Bluetooth audio (both below).
@@ -233,9 +241,10 @@ connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings →
 | K1 PITCH | KEEP LENGTH (the default) · SPEED | KEEP LENGTH changes the pitch only: each slice keeps its length (a granular pitch shift), so a key pitched +7 still fills its loop. SPEED is the classic repitch: up plays faster and shorter, down slower and longer (K1 left) |
 | K2 GRAIN | 10 … 80 ms | KEEP LENGTH's grains: shorter keeps hits tight, longer sounds smoother on held sounds |
 | K3 SNAP | OFF · 1/8 · 1/4 · 1/2 (the default) · 1 · 2 · 4 slices | Where a white key pressed while playing lands: at once (OFF), or at the next point of a grid that many slices apart, counted from the top of the pattern. The panel says what it is in this break (on the 2-bar breaks 1/2 slice = 1/16, 2 slices = 1/4). Stopped, keys always play at once |
+| K4 RESET ALL | Turn once ("RESET ALL?"), then again within 3 seconds | Clears everything back to how it came: tempo, generator, FX chain, kick, snare and hat, mixer, keys, slices, GLOBAL, Bluetooth audio, and all 16 patterns; the first break is chosen and it is saved at once. Bluetooth pairings are kept |
 
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
-tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay speed effects.
+tempo's own repitch, HALF, REVERSE's speed and the tape stop stay speed effects.
 
 **Bluetooth audio (GLO three times):** CHOPPAH plays through Bluetooth headphones or a Bluetooth speaker.
 
@@ -258,13 +267,17 @@ audio runs late: 150–300 ms between a key and your ear, so it is for listening
 (use the FM-1's own output or USB for that). Bluetooth MIDI keeps working beside it on the same radio. Turning
 Bluetooth audio on starts the radio even when Bluetooth MIDI is off.
 
-## 8. The kick
+## 8. The drums: kick, snare, hat
 
-**EDIT** opens the KICK page: a synthesised kick under the break, for gabber, hardcore and techno. It plays on the
-steps you give it, in time with the break (swing included), through the FX chain or around it. **EDIT again** steps
+Three synthesised drums play under the break, in time with it (swing included), on the pattern's drum lanes (§5):
+the kick on EDIT, the snare and the hat on ENV. They go through the FX chain or around it together (MIXER GROOVE K2).
+
+### The kick
+
+**EDIT** opens the KICK page: a synthesised kick for gabber, hardcore and techno. **EDIT again** steps
 through its sub-pages: MIX → LAYER → LAYER FX → MACRO → OUT.
 
-![The KICK page on LAYER: GRIT's decay being set, the kick's shape, the layers' levels, its 16 steps](img/screen-kick.png "The KICK page")
+![The KICK page on MIX: the kick's shape, the layers' levels, the three drum lanes](img/screen-kick.png "The KICK page")
 
 The kick is four layers summed and pushed into a clipper:
 
@@ -277,10 +290,10 @@ The kick is four layers summed and pushed into a clipper:
 
 | Control | Does |
 | --- | --- |
-| White keys | The kick's 16 steps of the bar, on and off (lit: on; the step playing flips). Four to the floor to start |
+| White keys | The kick lane's 16 steps of the bar, on and off (lit: on; the step playing flips). Four to the floor to start |
 | ALGORITHM | The layer LAYER and LAYER FX edit |
 | PRESETS | A built-in kick: 909, TECHNO, EARLY HC, ROTTERDAM (the start), INDUSTRIAL, DISTORTO. The steps, routing and volume stay |
-| SEL + EDIT | The kick through the FX chain (with the break) or around it (clean, straight to the limiter) |
+| SEL + EDIT | The drums through the FX chain (with the break) or around it (clean, straight to the limiter) |
 | MIDI note 36 (C1) | Plays the kick, from any channel, also while stopped |
 
 | Sub-page | K1 | K2 | K3 | K4 |
@@ -289,43 +302,62 @@ The kick is four layers summed and pushed into a clipper:
 | LAYER | Level | Pitch | Decay | Tone |
 | LAYER FX | Effect: OFF · DRIVE · CRUNCH · FILTER · RING MOD | A (gain · bits · cutoff · frequency) | B (tone · rate · resonance) | Wet |
 | MACRO | SUB (level, tail, weight) | PUNCH (level, sweep, click) | GRIT (level, dirt, tail) | INTENSITY |
-| OUT | Volume | Route: THRU FX · AROUND FX | | |
+| OUT | Volume | Route (the drums'): THRU FX · AROUND FX | | |
 
 **INTENSITY** is the drive into the clipper: low is a clean, round kick; past half the clip turns hard, the tail
 flattens into the long, distorted gabber kick. The strip shows the kick's shape (its first 600 ms), the layers'
-levels (the layer edited outlined, amber with an effect on) and the 16 steps with the playhead. The white keys play
-slices again on every other page. SAVE keeps the kick with the rest.
+levels (the layer edited outlined, amber with an effect on) and the three drum lanes with the playhead.
+
+### The snare and the hat
+
+![SNARE / HAT on the hat's SOUND knobs, its lane outlined](img/screen-perc.png "The SNARE / HAT page")
+
+**ENV** opens SNARE / HAT. **ALGORITHM** picks the voice, **ENV again** turns between its SOUND and SHAPE knobs,
+**PRESETS** picks a built-in sound, and the white keys are that voice's 16 steps.
+
+| Voice | Is | Presets |
+| --- | --- | --- |
+| SNARE | Two tuned sines with a pitch drop (the body) and band-passed noise (the snares), with a crack on the hit | 909 · TIGHT · FAT · GABBER |
+| HAT | Six square waves at the 808's ratios and noise, through two high-passes | CLOSED · 808 · OPEN · TRASH |
+
+| Knobs | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- |
+| SOUND | Level | Tune | Decay | Tone (the hat: METAL / NOISE) |
+| SHAPE | Snap (the hat: CUT, the high-pass) | Drive | | |
+
+MIDI notes 38 (D1) play the snare, 42, 44 and 46 the hat, also while stopped. The white keys play slices again on
+every other page (HOME, ARP, FX, GLOBAL, MIXER). SAVE keeps the drums with the rest.
 
 ## 9. The mixer
 
-**LFO** opens the MIXER: four channels side by side, each a fader. The break, the kick and the overlay have a level
-meter; FX MAIN shows the chain's four slots (lit: on). **LFO again** turns to GROOVE.
+**LFO** opens the MIXER: four channels side by side, each a fader with a level meter (FX shows the chain's four
+slots, lit: on). **LFO again** turns to GROOVE.
 
-![The MIXER: the break at 60 %, the kick at 40 %, FX MAIN at 60 %, the overlay's horn playing](img/screen-mixer.png "The MIXER")
+![The MIXER: the break, the kick, the snare and hat, the FX chain](img/screen-mixer.png "The MIXER")
 
 | Half | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too) | KICK: the kick's level (the KICK page's VOLUME) | FX MAIN: the master FX chain against the dry sound | FX OVERLAY: the soundboard's level (ENV's K1) |
-| GROOVE | SWING (50–75 %) | KICK ROUTE: through the FX chain or around it | | |
+| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too) | KICK: the kick's level (the KICK page's VOLUME) | PERC: the snare and the hat together | FX: the master FX chain against the dry sound |
+| GROOVE | SWING (50–75 %) | DRUMS: through the FX chain or around it | | |
 
-The two kinds of effects have their own faders: FX MAIN is how much of the chain you hear (the kick routed around it
-stays dry), OVERLAY how loud the soundboard plays over everything. Bring BREAK down to drop the break and let the kick
-run alone, then up again for the drop. Swing and FX were HOME's; HOME keeps the gate and the **DJ filter** (K2), which
-now filters the break alone: sweep it down and the kick and the soundboard stay full on top. The FLT pad throws it
-the same way.
+FX is how much of the chain you hear (the drums routed around it stay dry). Bring BREAK down to drop the break and
+let the drums run alone, then up again for the drop. HOME keeps the gate and the **DJ filter** (K2), which filters the
+break alone: sweep it down and the drums stay full on top. The FLT pad throws it the same way.
 
 ## 10. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
 | HOME (perform) | Gate | DJ filter on the break (left low-pass, right high-pass) | | |
-| LFO (mixer) | Break level | Kick level | FX MAIN (the chain, dry to wet) | FX OVERLAY (the soundboard) |
-| LFO again (groove) | Swing | Kick route: through the chain or around it | | |
+| LFO (mixer) | Break level | Kick level | Snare and hat level | FX (the chain, dry to wet) |
+| LFO again (groove) | Swing | Drums: through the chain or around it | | |
 | ARP (generator) | Complexity | Anchor | Roll | Fill |
 | FX (the chain) | the focused slot's effect: its three settings | | | Its mix |
-| ENV (soundboard) | Level | Pitch | Echo | Length |
+| SEQ (patterns) | Slice | Pitch | Hits | Reverse |
+| ENV (snare / hat) | Level | Tune | Decay | Tone |
+| ENV again (shape) | Snap / cut | Drive | | |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
-| GLO again (pitch, snap) | Keep length / speed | Grain | Snap | |
+| GLO again (pitch, snap) | Keep length / speed | Grain | Snap | Reset all (twice) |
 | GLO a third time (BT audio) | On / off | Device | Scan | Connect / hang up |
 | EDIT (kick) | see §8: MIX, LAYER, LAYER FX, MACRO, OUT | | | |
 
@@ -340,9 +372,10 @@ of a phrase. SEL + ARP writes a random pattern.
 
 ## 11. Saving
 
-SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop, the kick, the
-mixer and the GLOBAL settings; SAVE is lit when something changed. A new version keeps what an older one saved: new
-settings start at their defaults.
+SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop, the drums, the
+mixer, the GLOBAL settings and all 16 patterns; SAVE is lit when something changed. A new version keeps what an older
+one saved: new settings start at their defaults. (Version 0.32 changed the layout: what 0.31 and older saved starts
+over at the defaults once; Bluetooth pairings stay.) GLOBAL's RESET ALL clears it all on purpose (§7).
 
 ## 12. Troubleshooting
 

@@ -25,7 +25,7 @@ wait 300
 wavstop
 tap SAVE
 wait 50
-expect store_writes 1
+expect store_writes 2
 reboot
 wait 600
 shot reboot.png

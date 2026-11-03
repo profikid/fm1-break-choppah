@@ -31,15 +31,12 @@ typedef struct {
     kick_layer_t l[KICK_LAYERS];
     float intensity;                     /* 0..1: the sum's drive into the clipper (0 clean) */
     float volume;                        /* 0..1 */
-    uint16_t steps;                      /* the kick's 16 steps (bit n: step n of each bar) */
-    uint8_t chain;                       /* 1: through the FX chain with the break; 0: around it */
-    uint8_t rsv;
-} kick_t;                                /* 140 bytes */
+} kick_t;                                /* 136 bytes (its steps are the pattern's: the app's) */
 
 #define KICK_PRESETS 6u
 extern const char *const KICK_PRESET_NAME[KICK_PRESETS];
-void kick_preset(kick_t *k, uint32_t i);   /* the sound of a built-in kick (steps and chain kept) */
-void kick_defaults(kick_t *k);           /* ROTTERDAM, four to the floor, through the chain */
+void kick_preset(kick_t *k, uint32_t i);   /* the sound of a built-in kick (the volume kept) */
+void kick_defaults(kick_t *k);           /* ROTTERDAM, volume 0.8 */
 float kick_pitch_hz(uint32_t layer, float pitch);   /* a layer's pitch knob (0..1) in Hz, for the screen */
 float kick_decay_ms(uint32_t layer, float decay);   /* its decay knob in ms (to -40 dB) */
 /* the effects' settings as the screen shows them: FILTER's cutoff and RING's frequency in Hz, CRUNCH's bits */
