@@ -104,3 +104,9 @@ wait 300
 shot sel_help_fx.png
 tap SEL
 wait 200
+tap ARP
+wait 150
+shot pg_arp.png
+tap HOME
+wait 150
+shot pg_home.png

@@ -269,6 +269,7 @@ static void input(void)
     if (bdn & 1u << B_HOME) {
         ui.page = PG_HOME;
         ui.redraw |= RG_FOOT | RG_BLOCKS;
+        app_say("HOME", "PERFORM");
     }
     if (bdn & 1u << B_GLO)               /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, BT audio */
         global_part(ui.page == PG_GLOBAL ? (ui.gpage + 1u) % 3u : 0u);
@@ -316,7 +317,8 @@ static void input(void)
             pat_read_back();             /* (into the pattern playing: SAVE keeps it) */
             set_dirty = 1u;
             app_say("RANDOMIZE", "");
-        }
+        } else
+            app_say("ARP", "GENERATOR");
         ui.page = PG_GEN;
         ui.redraw |= RG_FOOT | RG_BLOCKS;
     }
