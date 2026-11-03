@@ -1,8 +1,15 @@
 # CHOPPAH: the MIXER on LFO. LEVELS: K1 the break, K2 the kick, K3 PERC (snare and hat), K4 FX (the chain), each
 # with its meter; LFO again, GROOVE: K1 swing, K2 the drums through the chain or around it. The DJ filter is HOME's
-# K2 and filters the break alone
+# K2 and filters the break alone. The kick lane starts empty: four to the floor put in on the KICK page first
 #   app/build/host/choppah_host tests/scenarios/mixer.txt app/build/scenarios
 wait 2600
+tap EDIT
+wait 200
+tapkey w1
+tapkey w5
+tapkey w9
+tapkey w13
+wait 200
 tap PLAY
 wait 400
 tap LFO

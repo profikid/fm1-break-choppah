@@ -55,7 +55,7 @@ The slicer view, top to bottom:
 | Control | Does |
 | --- | --- |
 | PLAY | Play / stop. HOME + PLAY: back to bar 1 |
-| White keys | Slices 1–16. Playing: at the next snap point (GLOBAL: 1/2 slice, a 16th, by default; OFF, 1/8 … 4 slices). Stopped: at once. Held: the key loops (below), playing or stopped |
+| White keys | Slices 1–16. Playing: at the next snap point (GLOBAL: 1 slice, an 8th on the 2-bar breaks, by default; OFF, 1/8 … 4 slices). Stopped: at once. Held: the key loops (below), playing or stopped |
 | SELECT | Tempo, 1 BPM a detent (0.1 with SEL held) |
 | SEL (tapped) | **Tap tempo**, on any page: tap SEL in time. The tempo follows from the second tap and settles as you go on (the average of the last eight taps); the header shows the count and the tempo. Stop for 2 seconds to start a new count; a tap far off the pace starts a new count from the tap before it. SEL used with something else (SEL + a knob, SEL + ALGORITHM, SEL + EDIT…) is not a tap |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
@@ -240,7 +240,7 @@ connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings →
 | --- | --- | --- |
 | K1 PITCH | KEEP LENGTH (the default) · SPEED | KEEP LENGTH changes the pitch only: each slice keeps its length (a granular pitch shift), so a key pitched +7 still fills its loop. SPEED is the classic repitch: up plays faster and shorter, down slower and longer (K1 left) |
 | K2 GRAIN | 10 … 80 ms | KEEP LENGTH's grains: shorter keeps hits tight, longer sounds smoother on held sounds |
-| K3 SNAP | OFF · 1/8 · 1/4 · 1/2 (the default) · 1 · 2 · 4 slices | Where a white key pressed while playing lands: at once (OFF), or at the next point of a grid that many slices apart, counted from the top of the pattern. The panel says what it is in this break (on the 2-bar breaks 1/2 slice = 1/16, 2 slices = 1/4). Stopped, keys always play at once |
+| K3 SNAP | OFF · 1/8 · 1/4 · 1/2 · 1 (the default) · 2 · 4 slices | Where a white key pressed while playing lands: at once (OFF), or at the next point of a grid that many slices apart, counted from the top of the pattern. The panel says what it is in this break (on the 2-bar breaks 1 slice = 1/8, 1/2 slice = 1/16, 2 slices = 1/4). Stopped, keys always play at once |
 | K4 RESET ALL | Turn once ("RESET ALL?"), then again within 3 seconds | Clears everything back to how it came: tempo, generator, FX chain, kick, snare and hat, mixer, keys, slices, GLOBAL, Bluetooth audio, and all 16 patterns; the first break is chosen and it is saved at once. Bluetooth pairings are kept |
 
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
@@ -290,7 +290,7 @@ The kick is four layers summed and pushed into a clipper:
 
 | Control | Does |
 | --- | --- |
-| White keys | The kick lane's 16 steps of the bar, on and off (lit: on; the step playing flips). Four to the floor to start |
+| White keys | The kick lane's 16 steps of the bar, on and off (lit: on; the step playing flips). Empty to start |
 | ALGORITHM | The layer LAYER and LAYER FX edit |
 | PRESETS | A built-in kick: 909, TECHNO, EARLY HC, ROTTERDAM (the start), INDUSTRIAL, DISTORTO. The steps, routing and volume stay |
 | SEL + EDIT | The drums through the FX chain (with the break) or around it (clean, straight to the limiter) |

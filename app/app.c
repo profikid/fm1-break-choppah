@@ -81,7 +81,7 @@ static void settings_defaults(void)
     set.pitch_keep = 1u;
     set.grain_ms = 30u;
     set.gate = 100u;
-    set.snap = 4u;                       /* 1/2 slice */
+    set.snap = 5u;                       /* 1 slice */
     set.brk_level = 100u;
     set.drums_chain = 1u;
     brk_padset_defaults(&set.pads);
@@ -101,7 +101,7 @@ static const float SNAP_SL[SNAPS] = {0.0f, 0.125f, 0.25f, 0.5f, 1.0f, 2.0f, 4.0f
 static const char *const SNAP_NAME[SNAPS] = {"OFF", "1/8 SLICE", "1/4 SLICE", "1/2 SLICE", "1 SLICE", "2 SLICES",
                                              "4 SLICES"};
 static const char *const SNAP_SHORT[SNAPS] = {"OFF", "1/8 SL", "1/4 SL", "1/2 SL", "1 SL", "2 SL", "4 SL"};
-static uint32_t snap_index(void) { return set.snap && set.snap <= SNAPS ? set.snap - 1u : 3u; }
+static uint32_t snap_index(void) { return set.snap && set.snap <= SNAPS ? set.snap - 1u : 4u; }
 
 static void settings_apply(void)
 {
@@ -166,8 +166,7 @@ static void pat_defaults(void)
             p->st[k][0] = 1u;            /* follow the loop */
             p->st[k][1] = p->st[k][2] = p->st[k][3] = 0u;
         }
-        p->lane[LANE_KICK] = 0x1111u;    /* four to the floor */
-        p->lane[LANE_SNARE] = p->lane[LANE_HAT] = 0u;
+        p->lane[LANE_KICK] = p->lane[LANE_SNARE] = p->lane[LANE_HAT] = 0u;   /* the drums start empty */
         p->rsv = 0u;
     }
 }

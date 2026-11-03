@@ -28,7 +28,7 @@ on the device. The looper and song mode are next: see the [PRD](docs/PRD.md) for
 
 | Control | Does |
 | --- | --- |
-| White keys 1–16 | Slices: at the next 16th while playing, at once while stopped. **Hold to loop**: the key's view shows its window and playhead, and **K1–K4 set that key's loop**: length (1/64 … 2 bars), pitch, start, mode (loop, ping-pong, reverse, one shot); SEL resets it. **Key held + FX**: that slice's own effect instead (LO-PASS, HI-PASS, CRUNCH, DRIVE, RING MOD, ECHO / VERB throws, and its LEVEL) |
+| White keys 1–16 | Slices: at the next snap point while playing (1 slice by default), at once while stopped. **Hold to loop**: the key's view shows its window and playhead, and **K1–K4 set that key's loop**: length (1/64 … 2 bars), pitch, start, mode (loop, ping-pong, reverse, one shot); SEL resets it. **Key held + FX**: that slice's own effect instead (LO-PASS, HI-PASS, CRUNCH, DRIVE, RING MOD, ECHO / VERB throws, and its LEVEL) |
 | Black keys 1–11 | Pads, while held: ROLL 1/8 · 1/16 · 1/32 · REVERSE · FREEZE · HALF · TAPE STOP · GATE · RANDOM · FILTER THROW · DUB (a throw into the delay). Each shows its own animation while held, and **K1–K4 tune it** (rate, decay, length, speed, feedback…). The rolls have a LEVEL for quiet ghost-note rolls, and their DECAY fades down or swells up |
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
 | SELECT | Tempo (SEL held: 0.1 BPM) · **tap SEL in time** on any page: tap tempo (from the second tap, the average of the last eight) |
