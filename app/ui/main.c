@@ -770,7 +770,7 @@ void app_frame(void)
         pat_next = -1;
         pat_apply();
         set_dirty = 1u;
-        ui.redraw |= RG_BLOCKS;
+        ui.redraw |= RG_BLOCKS | RG_FOOT;
     }
     if (st.step != ui.last_step || st.slice != ui.last_slice) {   /* the playhead moved */
         ui.last_step = st.step;

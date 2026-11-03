@@ -314,7 +314,7 @@ A synthesised kick for gabber, hardcore and techno. ALGORITHM turns through its 
 PUNCH FX → GRIT → GRIT FX → CLICK → CLICK FX → MACRO → OUT (each layer's part is its LAYER knobs, its FX part its
 LAYER FX knobs).
 
-![EDIT on the kick: the kick's shape, the layers' levels, the three drums below](img/screen-kick.png "The kick on EDIT")
+![EDIT on the kick: its part's settings as bars, the layers' levels, the three drums below](img/screen-kick.png "The kick on EDIT")
 
 The kick is four layers summed and pushed into a clipper:
 
@@ -340,8 +340,9 @@ The kick is four layers summed and pushed into a clipper:
 | OUT | Volume | | | |
 
 **INTENSITY** is the drive into the clipper: low is a clean, round kick; past half the clip turns hard, the tail
-flattens into the long, distorted gabber kick. The strip shows the kick's shape (its first 600 ms), the layers'
-levels (the layer edited outlined, amber with an effect on). Its steps: SEQ's KICK lane (empty to start).
+flattens into the long, distorted gabber kick. The page is laid out as the snare's and the hat's: the part's four
+settings as bars, under them the four layers' levels (the layer edited lit, amber with an effect on); the kick's
+shape is its box in the strip below. Its steps: SEQ's KICK lane (empty to start).
 
 ### The snare and the hat
 

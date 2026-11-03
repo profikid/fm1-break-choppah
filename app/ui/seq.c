@@ -225,7 +225,7 @@ static void seq_turn(int i, int32_t d)
     seq_value(i, t);
     say_int("STEP", (int32_t)ui.seq_step + 1, "");
     app_say(ui.msg[0], t);
-    ui.redraw |= RG_BLOCKS;
+    ui.redraw |= RG_BLOCKS | RG_FOOT;    /* (the knobs' values too: they show the step) */
 }
 static void pattern_pick(int32_t d)      /* PRESETS: the next or previous pattern (playing: at the loop's end) */
 {
@@ -239,7 +239,7 @@ static void pattern_pick(int32_t d)      /* PRESETS: the next or previous patter
         set_dirty = 1u;
     }
     say_int(playing_now() ? "NEXT PATTERN" : "PATTERN", want + 1, "");
-    ui.redraw |= RG_HEAD | RG_BLOCKS;
+    ui.redraw |= RG_HEAD | RG_BLOCKS | RG_FOOT;
 }
 static uint32_t keys_lit(const brk_status_t *st)   /* the white keys' lights on a lane's page (TAP: the beat) */
 {
