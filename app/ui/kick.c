@@ -10,7 +10,7 @@ static const char *const KN_KICK[KPAGES][4] = {{"SUB", "PUNCH", "GRIT", "CLICK"}
                                                {"LEVEL", "PITCH", "DECAY", "TONE"},
                                                {"EFFECT", "", "", "WET"},
                                                {"SUB", "PUNCH", "GRIT", "INTENSITY"},
-                                               {"VOLUME", "ROUTE", "", ""}};
+                                               {"VOLUME", "", "", ""}};
 static const char *const KFX_PARAM[KICK_FX][2] = {{"", ""}, {"GAIN", "TONE"}, {"BITS", "RATE"},
                                                   {"CUTOFF", "RESO"}, {"FREQ", ""}};
 /* the macros: each moves a few of the sound's settings together */
@@ -80,8 +80,6 @@ static void kick_value(int i, char *t)
     default:
         if (i == 0)
             pct_text(k->volume, t);
-        else if (i == 1)
-            text_cat(t, set.drums_chain ? "THRU FX" : "AROUND FX");
         break;
     }
 }
@@ -121,8 +119,6 @@ static void kick_knob_turn(int i, int32_t d)
     default:
         if (i == 0)
             k->volume = knob_f(k->volume, d, 0.02f, 0.0f, 1.0f);
-        else if (i == 1)
-            set.drums_chain = d > 0 ? 0u : 1u;  /* right: around the chain, left: through it */
         else
             return;
         break;
@@ -176,5 +172,5 @@ static void draw_kick(const brk_status_t *st)
         cv_text(x + 4, 41, &FONT_XS, t, sel ? C_HI : C_GRAY);
     }
     cv_blit(0, 88);
-    draw_lanes(st, LANE_KICK, "KEYS: KICK STEPS  ALGO: LAYER  PRESETS: KICK");
+    draw_lanes(st, LANE_KICK);
 }

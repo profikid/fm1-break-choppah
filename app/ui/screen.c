@@ -174,28 +174,29 @@ static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now
     cv_blit(0, 0);
 }
 
-/* the whole break: its waveform, the slice markers, the slice sounding lit, the playhead */
+/* the whole break: its waveform, the slice markers, the slice sounding lit, the playhead (42 rows: the page's help
+ * line goes under it) */
 static void draw_wave(const brk_status_t *st, const brk_break_t *b)
 {
     uint32_t i;
-    cv_begin(240, 54, C_BLACK);
+    cv_begin(240, 42, C_BLACK);
     if (b && b->len) {
         int32_t lit_a = -1, lit_z = -1;
         if (st->slice >= 0) {
             lit_a = (int32_t)(b->slice[st->slice] * 240u / b->len);
             lit_z = (int32_t)(b->slice[st->slice + 1] * 240u / b->len);
-            cv_rect(lit_a, 2, lit_z - lit_a, 50, C_BLOCK);
+            cv_rect(lit_a, 2, lit_z - lit_a, 38, C_BLOCK);
             if (set.gate && set.gate < 100u && st->key < 0)   /* gated: only the part that sounds lit */
                 lit_z = lit_a + ((lit_z - lit_a) * (int32_t)set.gate + 99) / 100;
         }
         for (i = 0; i < 240u; i++) {
-            int32_t h = wave_px[i];
-            cv_rect((int32_t)i, 27 - h, 1, 2 * h + 1, (int32_t)i >= lit_a && (int32_t)i < lit_z ? C_HI : C_DIM);
+            int32_t h = wave_px[i] * 5 / 6;
+            cv_rect((int32_t)i, 21 - h, 1, 2 * h + 1, (int32_t)i >= lit_a && (int32_t)i < lit_z ? C_HI : C_DIM);
         }
         for (i = 1; i < b->nslices; i++)
             cv_rect((int32_t)(b->slice[i] * 240u / b->len), 0, 1, 5, C_GRAY);
         if (st->slice >= 0)
-            cv_rect((int32_t)((uint32_t)st->pos * 240u / b->len), 0, 1, 54, C_WHITE);
+            cv_rect((int32_t)((uint32_t)st->pos * 240u / b->len), 0, 1, 42, C_WHITE);
     }
     cv_blit(0, 30);
 }

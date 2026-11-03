@@ -173,3 +173,11 @@ static void draw_global(const brk_status_t *st)
     }
     cv_blit(0, 140);
 }
+
+static void global_part(uint32_t g)      /* GLO (again: the next part) and ALGORITHM on GLOBAL */
+{
+    ui.gpage = (uint8_t)g;
+    ui.page = PG_GLOBAL;
+    ui.redraw |= RG_FOOT | RG_BLOCKS;
+    app_say("GLOBAL", g == 2u ? "BT AUDIO" : g ? "PITCH, SNAP" : "MIDI");
+}

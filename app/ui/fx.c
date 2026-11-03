@@ -234,8 +234,8 @@ static void draw_chain(void)
                 cv_rect(6 + (int32_t)i * 58, 21, (int32_t)(52.0f * brk_clampf(db / 24.0f, 0.0f, 1.0f)), 2, C_AMB);
             }
         }
-        cv_text(6, 26, &FONT_XS, "ALGO: SLOT   PRESETS: EFFECT", C_DIM);
-        cv_text(6, 38, &FONT_XS, "FX: ON / BYPASS   SEL+ALGO: MOVE", C_DIM);
+        cv_text(6, 26, &FONT_XS, "SEL+FX: BYPASS", C_DIM);
+        cv_text(6, 38, &FONT_XS, "FX+ALGO: MOVE", C_DIM);
         {                                /* the whole chain's mix (MIXER K4), to see, not to set */
             char w[16];
             pct_text(f->wet, v);

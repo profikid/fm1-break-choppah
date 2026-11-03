@@ -48,7 +48,18 @@ The slicer view, top to bottom:
 - **Slice blocks:** sixteen blocks, one per white key, each with its slice's waveform. The slice sounding is lit;
   a key held is outlined; a dot marks a key with a loop of its own (§3, key loops).
 - **Pads:** the eleven black-key pads, lit while held.
-- **Knobs:** the page's four knobs and their values.
+- **Under the waveform:** one line saying what the white keys, ALGORITHM and PRESETS do on this page; amber when
+  the white keys are steps here, not slices.
+- **Knobs:** the page's four knobs and their values. Between the pads and the knobs, a dot for each part of the page
+  (the one lit is where you are): pressing the page's button again goes to the next.
+
+**The rules.** ALGORITHM picks what you edit on the page (an FX slot, a kick layer, a SEQ lane, a drum voice,
+GLOBAL's part); on HOME, ARP and the MIXER, where there is nothing to pick, it is the break. PRESETS picks what goes
+in (an effect, a kick, a snare or hat sound); elsewhere it is the pattern. **SEL + ALGORITHM is the break and SEL +
+PRESETS the pattern on every page.** A page's button pressed again is its next part. **Hold SEL** alone for a second
+and the strip lists its combinations.
+
+![SEL held: its combinations on the strip; the help line under the waveform; the HOME knobs](img/screen-selhelp.png "SEL held")
 
 ## 3. Playing
 
@@ -57,12 +68,14 @@ The slicer view, top to bottom:
 | PLAY | Play / stop. HOME + PLAY: back to bar 1 |
 | White keys | Slices 1–16. Playing: at the next snap point (GLOBAL: 1 slice, an 8th on the 2-bar breaks, by default; OFF, 1/8 … 4 slices). Stopped: at once. Held: the key loops (below), playing or stopped |
 | SELECT | Tempo, 1 BPM a detent (0.1 with SEL held) |
-| SEL (tapped) | **Tap tempo**, on any page: tap SEL in time. The tempo follows from the second tap and settles as you go on (the average of the last eight taps); the header shows the count and the tempo. Stop for 2 seconds to start a new count; a tap far off the pace starts a new count from the tap before it. SEL used with something else (SEL + a knob, SEL + ALGORITHM, SEL + EDIT…) is not a tap |
+| SEL (tapped) | **Tap tempo**, on any page: tap SEL in time. The tempo follows from the second tap and settles as you go on (the average of the last eight taps); the header shows the count and the tempo. Stop for 2 seconds to start a new count; a tap far off the pace starts a new count from the tap before it. SEL used with something else (SEL + a knob, SEL + ALGORITHM, SEL + REC…) is not a tap; held alone a second it shows the combinations instead |
+| SEL + ALGORITHM · SEL + PRESETS | The break · the pattern, from any page |
+| SEL + SAVE | **Undo** the last pattern wipe (SEL + ARP, SEL + REC, a drum lane's FILL, CLR / 4X4 or COPY); again: redo |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
 | PRESETS | The pattern, P1–P16 (§5); while playing the new one starts at the end of the loop |
-| SEQ · REC | The sequencer; recording the keys into the pattern (§5). SEL + REC: clear the pattern |
+| SEQ · REC | The sequencer; recording the keys into the pattern (§5). SEL + REC: clear the pattern (SEL + SAVE takes it back) |
 | MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 36 the kick, 38 the snare, 42 / 44 / 46 the hat (§8); any channel |
-| ALGORITHM | The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
+| ALGORITHM | (HOME, ARP, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
 | MASTER | Volume |
 
 ![A slice held](img/screen-held.png "Slice 10 held")
@@ -137,14 +150,14 @@ where the generator can move it), a slice of its own, or nothing; and three drum
 that repeat every bar. **PRESETS** picks the pattern on most pages; while playing, the next one starts when the loop
 comes round (the header shows "P2>").
 
-**SEQ** opens the sequencer. **ALGORITHM** picks what the white keys edit:
+**SEQ** opens the sequencer. **ALGORITHM** (or **SEQ again**) picks what the white keys edit:
 
 ![SEQ: pattern 1, steps 1-16, step 9 a slice of its own being reversed; the kick, snare and hat lanes below](img/screen-seq.png "The SEQ page")
 
 | Lane | White keys | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- | --- |
 | STEPS 1-16, STEPS 17-32 | Pick a step to edit (outlined) | SLICE: OFF · LOOP · 1–16 | PITCH: −12 … +12 | HITS: ×1–×4 (a ratchet in the step) | REVERSE |
-| KICK, SNARE, HAT | That lane's 16 steps, on and off | | | | |
+| KICK, SNARE, HAT | That lane's 16 steps, on and off | FILL: 0–16 hits spread evenly from the downbeat (Euclidean) | ROTATE: the lane a step later (right) or earlier | Left CLEAR, right four on the floor | COPY the previous pattern's lane |
 
 The upper strip shows the half's 16 steps (a number: its own slice; a dot: LOOP; a dash: off; a mark under it: hits
 or reverse), the step playing lit; the lower strip all three drum lanes.
@@ -152,7 +165,8 @@ or reverse), the step playing lit; the lower strip all three drum lanes.
 **REC** records: while it is lit and the break plays, every white key you press (on HOME and the other pages where
 the keys play slices) is written into the pattern at the step it lands on, and so are MIDI notes: 48–63 as slices,
 36 / 38 / 42 into the kick, snare and hat lanes. REC again stops. **SEL + REC** clears: on SEQ the lane shown, on any
-other page the whole pattern. SEL + ARP (a random pattern) writes into the pattern playing. SAVE keeps all 16.
+other page the whole pattern. SEL + ARP (a random pattern) writes into the pattern playing. **SEL + SAVE undoes**
+either (and FILL, CLR / 4X4 and COPY on a drum lane); press it again to redo. SAVE keeps all 16.
 
 ## 6. The FX chain
 
@@ -166,11 +180,11 @@ its settings as bars over K1–K4.
 
 | Control | Does |
 | --- | --- |
-| ALGORITHM | The slot to tune (1–4) |
+| ALGORITHM · FX again | The slot to tune (1–4) |
 | PRESETS | The effect in that slot, through the library (EMPTY first); a new effect comes in on, at its own starting settings |
 | K1–K3 · K4 | Its settings · its mix |
-| FX (on the page) | That slot on / bypassed |
-| SEL + ALGORITHM | Moves that slot along the chain (the order is the sound: DRIVE before a FILTER is not a FILTER before DRIVE) |
+| SEL + FX | That slot on / bypassed |
+| FX held + ALGORITHM | Moves that slot along the chain (the order is the sound: DRIVE before a FILTER is not a FILTER before DRIVE) |
 | MIXER K4 FX | The whole chain against the dry sound: fade every effect in or out at once (the FX page shows it, bottom right) |
 
 | Effect | K1 | K2 | K3 |
@@ -210,7 +224,7 @@ longest it can).
 goes over the dry sound. The tail rings on after STOP. There is one: a second REVERB slot passes the sound on. Put it
 late in the chain to reverb the effects before it, or early to crunch or drive the reverb itself.
 
-The chain starts as CRUNCH → FILTER → FLANGER → RING MOD, all bypassed: FX on the page switches the focused one on.
+The chain starts as CRUNCH → FILTER → FLANGER → RING MOD, all bypassed: SEL + FX switches the focused one on.
 CRUNCH used to be HOME's K4; it is slot 1 now.
 
 STOP fades the break out at once (a white key held keeps looping); the reverb's and the dub delay's tails ring on.
@@ -218,7 +232,7 @@ STOP fades the break out at once (a white key held keeps looping); the reverb's 
 ## 7. GLOBAL: MIDI, Bluetooth, pitch, Bluetooth audio, reset
 
 **GLO** opens the GLOBAL page: the slice blocks give way to the state of MIDI, and K1–K4 set it (SAVE keeps it).
-**GLO again** turns to its second part, the pitch; **a third time**, Bluetooth audio (both below).
+**GLO again** (or ALGORITHM) turns to its second part, the pitch; **a third time**, Bluetooth audio (both below).
 
 ![GLOBAL, following a 119 BPM clock over USB](img/screen-global.png "The GLOBAL page")
 
@@ -293,7 +307,6 @@ The kick is four layers summed and pushed into a clipper:
 | White keys | The kick lane's 16 steps of the bar, on and off (lit: on; the step playing flips). Empty to start |
 | ALGORITHM | The layer LAYER and LAYER FX edit |
 | PRESETS | A built-in kick: 909, TECHNO, EARLY HC, ROTTERDAM (the start), INDUSTRIAL, DISTORTO. The steps, routing and volume stay |
-| SEL + EDIT | The drums through the FX chain (with the break) or around it (clean, straight to the limiter) |
 | MIDI note 36 (C1) | Plays the kick, from any channel, also while stopped |
 
 | Sub-page | K1 | K2 | K3 | K4 |
@@ -302,7 +315,7 @@ The kick is four layers summed and pushed into a clipper:
 | LAYER | Level | Pitch | Decay | Tone |
 | LAYER FX | Effect: OFF · DRIVE · CRUNCH · FILTER · RING MOD | A (gain · bits · cutoff · frequency) | B (tone · rate · resonance) | Wet |
 | MACRO | SUB (level, tail, weight) | PUNCH (level, sweep, click) | GRIT (level, dirt, tail) | INTENSITY |
-| OUT | Volume | Route (the drums'): THRU FX · AROUND FX | | |
+| OUT | Volume | | | |
 
 **INTENSITY** is the drive into the clipper: low is a clean, round kick; past half the clip turns hard, the tail
 flattens into the long, distorted gabber kick. The strip shows the kick's shape (its first 600 ms), the layers'
@@ -341,19 +354,20 @@ slots, lit: on). **LFO again** turns to GROOVE.
 | GROOVE | SWING (50–75 %) | DRUMS: through the FX chain or around it | | |
 
 FX is how much of the chain you hear (the drums routed around it stay dry). Bring BREAK down to drop the break and
-let the drums run alone, then up again for the drop. HOME keeps the gate and the **DJ filter** (K2), which filters the
+let the drums run alone, then up again for the drop. HOME keeps the gate, FX and COMPLEXITY to ride (K1, K3, K4) and the **DJ filter** (K2), which filters the
 break alone: sweep it down and the drums stay full on top. The FLT pad throws it the same way.
 
 ## 10. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| HOME (perform) | Gate | DJ filter on the break (left low-pass, right high-pass) | | |
+| HOME (perform) | Gate | DJ filter on the break (left low-pass, right high-pass) | FX (the MIXER's) | Complexity (the GENERATOR's) |
 | LFO (mixer) | Break level | Kick level | Snare and hat level | FX (the chain, dry to wet) |
 | LFO again (groove) | Swing | Drums: through the chain or around it | | |
 | ARP (generator) | Complexity | Anchor | Roll | Fill |
 | FX (the chain) | the focused slot's effect: its three settings | | | Its mix |
 | SEQ (patterns) | Slice | Pitch | Hits | Reverse |
+| SEQ, a drum lane | Fill | Rotate | Clear / 4x4 | Copy |
 | ENV (snare / hat) | Level | Tune | Decay | Tone |
 | ENV again (shape) | Snap / cut | Drive | | |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |

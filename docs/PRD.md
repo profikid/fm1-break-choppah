@@ -265,6 +265,19 @@ on the keys, eyes on the crowd.
 | B-34 | **The DJ filter is the break's** (2 Nov 2026): it moved from the end of the output stage to the break's input of the chain (the break and its echo / reverb throws); the drums through the chain join after it, the drums around the chain later still, so a sweep leaves them full. The FLT pad throws it the same way | P1 | *Done; engine test: low-passed, a 4 kHz break is gone while the kick passes* |
 | B-32 | **Slice effects:** each slice its own effect while it plays (loop, key, roll): LO-PASS, HI-PASS, CRUNCH, DRIVE, RING MOD, ECHO / VERB throws into the chain's delay and reverb, plus its LEVEL. A key held + FX flips K1–K4 to it (EFFECT, AMOUNT, TONE, LEVEL); blocks show a tag. Run per voice (a slice's state starts with its hit), the throws on two send buses out of the engine. Settings CHP6 | P1 | *Done 1 Nov 2026; engine tests: level 0 silences that slice alone, LO-PASS darkens it, ECHO throws it alone* |
 
+### 5.3a Control rules (3 Nov 2026, from the control map's review)
+
+| ID | Requirement | Pri | Acceptance |
+| --- | --- | --- | --- |
+| B-40 | **Encoder roles:** ALGORITHM picks what the page edits (FX slot, kick layer, SEQ lane, drum voice, GLOBAL's part), the break on HOME / ARP / MIXER; PRESETS what goes in (effect, kick, drum sound), the pattern elsewhere. SEL + ALGORITHM = the break and SEL + PRESETS = the pattern on every page | P1 | *Done; scenario controls.txt* |
+| B-41 | **A page button again = its next part**: GLO 3 parts, EDIT 5, LFO 2, ENV 2, FX its 4 slots (on letting go, so FX held + ALGORITHM can move the slot), SEQ its 5 lanes; a dot per part between the pads and the knobs. FX's bypass moved to SEL + FX | P1 | *Done; scenarios fxchain.txt, controls.txt* |
+| B-42 | **Undo:** one copy of the pattern before SEL + ARP, SEL + REC and a drum lane's FILL / CLR / COPY (a burst of one change is one); SEL + SAVE swaps it back (again: redo); ~140 B of RAM | P1 | *Done; scenario controls.txt* |
+| B-43 | **The page's help line** under the waveform (now 42 rows): KEYS / ALGO / PRESETS, amber where the keys are steps; the per-page help lines went | P2 | *Done* |
+| B-44 | **The drums' route has one home**, MIXER GROOVE K2: SEL + EDIT and KICK OUT's ROUTE removed | P2 | *Done* |
+| B-45 | **HOME K3 FX, K4 COMPLEXITY** (mirrors of MIXER K4 and ARP K1) | P2 | *Done* |
+| B-46 | **SEQ drum lanes' knobs:** K1 FILL (n hits spread evenly from the downbeat, Euclidean), K2 ROTATE, K3 clear (left) / four on the floor (right), K4 copy the previous pattern's lane | P2 | *Done; scenario controls.txt* |
+| B-47 | **Hold SEL alone a second:** the strip lists the SEL combinations (FX page: SEL + FX, FX + ALGO); letting go clears it, no tap counted | P2 | *Done; scenario controls.txt* |
+
 ### 5.4 Performance screen (HOME)
 
 - Top bar: break name · BPM (tap to set) · bar.beat · pattern · clock source icon.
@@ -279,7 +292,7 @@ on the keys, eyes on the crowd.
 
 | Page (button) | K1 | K2 | K3 | K4 | SEL page |
 | --- | --- | --- | --- | --- | --- |
-| HOME (perform) | Gate (built) | DJ filter on the break (built) | | | Tempo (tap) |
+| HOME (perform) | Gate | DJ filter on the break | FX | Complexity | Tempo (tap) |
 | LFO (mixer, built) | Break level | Kick level | Snare and hat level | FX | LFO again: swing · drums route |
 | SEQ (built) | Step slice | Step pitch | Hits (ratchet) | Reverse | ALGORITHM: the lane |
 | ARP (generator) | Complexity | Anchor | Roll | Fill | Retrig 2× · 3× · 4× · 8× |
@@ -443,7 +456,7 @@ own `o2` unit); settings in OBJ_SETTINGS (136 B).
 | K-4 | **KICK page on EDIT:** EDIT again steps MIX (K1–K4 the layers' levels) → LAYER (LEVEL PITCH DECAY TONE) → LAYER FX (EFFECT, A, B, WET) → MACRO (SUB, PUNCH, GRIT, INTENSITY) → OUT (VOLUME, ROUTE); ALGORITHM the layer; the strip shows the kick's shape (600 ms), the layers' levels, the 16 steps with the playhead | P0 | *Done; simulator scenario kick.txt* |
 | K-5 | **Steps** (the pattern's kick lane since 3 Nov 2026): on the KICK page the white keys toggle the kick on the bar's 16 steps (empty by default since 3 Nov 2026, was four to the floor; LEDs show them, the step playing flipped). The engine marks each step's sample offset (`brk_step_events`) so the kick lands sample-accurate, swing included | P0 | *Done; engine test: 16 events a bar, a step apart, places 0–15* |
 | K-6 | **Presets:** PRESETS loads a built-in kick (909, TECHNO, EARLY HC, ROTTERDAM the default, INDUSTRIAL, DISTORTO); the steps, routing and volume stay; SAVE keeps the kick with the settings | P0 | *Done; six presets in range and distinct* |
-| K-7 | **Routing** (the kick, the snare and the hat together since 3 Nov 2026): through the FX chain with the break (default) or around it (joins after the chain, into the limiter, thrown nowhere); never through the break's DJ filter (B-34); SEL + EDIT, OUT K2 or MIXER GROOVE K2 | P1 | *Done* |
+| K-7 | **Routing** (the kick, the snare and the hat together since 3 Nov 2026): through the FX chain with the break (default) or around it (joins after the chain, into the limiter, thrown nowhere); never through the break's DJ filter (B-34); MIXER GROOVE K2 (B-44; was also SEL + EDIT and OUT K2) | P1 | *Done* |
 | K-8 | **MIDI:** note 36 (C1) note-on on any channel plays the kick at the next block, also while stopped | P1 | *Done; scenario: a note sounds while stopped* |
 | K-9 | Retrigger without clicks: the kick still sounding fades out under the new hit; no work while silent | P0 | *Done; engine test* |
 | K-10 | **SNARE / HAT on ENV** (`app/dsp/perc.c`): SNARE two sines (1 : 1.62) with a pitch drop, band-passed noise and a crack (LEVEL, TUNE 120–400 Hz, DECAY 60–700 ms, TONE, SNAP, DRIVE); HAT six squares at the 808's ratios plus noise through two high-passes (LEVEL, TUNE, DECAY 15–900 ms, METAL / NOISE, CUT, DRIVE); four presets each (909, TIGHT, FAT, GABBER; CLOSED, 808, OPEN, TRASH); ALGORITHM the voice, ENV again SOUND / SHAPE, the white keys its lane; MIXER K3 PERC; MIDI 38, 42 / 44 / 46 | P1 | *Done; engine tests: presets bounded, the snare's body at its tune; scenario perc.txt* |

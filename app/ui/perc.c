@@ -58,5 +58,5 @@ static void draw_perc(const brk_status_t *st)
         cv_rect(x, y + 13, (int32_t)(52.0f * P[i] + 0.5f), 3, lit ? C_HI : C_DIM);
     }
     cv_blit(0, 88);
-    draw_lanes(st, LANE_SNARE + ui.pvoice, "KEYS: STEPS  ALGO: VOICE  PRESETS: SOUND");
+    draw_lanes(st, LANE_SNARE + ui.pvoice);
 }

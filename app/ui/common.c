@@ -36,6 +36,8 @@ static struct {
     uint8_t seq_lane, seq_step;          /* the SEQ page: the lane (SL_*) and the break step (0..31) it edits */
     uint8_t pvoice, ppage, ppreset[PERC_VOICES];   /* the SNARE / HAT page: its voice, sub-page, presets */
     uint8_t rec;                         /* REC: white keys and MIDI notes write into the pattern as it plays */
+    uint8_t help;                        /* SEL held alone a second: the SEL combinations on the strip */
+    uint8_t fx_hold, fx_turned;          /* FX held on the FX page (up alone: the next slot); a knob turned meanwhile */
     uint32_t reset_t;                    /* GLOBAL's RESET ALL: when it was first turned (it asks twice) */
     uint32_t mix_drawn;                  /* its faders' meters: when last drawn */
     int16_t meter_x;                     /* the header's level meter: where (0: not shown now, a message is) */

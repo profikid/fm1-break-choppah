@@ -1,0 +1,106 @@
+# CHOPPAH: the controls' rules. ALGORITHM picks what the page edits (GLOBAL: its part) and, with SEL held, the break
+# on any page; PRESETS with SEL held is the pattern on any page; a page button again is its next part (SEQ: lane);
+# the SEQ drum lanes' K1-K4 (FILL, ROTATE, CLR / 4X4, COPY); SEL + SAVE undoes (and redoes); HOME K3 FX, K4
+# COMPLEXITY; SEL held alone a second shows its combinations; the drums' route lives on the MIXER only
+#   app/build/host/choppah_host tests/scenarios/controls.txt app/build/scenarios
+wait 2600
+tap GLO
+wait 100
+expect page 3
+expect gpage 0
+turn ALGO 1 10
+wait 100
+expect gpage 1
+expect brk 0
+turn ALGO 1 10
+wait 100
+expect gpage 2
+turn ALGO 1 10
+wait 100
+expect gpage 0
+press SEL
+turn ALGO 1 10
+release SEL
+wait 300
+expect brk 1
+expect brk_next -1
+tap EDIT
+wait 100
+press SEL
+turn PRESET 1 10
+release SEL
+wait 100
+expect pattern 1
+expect page 4
+turn PRESET 1 10
+wait 100
+expect pattern 1
+tap SEQ
+wait 100
+expect page 6
+expect seq_lane 0
+tap SEQ
+tap SEQ
+wait 100
+expect seq_lane 2
+turn K1 4 10
+wait 100
+expect lane_kick 4369
+turn K2 1 10
+wait 100
+expect lane_kick 8738
+shot q_fill.png
+turn K3 -1 10
+wait 100
+expect lane_kick 0
+press SEL
+tap SAVE
+release SEL
+wait 100
+expect lane_kick 8738
+press SEL
+tap SAVE
+release SEL
+wait 100
+expect lane_kick 0
+press SEL
+tap SAVE
+release SEL
+wait 100
+expect lane_kick 8738
+tap HOME
+wait 100
+turn K3 -10 10
+turn K4 12 10
+wait 300
+shot h_k34.png
+press SEL
+wait 1200
+expect help 1
+shot sel_help.png
+release SEL
+wait 200
+expect help 0
+expect_bpm 169 171
+tap LFO
+tap LFO
+wait 100
+turn K2 1 10
+wait 100
+expect drums_chain 0
+turn K2 -1 10
+wait 100
+expect drums_chain 1
+press SEL
+tap EDIT
+release SEL
+wait 100
+expect drums_chain 1
+expect page 4
+tap FX
+wait 100
+press SEL
+wait 1200
+shot sel_help_fx.png
+release SEL
+wait 200
