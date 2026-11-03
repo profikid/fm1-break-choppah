@@ -56,7 +56,8 @@ typedef struct {
     uint8_t mix_rsv[3];
     uint8_t bta_on;                      /* Bluetooth audio out (GLOBAL, third half): on at power-on, the last device
                                           * connected again */
-    uint8_t bta_rsv[3];
+    uint8_t bta_codec;                   /* its SBC coding: 0 joint stereo (fm1-base's), 1 plain stereo */
+    uint8_t bta_rsv[2];
 } settings_t;
 #define SET_SIZE_CHP6 __builtin_offsetof(settings_t, kick)   /* the shortest save that loads */
 _Static_assert(sizeof(settings_t) <= 3840u, "a store object holds 3840 bytes");
@@ -89,6 +90,7 @@ static void settings_defaults(void)
     kick_defaults(&set.kick);
     set.brk_level = 100u;
     set.bta_on = 0u;                     /* (Bluetooth audio off until it is turned on) */
+    set.bta_codec = 0u;
 }
 
 static int pitch_keeps(void) { return set.pitch_keep != 2u; }   /* KEEP LENGTH unless SPEED was chosen */
@@ -1030,6 +1032,8 @@ static void ch_bta_value(int i, char *t)
     }
     if (i == 0)
         text_cat(t, st == PLAT_BTA_OFF ? "OFF" : "ON");
+    else if (i == 1 && st == PLAT_BTA_STREAMING)
+        text_cat(t, set.bta_codec ? "STEREO" : "JOINT");
     else if (i == 1) {
         if (ch_bta_entry(ui.bta_sel, n, &k, &f)) {
             n[9] = 0;                    /* (the foot's width) */
@@ -1061,7 +1065,11 @@ static void ch_bta_turn(int i, int32_t d)
         app_say("BT AUDIO", on ? "ON" : "OFF");
     } else if (st == PLAT_BTA_OFF)
         app_say("BT AUDIO", "TURN K1 ON");
-    else if (i == 1) {
+    else if (i == 1 && st == PLAT_BTA_STREAMING) {   /* streaming: K2 the SBC coding, joint or plain stereo */
+        set.bta_codec = d > 0;
+        set_dirty = 1u;
+        app_say("BT CODEC", set.bta_codec ? "STEREO" : "JOINT STEREO");
+    } else if (i == 1) {
         uint32_t c = ch_bta_count();
         ui.bta_sel = (uint8_t)(c ? (uint32_t)clamp((int32_t)ui.bta_sel + (d > 0 ? 1 : -1), 0, (int32_t)c - 1) : 0u);
         if (ch_bta_entry(ui.bta_sel, n, &k, &f))
@@ -1095,6 +1103,19 @@ static void ch_bta_turn(int i, int32_t d)
 static void ch_bta_poll(uint32_t now)
 {
     static int last_st = -1;
+#if FM1B_BT_AUDIO
+    {   /* the SBC coding chosen (K2 while streaming), into fm1-base's encoder (bt/br/bt_acl.c: one translation unit
+         * with this, so its state is in reach). Its own set-up is joint stereo, once a boot at the first stream; this
+         * sets it again as chosen, its bitpool kept, with the interrupts off (the audio interrupt encodes) */
+        static int8_t applied = -1;
+        if (ba_sbc_init_done && applied != (int8_t)set.bta_codec) {
+            uint32_t f = irq_save();
+            bt_sbc_init(&ba_sbc, 44100, (uint8_t)ba_sbc.p.s16BitPool, set.bta_codec ? 0u : 1u);
+            irq_restore(f);
+            applied = (int8_t)set.bta_codec;
+        }
+    }
+#endif
     if (ch_bta_state() != last_st) {     /* (the foot's K3 is SCAN or TEST L/R by the state) */
         last_st = ch_bta_state();
         foot_dirty = 1u;
@@ -1148,7 +1169,7 @@ static void draw_bta(void)
         text_cat(t, "K3: SCAN");
     cv_text(96, 15, &FONT_XS, t, st == PLAT_BTA_STREAMING ? C_HI : C_DIM);
     cv_text(6, 30, &FONT_XS, st == PLAT_BTA_STREAMING ? (lr_test ? "TEST: LOW BEEP LEFT, HIGH BEEP RIGHT" :
-            "K3: TEST LEFT / RIGHT. FM-1 SPEAKER MUTED") :
+            "K2: CODEC   K3: TEST LEFT / RIGHT") :
             "FOR LISTENING: 150-300 MS LATE", C_DIM);
     cv_blit(0, 88);
     cv_begin(240, 52, C_BLACK);
@@ -2726,8 +2747,9 @@ static void draw_foot(const brk_status_t *st)
         static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", ""};
         static const char *const KN_GROOVE[4] = {"SWING", "KICK ROUTE", "", ""};
         static const char *const KN_BTA[4] = {"BT AUDIO", "DEVICE", "SCAN", "CONNECT"};
-        const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? (i == 2 && ch_bta_state() == PLAT_BTA_STREAMING
-                           ? "TEST L/R" : KN_BTA[i]) : ui.page == PG_GLOBAL && ui.gpage
+        int bst = ui.page == PG_GLOBAL && ui.gpage == 2u && ch_bta_state() == PLAT_BTA_STREAMING;
+        const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? (bst && i == 2 ? "TEST L/R" : bst && i == 1
+                           ? "CODEC" : KN_BTA[i]) : ui.page == PG_GLOBAL && ui.gpage
                            ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
                            ? KN_GROOVE[i] : KN[ui.page][i];
         if (ui.shown >= 100) {           /* a white key held: its loop, or its slice's effect */
