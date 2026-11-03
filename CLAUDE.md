@@ -40,8 +40,8 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 ## Site
 
 `base/tools/make_site.py` builds the GitHub Pages site; `tools/site_style.py` then gives it CHOPPAH's look
-(`app/site/site.css`; the installer, fm1-base's page, also `app/site/install.css`: only its style, never its markup
-or ids) and puts the interactive control map (`app/site/controlmap.html`) into the manual's section
+(`app/site/site.css`; the installer and the emulator, fm1-base's pages, also `app/site/install.css` and
+`app/site/emu.css`: only their style, never their markup, ids or script) and puts the interactive control map (`app/site/controlmap.html`) into the manual's section
 "The control map". When a page's controls change, update that file's `PAGES` list with the manual. Manual screenshots
 come from the host scenarios (`app/build/scenarios/*.png`, copied into `app/docs/img`).
 
