@@ -147,7 +147,8 @@ static uint8_t blk_n;                    /* blocks with a slice behind them */
 static volatile uint8_t muted;
 static volatile float meter_brk, meter_kick, meter_sfx;   /* the MIXER's channels: the break, the kick and the
                                                            * soundboard, before the chain */
-static volatile float meter_l, meter_r;  /* the output's peaks as it leaves (after MASTER: 1 = full scale), falling
+static volatile float meter_l, meter_r;
+static volatile uint8_t bt_mono;         /* Bluetooth audio streams: the output as double mono (app_frame sets it) */  /* the output's peaks as it leaves (after MASTER: 1 = full scale), falling
                                           * ~20 dB a second: the render writes, the header's meter reads */
 
 static void wave_build(const brk_break_t *b)
@@ -439,6 +440,10 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         /* the break through the DJ filter, the kick joining it into the chain (or around it), the soundboard after */
         brk_fx_process(mono, set.kick.chain ? kick : 0, fx, sfx_echo(), echo, verb, set.kick.chain ? 0 : kick, l, r, m,
                        st.pads);
+        if (bt_mono)                     /* to Bluetooth: double mono, left and right the same (the stereo effects
+                                          * folded in), so a speaker or one earbud gets everything */
+            for (i = 0; i < m; i++)
+                l[i] = r[i] = 0.5f * (l[i] + r[i]);
         {                                /* the meter: this block's peaks as they leave, or the last ones falling */
             float pl = 0.0f, pr = 0.0f, fl = meter_l * 0.987f, fr = meter_r * 0.987f, out = gain * (1.0f / 8388608.0f);
             for (i = 0; i < m; i++) {
@@ -1070,6 +1075,7 @@ static void ch_bta_turn(int i, int32_t d)
 /* every frame: the pretend radio's steps; at boot, on as saved, then the last device once it is ready */
 static void ch_bta_poll(uint32_t now)
 {
+    bt_mono = (uint8_t)(ch_bta_state() == PLAT_BTA_STREAMING);
 #if !FM1B_BT_AUDIO
     if (bta_sim_on) {
         if (sim.st == PLAT_BTA_SCANNING && now - sim.t > 2000u) {

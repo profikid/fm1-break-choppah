@@ -1,8 +1,15 @@
 # CHOPPAH: Bluetooth audio out on GLOBAL's third part (GLO three times). K1 on, K3 a scan, K2 the device, K4 right
 # connects, left hangs up. The host has no radio: bta_sim pretends one (two devices found after 2 s, a connection
-# streaming after 1.3 s)
+# streaming after 1.3 s; then double mono: b_stream_mono.wav has left and right the same)
 #   app/build/host/choppah_host tests/scenarios/btaudio.txt app/build/scenarios
 wait 2600
+tap FX
+wait 100
+turn ALGO 2 10
+turn PRESET 8 10
+wait 100
+tap PLAY
+wait 200
 tap GLO
 tap GLO
 tap GLO
@@ -23,6 +30,9 @@ shot b_found.png
 turn K4 1 10
 wait 2000
 shot b_streaming.png
+wav b_stream_mono.wav
+wait 1500
+wavstop
 turn K4 -1 10
 wait 300
 shot b_hungup.png

@@ -248,7 +248,9 @@ tempo's own repitch, HALF, REVERSE's speed, the tape stop and the rewind stay sp
 | K3 SCAN | Any turn looks for headphones and speakers for about 10 seconds. Put the device in pairing mode first |
 | K4 CONNECT | Right: connect the device chosen (a new one pairs and is remembered; four are kept). Left: hang up. SEL held + left: forget the remembered device chosen |
 
-While it streams, the FM-1's own speaker and headphone output go quiet and MASTER still sets the level. Bluetooth
+While it streams, the FM-1's own speaker and headphone output go quiet and MASTER still sets the level. It goes out
+as double mono: left and right the same, the stereo effects (ping-pong delay, reverb, flanger) folded together, so
+one speaker or one earbud hears everything. Bluetooth
 audio runs late: 150–300 ms between a key and your ear, so it is for listening and showing, not for playing in time
 (use the FM-1's own output or USB for that). Bluetooth MIDI keeps working beside it on the same radio. Turning
 Bluetooth audio on starts the radio even when Bluetooth MIDI is off.
