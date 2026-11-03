@@ -33,7 +33,7 @@ on the device. The looper and song mode are next: see the [PRD](docs/PRD.md) for
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
 | SELECT | Tempo (SEL held: 0.1 BPM) · **tap SEL in time** on any page: tap tempo (from the second tap, the average of the last eight) |
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
-| ALGORITHM | The next break: AMEN, DRUMMER, THE WORM, THINK, COLD SWEAT, HOT PANTS, APACHE, SPORT |
+| ALGORITHM | The next break, its name at once, the break itself at the next bar: AMEN, DRUMMER, THE WORM, THINK, COLD SWEAT, HOT PANTS, APACHE, SPORT |
 | PRESETS | The pattern, P1–P16 (playing: from the end of the loop) |
 | SEQ | **PATTERN SEQUENCER**: the pattern's 32 break steps (each LOOP, a slice of its own, or off; K1 slice · K2 pitch · K3 hits ×1–×4 · K4 reverse) and its kick, snare and hat lanes (16 steps each). ALGORITHM picks the lane, the white keys edit it |
 | REC | Record the white keys and MIDI notes into the pattern as the break plays · SEL + REC: clear (on SEQ the lane, else the pattern) |

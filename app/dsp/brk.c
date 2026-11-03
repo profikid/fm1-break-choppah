@@ -11,6 +11,9 @@
 /* ---------------------------------------------------------------- shared --- */
 /* written by the main loop, read by the render (single words) */
 static const brk_break_t *volatile brk_now;
+static const brk_break_t *volatile p_swap;   /* a break waiting for the next step (brk_swap_break) */
+static volatile int p_mute;              /* the break silent (brk_mute), still running */
+static float mute_amp = 1.0f;
 static volatile float p_tempo = 136.9f, p_pitch, p_swing = 0.5f;
 static volatile int p_playing;
 static volatile uint32_t p_pads;         /* bit PAD_*: held */
@@ -611,6 +614,7 @@ static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float pf, fl
     }
 }
 
+static const brk_break_t *swap_now(void);
 void brk_render(float *out, uint32_t n)
 {
     const brk_break_t *b = brk_now;
@@ -618,6 +622,8 @@ void brk_render(float *out, uint32_t n)
     float sl = step_len(), inc, pf, half, ratio, sw = brk_clampf(p_swing, 0.5f, 0.75f);
     int playing = p_playing, keep = p_keep;
     n_renders++;
+    if (p_swap && (!playing || !b))      /* stopped: a break waiting takes over at once */
+        b = swap_now();
     if (!b || !b->len || !b->nslices) {
         for (i = 0; i < n; i++) {
             out[i] = 0.0f;
@@ -709,6 +715,10 @@ void brk_render(float *out, uint32_t n)
                 /* swing: the even 16th takes sw of the pair, the odd one the rest */
                 float len = 2.0f * sl * ((((uint32_t)(step + 1)) & 1u) ? 1.0f - sw : sw);
                 step_in_len = (uint32_t)len;
+                if (p_swap) {            /* a break waiting: in on this step (the main loop asks at a bar's end) */
+                    b = swap_now();
+                    ratio = (float)b->rate / (float)BRK_SR * (p_tempo * 100.0f / (float)b->bpm_x100);
+                }
                 on_step(b);
                 if (ev_cnt < EV_MAX) {
                     ev_off[ev_cnt] = (uint16_t)i;
@@ -809,8 +819,9 @@ void brk_render(float *out, uint32_t n)
             g = ph < brk_clampf(p_ps.gate_len, 0.1f, 0.9f) * per ? 1.0f : 0.0f;
         }
         gate_amp += (g - gate_amp) * 0.02f;
+        mute_amp += ((p_mute ? 0.0f : 1.0f) - mute_amp) * 0.02f;   /* (-60 dB in 8 ms) */
         {
-            float k = (1.0f / 32768.0f) * gate_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
+            float k = (1.0f / 32768.0f) * gate_amp * mute_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
             out[i] = acc * k;
             if (send_echo)               /* the slices' throws, for the effects' delay and reverb */
                 send_echo[i] = ea * k;
@@ -968,6 +979,18 @@ void brk_keyset(uint32_t key, const brk_keyset_t *k)
 }
 
 void brk_set_break(const brk_break_t *b) { brk_now = b; }
+void brk_mute(int on) { p_mute = on; }
+void brk_swap_break(const brk_break_t *b) { p_swap = b; }
+/* the render: the break waiting takes over, its voices start clean and it sounds again */
+static const brk_break_t *swap_now(void)
+{
+    brk_now = p_swap;
+    p_swap = 0;
+    v[0].active = v[1].active = 0u;
+    p_mute = 0;
+    mute_amp = 1.0f;
+    return brk_now;
+}
 const brk_break_t *brk_get_break(void) { return brk_now; }
 void brk_play(int on)
 {

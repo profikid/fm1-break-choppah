@@ -214,9 +214,11 @@ static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 #define CH_DUB_LEN 30720u                /* the dub delay's line: 0.70 s a side, 3/8 down to 97 BPM, 1/2 to 172 */
 static int16_t dub_line[CH_DUB_LEN] PLAT_POOL;
 static brk_break_t brk0;
-static brk_break_t brk_cur;              /* the bank's break playing (pcm_a holds it) */
+static brk_break_t brk_cur[2];           /* the bank's break playing (pcm_a holds it), and the next one's: the render
+                                          * keeps its own while the next is written */
 static uint32_t n_synth;                 /* 0; 1 in a build with no bank: a synthesised break (brk_synth.c) */
 static uint32_t n_breaks;                /* then the bank's valid slots */
+static int32_t brk_next = -1;            /* a break chosen, waiting for the next bar (break_ask), or -1 */
 static uint8_t wave_px[240];             /* the waveform's height per column, for the screen */
 #define BLK_N 16u                        /* the slicer view's blocks: one per white key */
 #define BLK_W 26u                        /* columns of waveform in a block */
@@ -277,30 +279,43 @@ static const bank_slot_t *bank_slot(uint32_t i)
 #endif
 }
 
-/* break i into pcm_a (nothing may be playing from it: the render was given no break, see break_ask) */
-static void break_load(uint32_t i)
+/* break i's name, for the screen before it is in */
+static const char *break_name(uint32_t i)
+{
+    static char t[13];
+    const bank_slot_t *s = i >= n_synth ? bank_slot(i - n_synth) : 0;
+    uint32_t k;
+    for (k = 0; k < 12u; k++)
+        t[k] = s ? s->name[k] : 0;
+    t[12] = 0;
+    return s ? t : brk0.name;
+}
+
+/* break i into pcm_a and the descriptor the render isn't using (whatever plays from pcm_a meanwhile is muted, see
+ * break_poll); hand it to the render after */
+static const brk_break_t *break_load(uint32_t i)
 {
     const bank_slot_t *s = i >= n_synth ? bank_slot(i - n_synth) : 0;
+    brk_break_t *d = brk_get_break() == &brk_cur[0] ? &brk_cur[1] : &brk_cur[0];
     const brk_break_t *b = &brk0;
     uint32_t k;
-    brk_set_break(0);
     if (s) {
         adpcm_state_t st = {0, 0, 0};
 #if CH_HAVE_BANK
         adpcm_decode(&st, CH_BANK + s->data_off, pcm_a, s->len);
 #endif
-        brk_cur.pcm = pcm_a;
-        brk_cur.len = s->len;
-        brk_cur.rate = s->rate;
-        brk_cur.bpm_x100 = s->bpm_x100;
-        brk_cur.bars = s->bars;
-        brk_cur.nslices = s->nslices;
+        d->pcm = pcm_a;
+        d->len = s->len;
+        d->rate = s->rate;
+        d->bpm_x100 = s->bpm_x100;
+        d->bars = s->bars;
+        d->nslices = s->nslices;
         for (k = 0; k <= s->nslices; k++)
-            brk_cur.slice[k] = s->slice[k];
+            d->slice[k] = s->slice[k];
         for (k = 0; k < 12u; k++)
-            brk_cur.name[k] = s->name[k];
-        brk_cur.name[12] = 0;
-        b = &brk_cur;
+            d->name[k] = s->name[k];
+        d->name[12] = 0;
+        b = d;
     } else {                             /* a built-in style, played into RAM now */
         if (i >= n_synth)
             i = 0u;
@@ -311,7 +326,7 @@ static void break_load(uint32_t i)
     }
     set.brk = (uint8_t)i;
     wave_build(b);
-    brk_set_break(b);
+    return b;
 }
 
 void app_init(void)
@@ -342,7 +357,7 @@ void app_init(void)
         set.brk = 0u;
     if (plat_store_load(OBJ_PAT, &pats, sizeof pats) != (int)sizeof pats || pats.magic != PAT_MAGIC)
         pat_defaults();
-    break_load(set.brk);                 /* boot: the audio isn't running yet */
+    brk_set_break(break_load(set.brk));  /* boot: the audio isn't running yet */
     settings_apply();
     pat_apply();
 }

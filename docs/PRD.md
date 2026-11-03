@@ -104,7 +104,7 @@ acceptance criteria.
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
 | A-1 | Play a break as a tempo-locked loop. Default repitch mode: playback rate = target BPM / break's native BPM | P0 | Amen at 136.9 native plays in time at 60–220 BPM; ±1 sample drift per 64 bars max |
-| A-2 | Break library: **8 slots** (user-loaded) + at least 1 built-in break that ships legally (§11 Q1) | P0 | ALGORITHM switches breaks, quantised to the next bar |
+| A-2 | Break library: the built-in breaks (8, `breaks/breaks.txt`) | P0 | ALGORITHM switches breaks, quantised to the next bar. *Done 3 Nov 2026: the name shows at once (amber in the header, "NEXT BREAK"); in the bar's last 16th the break is muted (the clock, the drums and the steps run on), the next one decoded over the same PCM buffer, and the engine swaps it in on the next step, the bar's first (`brk_mute`, `brk_swap_break`); stopped, at once. Engine test test_swap; scenario breaks.txt* |
 | A-3 | **16 slice trigger keys** (white keys), synced to tempo: a press plays that slice at the next step (1/16 grid) | P0 | Max quantise latency = 1 step; trigger jitter < 1 ms |
 | A-4 | **Free-play mode:** while stopped, keys play slices immediately (unquantised) | P0 | Key-to-sound < 10 ms |
 | A-5 | Slice count per break: 8, 16 (default) or 32; equal grid or transient-detected markers from the prep tool | P0 | Markers survive reboot |

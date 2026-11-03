@@ -801,6 +801,35 @@ static void test_gate(void)
           early[1], late[1], late[0]);
 }
 
+/* a break change (ALGORITHM): muted, the break runs on silent; the next one swapped in waits for the next step,
+ * then sounds; stopped, it is in at once */
+static void test_swap(void)
+{
+    static int16_t pcm2[200000];
+    static brk_break_t b2;
+    uint32_t sl;
+    float pk;
+    fresh(1);
+    brk_synth_break(pcm2, RATE, BPM, 1u, &b2);
+    sl = brk_step_len_samples();
+    brk_play(1);
+    render(buf, sl * 3u + sl / 4u, 0, 0, 0);     /* a quarter into step 3 */
+    brk_mute(1);
+    render(buf, 512u, 0, 0, 0);                   /* (the fade: two renders) */
+    pk = render(buf, sl / 4u, 0, 0, 0);
+    CHECK(pk < 1e-4f, "muted: silent (%.5f)", pk);
+    brk_swap_break(&b2);
+    render(buf, sl / 8u, 0, 0, 0);
+    CHECK(brk_get_break() == &brk, "the new break waits for the next step");
+    pk = render(buf, sl, 0, 0, 0);                /* past step 4's start */
+    CHECK(brk_get_break() == &b2 && pk > 0.01f, "in on the next step, and sounding (%.3f)", pk);
+    brk_play(0);
+    render(buf, 1024u, 0, 0, 0);
+    brk_swap_break(&brk);
+    render(buf, 256u, 0, 0, 0);
+    CHECK(brk_get_break() == &brk, "stopped: in at once");
+}
+
 /* the snap: where a key pressed while playing begins. A 1-bar break of 16 slices: a slice is a 16th */
 static void test_snap(void)
 {
@@ -1386,6 +1415,7 @@ int main(int argc, char **argv)
     test_clock();
     test_keep_length();
     test_gate();
+    test_swap();
     test_snap();
     test_reverb();
     test_stop();

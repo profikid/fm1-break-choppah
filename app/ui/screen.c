@@ -154,7 +154,8 @@ static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now
         } else
             cv_rect(8, 9, 10, 10, C_DIM);
         {                                /* the break, the pattern (> one queued), REC */
-            int32_t x = cv_text(24, 6, &FONT_B, b ? b->name : "NO BREAK", C_WHITE);
+            int32_t x = cv_text(24, 6, &FONT_B, b ? break_name(set.brk) : "NO BREAK",   /* (amber: still to come) */
+                                brk_next >= 0 ? C_AMB : C_WHITE);
             t[0] = 'P';
             int_text((int32_t)set.pattern + 1, t + 1);
             if (pat_next >= 0)

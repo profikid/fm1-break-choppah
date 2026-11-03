@@ -72,19 +72,16 @@ static void knob_turn(int k, int32_t d)
     changed();
 }
 
-/* a break change while running, without blocking: the render gets no break (silence), and once two renders have
- * passed (it has let go of pcm_a) app_frame loads the new one */
-static int32_t brk_next = -1;
-static uint32_t brk_mark;
+/* a break change (ALGORITHM): its name at once, the break itself at the next bar. Playing, break_poll waits for
+ * the bar's last 16th, mutes the break (it runs on, the clock and the drums too), decodes the new one over pcm_a
+ * once the fade is done, and the render swaps it in on the next step: the bar's first. Stopped: at once */
 static void break_ask(uint32_t i)
 {
     set.brk = (uint8_t)i;                /* turning on fast just moves the target */
-    if (brk_next < 0) {
-        brk_set_break(0);
-        brk_mark = brk_renders();
-    }
     brk_next = (int32_t)i;
     set_dirty = 1u;
+    app_say(playing_now() ? "NEXT BREAK" : "BREAK", break_name(i));
+    ui.redraw |= RG_HEAD;
 }
 
 /* GLOBAL's RESET ALL: every setting and pattern to the start, saved (the Bluetooth pairings stay: OBJ_BLE) */
@@ -109,11 +106,26 @@ static void reset_all(void)
 }
 static void break_poll(void)
 {
-    if (brk_next >= 0 && brk_renders() - brk_mark >= 2u) {
-        break_load((uint32_t)brk_next);
-        brk_next = -1;
-        app_say("BREAK", brk_get_break()->name);
+    static uint32_t mark;
+    static uint8_t muting;
+    if (brk_next < 0)
+        return;
+    if (!muting) {
+        brk_status_t st;
+        brk_status(&st);
+        if (st.playing && st.bar16 >= 0 && st.bar16 != 15)
+            return;                      /* playing: not before the bar's last 16th */
+        brk_mute(1);
+        mark = brk_renders();
+        muting = 1u;
+        return;
     }
+    if (brk_renders() - mark < 2u)       /* the fade out done */
+        return;
+    brk_swap_break(break_load((uint32_t)brk_next));
+    brk_next = -1;
+    muting = 0u;
+    ui.redraw |= RG_ALL;
 }
 
 /* white keys held into a page where they don't play slices: let the engine's loops go */

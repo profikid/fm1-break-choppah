@@ -1,10 +1,13 @@
-# CHOPPAH: ALGORITHM steps through every break, and each one sounds (the 8 of breaks/breaks.txt), round to the first again
+# CHOPPAH: ALGORITHM steps through every break, and each one sounds (the 8 of breaks/breaks.txt), round to the first again.
+# The name shows at once (amber), the break itself comes in at the next bar
 wait 2600
 tap PLAY
 wait 600
 shot a_start.png
 turn ALGO 1
-wait 400
+wait 60
+shot a_next.png
+wait 340
 peakreset
 wait 1200
 expect peak_db_min -30

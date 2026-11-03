@@ -126,6 +126,10 @@ typedef struct {
 
 void brk_init(void);
 void brk_set_break(const brk_break_t *b);   /* main loop; takes effect at once (call stopped, or at a bar) */
+void brk_mute(int on);                   /* the break silent (an 8 ms fade), the clock and the steps running on */
+void brk_swap_break(const brk_break_t *b);   /* b takes over at the next step (stopped: the next render), its
+                                          * voices clean, and the mute ends. Swapping while the old break
+                                          * plays muted lets the main loop rewrite its PCM meanwhile */
 const brk_break_t *brk_get_break(void);
 
 void brk_play(int on);
