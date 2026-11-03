@@ -4,6 +4,8 @@
 
   tools/site_style.py SITE_DIR
 
+- install/index.html (fm1-base's installer): site.css and app/site/install.css in place of its style, and the
+  site's header above it; its markup and script stay as they are;
 - index.html and manual/index.html: app/site/site.css (with its fonts) in place of fm1-base's style, a class on
   <body> for each page, and a "Controls" link in the site's header (to the manual's control map);
 - manual/index.html: the control map (app/site/controlmap.html: explorer, buttons, the whole map, who owns the
@@ -40,9 +42,9 @@ SPY = """<script>
 """
 
 
-def restyle(path, cls, controls_href):
+def restyle(path, cls, controls_href, extra=""):
     s = path.read_text(encoding="utf-8")
-    css = (APP / "site" / "site.css").read_text(encoding="utf-8")
+    css = (APP / "site" / "site.css").read_text(encoding="utf-8") + extra
     s, n = re.subn(r"<style>.*?</style>", lambda m: FONTS + "<style>" + css + "</style>", s, count=1, flags=re.S)
     if n != 1:
         raise SystemExit(f"{path}: no <style> to replace")
@@ -55,8 +57,27 @@ def restyle(path, cls, controls_href):
     return s
 
 
+def install(site):
+    """the installer: CHOPPAH's style, and the site's header (the same pages as the manual's) above its main"""
+    page = site / "install" / "index.html"
+    if not page.exists():
+        return
+    s = restyle(page, "install", "", (APP / "site" / "install.css").read_text(encoding="utf-8"))
+    conf = (APP / "fm1.toml").read_text(encoding="utf-8")
+    name = re.search(r'^name\s*=\s*"([^"]+)"', conf, re.M)
+    repo = re.search(r'^repo\s*=\s*"([^"]+)"', conf, re.M)
+    name = name.group(1) if name else "CHOPPAH"
+    header = ('<div class="page"><header class="site"><a class="home" href="../">' + name + '</a><nav>'
+              '<a href="../emu/">Emulator</a><a href="../install/" aria-current="page">Install</a>'
+              '<a href="../manual/">Manual</a><a href="../manual/#controls">Controls</a>' +
+              (f'<a href="{repo.group(1)}">Source</a>' if repo else "") + '</nav></header></div>\n')
+    s = s.replace('<body class="install">', '<body class="install">\n' + header, 1)
+    page.write_text(s, encoding="utf-8")
+
+
 def main(site):
     site = Path(site)
+    install(site)
     home = site / "index.html"
     if home.exists():
         home.write_text(restyle(home, "home", "manual/#controls"), encoding="utf-8")
