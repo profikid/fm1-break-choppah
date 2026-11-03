@@ -419,6 +419,11 @@ data first, header last, so a cut upload leaves the old header valid or nothing 
   web installer page (Chrome/Edge). Update mode on the FM-1: hold **OCT− + OCT+ for 5 s**.
 - **Rollback:** the web installer can put M-VAVE's own firmware back. Keep a stock firmware file locally
   before the first flash.
+- **The update screen** (3 Nov 2026): while the package is written the FM-1 shows CHOPPAH's own: black, the slice
+  mark filling in amber with the write, UPDATING, DO NOT UNPLUG, a bar of amber segments. It is the update loader's
+  screen (felucca-bsp `loader/ldr_screen.c`, no hook): `build.sh` swaps in `app/loader/ldr_screen.c` for device builds
+  and restores felucca-bsp's after; only the drawing differs (the panel's start, the functions, RAM-only buffers as
+  the original). The loader ships in the package, so the screen shows when that package is installed.
 - **Safe mode:** fm1-base starts in safe mode after two failed boots, and the installer can still reach it.
 - **Last resort:** if the chip's own update mode shows up (USB 4C4A:8057), `base/bsp/tools/fm1_rescue.sh`
   restores stock firmware from a Mac.

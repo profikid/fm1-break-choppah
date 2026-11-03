@@ -37,6 +37,14 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - Releases are automatic: every push to main is the last `vX.Y` tag + 1 minor (`scripts/next_version.sh`, floor
   `VERSION`). Don't tag by hand or bump `VERSION` for a minor; raise `VERSION` only for a new major.
 
+## The update screen
+
+The screen the FM-1 shows while an update is written ("UPDATING", "DO NOT UNPLUG", the bar) is the update loader's,
+built from felucca-bsp (`base/bsp/loader/`), which has no hook: `build.sh` copies `app/loader/ldr_screen.c` over
+`base/bsp/loader/ldr_screen.c` for a device build and puts the original back when it ends (never commit the
+submodule changed). Keep its function names, the panel's start and RAM-only buffers as felucca-bsp's: the loader runs
+while the app area is rewritten. It ships in the package, so it shows when that package is installed.
+
 ## Site
 
 `base/tools/make_site.py` builds the GitHub Pages site; `tools/site_style.py` then gives it CHOPPAH's look

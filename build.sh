@@ -43,4 +43,19 @@ esac
 [ -f base/tools/build.py ] || { echo "build.sh: no fm1-base in base/ (scripts/bootstrap.sh)"; exit 1; }
 bank
 "$PY" -c 'import PIL' 2>/dev/null || { echo "build.sh: $PY has no Pillow (scripts/bootstrap.sh)"; exit 1; }
-exec "$PY" base/tools/build.py app "$@"
+# CHOPPAH's update screen (app/loader/ldr_screen.c) in place of felucca-bsp's while the firmware builds: the update
+# loader (which draws "UPDATING", "DO NOT UNPLUG" and the bar while the flash is rewritten) is built from felucca-bsp
+# and has no hook of its own. The original is put back when the build ends, however it ends.
+case "$1" in
+    --host|--web) ;;
+    *)
+        LS=base/bsp/loader/ldr_screen.c
+        if [ -f app/loader/ldr_screen.c ] && [ -f "$LS" ]; then
+            mkdir -p app/build
+            cp "$LS" app/build/ldr_screen.felucca.c
+            trap 'cp app/build/ldr_screen.felucca.c "$LS"' EXIT
+            trap 'exit 1' INT TERM
+            cp app/loader/ldr_screen.c "$LS"
+        fi ;;
+esac
+"$PY" base/tools/build.py app "$@"
