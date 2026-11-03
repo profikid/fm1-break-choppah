@@ -75,7 +75,7 @@ The panel works in two layers. **Keys** are always the instrument; **buttons** p
 | **HOME** | Main screen; **hold HOME + PLAY** = reset to bar 1; **HOME + SELECT** = tempo |
 | **REC** | Looper: record → loop → overdub → loop (§4.3); hold = clear |
 | **SEQ** | Step sequencer edit |
-| **ARP** | Generator (the randomising algorithm, §4.2) |
+| **ARP** | SEL + ARP: randomize (the generator itself is HOME's second part since 3 Nov 2026; ARP alone is free) |
 | **EDIT** | Break / slice editor |
 | **FX** | DSP effects page (§4.5) |
 | **ENV** | Slice envelope and gate |
@@ -118,7 +118,7 @@ Based on the behaviour of BB Gen / X0X's break part and ABG's "randomizing algor
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| A-10 | **Generator** (ARP page) rearranges slices as the loop plays. Parameters: **COMPLEXITY** (chance of jumping instead of playing the next slice), **ANCHOR** (keep kick/snare slices on 1 and 3), **ROLL** (repeat or neighbour-slice chance), **FILL** (rule-breaking in the last bar of a phrase) | P0 | COMPLEXITY 0 = straight loop, bit-exact with plain playback |
+| A-10 | **Generator** (HOME's second part, HOME again; the ARP page until 3 Nov 2026) rearranges slices as the loop plays. Parameters: **COMPLEXITY** (chance of jumping instead of playing the next slice), **ANCHOR** (keep kick/snare slices on 1 and 3), **ROLL** (repeat or neighbour-slice chance), **FILL** (rule-breaking in the last bar of a phrase) | P0 | COMPLEXITY 0 = straight loop, bit-exact with plain playback |
 | A-11 | **RANDOMIZE** one-shot: SEL+ARP writes a new random pattern into the current sequence | P0 | Undo with a second SEL+ARP within 4 s |
 | A-12 | Phrase length 2/4/8/16 bars (fills land on the phrase's last bar) | P1 | |
 | A-13 | Deterministic seed per pattern (same seed → same variations), and a "lock" so a pattern you like can be recalled | P1 | |
@@ -298,7 +298,7 @@ on the keys, eyes on the crowd.
 | HOME (perform) | Gate | DJ filter on the break | FX | Complexity | Tempo (tap) |
 | LFO (mixer, built) | Break level | Kick level | Snare and hat level | FX | LFO again: swing · drums route |
 | SEQ (built) | Step slice | Step pitch | Hits (ratchet) | Reverse | ALGORITHM: the lane |
-| ARP (generator) | Complexity | Anchor | Roll | Fill | Retrig 2× · 3× · 4× · 8× |
+| HOME again (generator) | Complexity | Anchor | Roll | Fill | Retrig 2× · 3× · 4× · 8× |
 | EDIT (break) | Slice select | Start nudge | Slice count | Native BPM | Gain · Trim · Name · Mode (repitch/stretch) |
 | FX | Focused FX param 1 | param 2 | param 3 | Mix | Next FX · on/off |
 | ENV (snare / hat, built) | Level | Tune | Decay | Tone | ENV again: snap / cut · drive |

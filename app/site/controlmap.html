@@ -162,14 +162,11 @@
   if (!root) return;
   const $ = (n) => root.querySelector('[data-cm="' + n + '"]');
   const PAGES = [
-    { id: "home", btn: "HOME", name: "PERFORM", sub: "Gate, filter, FX, complexity", again: "nothing", subs: [
-      { n: "PERFORM", k: ["GATE", "DJ FILTER", "FX", "COMPLEXITY"], strip: "16 SLICE BLOCKS", note: "the slice playing lit; a held key outlined" } ],
+    { id: "home", btn: "HOME", name: "PERFORM · GENERATOR", sub: "Play; how the break rearranges", again: "next part (2)", subs: [
+      { n: "PERFORM", k: ["GATE", "DJ FILTER", "FX", "COMPLEXITY"], strip: "16 SLICE BLOCKS", note: "the slice playing lit; a held key outlined" },
+      { n: "GENERATOR", k: ["COMPLEXITY", "ANCHOR", "ROLL", "FILL"], strip: "16 SLICE BLOCKS", note: "HOME again" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
-      notes: [["SEL", "Pressed alone: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["SEL + SAVE", "Undo / redo the last pattern wipe"]] },
-    { id: "arp", btn: "ARP", name: "GENERATOR", sub: "How the break rearranges", again: "nothing", subs: [
-      { n: "GENERATOR", k: ["COMPLEXITY", "ANCHOR", "ROLL", "FILL"], strip: "16 SLICE BLOCKS", note: "as on HOME" } ],
-      algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
-      notes: [["SEL + ARP", "A random pattern over the one playing (SEL + SAVE undoes)"]] },
+      notes: [["SEL", "Pressed alone: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["SEL + ARP", "A random pattern over the one playing (SEL + SAVE undoes)"]] },
     { id: "fx", btn: "FX", name: "FX CHAIN", sub: "Four slots in series", again: "next slot (4)", part: true, subs: [1, 2, 3, 4].map(n =>
       ({ n: "SLOT " + n, k: ["PARAM 1", "PARAM 2", "PARAM 3", "MIX"], strip: "THE CHAIN: 4 SLOTS", note: n === 1 ? "the focused slot outlined" : "" })),
       algo: "Slot", presets: "Effect", keys: "slices",

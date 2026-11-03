@@ -56,7 +56,7 @@ The slicer view, top to bottom:
 - **Pads:** the eleven black-key pads, lit while held.
 - **Knobs:** the page's four knobs and their values.
 
-**The rules.** ALGORITHM picks what you edit on the page (an FX slot, a drum's part, a SEQ lane, GLOBAL's part); on HOME, ARP and the MIXER, where there is nothing to pick, it is the break. PRESETS picks what goes
+**The rules.** ALGORITHM picks what you edit on the page (an FX slot, a drum's part, a SEQ lane, GLOBAL's part); on HOME (both its parts) and the MIXER, where there is nothing to pick, it is the break. PRESETS picks what goes
 in (an effect, a kick, a snare or hat sound); elsewhere it is the pattern. **SEQ is where everything is sequenced**
 (the break's steps and the kick, snare and hat lanes), **EDIT where the drums' sounds are made** (kick, snare, hat);
 the white keys play slices everywhere but SEQ and ENV (tap tempo). **SEL + ALGORITHM is the break and SEL +
@@ -80,7 +80,7 @@ lists its combinations (SEL again, or any other button, key or knob, closes it).
 | PRESETS | The pattern, P1–P16 (§5); while playing the new one starts at the end of the loop |
 | SEQ · REC | The sequencer; recording the keys into the pattern (§5). SEL + REC: clear the pattern (SEL + SAVE takes it back) |
 | MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 36 the kick, 38 the snare, 42 / 44 / 46 the hat (§8); any channel |
-| ALGORITHM | (HOME, ARP, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
+| ALGORITHM | (HOME, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
 | MASTER | Volume |
 
 ### Tap tempo
@@ -392,7 +392,7 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | HOME (perform) | Gate | DJ filter on the break (left low-pass, right high-pass) | FX (the MIXER's) | Complexity (the GENERATOR's) |
 | LFO (mixer) | Break level | Kick level | Snare and hat level | FX (the chain, dry to wet) |
 | LFO again (groove) | Swing | Drums: through the chain or around it | | |
-| ARP (generator) | Complexity | Anchor | Roll | Fill |
+| HOME again (generator) | Complexity | Anchor | Roll | Fill |
 | FX (the chain) | the focused slot's effect: its three settings | | | Its mix |
 | SEQ (patterns) | Slice | Pitch | Hits | Reverse |
 | SEQ, a drum lane | Fill | Rotate | Clear / 4x4 | Copy |
@@ -410,7 +410,7 @@ the slice lit in the waveform shrinks with it. It covers the loop's slices, ratc
 
 The generator rearranges the break as it plays: **complexity** is how often it jumps, **anchor** keeps the kick and
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
-of a phrase. SEL + ARP writes a random pattern.
+of a phrase; it is HOME's second part (HOME again). SEL + ARP writes a random pattern (ARP alone is free now).
 
 ## 11. The control map
 

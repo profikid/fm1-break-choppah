@@ -41,6 +41,7 @@ static struct {
     uint32_t help_t, tap_last;           /* when the card opened; the last tap (TAP's flash) */
     uint8_t drawn_page;                  /* the page last drawn (TAP takes the whole screen: leaving it redraws all) */
     uint32_t lobo_t;                     /* RESET ALL done: the lobotomy screen, since then (0: not showing) */
+    uint8_t home_hold, home_combo;       /* HOME held on its page (up alone: its other part); PLAY pressed meanwhile */
     uint8_t fx_hold, fx_turned;          /* FX held on the FX page (up alone: the next slot); a knob turned meanwhile */
     uint32_t reset_t;                    /* GLOBAL's RESET ALL: when it was first turned (it asks twice) */
     uint32_t mix_drawn;                  /* its faders' meters: when last drawn */

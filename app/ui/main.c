@@ -204,6 +204,21 @@ static void input(void)
     int k;
     if (keys != ui.keys || btn != ui.btn)
         ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
+    if (ui.lobo_t) {                     /* RESET ALL's screen up: a press only ends it (app_frame), it does nothing */
+        for (i = 0; i < 16u; i++)        /* (but what is let go is let go: no key loop or pad left on) */
+            if (kup >> WK[i] & 1u)
+                brk_key((int)i, 0);
+        for (i = 0; i < 11u; i++)
+            if (kup >> BK[i] & 1u)
+                brk_pad((int)i, 0);
+        for (k = 0; k < NE; k++)
+            if (plat_enc(k))
+                ui.touched = 1u;
+        ui.home_hold = ui.fx_hold = ui.tap_pend = 0u;
+        ui.keys = keys;
+        ui.btn = btn;
+        return;
+    }
     for (i = 0; i < 16u; i++) {          /* white keys: slices, or on the soundboard its sounds */
         if (ui.page == PG_TAP) {         /* the TAP page: every white key taps */
             if (kdn >> WK[i] & 1u)
@@ -256,14 +271,28 @@ static void input(void)
         if (btn & 1u << B_HOME) {        /* HOME + PLAY: back to bar 1 */
             transport(st.playing, 1);
             app_say("RESET", "");
+            ui.home_combo = 1u;          /* (not HOME's next part) */
         } else
             transport(!st.playing, 0);
         muted = 0u;
     }
-    if (bdn & 1u << B_HOME) {
-        ui.page = PG_HOME;
-        ui.redraw |= RG_FOOT | RG_BLOCKS;
-        page_say();
+    if (bdn & 1u << B_HOME) {            /* HOME: PERFORM; again (let go alone), GENERATOR, and back */
+        if (ui.page == PG_HOME || ui.page == PG_GEN) {
+            ui.home_hold = 1u;
+            ui.home_combo = 0u;
+        } else {
+            ui.page = PG_HOME;
+            ui.redraw |= RG_FOOT | RG_BLOCKS;
+            page_say();
+        }
+    }
+    if (ui.home_hold && !(btn & 1u << B_HOME)) {
+        ui.home_hold = 0u;
+        if (!ui.home_combo && (ui.page == PG_HOME || ui.page == PG_GEN)) {
+            ui.page = ui.page == PG_HOME ? PG_GEN : PG_HOME;
+            ui.redraw |= RG_FOOT | RG_BLOCKS;
+            page_say();
+        }
     }
     if (bdn & 1u << B_GLO)               /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, BT audio */
         global_part(ui.page == PG_GLOBAL ? (ui.gpage + 1u) % 3u : 0u);
@@ -304,18 +333,13 @@ static void input(void)
         app_say("REC", ui.rec ? "ON" : "OFF");
         ui.redraw |= RG_HEAD;
     }
-    if (bdn & 1u << B_ARP) {
-        if (btn & 1u << B_SEL) {         /* SEL + ARP: a random pattern (SEL + SAVE takes it back) */
-            undo_mark(UNDO_RANDOM);
-            brk_randomize();
-            pat_read_back();             /* (into the pattern playing: SAVE keeps it) */
-            set_dirty = 1u;
-            app_say("RANDOMIZE", "");
-        }
-        ui.page = PG_GEN;
-        ui.redraw |= RG_FOOT | RG_BLOCKS;
-        if (!(btn & 1u << B_SEL))
-            page_say();
+    if (bdn & 1u << B_ARP && btn & 1u << B_SEL) {   /* SEL + ARP: a random pattern (SEL + SAVE takes it back) */
+        undo_mark(UNDO_RANDOM);              /* (the generator itself is HOME's second part; ARP alone is free) */
+        brk_randomize();
+        pat_read_back();                 /* (into the pattern playing: SAVE keeps it) */
+        set_dirty = 1u;
+        app_say("RANDOMIZE", "");
+        ui.redraw |= RG_BLOCKS;
     }
     if (bdn & 1u << B_FX && key_tuned() >= 0) {   /* FX with a key held: its knobs, loop <-> slice effect */
         ui.key_layer ^= 1u;
@@ -486,7 +510,7 @@ static void leds(void)
     brk_status(&st);
     if (st.playing)
         b |= 1u << B_PLAY;
-    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_ARP, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_EDIT, B_ENV};
+    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_HOME, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_EDIT, B_ENV};
     b |= 1u << PAGE_BTN[ui.page];
     if (ui.rec)
         b |= 1u << B_REC;
@@ -581,7 +605,7 @@ static int32_t tab(int32_t x, const char *s, int on)
 }
 static void draw_tabs(void)
 {
-    static const char *const BTN[NPAGES] = {"HOME", "ARP", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV"};
+    static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV"};
     static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
     static const char *const SLOT[4] = {"1", "2", "3", "4"};
     static const char *const DRUM[3] = {"KICK", "SNARE", "HAT"};
@@ -592,10 +616,10 @@ static void draw_tabs(void)
     part[0] = 0;
     cv_begin(240, 14, C_BLACK);
     x = cv_text(4, 1, &FONT_T, BTN[ui.page % NPAGES], C_WHITE) + 6;
-    if (ui.page == PG_HOME)
-        tab(x, "PERFORM", 1);
-    else if (ui.page == PG_GEN)
-        tab(x, "GENERATOR", 1);
+    if (ui.page == PG_HOME || ui.page == PG_GEN) {   /* HOME: PERFORM, GENERATOR */
+        x = tab(x, "PERFORM", ui.page == PG_HOME);
+        tab(x, "GENERATOR", ui.page == PG_GEN);
+    }
     else if (ui.page == PG_GLOBAL)
         for (i = 0; i < 3u; i++)
             x = tab(x, GPART[i], i == ui.gpage);
@@ -630,7 +654,7 @@ static void draw_tabs(void)
  * ("GLO PITCH", "EDIT KICK SUB FX", "FX SLOT 2 TREMOLO", "SEQ HAT", "ENV TAP TEMPO") */
 static void page_say(void)
 {
-    static const char *const BTN[NPAGES] = {"HOME", "ARP", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV"};
+    static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV"};
     static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
     static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
     char t[24];

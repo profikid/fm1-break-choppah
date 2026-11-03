@@ -2,14 +2,15 @@
 # and the part in the header (as its tabs show), and lights its button
 #   app/build/host/choppah_host tests/scenarios/pages.txt app/build/scenarios
 wait 2600
+expect page 0
+tap HOME
+wait 120
+expect page 1
+shot n_arp.png
 tap HOME
 wait 120
 expect page 0
 shot n_home.png
-tap ARP
-wait 120
-expect page 1
-shot n_arp.png
 tap FX
 wait 120
 expect page 2

@@ -104,9 +104,19 @@ wait 300
 shot sel_help_fx.png
 tap SEL
 wait 200
-tap ARP
-wait 150
-shot pg_arp.png
 tap HOME
 wait 150
+expect page 0
 shot pg_home.png
+tap HOME
+wait 150
+expect page 1
+shot pg_arp.png
+press HOME
+tap PLAY
+release HOME
+wait 150
+expect page 1
+tap ARP
+wait 150
+expect page 1
