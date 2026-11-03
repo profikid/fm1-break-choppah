@@ -821,6 +821,7 @@ void app_ui_init(void)
     ui.last_step = ui.last_slice = -2;
     ui.intro = 1u;                       /* the start screen first */
     ui.intro_t0 = plat_ms();
+    ui.idle_t = ui.intro_t0;
     ui.intro_drawn = 0u;
     ui.touched = 0u;
     ui.pad_focus = ui.key_focus = -1;
@@ -835,8 +836,9 @@ void app_frame(void)
     uint32_t now = plat_ms(), hdr;
     input();
     break_poll();
-    if (ui.touched || !ui.idle_t)
-        ui.idle_t = now | 1u;
+    if (ui.touched)                      /* (the time itself: "now | 1" was a millisecond ahead half the time, and
+                                          * now - idle_t then wrapped round to the demo at once) */
+        ui.idle_t = now;
     if (demo.on) {                       /* the demo: until anything is touched (that touch does nothing else) */
         if (ui.touched) {
             ui.touched = 0u;
@@ -848,7 +850,7 @@ void app_frame(void)
             return;
         }
     } else if (!ui.intro && !ui.lobo_t &&
-               now - ui.idle_t > (playing_now() ? DEMO_IDLE_PLAY_MS : DEMO_IDLE_MS)) {
+               (int32_t)(now - ui.idle_t) > (int32_t)(playing_now() ? DEMO_IDLE_PLAY_MS : DEMO_IDLE_MS)) {
         slices_let_go(ui.keys);
         ui.help = 0u;
         demo_start(now);
