@@ -279,7 +279,7 @@ on the keys, eyes on the crowd.
 | B-47 | **SEL pressed alone** (held a second until 3 Nov 2026, when tap tempo left SEL): the strip lists the SEL combinations (FX page: SEL + FX, FX + ALGO); SEL again, or any other button, key or knob, closes it | P2 | *Done; scenario controls.txt* |
 | B-50 | **EDIT's drums show their waveforms** (3 Nov 2026): the lower strip's three boxes each draw one hit of the drum (`kick_shape`, `perc_shape`: offline, worked out again when its settings change), over a window fitting its decay, as tall as the box | P2 | *Done; engine test: perc_shape a hit, then its tail* |
 | B-48 | **SEQ sequences, EDIT designs** (3 Nov 2026, the user's call): the drums' steps live on SEQ's lanes only (the white keys play slices on every other page); EDIT holds the kick, the snare and the hat (EDIT again: the next drum; ALGORITHM the drum's part: the kick's 11 = MIX, each layer and its FX, MACRO, OUT; the snare's / hat's SOUND, SHAPE); the lower strip shows the three drums, lit on their hits. ENV went to tap tempo (A-38) | P1 | *Done; scenarios kick.txt, perc.txt* |
-| B-49 | **A tab bar** replaces B-41's dots: under the waveform (now 32 rows), the button's name as printed, then the page's parts as tabs (the one you are on filled amber), and on EDIT / FX the part edited, "< SUB FX >"; the help line (B-43) under it | P1 | *Done* |
+| B-49 | **A tab bar** replaces B-41's dots: right under the header on every page (since 3 Nov 2026; first under the waveform), tap tempo's too, the button's name as printed, then the page's parts as tabs (the one you are on filled amber), and on EDIT / FX the part edited, "< SUB FX >"; the help line (B-43) under it | P1 | *Done* |
 
 ### 5.4 Performance screen (HOME)
 

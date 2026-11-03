@@ -594,7 +594,7 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
         fx_value(ui.fx_focus, i, t);
 }
 
-/* the tab bar under the waveform: the button's name, then the page's parts as tabs (the one you are on lit: the
+/* the tab bar under the header: the button's name, then the page's parts as tabs (the one you are on lit: the
  * button again, or ALGORITHM, goes to the next); EDIT and FX also name the part edited, "< SUB FX >" */
 static int32_t tab(int32_t x, const char *s, int on)
 {
@@ -620,6 +620,8 @@ static void draw_tabs(void)
         x = tab(x, "PERFORM", ui.page == PG_HOME);
         tab(x, "GENERATOR", ui.page == PG_GEN);
     }
+    else if (ui.page == PG_TAP)
+        tab(x, "TAP TEMPO", 1);
     else if (ui.page == PG_GLOBAL)
         for (i = 0; i < 3u; i++)
             x = tab(x, GPART[i], i == ui.gpage);
@@ -647,7 +649,7 @@ static void draw_tabs(void)
         text_cat(t, " >");
         cv_text(236 - text_w(&FONT_T, t), 1, &FONT_T, t, C_HI);
     }
-    cv_blit(0, 74);
+    cv_blit(0, 30);                      /* (right under the header, on every page) */
 }
 
 /* the header, when a page opens or turns to another part: the button as printed and the part as its tab shows it
@@ -723,8 +725,7 @@ static void draw_foot(const brk_status_t *st)
                                               {"TEMPO", "FINE", "HALF / X2", "CLICK"}};
     uint32_t i;
     char t[16];
-    if (ui.page != PG_TAP)               /* (TAP draws those rows itself) */
-        draw_tabs();
+    draw_tabs();
     cv_begin(240, 48, C_BLACK);
     for (i = 0; i < 11u; i++) {
         int on = (st->pads >> i) & 1u;
@@ -809,7 +810,7 @@ void app_frame(void)
         }
     }
     if ((ui.page == PG_TAP) != (ui.drawn_page == PG_TAP)) {   /* into or out of TAP: the whole screen again */
-        lcd_fill(0, 30, 240, 162, C_BLACK);
+        lcd_fill(0, 44, 240, 148, C_BLACK);
         ui.redraw = RG_ALL;
     }
     ui.drawn_page = ui.page;

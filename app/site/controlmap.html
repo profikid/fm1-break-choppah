@@ -34,8 +34,8 @@
 .cmap .zone { position: absolute; left: 0; right: 0; display: flex; align-items: center; padding: 0 6px; font-size: 9px; letter-spacing: .03em; }
 .cmap .z-head { top: 0; height: 11.7%; border-bottom: 1px solid #2a2a2a; color: #fff; justify-content: space-between; }
 .cmap .z-head b { color: var(--amber); font-weight: 500; }
-.cmap .z-wave { top: 12.5%; height: 18.3%; }
-.cmap .z-tabs { top: 30.8%; height: 5.8%; gap: 3px; font-size: 7px; color: #fff; }
+.cmap .z-wave { top: 18.3%; height: 18.3%; }
+.cmap .z-tabs { top: 12.5%; height: 5.8%; gap: 3px; font-size: 7px; color: #fff; }
 .cmap .z-tabs span { background: #1f1f1f; color: #9a9a9a; padding: 1px 3px; border-radius: 1px; }
 .cmap .z-tabs span.on { background: var(--amber); color: #000; }
 .cmap .z-tabs em { margin-left: auto; color: var(--amber); font-style: normal; }
@@ -231,8 +231,7 @@
       (p.part ? "<em>&lt; " + (p.id === "edit" ? s.n.split(" · ")[1] : "TREMOLO") + " &gt;</em>" : "");
     $("strip").innerHTML = s.strip + (s.note ? "<em>" + s.note + "</em>" : "");
     $("knobs").innerHTML = s.k.map((k, i) => k ? "<div>" + k + "<b>·····</b></div>" : '<div class="empty">K' + (i + 1) + "<b>&nbsp;</b></div>").join("");
-    $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter", 1], ["WAVEFORM", "The break, the slice lit, the playhead", 1],
-      ["TABS", p.btn + " › " + tabs.join(" · "), 0],
+    $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter", 1], ["TABS", p.btn + " › " + tabs.join(" · "), 0], ["WAVEFORM", "The break, the slice lit, the playhead", 1],
       ["STRIP", s.strip.toLowerCase(), 0], ["PADS", "11 pads, lit while held", 1], ["KNOBS", s.k.map(k => k || "—").join(" · "), 0]]
       .map(([a, b, same]) => "<div><dt>" + a + '</dt><dd class="' + (same ? "same" : "") + '">' + b + "</dd></div>").join("");
     const encs = [["SELECT", "Tempo (SEL: 0.1)", "on"], ["ALGORITHM", p.algo, "on"], ["PRESETS", p.presets, "on"]]
