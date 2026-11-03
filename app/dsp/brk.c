@@ -916,7 +916,7 @@ void brk_render(float *out, uint32_t n)
         {
             float fxp = 0.0f;            /* the pads' own pitch: the roll's ramp, the freeze's offset */
             if (roll_slice >= 0)
-                fxp += brk_clampf((float)roll_n * p_ps.roll_pitch, -24.0f, 24.0f);
+                fxp += brk_clampf((float)roll_n * p_ps.roll_pitch, -36.0f, 36.0f);
             if ((pads_now >> PAD_FREEZE) & 1u)
                 fxp += p_ps.frz_pitch;
             fxp += key_pitch;

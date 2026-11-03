@@ -97,7 +97,15 @@ static void pad_knob_turn(int pad, int k, int32_t d)
     case 0:
         if (k == 0) p->roll_div[pad] = (uint8_t)clamp((int32_t)p->roll_div[pad] + d, 0, BRK_ROLL_DIVS - 1);
         else if (k == 1) p->roll_decay = knob_f(p->roll_decay, d, 0.02f, -0.9f, 0.9f);
-        else if (k == 2) p->roll_pitch = knob_f(p->roll_pitch, d, 0.5f, -3.0f, 3.0f);
+        else if (k == 2) {               /* 0.1 a detent, 0.5 turned fast (a run of detents < 40 ms apart) */
+            static uint32_t last, run;
+            uint32_t now = plat_ms();
+            float v;
+            run = now - last < 40u ? run + 1u : 0u;
+            last = now;
+            v = knob_f(p->roll_pitch, d, run >= 3u || d > 2 || d < -2 ? 0.5f : 0.1f, -12.0f, 12.0f);
+            p->roll_pitch = (float)(int32_t)(v * 10.0f + (v < 0.0f ? -0.5f : 0.5f)) * 0.1f;   /* (on the tenth) */
+        }
         else p->roll_level = (uint8_t)clamp((int32_t)(p->roll_level ? p->roll_level : 100u) + d * 5, 5, 100);
         break;
     case PAD_REVERSE: p->rev_speed = knob_f(p->rev_speed, d, 0.05f, 0.5f, 2.0f); break;

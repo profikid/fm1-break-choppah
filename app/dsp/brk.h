@@ -60,7 +60,7 @@ typedef struct {
     uint8_t rsv[2];
     float roll_decay;                    /* -0.9..0.9: > 0 each repeat this much quieter, < 0 louder (a swell up to
                                           * full) */
-    float roll_pitch;                    /* -3..+3 semitones a repeat */
+    float roll_pitch;                    /* -12..+12 semitones a repeat (the sum held to +-36) */
     float rev_speed;                     /* 0.5..2 */
     float frz_pitch;                     /* -12..+12 semitones */
     float half_speed;                    /* 0.25..0.75 */

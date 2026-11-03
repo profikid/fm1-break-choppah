@@ -1009,8 +1009,8 @@ int app_expect(const char *what, int *got)
 {
     static const char *const W[] = {"page", "gpage", "kpage", "seq_lane", "fx_focus", "fx_on", "lane_kick",
                                     "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo",
-                                    "fill", "fill_armed", "fill_type"};
-    int v[17];
+                                    "fill", "fill_armed", "fill_type", "roll_pitch_x10"};
+    int v[18];
     brk_status_t bs;
     uint32_t i;
     v[0] = ui.page;
@@ -1031,7 +1031,8 @@ int app_expect(const char *what, int *got)
     v[14] = bs.fill;
     v[15] = bs.fill_armed;
     v[16] = set.fill_type;
-    for (i = 0; i < 17u; i++)
+    v[17] = (int)(set.pads.roll_pitch * 10.0f + (set.pads.roll_pitch < 0.0f ? -0.5f : 0.5f));
+    for (i = 0; i < 18u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

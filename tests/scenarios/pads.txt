@@ -87,3 +87,23 @@ expect peak_db_min -30
 tap SAVE
 wait 50
 expect store_writes 2
+# the roll's pitch: 0.1 semitone a detent, 0.5 turned fast, -12 .. +12 a repeat
+key b0 down
+wait 100
+turn K3 1 10
+wait 50
+expect roll_pitch_x10 1
+turn K3 2 10
+wait 50
+expect roll_pitch_x10 3
+turn K3 -4 80
+wait 50
+expect roll_pitch_x10 -1
+turn K3 -100 10
+wait 50
+expect roll_pitch_x10 -120
+turn K3 300 10
+wait 50
+expect roll_pitch_x10 120
+shot r_pitch12.png
+key b0 up
