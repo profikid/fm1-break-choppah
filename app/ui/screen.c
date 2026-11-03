@@ -109,6 +109,68 @@ static void intro_draw(uint32_t now)
     }
 }
 
+/* RESET ALL's screen: a brain seen from the side, an ice pick in through the eye socket, the frontal lobe gone grey,
+ * a flatline under it, LOBOTOMIZED. Drawn whole, in four strips of 60 rows, from shapes (no picture in flash) */
+#define LB_PINK RGB(255, 140, 160)
+#define LB_FOLD RGB(190, 70, 100)
+#define LB_EDGE RGB(120, 30, 60)
+#define LB_DEAD RGB(96, 96, 104)
+static int lobo_in(int32_t x, int32_t y)  /* inside the brain: the cerebrum (flat-bottomed), the cerebellum, the stem */
+{
+    float dx = (float)(x - 126) * (1.0f / 92.0f), dy = (float)(y - 88) * (1.0f / 60.0f);
+    float cx = (float)(x - 176) * (1.0f / 36.0f), cy = (float)(y - 132) * (1.0f / 19.0f);
+    if (dx * dx + dy * dy < 1.0f && dy < 0.66f)
+        return 1;
+    if (cx * cx + cy * cy < 1.0f)
+        return 1;
+    return x >= 146 && x < 162 && y >= 120 && y < 168;
+}
+static void draw_lobotomy(void)
+{
+    uint32_t band;
+    for (band = 0; band < 4u; band++) {
+        int32_t top = (int32_t)band * 60, y, x, i;
+        cv_begin(240, 60, C_BLACK);
+        cv_oy = -top;                    /* (draw in screen rows: the canvas shows top..top + 59) */
+        for (y = top; y < top + 60 && y < 172; y++)
+            for (x = 30; x < 222; x++) {
+                float d, ex, ey;
+                uint16_t c;
+                if (!lobo_in(x, y))
+                    continue;
+                ex = (float)(x - 58);    /* the pick's tip, in the frontal lobe */
+                ey = (float)(y - 96);
+                if (!lobo_in(x - 1, y) || !lobo_in(x + 1, y) || !lobo_in(x, y - 1) || !lobo_in(x, y + 1))
+                    c = LB_EDGE;
+                else {                   /* the folds: two wavy fields crossing */
+                    d = brk_sin_turns((float)x * 0.045f + 0.35f * brk_sin_turns((float)y * 0.03f + (float)x * 0.01f)) +
+                        brk_sin_turns((float)y * 0.06f + 0.3f * brk_sin_turns((float)x * 0.025f));
+                    c = brk_absf(d) < 0.14f ? LB_FOLD : LB_PINK;
+                    if (x >= 140 && y >= 118)            /* the cerebellum: finer, level folds */
+                        c = brk_sin_turns((float)y * 0.28f) > 0.6f ? LB_FOLD : LB_PINK;
+                }
+                if (ex * ex + ey * ey < 576.0f)          /* what the pick took: gone grey */
+                    c = c == LB_PINK ? LB_DEAD : c == LB_FOLD ? RGB(52, 52, 58) : c;
+                cv_rect(x, y, 1, 1, c);
+            }
+        for (i = 0; i <= 120; i++) {     /* the pick: a handle, then the shaft up to the tip */
+            int32_t px = 4 + (58 - 4) * i / 120, py = 196 - (196 - 96) * i / 120;
+            if (i < 40)
+                cv_rect(px - 2, py - 2, 5, 5, C_AMB);
+            else
+                cv_rect(px, py, 2, 2, i > 112 ? C_WHITE : C_GRAY);
+        }
+        for (x = 96; x < 236; x++) {     /* the flatline, one last blip */
+            int32_t b = x >= 112 && x < 124 ? (x < 116 ? -(x - 112) * 4 : x < 120 ? -16 + (x - 116) * 6 : 8 - (x - 120) * 2) : 0;
+            cv_rect(x, 182 + b, 1, 2, x < 124 ? C_HI : C_GRAY);
+        }
+        cv_text2((240 - text2_w(&FONT_B, "LOBOTOMIZED")) / 2, 194, &FONT_B, "LOBOTOMIZED", C_HI);
+        cv_text((240 - text_w(&FONT_XS, "ALL SETTINGS CLEARED")) / 2, 226, &FONT_XS, "ALL SETTINGS CLEARED", C_GRAY);
+        cv_oy = 0;
+        cv_blit(0, (uint32_t)top);
+    }
+}
+
 static void intro_end(void)
 {
     ui.intro = 0u;

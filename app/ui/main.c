@@ -123,7 +123,8 @@ static void reset_all(void)
     (void)plat_store_save(OBJ_PAT, &pats, sizeof pats);
     set_dirty = 0u;
     app_say("ALL CLEARED", "");
-    ui.redraw |= RG_ALL;
+    ui.lobo_t = plat_ms() | 1u;          /* the lobotomy screen (app_frame) */
+    draw_lobotomy();
 }
 static void break_poll(void)
 {
@@ -705,6 +706,16 @@ void app_frame(void)
             return;
         }
     }
+    if (ui.lobo_t) {                     /* RESET ALL's screen: 3 s, or until a key or button (after its own turn) */
+        if (now - ui.lobo_t > 3000u || (ui.touched && now - ui.lobo_t > 500u)) {
+            ui.lobo_t = 0u;
+            lcd_fill(0, 0, 240, 240, C_BLACK);
+            ui.redraw = RG_ALL;
+        } else {
+            ui.touched = 0u;
+            return;
+        }
+    }
     ui.touched = 0u;
     ch_bta_poll(now);
     brk_status(&st);
@@ -842,8 +853,8 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
 int app_expect(const char *what, int *got)
 {
     static const char *const W[] = {"page", "gpage", "kpage", "seq_lane", "fx_focus", "fx_on", "lane_kick",
-                                    "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain"};
-    int v[13];
+                                    "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo"};
+    int v[14];
     uint32_t i;
     v[0] = ui.page;
     v[1] = ui.gpage;
@@ -858,7 +869,8 @@ int app_expect(const char *what, int *got)
     v[10] = brk_next;
     v[11] = ui.help;
     v[12] = set.drums_chain;
-    for (i = 0; i < 13u; i++)
+    v[13] = ui.lobo_t != 0u;
+    for (i = 0; i < 14u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;
