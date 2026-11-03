@@ -23,8 +23,13 @@ static void tap_knob(int k, int32_t d)   /* TAP: K1 the tempo, K2 finer, K3 half
         v += d;
     else if (k == EN_K3)
         v = d > 0 ? v * 2 : v / 2;
-    else
+    else {                               /* K4: the metronome's click, right on, left off */
+        set.click = d > 0 ? 1u : 0u;
+        changed();
+        app_say("CLICK", set.click ? "ON" : "OFF");
+        ui.redraw |= RG_BLOCKS;
         return;
+    }
     set.tempo_x10 = (uint16_t)clamp(v, 400, 3000);
     changed();
     tenths_text(set.tempo_x10, t);
@@ -510,6 +515,8 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
             tenths_text(set.tempo_x10, t);
         else if (i == 2)
             text_cat(t, "L / R");
+        else
+            text_cat(t, set.click ? "ON" : "OFF");
         return;
     }
     if (ui.page == PG_GLOBAL) {
@@ -652,7 +659,7 @@ static void draw_foot(const brk_status_t *st)
                                               {"BREAK", "KICK", "PERC", "FX"},
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
                                               {"", "", "", ""},
-                                              {"TEMPO", "FINE", "HALF / X2", ""}};
+                                              {"TEMPO", "FINE", "HALF / X2", "CLICK"}};
     uint32_t i;
     char t[16];
     if (ui.page != PG_TAP)               /* (TAP draws those rows itself) */

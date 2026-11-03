@@ -87,7 +87,9 @@ bob lights on each beat, white on the bar's first; BEAT counts 1–4 while playi
 from the second tap and settles as you go on (the average of the last eight taps); each tap flashes the display and
 sends a ripple out from the metronome.
 Stop for 2 seconds to start a new count; a tap far off the pace starts a new count from the tap before it. **K1** sets
-the tempo a BPM at a time, **K2** a tenth, **K3** halves it (left) or doubles it (right). Following an outside clock,
+the tempo a BPM at a time, **K2** a tenth, **K3** halves it (left) or doubles it (right), **K4** turns the
+metronome's **CLICK** on (right) or off (left): a short tick on every beat while playing, higher on the bar's first,
+dry over everything (not through the effects), kept with SAVE. Following an outside clock,
 it says EXT CLOCK and waits.
 
 ![TAP TEMPO: 160.0 BPM on the LED display, six taps, the metronome on the second beat, a tap's ripple](img/screen-tap.png "TAP TEMPO")
@@ -394,7 +396,7 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | Reset all (twice) |
 | GLO a third time (BT audio) | On / off | Device | Scan | Connect / hang up |
-| ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | |
+| ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | Click on / off |
 | EDIT (kick; ALGORITHM its part) | see §8: MIX, SUB … CLICK FX, MACRO, OUT | | | |
 | EDIT again (snare, then hat) | Level · Snap / cut | Tune · Drive | Decay | Tone |
 

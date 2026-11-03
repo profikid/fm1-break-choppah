@@ -32,7 +32,7 @@ on the device. The looper and song mode are next: see the [PRD](docs/PRD.md) for
 | Black keys 1–11 | Pads, while held: ROLL 1/8 · 1/16 · 1/32 · REVERSE · FREEZE · HALF · TAPE STOP · GATE · RANDOM · FILTER THROW · DUB (a throw into the delay). Each shows its own animation while held, and **K1–K4 tune it** (rate, decay, length, speed, feedback…). The rolls have a LEVEL for quiet ghost-note rolls, and their DECAY fades down or swells up |
 | PLAY | Play / stop · HOME + PLAY: back to bar 1 |
 | SELECT | Tempo (SEL held: 0.1 BPM) |
-| ENV | **TAP TEMPO**, the whole screen: tap ENV again or any white key in time (from the second tap, the average of the last eight); big digits, the bar's beats; K1 tempo · K2 fine · K3 half / double |
+| ENV | **TAP TEMPO**, the whole screen: tap ENV again or any white key in time (from the second tap, the average of the last eight); big digits, the bar's beats; K1 tempo · K2 fine · K3 half / double · K4 the metronome's click on / off |
 | SEL (the shift) | **SEL + ALGORITHM** the break and **SEL + PRESETS** the pattern, on every page · **SEL + SAVE** undo the last pattern wipe (again: redo) · **SEL** pressed alone: the strip lists every combination |
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
 | ALGORITHM | The next break, its name at once, the break itself at the next bar: AMEN, DRUMMER, THE WORM, THINK, COLD SWEAT, HOT PANTS, APACHE, SPORT |

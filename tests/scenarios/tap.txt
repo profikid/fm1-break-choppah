@@ -1,4 +1,4 @@
-# CHOPPAH: tap tempo on ENV (a white key tap takes ~90 ms here: 285 ms between = 375 ms a beat), a page of its own (the whole screen): ENV again taps, so does any white key. The tempo
+# CHOPPAH: tap tempo on ENV (a white key tap takes ~90 ms here: 285 ms between = 375 ms a beat), K4 the click. The tempo
 # follows from the second tap (the mean of the last eight); a 2 s pause starts again; K1 / K2 set it, K3 halves or
 # doubles. SEL taps nothing now: pressed alone it opens the SEL combinations card
 #   app/build/host/choppah_host tests/scenarios/tap.txt app/build/scenarios
@@ -69,3 +69,23 @@ shot t_swing2.png
 tap ENV
 wait 60
 shot t_ripple.png
+tap LFO
+turn K1 -50 10
+wait 300
+peakreset
+wait 1000
+expect peak_db_max -60
+tap ENV
+turn K4 1 10
+wait 100
+shot t_click.png
+peakreset
+wav click.wav
+wait 1500
+expect peak_db_min -22
+wavstop
+turn K4 -1 10
+wait 100
+peakreset
+wait 1000
+expect peak_db_max -60

@@ -51,7 +51,9 @@ typedef struct {
     uint8_t bta_on;                      /* Bluetooth audio out (GLOBAL, third part): on at power-on, the last device
                                           * connected again */
     uint8_t bta_codec;                   /* its SBC coding: 0 joint stereo (fm1-base's), 1 plain stereo */
-    uint8_t rsv[2];
+    uint8_t click;                       /* the metronome's click (TAP K4): 1 on each beat while playing (was a spare
+                                          * byte: older saves have it off) */
+    uint8_t rsv;
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
     brk_slicefx_t slx[BRK_KEYS];         /* each slice's own effect and level (a key held, FX: its other layer) */
@@ -231,6 +233,10 @@ static volatile float meter_l, meter_r;  /* the output's peaks as it leaves (aft
                                           * ~20 dB a second: the render writes, the header's meter reads */
 #define LR_TEST_LEN (4u * BRK_SR)
 static volatile uint32_t lr_test;        /* the left / right test (BT AUDIO K3 while streaming): samples left of it */
+static uint16_t click_at[4];             /* the render: this block's metronome clicks (their samples, the bar's first) */
+static uint8_t click_hi[4];
+static uint32_t nclick;
+static float click_env, click_ph, click_inc;
 
 static void wave_build(const brk_break_t *b)
 {
@@ -527,7 +533,12 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             uint8_t idx[8], who[8];
             uint32_t k, ne = brk_step_events(off, idx, 8u), nk = 0u, np = 0u;
             uint32_t lk = lane_now[LANE_KICK], ls = lane_now[LANE_SNARE], lh = lane_now[LANE_HAT];
+            nclick = 0u;
             for (k = 0; k < ne; k++) {
+                if (set.click && !(idx[k] & 3u) && nclick < 4u) {   /* the metronome: each beat, the bar's first higher */
+                    click_at[nclick] = off[k];
+                    click_hi[nclick++] = idx[k] == 0u;
+                }
                 uint32_t w = (ls >> idx[k] & 1u) << PV_SNARE | (lh >> idx[k] & 1u) << PV_HAT;
                 if (lk >> idx[k] & 1u)
                     ka[nk++] = off[k];
@@ -546,6 +557,27 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         brk_status(&st);
         /* the break through the DJ filter, the drums joining it into the chain (or around it) */
         brk_fx_process(mono, set.drums_chain ? kick : 0, echo, verb, set.drums_chain ? 0 : kick, l, r, m, st.pads);
+        if (nclick || click_env > 1e-3f) {   /* the metronome's click: dry, over everything, both sides */
+            uint32_t j = 0u;
+            for (i = 0; i < m; i++) {
+                float x;
+                if (j < nclick && click_at[j] <= i) {
+                    click_env = 1.0f;
+                    click_ph = 0.0f;
+                    click_inc = (click_hi[j] ? 2400.0f : 1500.0f) / (float)BRK_SR;
+                    j++;
+                }
+                x = 0.5f * click_env * brk_sin_turns(click_ph);
+                click_ph += click_inc;
+                if (click_ph >= 1.0f)
+                    click_ph -= 1.0f;
+                click_env *= 0.9982f;    /* (~12 ms to -20 dB) */
+                l[i] += x;
+                r[i] += x;
+            }
+            if (click_env < 1e-3f)
+                click_env = 0.0f;
+        }
         if (lr_test) {                   /* the left / right test: a low beep on the left, then a high one on the
                                           * right, twice (4 s), over everything else */
             static float ph;
