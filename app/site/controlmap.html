@@ -150,7 +150,7 @@
     <h3>Who owns K1–K4</h3>
     <p>First match wins.</p>
     <div class="stack">
-      <div class="layer"><div class="rank">1</div><b>A white key held</b><ul><li>Anywhere but SEQ</li><li>Its loop: LENGTH, PITCH, START, MODE</li><li>FX flips to its slice effect: EFFECT, AMOUNT, TONE, LEVEL</li><li>SEL resets the key</li></ul></div>
+      <div class="layer"><div class="rank">1</div><b>A white key held</b><ul><li>Anywhere but SEQ and ENV (tap tempo)</li><li>Its loop: LENGTH, PITCH, START, MODE</li><li>FX flips to its slice effect: EFFECT, AMOUNT, TONE, LEVEL</li><li>SEL resets the key</li></ul></div>
       <div class="layer"><div class="rank">2</div><b>A pad held</b><ul><li>Any page; a pad pressed after the key wins</li><li>Rolls: RATE, DECAY, PITCH, LEVEL</li><li>FILTER: TARGET, RESO, SPEED</li><li>DUB: TIME, FEEDBACK, TONE, MIX</li></ul></div>
       <div class="layer"><div class="rank">3</div><b>The page</b><ul><li>What the explorer shows</li><li>SELECT is always the tempo, MASTER the volume</li><li>ALGORITHM and PRESETS follow the page</li></ul></div>
     </div>
@@ -166,7 +166,7 @@
     { id: "home", btn: "HOME", name: "PERFORM", sub: "Gate, filter, FX, complexity", again: "nothing", subs: [
       { n: "PERFORM", k: ["GATE", "DJ FILTER", "FX", "COMPLEXITY"], strip: "16 SLICE BLOCKS", note: "the slice playing lit; a held key outlined" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
-      notes: [["SEL", "Tap tempo; held a second: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["SEL + SAVE", "Undo / redo the last pattern wipe"]] },
+      notes: [["SEL", "Pressed alone: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["SEL + SAVE", "Undo / redo the last pattern wipe"]] },
     { id: "arp", btn: "ARP", name: "GENERATOR", sub: "How the break rearranges", again: "nothing", subs: [
       { n: "GENERATOR", k: ["COMPLEXITY", "ANCHOR", "ROLL", "FILL"], strip: "16 SLICE BLOCKS", note: "as on HOME" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
@@ -194,6 +194,10 @@
       { n: "LEVELS", k: ["BREAK", "KICK", "PERC", "FX"], strip: "4 FADERS AND METERS", note: "FX shows the 4 slots" },
       { n: "GROOVE", k: ["SWING", "DRUMS ROUTE", "", ""], strip: "SWING · THE DRUMS' ROUTE", note: "" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices", notes: [] },
+    { id: "env", btn: "ENV", name: "TAP TEMPO", sub: "The whole screen", again: "a tap", subs: [
+      { n: "TAP TEMPO", k: ["TEMPO", "FINE", "HALF / X2", ""], strip: "BIG BPM · THE BAR'S 4 BEATS · TAPS", note: "the whole screen: no waveform, no tabs" } ],
+      algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "taps",
+      notes: [["ENV again · any white key", "A tap; the mean of the last eight"], ["K3", "Left halves, right doubles"]] },
     { id: "seq", btn: "SEQ", name: "SEQUENCER", sub: "16 patterns, all the steps", again: "next lane (5)", subs: [
       { n: "1-16", k: ["SLICE", "PITCH", "HITS", "REVERSE"], strip: "16 STEPS · THE DRUM LANES", note: "the step edited outlined" },
       { n: "17-32", k: ["SLICE", "PITCH", "HITS", "REVERSE"], strip: "16 STEPS · THE DRUM LANES", note: "" },
@@ -222,7 +226,7 @@
   $("subs").addEventListener("click", e => { const b = e.target.closest(".sub"); if (b) { sub = +b.dataset.i; render(); } });
 
   function render() {
-    const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps";
+    const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps" || p.keys === "taps";
     root.querySelectorAll(".pbtn").forEach((b, i) => b.setAttribute("aria-pressed", String(i === cur)));
     $("subs").innerHTML = p.subs.map((x, i) => '<button type="button" class="sub" data-i="' + i + '" aria-pressed="' + (i === sub) + '">' + x.n + "</button>").join("");
     const tabs = p.id === "edit" ? ["KICK", "SNARE", "HAT"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
@@ -230,7 +234,7 @@
     $("tabs").innerHTML = "<b>" + p.btn + "</b>" + tabs.map((t, i) => '<span class="' + (i === on ? "on" : "") + '">' + t + "</span>").join("") +
       (p.part ? "<em>&lt; " + (p.id === "edit" ? s.n.split(" · ")[1] : "TREMOLO") + " &gt;</em>" : "");
     $("help").className = "zone z-help" + (steps ? " steps" : "");
-    $("help").textContent = "KEYS " + (steps ? (sub < 2 ? "PICK STEP" : "LANE STEPS") : "SLICES") + "   ALGO " + p.algo.split(" (")[0].toUpperCase() + "   PRESETS " + p.presets.split(" ")[0].toUpperCase();
+    $("help").textContent = "KEYS " + (p.keys === "taps" ? "TAP" : steps ? (sub < 2 ? "PICK STEP" : "LANE STEPS") : "SLICES") + "   ALGO " + p.algo.split(" (")[0].toUpperCase() + "   PRESETS " + p.presets.split(" ")[0].toUpperCase();
     $("strip").innerHTML = s.strip + (s.note ? "<em>" + s.note + "</em>" : "");
     $("knobs").innerHTML = s.k.map((k, i) => k ? "<div>" + k + "<b>·····</b></div>" : '<div class="empty">K' + (i + 1) + "<b>&nbsp;</b></div>").join("");
     $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter", 1], ["WAVEFORM", "The break, the slice lit, the playhead", 1],
@@ -242,12 +246,12 @@
     $("encoders").innerHTML = encs.map(([n, f, c]) => '<div class="enc ' + c + '"><div class="knob"></div><div class="ename">' + n + '</div><div class="efn">' + f + "</div></div>").join("");
     let h = "";
     for (let i = 0; i < 16; i++) {
-      const lit = steps ? (sub >= 2 && i % 4 === 0) : i === 4;
+      const lit = p.keys === "taps" ? true : steps ? (sub >= 2 && i % 4 === 0) : i === 4;
       h += '<div class="wk' + (lit ? " lit" : "") + '" style="left:calc(' + i + ' * 100% / 16 + 1px)">' + (steps ? i + 1 : "S" + (i + 1)) + "</div>";
     }
     [0, 1, 3, 4, 5, 7, 8, 10, 11, 12, 14].forEach((g, j) => { h += '<div class="bk" style="left:calc(' + (g + 1) + ' * 100% / 16 - 100% / 16 * .31)">' + PADS[j] + "</div>"; });
     $("kbd").innerHTML = h;
-    $("keyrole").innerHTML = "<span>White keys: <b>" + (steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : "SLICES 1–16 (hold to loop)") +
+    $("keyrole").innerHTML = "<span>White keys: <b>" + (p.keys === "taps" ? "EVERY KEY TAPS THE TEMPO" : steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : "SLICES 1–16 (hold to loop)") +
       "</b></span><span>Black keys: <b>PADS (momentary, any page)</b></span>";
     $("notes").innerHTML = p.notes.map(([a, b]) => '<div class="note"><span>' + a + "</span>" + b + "</div>").join("") ||
       '<div class="note"><span>No combinations</span>Only the controls every page shares.</div>';

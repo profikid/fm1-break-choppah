@@ -146,7 +146,7 @@ Based on the behaviour of BB Gen / X0X's break part and ABG's "randomizing algor
 | A-35 | **REVERSE as a gate:** reverse playback while held (not a toggle) | P0 | |
 | A-36 | **Pitch / speed ±** on OCT−/OCT+: semitone steps; holding accelerates; both buttons reset | P0 | ±24 semitones; fine mode with SEL (±100 cents) |
 | A-37 | **Pause** (PLAY) and **reset** (HOME+PLAY) | P0 | |
-| A-38 | **Tap tempo on SEL, any page** (2 Nov 2026): the tempo from the second tap, the mean of the last eight; a 2 s pause or a tap off the pace (outside 0.7–1.4 of it) starts a new run; counted when SEL comes up alone (SEL in a combination is no tap), at its press time; waits while an outside clock leads. The header shows TAP n and the tempo | P0 | *Done; scenario tap.txt: two taps 500 ms apart give 120.0, six at 375 ms 160.0 on the FX page, SEL + knobs leave it* |
+| A-38 | **Tap tempo** (2 Nov 2026 on SEL; since 3 Nov 2026 on **ENV**, a page of its own taking the whole screen: big digits lit on each tap, the bar's four beats, the run's taps; ENV again or any white key taps, the keys flash on the beat; K1 tempo, K2 0.1, K3 half / double): the tempo from the second tap, the mean of the last eight; a 2 s pause or a tap off the pace (outside 0.7–1.4 of it) starts a new run; waits while an outside clock leads. The header shows TAP n and the tempo | P0 | *Done; scenario tap.txt: two ENV taps 500 ms apart give 120.0, six white keys at 375 ms 160.0, K3 halves and doubles* |
 
 ### 4.5 DSP effects
 
@@ -276,8 +276,8 @@ on the keys, eyes on the crowd.
 | B-44 | **The drums' route has one home**, MIXER GROOVE K2: SEL + EDIT and KICK OUT's ROUTE removed | P2 | *Done* |
 | B-45 | **HOME K3 FX, K4 COMPLEXITY** (mirrors of MIXER K4 and ARP K1) | P2 | *Done* |
 | B-46 | **SEQ drum lanes' knobs:** K1 FILL (n hits spread evenly from the downbeat, Euclidean), K2 ROTATE, K3 clear (left) / four on the floor (right), K4 copy the previous pattern's lane | P2 | *Done; scenario controls.txt* |
-| B-47 | **Hold SEL alone a second:** the strip lists the SEL combinations (FX page: SEL + FX, FX + ALGO); letting go clears it, no tap counted | P2 | *Done; scenario controls.txt* |
-| B-48 | **SEQ sequences, EDIT designs** (3 Nov 2026, the user's call): the drums' steps live on SEQ's lanes only (the white keys play slices on every other page); EDIT holds the kick, the snare and the hat (EDIT again: the next drum; ALGORITHM the drum's part: the kick's 11 = MIX, each layer and its FX, MACRO, OUT; the snare's / hat's SOUND, SHAPE); the lower strip shows the three drums, lit on their hits. ENV is free | P1 | *Done; scenarios kick.txt, perc.txt* |
+| B-47 | **SEL pressed alone** (held a second until 3 Nov 2026, when tap tempo left SEL): the strip lists the SEL combinations (FX page: SEL + FX, FX + ALGO); SEL again, or any other button, key or knob, closes it | P2 | *Done; scenario controls.txt* |
+| B-48 | **SEQ sequences, EDIT designs** (3 Nov 2026, the user's call): the drums' steps live on SEQ's lanes only (the white keys play slices on every other page); EDIT holds the kick, the snare and the hat (EDIT again: the next drum; ALGORITHM the drum's part: the kick's 11 = MIX, each layer and its FX, MACRO, OUT; the snare's / hat's SOUND, SHAPE); the lower strip shows the three drums, lit on their hits. ENV went to tap tempo (A-38) | P1 | *Done; scenarios kick.txt, perc.txt* |
 | B-49 | **A tab bar** replaces B-41's dots: under the waveform (now 32 rows), the button's name as printed, then the page's parts as tabs (the one you are on filled amber), and on EDIT / FX the part edited, "< SUB FX >"; the help line (B-43) under it | P1 | *Done* |
 
 ### 5.4 Performance screen (HOME)

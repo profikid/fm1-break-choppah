@@ -241,8 +241,10 @@ static void pattern_pick(int32_t d)      /* PRESETS: the next or previous patter
     say_int(playing_now() ? "NEXT PATTERN" : "PATTERN", want + 1, "");
     ui.redraw |= RG_HEAD | RG_BLOCKS;
 }
-static uint32_t keys_lit(const brk_status_t *st)   /* the white keys' lights on a lane's page */
+static uint32_t keys_lit(const brk_status_t *st)   /* the white keys' lights on a lane's page (TAP: the beat) */
 {
+    if (ui.page == PG_TAP)
+        return st->playing && st->bar16 >= 0 && !(st->bar16 & 3) ? 0xFFFFu : 0u;
     uint32_t m = 0u, l = ui.seq_lane >= SL_KICK ? ui.seq_lane - SL_KICK : NLANES, i;
     if (l < NLANES) {
         m = pat_now()->lane[l];

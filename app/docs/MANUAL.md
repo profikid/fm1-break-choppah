@@ -58,11 +58,11 @@ The slicer view, top to bottom:
 **The rules.** ALGORITHM picks what you edit on the page (an FX slot, a drum's part, a SEQ lane, GLOBAL's part); on HOME, ARP and the MIXER, where there is nothing to pick, it is the break. PRESETS picks what goes
 in (an effect, a kick, a snare or hat sound); elsewhere it is the pattern. **SEQ is where everything is sequenced**
 (the break's steps and the kick, snare and hat lanes), **EDIT where the drums' sounds are made** (kick, snare, hat);
-the white keys play slices everywhere but SEQ. **SEL + ALGORITHM is the break and SEL +
-PRESETS the pattern on every page.** A page's button pressed again is its next part. **Hold SEL** alone for a second
-and the strip lists its combinations. The control map (§11) shows all of it at once.
+the white keys play slices everywhere but SEQ and ENV (tap tempo). **SEL + ALGORITHM is the break and SEL +
+PRESETS the pattern on every page.** A page's button pressed again is its next part. **Press SEL** alone and the strip
+lists its combinations (SEL again, or any other button, key or knob, closes it). The control map (§11) shows all of it at once.
 
-![SEL held: its combinations on the strip; the help line under the waveform; the HOME knobs](img/screen-selhelp.png "SEL held")
+![SEL pressed: its combinations on the strip; the help line under the waveform; the HOME knobs](img/screen-selhelp.png "SEL pressed")
 
 ## 3. Playing
 
@@ -71,7 +71,8 @@ and the strip lists its combinations. The control map (§11) shows all of it at 
 | PLAY | Play / stop. HOME + PLAY: back to bar 1 |
 | White keys | Slices 1–16. Playing: at the next snap point (GLOBAL: 1 slice, an 8th on the 2-bar breaks, by default; OFF, 1/8 … 4 slices). Stopped: at once. Held: the key loops (below), playing or stopped |
 | SELECT | Tempo, 1 BPM a detent (0.1 with SEL held) |
-| SEL (tapped) | **Tap tempo**, on any page: tap SEL in time. The tempo follows from the second tap and settles as you go on (the average of the last eight taps); the header shows the count and the tempo. Stop for 2 seconds to start a new count; a tap far off the pace starts a new count from the tap before it. SEL used with something else (SEL + a knob, SEL + ALGORITHM, SEL + REC…) is not a tap; held alone a second it shows the combinations instead |
+| ENV | **Tap tempo**, a page of its own (below) |
+| SEL (pressed alone) | The combinations card: every SEL combination on the strip. SEL used with something else (SEL + a knob, SEL + ALGORITHM, SEL + REC…) does that instead |
 | SEL + ALGORITHM · SEL + PRESETS | The break · the pattern, from any page |
 | SEL + SAVE | **Undo** the last pattern wipe (SEL + ARP, SEL + REC, a drum lane's FILL, CLR / 4X4 or COPY); again: redo |
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
@@ -80,6 +81,17 @@ and the strip lists its combinations. The control map (§11) shows all of it at 
 | MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 36 the kick, 38 the snare, 42 / 44 / 46 the hat (§8); any channel |
 | ALGORITHM | (HOME, ARP, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
 | MASTER | Volume |
+
+### Tap tempo
+
+**ENV** opens TAP TEMPO, which takes the whole screen: the tempo in big digits, the bar's four beats (the one playing
+lit), this run's taps. Tap **ENV again** in time, or **any white key** (the keys flash on the beat). The tempo follows
+from the second tap and settles as you go on (the average of the last eight taps); the digits light up on each tap.
+Stop for 2 seconds to start a new count; a tap far off the pace starts a new count from the tap before it. **K1** sets
+the tempo a BPM at a time, **K2** a tenth, **K3** halves it (left) or doubles it (right). Following an outside clock,
+it says EXT CLOCK and waits.
+
+![TAP TEMPO: 160.0 BPM, the second beat playing, six taps](img/screen-tap.png "TAP TEMPO")
 
 ![A slice held](img/screen-held.png "Slice 10 held")
 
@@ -349,7 +361,7 @@ levels (the layer edited outlined, amber with an effect on). Its steps: SEQ's KI
 | SHAPE | Snap (the hat: CUT, the high-pass) | Drive | | |
 
 MIDI notes 38 (D1) play the snare, 42, 44 and 46 the hat, also while stopped. SAVE keeps the drums with the rest.
-(ENV, which used to open SNARE / HAT, is free now.)
+(ENV, which used to open SNARE / HAT, is tap tempo now: §3.)
 
 ## 9. The mixer
 
@@ -381,6 +393,7 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | Reset all (twice) |
 | GLO a third time (BT audio) | On / off | Device | Scan | Connect / hang up |
+| ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | |
 | EDIT (kick; ALGORITHM its part) | see §8: MIX, SUB … CLICK FX, MACRO, OUT | | | |
 | EDIT again (snare, then hat) | Level · Snap / cut | Tune · Drive | Decay | Tone |
 

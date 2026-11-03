@@ -60,6 +60,8 @@ void app_say(const char *a, const char *b);   /* a short message on the screen *
 /* the host simulator's own commands (app_host_cmd in app.c) */
 #define APP_HOST_CMD
 int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d);
+#define APP_HOST_FAILS                   /* expect_bpm's failures, counted into the run's */
+int app_host_fails(void);
 #define APP_HOST_EXPECT                  /* expect page / gpage / kpage / seq_lane / fx_focus / fx_on / lane_kick /
                                           * lane_hat / pattern / brk / brk_next / help / drums_chain / lobo */
 int app_expect(const char *what, int *got);

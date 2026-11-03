@@ -2,7 +2,7 @@
 /* CHOPPAH: the UI's state, its text helpers, messages, tap tempo, the screen's colours and big text. (Part of
  * app.c's unity: included there in order.) */
 
-enum { PG_HOME, PG_GEN, PG_FX, PG_GLOBAL, PG_KICK, PG_MIX, PG_SEQ, PG_PERC, NPAGES };
+enum { PG_HOME, PG_GEN, PG_FX, PG_GLOBAL, PG_KICK, PG_MIX, PG_SEQ, PG_PERC, PG_TAP, NPAGES };
 static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
                                                 "FLT", "DUB"};
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
@@ -37,7 +37,9 @@ static struct {
     uint8_t pvoice, ppage, ppreset[PERC_VOICES];   /* the SNARE / HAT page: its voice, sub-page, presets */
     uint8_t einst;                       /* EDIT, the drums' design: 0 the kick (PG_KICK), 1 the snare, 2 the hat (PG_PERC) */
     uint8_t rec;                         /* REC: white keys and MIDI notes write into the pattern as it plays */
-    uint8_t help;                        /* SEL held alone a second: the SEL combinations on the strip */
+    uint8_t help;                        /* SEL pressed alone: the SEL combinations on the strip, until the next press */
+    uint32_t help_t, tap_last;           /* when the card opened; the last tap (TAP's flash) */
+    uint8_t drawn_page;                  /* the page last drawn (TAP takes the whole screen: leaving it redraws all) */
     uint32_t lobo_t;                     /* RESET ALL done: the lobotomy screen, since then (0: not showing) */
     uint8_t fx_hold, fx_turned;          /* FX held on the FX page (up alone: the next slot); a knob turned meanwhile */
     uint32_t reset_t;                    /* GLOBAL's RESET ALL: when it was first turned (it asks twice) */
@@ -49,7 +51,7 @@ static struct {
     uint8_t redraw;                      /* RG_* bits: the regions to draw again */
 } ui;
 /* the white keys play slices (or, on the SEQ, KICK and SNARE / HAT pages, steps) */
-static int slices_page(void) { return ui.page != PG_SEQ; }   /* (the drums' steps are SEQ's alone) */
+static int slices_page(void) { return ui.page != PG_SEQ && ui.page != PG_TAP; }   /* (SEQ: steps; TAP: taps) */
 enum { RG_HEAD = 1, RG_WAVE = 2, RG_BLOCKS = 4, RG_FOOT = 8, RG_ALL = 15, RG_FX = 16 };
 
 static void text_cat(char *d, const char *s)
@@ -133,6 +135,8 @@ static void tap_tempo(uint32_t t)
     }
     ui.taps[ui.ntaps % TAPS] = t;
     ui.ntaps++;
+    ui.tap_last = t | 1u;
+    ui.redraw |= 4u;                     /* (RG_BLOCKS: the TAP page) */
     a[0] = 0;
     text_cat(a, "TAP ");
     int_text((int32_t)(ui.ntaps < 99u ? ui.ntaps : 99u), a + 4);
@@ -215,7 +219,13 @@ static void times_text(float v, char *t) /* 0.5 -> "x0.50" */
 /* big text: a font at twice its size, each of its pixels a 2 x 2 block (blended as cv_text blends). It stands in for
  * a 31-pixel font: that one costs 20 KB of flash, which Bluetooth audio needed */
 static int32_t text2_w(const felucca_font_t *f, const char *s) { return 2 * text_w(f, s); }
+static int32_t cv_textn(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c, uint32_t n);
 static int32_t cv_text2(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c)
+{
+    return cv_textn(x, y, f, s, c, 2u);
+}
+/* a font at n times its size (TAP's tempo: 3) */
+static int32_t cv_textn(int32_t x, int32_t y, const felucca_font_t *f, const char *s, uint16_t c, uint32_t n)
 {
     uint32_t r = c >> 11, g = (c >> 5) & 63u, b = c & 31u;
     for (; *s; s++) {
@@ -227,9 +237,9 @@ static int32_t cv_text2(int32_t x, int32_t y, const felucca_font_t *f, const cha
                 a = (gx & 1u) ? (a & 15u) : (a >> 4);
                 if (!a)
                     continue;
-                for (k = 0; k < 4u; k++) {
-                    int32_t px = x + 2 * ((int32_t)gx - f->pad) + (int32_t)(k & 1u),
-                            py = y + 2 * (int32_t)gy + (int32_t)(k >> 1) + cv_oy;
+                for (k = 0; k < n * n; k++) {
+                    int32_t px = x + (int32_t)n * ((int32_t)gx - f->pad) + (int32_t)(k % n),
+                            py = y + (int32_t)n * (int32_t)gy + (int32_t)(k / n) + cv_oy;
                     uint32_t at, bg;
                     if ((uint32_t)px >= cv_w || py < cv_y0 || py >= cv_y1)
                         continue;
@@ -240,7 +250,7 @@ static int32_t cv_text2(int32_t x, int32_t y, const felucca_font_t *f, const cha
                                        ((b * a + (bg & 31u) * (15u - a)) / 15u));
                 }
             }
-        x += 2 * f->adv[gi];
+        x += (int32_t)n * f->adv[gi];
     }
     return x;
 }

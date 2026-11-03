@@ -2,9 +2,43 @@
 /* CHOPPAH: the controls (knobs, keys, buttons), the lights, the foot and the frame. (Part of app.c's unity:
  * included there in order.) */
 
+static void tap_or_ext(uint32_t now)     /* a tap (ENV on TAP, a white key on TAP); an outside clock has the tempo */
+{
+    if (ext_active())
+        app_say("TEMPO", "EXT CLOCK");
+    else
+        tap_tempo(now);
+}
+static void tap_knob(int k, int32_t d)   /* TAP: K1 the tempo, K2 finer, K3 half or double */
+{
+    char t[16];
+    int32_t v = set.tempo_x10;
+    if (ext_active()) {
+        app_say("TEMPO", "EXT CLOCK");
+        return;
+    }
+    if (k == EN_K1)
+        v += d * 10;
+    else if (k == EN_K2)
+        v += d;
+    else if (k == EN_K3)
+        v = d > 0 ? v * 2 : v / 2;
+    else
+        return;
+    set.tempo_x10 = (uint16_t)clamp(v, 400, 3000);
+    changed();
+    tenths_text(set.tempo_x10, t);
+    app_say("BPM", t);
+    ui.redraw |= RG_BLOCKS;
+}
+
 static void knob_turn(int k, int32_t d)
 {
     brk_fx_t *f = &set.fx;
+    if (ui.page == PG_TAP) {
+        tap_knob(k, d);
+        return;
+    }
     if (ui.page == PG_GLOBAL) {
         global_turn(k - EN_K1, d);
         return;
@@ -169,6 +203,11 @@ static void input(void)
     if (keys != ui.keys || btn != ui.btn)
         ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
     for (i = 0; i < 16u; i++) {          /* white keys: slices, or on the soundboard its sounds */
+        if (ui.page == PG_TAP) {         /* the TAP page: every white key taps */
+            if (kdn >> WK[i] & 1u)
+                tap_or_ext(now);
+            continue;
+        }
         if (ui.page == PG_SEQ) {         /* the SEQ page: a break step to edit, or a drum lane's steps */
             if (kdn >> WK[i] & 1u)
                 seq_key(i);
@@ -236,6 +275,16 @@ static void input(void)
         ui.redraw |= RG_FOOT | RG_BLOCKS;
         app_say("MIXER", ui.mpage ? "GROOVE" : "LEVELS");
     }
+    if (bdn & 1u << B_ENV) {             /* ENV: TAP TEMPO, the whole screen; again: a tap */
+        if (ui.page == PG_TAP)
+            tap_or_ext(now);
+        else {
+            slices_let_go(keys);
+            ui.page = PG_TAP;
+            ui.redraw |= RG_FOOT | RG_BLOCKS;
+            app_say("TAP TEMPO", "ENV OR WHITE KEYS");
+        }
+    }
     if (bdn & 1u << B_SEQ) {             /* SEQ: the pattern's steps and lanes; again, the next lane */
         if (ui.page != PG_SEQ)
             slices_let_go(keys);
@@ -300,28 +349,22 @@ static void input(void)
         ui.key_turned = 1u;
         changed();
         app_say(ui.key_layer ? "SLICE FX" : "KEY", "RESET");
-    } else if (bdn & 1u << B_SEL) {      /* a tap, if it comes up alone (below) */
+    } else if (bdn & 1u << B_SEL) {      /* a press, if it comes up alone (below) */
         ui.tap_pend = 1u;
         ui.tap_t = now;
         ui.tap_combo = (uint8_t)((btn & ~(1u << B_SEL)) != 0u);   /* (another button already held: a combination) */
     }
     if (ui.tap_pend && (btn & 1u << B_SEL) && (bdn & ~(1u << B_SEL)))
         ui.tap_combo = 1u;               /* another button with SEL held */
-    if (ui.tap_pend && !ui.tap_combo && !ui.help && (btn & 1u << B_SEL) && now - ui.tap_t >= 1000u) {
-        ui.help = 1u;                    /* SEL held alone a second: its combinations, until it is let go */
-        app_say("SEL", "COMBINATIONS");
-    }
-    if (ui.help && !(btn & 1u << B_SEL)) {
-        ui.help = 0u;
+    if (ui.help && ((bdn & ~(1u << B_SEL)) || kdn))
+        ui.help = 0u;                    /* the card open: any other button or key closes it */
+    if (ui.tap_pend && !(btn & 1u << B_SEL)) {   /* SEL up alone: the combinations card, open or closed */
         ui.tap_pend = 0u;
-    }
-    if (ui.tap_pend && !(btn & 1u << B_SEL)) {   /* SEL up: alone and short, a tap at its press */
-        ui.tap_pend = 0u;
-        if (!ui.tap_combo && now - ui.tap_t < 800u) {
-            if (ext_active())
-                app_say("TEMPO", "EXT CLOCK");
-            else
-                tap_tempo(ui.tap_t);
+        if (!ui.tap_combo) {
+            ui.help ^= 1u;
+            ui.help_t = now;
+            if (ui.help)
+                app_say("SEL", "COMBINATIONS");
         }
     }
     if (bdn & 1u << B_SAVE && btn & 1u << B_SEL)   /* SEL + SAVE: undo (again: redo) */
@@ -363,6 +406,8 @@ static void input(void)
             ui.tap_combo = 1u;           /* (SEL + a knob is no tap) */
         if (ui.fx_hold)
             ui.fx_turned = 1u;           /* (FX + a knob: not the next slot) */
+        if (!(btn & 1u << B_SEL))
+            ui.help = 0u;                /* (a knob closes the card) */
         if (k == EN_SELECT && ext_active()) {
             app_say("TEMPO", "EXT CLOCK");   /* the outside clock has the tempo */
         } else if (k == EN_SELECT) {     /* tempo: 1 BPM a detent, 0.1 with SEL held */
@@ -436,7 +481,7 @@ static void leds(void)
     brk_status(&st);
     if (st.playing)
         b |= 1u << B_PLAY;
-    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_ARP, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_EDIT};
+    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_ARP, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_EDIT, B_ENV};
     b |= 1u << PAGE_BTN[ui.page];
     if (ui.rec)
         b |= 1u << B_REC;
@@ -460,6 +505,13 @@ static void leds(void)
 static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown under its name */
 {
     t[0] = 0;
+    if (ui.page == PG_TAP) {
+        if (i < 2)
+            tenths_text(set.tempo_x10, t);
+        else if (i == 2)
+            text_cat(t, "L / R");
+        return;
+    }
     if (ui.page == PG_GLOBAL) {
         global_value(i, t);
         return;
@@ -512,9 +564,9 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
  * steps here, not slices) */
 static void page_help(void)
 {
-    static const char *const ALGO[NPAGES] = {"BREAK", "BREAK", "SLOT", "PART", "PART", "BREAK", "LANE", "PART"};
+    static const char *const ALGO[NPAGES] = {"BREAK", "BREAK", "SLOT", "PART", "PART", "BREAK", "LANE", "PART", "BREAK"};
     static const char *const PRE[NPAGES] = {"PATTERN", "PATTERN", "EFFECT", "PATTERN", "KICK", "PATTERN", "PATTERN",
-                                            "SOUND"};
+                                            "SOUND", "PATTERN"};
     char t[48] = "KEYS ";
     int steps = !slices_page();
     text_cat(t, ui.page != PG_SEQ ? "SLICES" : ui.seq_lane < SL_KICK ? "PICK STEP" : "LANE STEPS");
@@ -538,7 +590,7 @@ static int32_t tab(int32_t x, const char *s, int on)
 }
 static void draw_tabs(void)
 {
-    static const char *const BTN[NPAGES] = {"HOME", "ARP", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT"};
+    static const char *const BTN[NPAGES] = {"HOME", "ARP", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV"};
     static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
     static const char *const SLOT[4] = {"1", "2", "3", "4"};
     static const char *const DRUM[3] = {"KICK", "SNARE", "HAT"};
@@ -586,7 +638,7 @@ static void draw_tabs(void)
 /* SEL held alone: its combinations, on the strip (FX page: its own two) */
 static void draw_help(void)
 {
-    static const char *const L[8][2] = {{"SEL TAP", "TAP TEMPO"}, {"+ ALGO", "BREAK"}, {"+ PRESETS", "PATTERN"},
+    static const char *const L[8][2] = {{"SEL", "THIS CARD"}, {"+ ALGO", "BREAK"}, {"+ PRESETS", "PATTERN"},
                                         {"+ REC", "CLEAR PATTERN"}, {"+ ARP", "RANDOM PATTERN"},
                                         {"+ SAVE", "UNDO / REDO"}, {"+ SELECT", "FINE TEMPO"},
                                         {"KEY + SEL", "RESET THE KEY"}};
@@ -618,11 +670,14 @@ static void draw_foot(const brk_status_t *st)
                                               {"", "", "", ""},
                                               {"BREAK", "KICK", "PERC", "FX"},
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
-                                              {"", "", "", ""}};
+                                              {"", "", "", ""},
+                                              {"TEMPO", "FINE", "HALF / X2", ""}};
     uint32_t i;
     char t[16];
-    draw_tabs();
-    page_help();
+    if (ui.page != PG_TAP) {             /* (TAP draws those rows itself) */
+        draw_tabs();
+        page_help();
+    }
     cv_begin(240, 48, C_BLACK);
     for (i = 0; i < 11u; i++) {
         int on = (st->pads >> i) & 1u;
@@ -706,6 +761,19 @@ void app_frame(void)
             return;
         }
     }
+    if ((ui.page == PG_TAP) != (ui.drawn_page == PG_TAP)) {   /* into or out of TAP: the whole screen again */
+        lcd_fill(0, 30, 240, 162, C_BLACK);
+        ui.redraw = RG_ALL;
+    }
+    ui.drawn_page = ui.page;
+    if (ui.page == PG_TAP && ui.tap_last && now - ui.tap_last >= 120u) {   /* the tap's flash over */
+        ui.tap_last = 0u;
+        ui.redraw |= RG_BLOCKS;
+    }
+    if (ui.ntaps && now - ui.taps[(ui.ntaps - 1u) % TAPS] > 2000u) {   /* a pause: the run is over */
+        ui.ntaps = 0u;
+        ui.redraw |= ui.page == PG_TAP ? RG_BLOCKS : 0;
+    }
     if (ui.lobo_t) {                     /* RESET ALL's screen: 3 s, or until a key or button (after its own turn) */
         if (now - ui.lobo_t > 3000u || (ui.touched && now - ui.lobo_t > 500u)) {
             ui.lobo_t = 0u;
@@ -783,7 +851,7 @@ void app_frame(void)
           (uint32_t)(pat_next >= 0) << 27;
     if (hdr != ui.last_hdr) {
         ui.last_hdr = hdr;
-        ui.redraw |= RG_HEAD;
+        ui.redraw |= RG_HEAD | (ui.page == PG_TAP ? RG_BLOCKS : 0);
     }
     if (ui.redraw & RG_HEAD)
         draw_head(&st, b, now);
@@ -793,7 +861,7 @@ void app_frame(void)
     }
     if (!ui.redraw)
         return;
-    if (ui.redraw & RG_WAVE)
+    if (ui.redraw & RG_WAVE && ui.page != PG_TAP)
         draw_wave(&st, b);
     if (ui.redraw & RG_FX) {
         if (ui.shown >= 100)
@@ -805,7 +873,9 @@ void app_frame(void)
         ui.fx_drawn = now;
     }
     if (ui.redraw & RG_BLOCKS) {
-        if (ui.page == PG_SEQ)
+        if (ui.page == PG_TAP)
+            draw_tap(&st, now);
+        else if (ui.page == PG_SEQ)
             draw_seq(&st);
         else if (ui.page == PG_PERC)
             draw_perc(&st);
@@ -831,6 +901,8 @@ void app_frame(void)
 #ifdef PLAT_HOST
 /* the host simulator's commands: "splash" draws the power-on screen (the device draws it before app_init; the
  * simulator never does) */
+static int host_fails;
+int app_host_fails(void) { return host_fails; }
 int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, const char *d)
 {
     (void)a; (void)b; (void)c; (void)d;
@@ -844,6 +916,7 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
     }
     if (!strcmp(cmd, "expect_bpm")) {    /* expect_bpm LO HI (whole BPM): the tempo the engine plays at */
         int32_t x100 = (int32_t)(brk_get_tempo() * 100.0f + 0.5f), bad = x100 < atoi(a) * 100 || x100 > atoi(b) * 100;
+        host_fails += bad ? 1 : 0;
         printf("%s tempo %d.%02d BPM (%s..%s)\n", bad ? "FAIL" : "  ok", (int)(x100 / 100), (int)(x100 % 100), a, b);
         return 1;
     }
