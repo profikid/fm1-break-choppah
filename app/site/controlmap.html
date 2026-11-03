@@ -1,0 +1,272 @@
+<!-- CHOPPAH's control map (tools/site_style.py puts it in the manual's "The control map" section). Its data is the
+     PAGES list below: keep it in step with app/ui/main.c when a page's controls change. -->
+<style>
+.cmap { container-type: inline-size; display: grid; gap: 34px; margin: 6px 0 10px; }
+.cmap > div { min-width: 0; }
+.cmap h3 { margin: 0 0 10px; }
+.cmap .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font: 12px var(--f-mono); color: var(--dim); margin-bottom: 10px; }
+.cmap .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.cmap .explorer { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 18px; align-items: start; }
+.cmap .picker { display: grid; gap: 7px; }
+.cmap .pbtn {
+  display: grid; grid-template-columns: 56px 1fr; align-items: center; gap: 10px; width: 100%;
+  background: var(--panel); border: 1px solid var(--line); color: var(--fg); padding: 9px 10px; border-radius: 6px;
+  font: inherit; text-align: left; cursor: pointer;
+}
+.cmap .pbtn:hover { border-color: var(--faint); }
+.cmap .pbtn[aria-pressed="true"] { border-color: var(--amber); background: var(--raise); }
+.cmap .cap {
+  font: 600 11px var(--f-mono); letter-spacing: .06em; text-align: center; padding: 5px 0; border-radius: 4px;
+  background: #2a261d; color: var(--hot); box-shadow: inset 0 -2px 0 #11100c;
+}
+.cmap .pbtn[aria-pressed="true"] .cap { background: var(--amber); color: #1a1406; }
+.cmap .pname { font: 600 14.5px/1.25 var(--f-display); }
+.cmap .pname small { display: block; font: 12px var(--f-body); color: var(--dim); }
+.cmap .device { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 16px; min-width: 0; }
+.cmap .subs { display: flex; flex-wrap: wrap; gap: 6px; }
+.cmap .sub { font: 500 12px var(--f-mono); padding: 5px 9px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--dim); cursor: pointer; }
+.cmap .sub[aria-pressed="true"] { color: #1a1406; background: var(--amber); border-color: var(--amber); }
+.cmap .devtop { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 18px; align-items: start; }
+.cmap .screen {
+  width: 240px; max-width: 100%; aspect-ratio: 1; background: #000; border: 6px solid #050505; border-radius: 6px;
+  position: relative; box-shadow: 0 0 0 1px var(--line); font-family: var(--f-mono); overflow: hidden;
+}
+.cmap .zone { position: absolute; left: 0; right: 0; display: flex; align-items: center; padding: 0 6px; font-size: 9px; letter-spacing: .03em; }
+.cmap .z-head { top: 0; height: 11.7%; border-bottom: 1px solid #2a2a2a; color: #fff; justify-content: space-between; }
+.cmap .z-head b { color: var(--amber); font-weight: 500; }
+.cmap .z-wave { top: 12.5%; height: 13.3%; }
+.cmap .z-tabs { top: 25.8%; height: 5.8%; gap: 3px; font-size: 7px; color: #fff; }
+.cmap .z-tabs span { background: #1f1f1f; color: #9a9a9a; padding: 1px 3px; border-radius: 1px; }
+.cmap .z-tabs span.on { background: var(--amber); color: #000; }
+.cmap .z-tabs em { margin-left: auto; color: var(--amber); font-style: normal; }
+.cmap .z-help { top: 31.7%; height: 5%; justify-content: center; font-size: 6.5px; color: #777; }
+.cmap .z-help.steps { color: var(--amber); }
+.cmap .z-strip { top: 36.7%; height: 43.3%; align-items: stretch; padding: 4px 6px; }
+.cmap .z-pads { top: 80%; height: 5.8%; gap: 2px; padding: 0 3px; }
+.cmap .z-pads span { flex: 1; background: #1d2230; color: #8a93a8; font-size: 6px; text-align: center; line-height: 11px; border-radius: 1px; }
+.cmap .z-knobs { top: 87.5%; height: 12.5%; display: grid; grid-template-columns: repeat(4, 1fr); padding: 0 4px; align-items: center; }
+.cmap .z-knobs div { font-size: 7.5px; color: #8b8b8b; line-height: 1.2; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.cmap .z-knobs div b { display: block; color: #fff; font-weight: 400; }
+.cmap .z-knobs div.empty { color: #3a3a3a; }
+.cmap .wave { width: 100%; height: 100%; }
+.cmap .strip-box { flex: 1; border: 1px dashed #3a3424; border-radius: 3px; color: var(--amber); display: grid; place-items: center; text-align: center; font-size: 9.5px; padding: 6px; line-height: 1.35; }
+.cmap .strip-box em { display: block; color: #8b8b8b; font-style: normal; font-size: 8px; margin-top: 4px; }
+.cmap dl.zl { font: 12px var(--f-mono); color: var(--dim); display: grid; gap: 7px; margin: 0; }
+.cmap .zl div { display: grid; grid-template-columns: 82px 1fr; gap: 8px; align-items: baseline; }
+.cmap .zl dt { color: var(--amber); }
+.cmap .zl dd { margin: 0; color: var(--fg); min-width: 0; overflow-wrap: anywhere; }
+.cmap .zl dd.same { color: var(--dim); }
+.cmap .encoders { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.cmap .enc { display: grid; justify-items: center; gap: 6px; text-align: center; min-width: 0; }
+.cmap .knob { width: 38px; height: 38px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #3b362b, #15130f 70%); border: 1px solid #000; position: relative; box-shadow: 0 2px 0 #050504; }
+.cmap .knob::after { content: ""; position: absolute; left: 50%; top: 4px; width: 2px; height: 10px; background: var(--hot); transform: translateX(-50%); border-radius: 1px; }
+.cmap .enc.on .knob { box-shadow: 0 0 0 2px var(--amber); }
+.cmap .enc.dead .knob { opacity: .35; }
+.cmap .ename { font: 600 10px var(--f-mono); color: var(--dim); letter-spacing: .06em; }
+.cmap .efn { font: 500 12px/1.25 var(--f-body); color: var(--fg); min-height: 30px; overflow-wrap: anywhere; }
+.cmap .enc.dead .efn { color: var(--faint); }
+.cmap .kbd-wrap { overflow-x: auto; }
+.cmap .kbd { position: relative; height: 104px; min-width: 520px; }
+.cmap .wk { position: absolute; top: 0; height: 104px; width: calc(100% / 16 - 2px); background: #e8e2d2; border-radius: 0 0 4px 4px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px; font: 600 10px var(--f-mono); color: #3a3426; }
+.cmap .wk.lit { background: var(--amber); color: #1a1406; }
+.cmap .bk { position: absolute; top: 0; height: 62px; width: calc(100% / 16 * .62); background: #15130f; border: 1px solid #000; border-radius: 0 0 3px 3px; z-index: 2; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 5px; font: 500 8px var(--f-mono); color: var(--pad); }
+.cmap .keyrole { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; color: var(--dim); }
+.cmap .keyrole b { color: var(--fg); font-weight: 500; }
+.cmap .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.cmap .note { border: 1px solid var(--line); border-radius: 6px; padding: 9px 12px; font-size: 13px; min-width: 0; }
+.cmap .note span { display: block; font: 500 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--amber); margin-bottom: 3px; }
+.cmap .nav { display: grid; gap: 7px; }
+.cmap .navrow { display: grid; grid-template-columns: 64px minmax(0, 1fr) 170px; gap: 12px; align-items: center; padding: 9px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.cmap .chain { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.cmap .chip { font: 500 12px var(--f-mono); padding: 4px 9px; border-radius: 4px; background: var(--raise); border: 1px solid var(--line); white-space: nowrap; }
+.cmap .chip.first { border-color: var(--amber); color: var(--amber); }
+.cmap .arr { color: var(--faint); font: 12px var(--f-mono); }
+.cmap .again { font: 12px var(--f-mono); color: var(--dim); }
+.cmap .again.none { color: var(--faint); }
+.cmap .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+.cmap table { min-width: 900px; font-size: 13px; }
+.cmap table td:first-child { color: var(--fg); font-family: var(--f-display); font-weight: 600; font-size: 14px; }
+.cmap table td small { display: block; font: 11px var(--f-mono); color: var(--dim); font-weight: 400; }
+.cmap td.e { color: var(--faint); }
+.cmap td.brk { color: var(--amber); }
+.cmap tr.grp td { border-top: 2px solid var(--line); }
+.cmap .stack { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.cmap .layer { border: 1px solid var(--line); border-radius: 8px; padding: 14px; background: var(--panel); display: grid; gap: 6px; align-content: start; }
+.cmap .layer .rank { font: 600 28px/1 var(--f-display); color: var(--amber); }
+.cmap .layer b { font: 600 16px var(--f-display); }
+.cmap .layer ul { margin: 0; padding-left: 18px; color: var(--dim); font-size: 13.5px; }
+@container (max-width: 820px) {
+  .cmap .explorer { grid-template-columns: 1fr; }
+  .cmap .picker { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .cmap .navrow { grid-template-columns: 58px minmax(0, 1fr); }
+  .cmap .navrow .again { grid-column: 2; }
+}
+@container (max-width: 560px) {
+  .cmap .devtop { grid-template-columns: 1fr; justify-items: center; }
+  .cmap dl.zl { justify-self: stretch; }
+  .cmap .encoders { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 14px; }
+}
+</style>
+
+<div class="cmap" id="cmap">
+  <div>
+    <h3>Explorer</h3>
+    <p>Pick a page: the screen, the seven encoders and the keys show what they do there; the chips above the screen
+    are its parts (the button again, or ALGORITHM, goes to the next). The panel is a schematic, not to scale.</p>
+    <div class="explorer">
+      <div class="picker" data-cm="picker" role="group" aria-label="Pages"></div>
+      <div class="device">
+        <div class="subs" data-cm="subs" role="group" aria-label="Parts"></div>
+        <div class="devtop">
+          <div class="screen" aria-label="The 240 by 240 screen">
+            <div class="zone z-head"><span>&#9654; AMEN P1</span><b>170.0 BPM</b></div>
+            <div class="zone z-wave"><svg class="wave" data-cm="wave" viewBox="0 0 240 32" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+            <div class="zone z-tabs" data-cm="tabs"></div>
+            <div class="zone z-help" data-cm="help"></div>
+            <div class="zone z-strip"><div class="strip-box" data-cm="strip"></div></div>
+            <div class="zone z-pads" data-cm="pads"></div>
+            <div class="zone z-knobs" data-cm="knobs"></div>
+          </div>
+          <dl class="zl" data-cm="zones"></dl>
+        </div>
+        <div class="encoders" data-cm="encoders"></div>
+        <div class="kbd-wrap"><div class="kbd" data-cm="kbd" aria-label="Keys"></div></div>
+        <div class="keyrole" data-cm="keyrole"></div>
+        <div class="notes" data-cm="notes"></div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <h3>Buttons and their parts</h3>
+    <div class="legend"><span><i style="background:var(--amber)"></i>where a press lands from another page</span></div>
+    <div class="nav" data-cm="nav"></div>
+  </div>
+  <div>
+    <h3>Every page, every control</h3>
+    <div class="legend"><span><i style="background:var(--amber)"></i>ALGORITHM changes the break</span><span><i style="background:var(--faint)"></i>does nothing</span></div>
+    <div class="tbl"><table data-cm="matrix" aria-label="Every page and control"></table></div>
+  </div>
+  <div>
+    <h3>Who owns K1–K4</h3>
+    <p>First match wins.</p>
+    <div class="stack">
+      <div class="layer"><div class="rank">1</div><b>A white key held</b><ul><li>Anywhere but SEQ</li><li>Its loop: LENGTH, PITCH, START, MODE</li><li>FX flips to its slice effect: EFFECT, AMOUNT, TONE, LEVEL</li><li>SEL resets the key</li></ul></div>
+      <div class="layer"><div class="rank">2</div><b>A pad held</b><ul><li>Any page; a pad pressed after the key wins</li><li>Rolls: RATE, DECAY, PITCH, LEVEL</li><li>FILTER: TARGET, RESO, SPEED</li><li>DUB: TIME, FEEDBACK, TONE, MIX</li></ul></div>
+      <div class="layer"><div class="rank">3</div><b>The page</b><ul><li>What the explorer shows</li><li>SELECT is always the tempo, MASTER the volume</li><li>ALGORITHM and PRESETS follow the page</li></ul></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const root = document.getElementById("cmap");
+  if (!root) return;
+  const $ = (n) => root.querySelector('[data-cm="' + n + '"]');
+  const PAGES = [
+    { id: "home", btn: "HOME", name: "PERFORM", sub: "Gate, filter, FX, complexity", again: "nothing", subs: [
+      { n: "PERFORM", k: ["GATE", "DJ FILTER", "FX", "COMPLEXITY"], strip: "16 SLICE BLOCKS", note: "the slice playing lit; a held key outlined" } ],
+      algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
+      notes: [["SEL", "Tap tempo; held a second: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["SEL + SAVE", "Undo / redo the last pattern wipe"]] },
+    { id: "arp", btn: "ARP", name: "GENERATOR", sub: "How the break rearranges", again: "nothing", subs: [
+      { n: "GENERATOR", k: ["COMPLEXITY", "ANCHOR", "ROLL", "FILL"], strip: "16 SLICE BLOCKS", note: "as on HOME" } ],
+      algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
+      notes: [["SEL + ARP", "A random pattern over the one playing (SEL + SAVE undoes)"]] },
+    { id: "fx", btn: "FX", name: "FX CHAIN", sub: "Four slots in series", again: "next slot (4)", part: true, subs: [1, 2, 3, 4].map(n =>
+      ({ n: "SLOT " + n, k: ["PARAM 1", "PARAM 2", "PARAM 3", "MIX"], strip: "THE CHAIN: 4 SLOTS", note: n === 1 ? "the focused slot outlined" : "" })),
+      algo: "Slot", presets: "Effect", keys: "slices",
+      notes: [["SEL + FX", "Bypass the focused slot"], ["FX held + ALGO", "Move the slot along the chain"], ["Key held + FX", "That key's slice effect on K1–K4"]] },
+    { id: "glo", btn: "GLO", name: "GLOBAL", sub: "MIDI, pitch, Bluetooth audio", again: "next part (3)", subs: [
+      { n: "MIDI", k: ["CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"], strip: "BLUETOOTH · CLOCK IN · CLOCK OUT · PORTS", note: "status" },
+      { n: "PITCH", k: ["PITCH", "GRAIN", "SNAP", "RESET ALL"], strip: "PITCH MODE · GRAIN · SNAP", note: "what the snap is in this break" },
+      { n: "BT AUDIO", k: ["BT AUDIO", "DEVICE · CODEC*", "SCAN · TEST L/R*", "CONNECT"], strip: "BT AUDIO: STATE · DEVICES", note: "* while streaming" } ],
+      algo: "Part", presets: "Pattern P1–P16", keys: "slices", notes: [["K4 RESET ALL", "Turn twice within 3 s"]] },
+    { id: "edit", btn: "EDIT", name: "DRUM DESIGN", sub: "Kick, snare, hat sounds", again: "next drum (3)", part: true, subs: [
+      { n: "KICK · MIX", k: ["SUB", "PUNCH", "GRIT", "CLICK"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "ALGORITHM: MIX, SUB, SUB FX … CLICK FX, MACRO, OUT" },
+      { n: "KICK · LAYER", k: ["LEVEL", "PITCH", "DECAY", "TONE"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "SUB, PUNCH, GRIT, CLICK" },
+      { n: "KICK · LAYER FX", k: ["EFFECT", "A", "B", "WET"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "" },
+      { n: "KICK · MACRO", k: ["SUB", "PUNCH", "GRIT", "INTENSITY"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "" },
+      { n: "KICK · OUT", k: ["VOLUME", "", "", ""], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "" },
+      { n: "SNARE / HAT · SOUND", k: ["LEVEL", "TUNE", "DECAY", "TONE"], strip: "6 SETTINGS · THE 3 DRUMS", note: "EDIT again: the snare, then the hat" },
+      { n: "SNARE / HAT · SHAPE", k: ["SNAP / CUT", "DRIVE", "", ""], strip: "6 SETTINGS · THE 3 DRUMS", note: "" } ],
+      algo: "Part", presets: "Kick / sound", keys: "slices",
+      notes: [["Steps", "On SEQ's KICK, SNARE and HAT lanes"], ["MIDI 36 · 38 · 42", "Kick · snare · hat"]] },
+    { id: "lfo", btn: "LFO", name: "MIXER", sub: "Levels and groove", again: "next part (2)", subs: [
+      { n: "LEVELS", k: ["BREAK", "KICK", "PERC", "FX"], strip: "4 FADERS AND METERS", note: "FX shows the 4 slots" },
+      { n: "GROOVE", k: ["SWING", "DRUMS ROUTE", "", ""], strip: "SWING · THE DRUMS' ROUTE", note: "" } ],
+      algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices", notes: [] },
+    { id: "seq", btn: "SEQ", name: "SEQUENCER", sub: "16 patterns, all the steps", again: "next lane (5)", subs: [
+      { n: "1-16", k: ["SLICE", "PITCH", "HITS", "REVERSE"], strip: "16 STEPS · THE DRUM LANES", note: "the step edited outlined" },
+      { n: "17-32", k: ["SLICE", "PITCH", "HITS", "REVERSE"], strip: "16 STEPS · THE DRUM LANES", note: "" },
+      { n: "KICK", k: ["FILL", "ROTATE", "CLR / 4X4", "COPY"], strip: "THE KEYS: THIS LANE'S STEPS · LANES", note: "Euclidean fill, rotate, clear, copy" },
+      { n: "SNARE", k: ["FILL", "ROTATE", "CLR / 4X4", "COPY"], strip: "THE KEYS: THIS LANE'S STEPS · LANES", note: "" },
+      { n: "HAT", k: ["FILL", "ROTATE", "CLR / 4X4", "COPY"], strip: "THE KEYS: THIS LANE'S STEPS · LANES", note: "" } ],
+      algo: "Lane", presets: "Pattern P1–P16", keys: "steps",
+      notes: [["REC", "Record keys and MIDI notes into the pattern"], ["SEL + REC", "Clear: the lane here, the pattern elsewhere"]] }
+  ];
+  const PADS = ["R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND", "FLT", "DUB"];
+  let cur = 0, sub = 0;
+
+  (function wave() {
+    let d = "", seed = 7;
+    const r = () => (seed = (seed * 9301 + 49297) % 233280) / 233280;
+    for (let x = 0; x < 240; x += 2) {
+      const hit = (x % 15) < 2 ? 1 : Math.pow(1 - (x % 15) / 15, 2.2), h = Math.max(1, (hit * .85 + r() * .15) * 14);
+      d += '<rect x="' + x + '" y="' + (16 - h) + '" width="1.4" height="' + (h * 2) + '" fill="' + (x >= 60 && x < 75 ? "#ffb21a" : "#5a5a66") + '"/>';
+    }
+    $("wave").innerHTML = d + '<rect x="68" y="0" width="1" height="32" fill="#fff"/>';
+  })();
+  $("pads").innerHTML = PADS.map(p => "<span>" + p + "</span>").join("");
+  $("picker").innerHTML = PAGES.map((p, i) => '<button type="button" class="pbtn" data-i="' + i + '" aria-pressed="false"><span class="cap">' +
+    p.btn + '</span><span class="pname">' + p.name + "<small>" + p.sub + "</small></span></button>").join("");
+  $("picker").addEventListener("click", e => { const b = e.target.closest(".pbtn"); if (b) { cur = +b.dataset.i; sub = 0; render(); } });
+  $("subs").addEventListener("click", e => { const b = e.target.closest(".sub"); if (b) { sub = +b.dataset.i; render(); } });
+
+  function render() {
+    const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps";
+    root.querySelectorAll(".pbtn").forEach((b, i) => b.setAttribute("aria-pressed", String(i === cur)));
+    $("subs").innerHTML = p.subs.map((x, i) => '<button type="button" class="sub" data-i="' + i + '" aria-pressed="' + (i === sub) + '">' + x.n + "</button>").join("");
+    const tabs = p.id === "edit" ? ["KICK", "SNARE", "HAT"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
+    const on = p.id === "edit" ? (sub < 5 ? 0 : 1) : sub;
+    $("tabs").innerHTML = "<b>" + p.btn + "</b>" + tabs.map((t, i) => '<span class="' + (i === on ? "on" : "") + '">' + t + "</span>").join("") +
+      (p.part ? "<em>&lt; " + (p.id === "edit" ? s.n.split(" · ")[1] : "TREMOLO") + " &gt;</em>" : "");
+    $("help").className = "zone z-help" + (steps ? " steps" : "");
+    $("help").textContent = "KEYS " + (steps ? (sub < 2 ? "PICK STEP" : "LANE STEPS") : "SLICES") + "   ALGO " + p.algo.split(" (")[0].toUpperCase() + "   PRESETS " + p.presets.split(" ")[0].toUpperCase();
+    $("strip").innerHTML = s.strip + (s.note ? "<em>" + s.note + "</em>" : "");
+    $("knobs").innerHTML = s.k.map((k, i) => k ? "<div>" + k + "<b>·····</b></div>" : '<div class="empty">K' + (i + 1) + "<b>&nbsp;</b></div>").join("");
+    $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter", 1], ["WAVEFORM", "The break, the slice lit, the playhead", 1],
+      ["TABS", p.btn + " › " + tabs.join(" · "), 0], ["HELP", $("help").textContent.replace(/ {3}/g, " · "), 0],
+      ["STRIP", s.strip.toLowerCase(), 0], ["PADS", "11 pads, lit while held", 1], ["KNOBS", s.k.map(k => k || "—").join(" · "), 0]]
+      .map(([a, b, same]) => "<div><dt>" + a + '</dt><dd class="' + (same ? "same" : "") + '">' + b + "</dd></div>").join("");
+    const encs = [["SELECT", "Tempo (SEL: 0.1)", "on"], ["ALGORITHM", p.algo, "on"], ["PRESETS", p.presets, "on"]]
+      .concat(s.k.map((k, i) => ["K" + (i + 1), k || "—", k ? "on" : "dead"]));
+    $("encoders").innerHTML = encs.map(([n, f, c]) => '<div class="enc ' + c + '"><div class="knob"></div><div class="ename">' + n + '</div><div class="efn">' + f + "</div></div>").join("");
+    let h = "";
+    for (let i = 0; i < 16; i++) {
+      const lit = steps ? (sub >= 2 && i % 4 === 0) : i === 4;
+      h += '<div class="wk' + (lit ? " lit" : "") + '" style="left:calc(' + i + ' * 100% / 16 + 1px)">' + (steps ? i + 1 : "S" + (i + 1)) + "</div>";
+    }
+    [0, 1, 3, 4, 5, 7, 8, 10, 11, 12, 14].forEach((g, j) => { h += '<div class="bk" style="left:calc(' + (g + 1) + ' * 100% / 16 - 100% / 16 * .31)">' + PADS[j] + "</div>"; });
+    $("kbd").innerHTML = h;
+    $("keyrole").innerHTML = "<span>White keys: <b>" + (steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : "SLICES 1–16 (hold to loop)") +
+      "</b></span><span>Black keys: <b>PADS (momentary, any page)</b></span>";
+    $("notes").innerHTML = p.notes.map(([a, b]) => '<div class="note"><span>' + a + "</span>" + b + "</div>").join("") ||
+      '<div class="note"><span>No combinations</span>Only the controls every page shares.</div>';
+  }
+
+  $("nav").innerHTML = PAGES.map(p => '<div class="navrow"><span class="cap">' + p.btn + '</span><div class="chain">' +
+    p.subs.map((s, i) => '<span class="chip' + (i ? "" : " first") + '">' + s.n + "</span>").join('<span class="arr">→</span>') +
+    (p.subs.length > 1 ? '<span class="arr">↺</span>' : "") + '</div><span class="again' + (p.again === "nothing" ? " none" : "") + '">again: ' + p.again + "</span></div>").join("") +
+    '<div class="navrow"><span class="cap">REC</span><div class="chain"><span class="chip">record on / off</span></div><span class="again">SEL + REC: clear</span></div>' +
+    '<div class="navrow"><span class="cap">SAVE</span><div class="chain"><span class="chip">settings and 16 patterns</span></div><span class="again">SEL + SAVE: undo</span></div>' +
+    '<div class="navrow"><span class="cap">OCT ±</span><div class="chain"><span class="chip">pitch in semitones</span></div><span class="again">both: back to 0</span></div>';
+
+  let m = "<thead><tr><th>Page</th><th>Part</th><th>White keys</th><th>ALGORITHM</th><th>PRESETS</th><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr></thead><tbody>";
+  PAGES.forEach(p => p.subs.forEach((s, i) => {
+    m += '<tr class="' + (i ? "" : "grp") + '">' + (i ? "<td></td>" : "<td>" + p.btn + "<small>" + p.name + "</small></td>") +
+      "<td>" + s.n + "</td><td>" + p.keys + '</td><td class="' + (p.brk ? "brk" : "") + '">' + p.algo + "</td><td>" + p.presets + "</td>" +
+      s.k.map(k => k ? "<td>" + k + "</td>" : '<td class="e">—</td>').join("") + "</tr>";
+  }));
+  $("matrix").innerHTML = m + "</tbody>";
+  render();
+})();
+</script>

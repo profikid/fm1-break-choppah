@@ -19,8 +19,9 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 8. The drums: kick, snare, hat
 9. The mixer
 10. Pages and knobs
-11. Saving
-12. Troubleshooting
+11. The control map
+12. Saving
+13. Troubleshooting
 
 ---
 
@@ -59,7 +60,7 @@ in (an effect, a kick, a snare or hat sound); elsewhere it is the pattern. **SEQ
 (the break's steps and the kick, snare and hat lanes), **EDIT where the drums' sounds are made** (kick, snare, hat);
 the white keys play slices everywhere but SEQ. **SEL + ALGORITHM is the break and SEL +
 PRESETS the pattern on every page.** A page's button pressed again is its next part. **Hold SEL** alone for a second
-and the strip lists its combinations.
+and the strip lists its combinations. The control map (§11) shows all of it at once.
 
 ![SEL held: its combinations on the strip; the help line under the waveform; the HOME knobs](img/screen-selhelp.png "SEL held")
 
@@ -390,14 +391,21 @@ The generator rearranges the break as it plays: **complexity** is how often it j
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
 of a phrase. SEL + ARP writes a random pattern.
 
-## 11. Saving
+## 11. The control map
+
+Every page, button, encoder and key in one place. On the [site's manual](https://profikid.github.io/fm1-break-choppah/manual/#controls)
+this section is interactive: pick a page and the screen, the seven encoders and the keys show what they do there;
+below it, each button with its parts, the whole map as one table, and which of a held key, a held pad or the page
+owns K1–K4. Here, in short: §2 has the rules, §10 every page's knobs.
+
+## 12. Saving
 
 SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop, the drums, the
 mixer, the GLOBAL settings and all 16 patterns; SAVE is lit when something changed. A new version keeps what an older
 one saved: new settings start at their defaults. (Version 0.32 changed the layout: what 0.31 and older saved starts
 over at the defaults once; Bluetooth pairings stay.) GLOBAL's RESET ALL clears it all on purpose (§7).
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 - **No sound:** turn MASTER up; press PLAY.
 - **A crash screen:** press a key to restart. Two failed starts in a row start safe mode, which the installer can

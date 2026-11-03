@@ -18,6 +18,7 @@ PY="${PYTHON:-python3}"
 ./build.sh --web --release "$VER"
 rm -rf build/site
 "$PY" base/tools/make_site.py app "app/build/choppah-$VER.fwsc" "$VER" build/site
+"$PY" tools/site_style.py build/site          # CHOPPAH's look, and the control map in the manual
 
 case "$DEST" in
     *:*) rsync -az --delete build/site/ "$DEST/" ;;

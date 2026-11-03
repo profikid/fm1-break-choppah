@@ -102,6 +102,7 @@ jobs:
           ./build.sh --release "$VERSION"
           ./build.sh --web --release "$VERSION"     # the emulator shows the version too
           /usr/bin/python3 base/tools/make_site.py app "app/build/choppah-$VERSION.fwsc" "$VERSION" site
+          /usr/bin/python3 tools/site_style.py site    # CHOPPAH's look, and the control map in the manual
 
       - uses: actions/upload-pages-artifact@v3
         with:
