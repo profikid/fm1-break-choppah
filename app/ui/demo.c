@@ -1,16 +1,16 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* CHOPPAH: the demo (PRD B-54). Left alone for a minute while stopped (three while playing), the FM-1 shows four
+/* CHOPPAH: the demo (PRD B-54). Left alone for a minute while stopped (three while playing), the FM-1 shows five
  * scenes in turn, eight seconds each, on the tempo (the break's beat while it plays, a clock of its own stopped), the
  * lights animating with them: BARS (the mark's sixteen bars bouncing to an Amen beat), WAVE (the break's waveform
  * scrolling under a playhead, a slice chopped out of line on each beat), TUNNEL (squares rushing out from the
- * name, a white one on each beat) and STARS (slice blocks flying out of the screen). A comet runs through the
+ * name, a white one on each beat), WORMHOLE (rings of dots twisting down a bending tunnel to a glowing core) and STARS (slice blocks flying out of the screen). A comet runs through the
  * buttons all the while; the keys light with each scene. Any key, button or knob ends it, and does nothing else.
  * (Part of app.c's unity: included there in order, after screen.c.) */
 
 #define DEMO_IDLE_MS 60000u              /* stopped: a minute untouched */
 #define DEMO_IDLE_PLAY_MS 180000u        /* playing: three */
 #define DEMO_SCENE_MS 8000u
-#define DEMO_SCENES 4u
+#define DEMO_SCENES 5u
 #define DEMO_FRAME_MS 40u                /* 25 frames a second */
 #define DEMO_STARS 64u
 
@@ -156,6 +156,52 @@ static void demo_tunnel(uint32_t now, int32_t top)   /* TUNNEL: squares rushing 
     cv_text2((240 - text2_w(&FONT_B, APP_NAME)) / 2, 102 - top, &FONT_B, APP_NAME, C_WHITE);
 }
 
+/* WORMHOLE: fourteen rings of twenty-four dots rushing at you, two a beat (a jolt on each beat), each turned a little
+ * from the last, and each dot joined to its next ring's by a line: a wireframe tube whose seams run in spiral arms.
+ * The far end bends round (the rings' centres follow a slow curve, the farther the more) to a glowing core. Near
+ * rings bigger, brighter, their dots larger; every fourth ring white */
+#define WH_RINGS 14u
+#define WH_DOTS 24u
+static void demo_wormhole(uint32_t now, int32_t top)
+{
+    float t = (float)(now - demo.t0) * 0.001f, f = demo.beat - (float)(int32_t)demo.beat;
+    float run = demo.beat * 2.0f + (f < 0.2f ? f * 2.5f : 0.5f), fr = run - (float)(int32_t)run;
+    float bx = brk_sin_turns(t * 0.07f), by = brk_sin_turns(t * 0.05f + 0.3f), spin = t * 0.08f;
+    int16_t px[WH_DOTS], py[WH_DOTS];    /* the farther ring's dots, for the seams */
+    uint32_t i, j, have = 0u;
+    for (i = WH_RINGS; i-- > 0u;) {      /* far to near: the near ones over */
+        float w = 1.0f - ((float)i + fr) / (float)WH_RINGS;   /* 1 far .. 0 near */
+        float r = 9.0f / (w + 0.055f), cxf = 120.0f + 70.0f * bx * w * w, cyf = 120.0f + 60.0f * by * w * w;
+        uint32_t n = (uint32_t)(int32_t)run - i;   /* the ring's own number, as it comes closer */
+        int32_t sz = 1 + (int32_t)(7.0f * (1.0f - w) * (1.0f - w)), cy = (int32_t)cyf - top;
+        uint16_t seam = w < 0.35f ? C_HI : w < 0.7f ? C_AMB : C_BLOCK;
+        if (w <= 0.0f || r > 260.0f) {
+            have = 0u;
+            continue;                    /* (behind the eye) */
+        }
+        for (j = 0; j < WH_DOTS; j++) {
+            float a = (float)j * (1.0f / (float)WH_DOTS) + (float)n * 0.031f + spin;
+            int32_t x = (int32_t)(cxf + r * brk_sin_turns(a + 0.25f)), y = cy + (int32_t)(r * brk_sin_turns(a));
+            uint16_t c = n % 4u == 0u ? C_WHITE : (j + n) % 6u == 0u ? C_WHITE
+                       : w < 0.35f ? C_BLOCK_HI : w < 0.7f ? C_HI : C_DIM;
+            if (have && (y > -40 || py[j] > -40) && (y < 100 || py[j] < 100))
+                cv_line(px[j], py[j], x, y, seam);   /* the seam from the farther ring */
+            if (y + sz >= 0 && y - sz < 60)
+                cv_rect(x - sz / 2, y - sz / 2, sz, sz, c);
+            px[j] = (int16_t)x;
+            py[j] = (int16_t)y;
+        }
+        have = 1u;
+    }
+    {                                    /* the core: where the far end bends to, glowing, over the far seams */
+        int32_t cx = 120 + (int32_t)(70.0f * bx), cy = 120 + (int32_t)(60.0f * by) - top, g;
+        for (g = 4; g >= 1; g--)
+            cv_rect(cx - g * 3, cy - g * 3, g * 6, g * 6, g == 1 ? C_WHITE : g == 2 ? C_BLOCK_HI : g == 3 ? C_HI : C_BLOCK);
+    }
+    if (top >= 180)
+        demo_press(top);
+}
+
 static void demo_stars(int32_t top)     /* STARS: slice blocks flying out of the screen */
 {
     uint32_t i;
@@ -181,7 +227,7 @@ static void demo_frame(uint32_t now)
     demo.drawn = now;
     demo_clock(now);
     sc = demo_scene(now);
-    if (sc == 3u)                        /* the stars come closer, faster on the beat */
+    if (sc == 4u)                        /* the stars come closer, faster on the beat */
         for (i = 0; i < DEMO_STARS; i++) {
             float f = demo.beat - (float)(int32_t)demo.beat;
             demo_sky.sz[i] -= 0.012f + (f < 0.25f ? 0.02f : 0.0f);
@@ -198,6 +244,8 @@ static void demo_frame(uint32_t now)
             demo_wave(top);
         else if (sc == 2u)
             demo_tunnel(now, top);
+        else if (sc == 3u)
+            demo_wormhole(now, top);
         else
             demo_stars(top);
         cv_blit(0, (uint32_t)top);
@@ -244,6 +292,15 @@ static void demo_leds(uint32_t now)
             kd |= 1u << WK[i];
         if (f < 0.15f)
             for (i = 0; i < 11u; i++)
+                k |= 1u << BK[i];
+    } else if (sc == 3u) {               /* WORMHOLE: two lights swirling round the white keys, the black on the beat */
+        uint32_t p = t / 45u % 16u;
+        k |= 1u << WK[p] | 1u << WK[(p + 8u) % 16u];
+        km |= 1u << WK[(p + 15u) % 16u] | 1u << WK[(p + 7u) % 16u];
+        for (i = 0; i < 16u; i++)
+            kd |= 1u << WK[i];
+        if (f < 0.2f)
+            for (i = (uint32_t)(int32_t)demo.beat & 1u; i < 11u; i += 2u)
                 k |= 1u << BK[i];
     } else {                             /* STARS: the keys twinkling */
         static uint32_t last;

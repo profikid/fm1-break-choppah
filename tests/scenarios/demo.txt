@@ -1,4 +1,4 @@
-# CHOPPAH: the demo. A minute untouched (stopped) and the four scenes run, eight seconds each, the lights with them;
+# CHOPPAH: the demo. A minute untouched (stopped) and the five scenes run, eight seconds each, the lights with them;
 # a press ends it and does nothing else (here HOME's: the page stays PERFORM, the break stays stopped)
 #   app/build/host/choppah_host tests/scenarios/demo.txt app/build/scenarios
 wait 2600
@@ -19,6 +19,11 @@ wait 8000
 shot d_tunnel.png
 leds
 wait 8000
+shot d_wormhole.png
+leds
+wait 300
+shot d_wormhole2.png
+wait 7700
 shot d_stars.png
 leds
 tap PLAY
