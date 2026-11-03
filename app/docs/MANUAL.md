@@ -28,7 +28,7 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 
 **Try it first:** the emulator runs the same code in the browser, with sound, played with the mouse.
 
-**Install:** open the install page in Chrome or Edge, connect the FM-1 by USB and press Install. If the FM-1 runs
+**Install:** open the install page in Chrome or Edge, connect the FM-1 by USB and press Install. When it is done, the page throws confetti. If the FM-1 runs
 M-VAVE's FM1 Open firmware, put M-VAVE's original firmware back first (M-VAVE's workbench, *Restore original*), then
 install CHOPPAH.
 

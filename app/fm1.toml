@@ -12,6 +12,7 @@ words = "words.tsv"
 include = ["dsp"]
 o2 = ["dsp/*.c"]               # the engine, at -O2
 # the site (tools/make_site.py)
+install_app = "site/install_app.js"   # confetti when the install is done
 tagline = "An Amen chopper for the FM-1"
 repo = "https://github.com/profikid/fm1-break-choppah"
 licence = "MPL-2.0"
