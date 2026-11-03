@@ -297,6 +297,37 @@ static void draw_lobotomy(void)
     }
 }
 
+/* the start screen's lights: a comet runs through the buttons as the break drops in (OCT- and OCT+, the top row left
+ * to right, the bottom row back), a tail of mid-lit buttons behind it and the ones it passed glowing; then all flash
+ * as the mark completes, and PLAY blinks green with PRESS PLAY. Returns 0 once the start screen is over */
+static int intro_leds(uint32_t now)
+{
+    static const uint8_t PATH[NB] = {B_OCTDN, B_OCTUP, B_FX, B_SEL, B_ENV, B_LFO, B_EDIT, B_GLO,
+                                     B_REC, B_PLAY, B_SEQ, B_ARP, B_SAVE, B_HOME};
+    uint32_t t = now - ui.intro_t0, run = 16u * INTRO_STEP, b = 0u, mid = 0u, dim = 0u, i;
+    if (!ui.intro)
+        return 0;
+    if (t < run) {                       /* the comet */
+        uint32_t head = t * (NB + 2u) / run;   /* (+2: its tail runs out too) */
+        for (i = 0; i < NB; i++)
+            if (i == head)
+                b |= 1u << PATH[i];
+            else if (i + 2u >= head && i < head)
+                mid |= 1u << PATH[i];
+            else if (i < head)
+                dim |= 1u << PATH[i];
+    } else if (t < run + 160u)           /* the mark complete: all flash */
+        b = ((1u << NB) - 1u) | LED_PLAY_GREEN;
+    else {                               /* PRESS PLAY: PLAY blinks green, the rest glow */
+        dim = ((1u << NB) - 1u) & ~(1u << B_PLAY);
+        if ((t - run - 160u) % 500u < 250u)
+            b = LED_PLAY_GREEN;
+    }
+    plat_lights(b, 0u, dim, 0u, 1);
+    plat_lights_mid(mid, 0u);
+    return 1;
+}
+
 static void intro_end(void)
 {
     ui.intro = 0u;

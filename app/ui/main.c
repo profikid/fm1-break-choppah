@@ -518,8 +518,17 @@ void app_input_only(void) { input(); }
 
 static void leds(void)
 {
+    static uint8_t after_intro;
     brk_status_t st;
     uint32_t b = 0u, k = 0u, i;
+    if (intro_leds(plat_ms())) {         /* the start screen's own (screen.c) */
+        after_intro = 1u;
+        return;
+    }
+    if (after_intro) {                   /* (its mid-lit tail let go) */
+        after_intro = 0u;
+        plat_lights_mid(0u, 0u);
+    }
     brk_status(&st);
     if (st.playing)
         b |= 1u << B_PLAY;

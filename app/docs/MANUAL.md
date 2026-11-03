@@ -38,7 +38,8 @@ install CHOPPAH.
 
 ## 2. The screens
 
-At power-on CHOPPAH shows its mark, then the start screen: the loaded break drops in slice by slice. After two
+At power-on CHOPPAH shows its mark, then the start screen: the loaded break drops in slice by slice while a light
+runs through the buttons, they all flash as it completes, and PLAY blinks green. After two
 seconds, or at once on any key, the **slicer view** opens. PLAY on the start screen also starts the break.
 
 ![The start screen](img/screen-start.png "The start screen")
