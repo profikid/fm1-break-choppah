@@ -179,5 +179,5 @@ static void global_part(uint32_t g)      /* GLO (again: the next part) and ALGOR
     ui.gpage = (uint8_t)g;
     ui.page = PG_GLOBAL;
     ui.redraw |= RG_FOOT | RG_BLOCKS;
-    app_say("GLOBAL", g == 2u ? "BT AUDIO" : g ? "PITCH, SNAP" : "MIDI");
+    page_say();
 }

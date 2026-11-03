@@ -51,6 +51,7 @@ static struct {
     uint8_t redraw;                      /* RG_* bits: the regions to draw again */
 } ui;
 /* the white keys play slices (or, on the SEQ, KICK and SNARE / HAT pages, steps) */
+static void page_say(void);              /* the header: the page's button and part, as its tabs (main.c) */
 static int slices_page(void) { return ui.page != PG_SEQ && ui.page != PG_TAP; }   /* (SEQ: steps; TAP: taps) */
 enum { RG_HEAD = 1, RG_WAVE = 2, RG_BLOCKS = 4, RG_FOOT = 8, RG_ALL = 15, RG_FX = 16 };
 

@@ -48,6 +48,9 @@ The slicer view, top to bottom:
 - **The break:** its waveform, the slice markers, the slice sounding lit, the playhead.
 - **Tabs:** the button you pressed (as printed on the panel), then the page's parts as tabs, the one you are on lit:
   the button again (or ALGORITHM) goes to the next. On EDIT and FX the part edited shows at the right, "< SUB FX >".
+  Opening a page, or turning to another part, says the same in the header for a moment: the button, then the part
+  ("GLO PITCH", "EDIT KICK SUB FX", "FX SLOT 2 TREMOLO", "SEQ HAT"). ENV's tap tempo, which takes the whole screen,
+  keeps its tab at its foot.
 - **Slice blocks:** sixteen blocks, one per white key, each with its slice's waveform. The slice sounding is lit;
   a key held is outlined; a dot marks a key with a loop of its own (§3, key loops).
 - **Pads:** the eleven black-key pads, lit while held.

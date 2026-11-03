@@ -122,17 +122,11 @@ static void knob_turn(int k, int32_t d)
 /* EDIT: the drum ui.einst's sound (the kick's page, or the snare's or the hat's) */
 static void edit_open(void)
 {
-    char t[16];
-    t[0] = 0;
     ui.page = ui.einst ? PG_PERC : PG_KICK;
     ui.redraw |= RG_FOOT | RG_BLOCKS;
-    if (ui.einst) {
+    if (ui.einst)
         ui.pvoice = (uint8_t)(ui.einst - 1u);
-        app_say(PERC_VOICE_NAME[ui.pvoice], ui.ppage ? "SHAPE" : "SOUND");
-    } else {
-        kick_part_name(kick_part(), t);
-        app_say("KICK", t);
-    }
+    page_say();
 }
 
 /* a break change (ALGORITHM): its name at once, the break itself at the next bar. Playing, break_poll waits for
@@ -269,7 +263,7 @@ static void input(void)
     if (bdn & 1u << B_HOME) {
         ui.page = PG_HOME;
         ui.redraw |= RG_FOOT | RG_BLOCKS;
-        app_say("HOME", "PERFORM");
+        page_say();
     }
     if (bdn & 1u << B_GLO)               /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, BT audio */
         global_part(ui.page == PG_GLOBAL ? (ui.gpage + 1u) % 3u : 0u);
@@ -282,7 +276,7 @@ static void input(void)
         ui.mpage = ui.page == PG_MIX ? (uint8_t)!ui.mpage : 0u;
         ui.page = PG_MIX;
         ui.redraw |= RG_FOOT | RG_BLOCKS;
-        app_say("MIXER", ui.mpage ? "GROOVE" : "LEVELS");
+        page_say();
     }
     if (bdn & 1u << B_ENV) {             /* ENV: TAP TEMPO, the whole screen; again: a tap */
         if (ui.page == PG_TAP)
@@ -291,7 +285,7 @@ static void input(void)
             slices_let_go(keys);
             ui.page = PG_TAP;
             ui.redraw |= RG_FOOT | RG_BLOCKS;
-            app_say("TAP TEMPO", "ENV OR WHITE KEYS");
+            page_say();
         }
     }
     if (bdn & 1u << B_SEQ) {             /* SEQ: the pattern's steps and lanes; again, the next lane */
@@ -301,7 +295,7 @@ static void input(void)
             ui.seq_lane = (uint8_t)((ui.seq_lane + 1u) % NSEQL);
         ui.page = PG_SEQ;
         ui.redraw |= RG_FOOT | RG_BLOCKS;
-        app_say("SEQ", SEQ_LANE_NAME[ui.seq_lane % NSEQL]);
+        page_say();
     }
     if (bdn & 1u << B_REC && btn & 1u << B_SEL) {   /* SEL + REC: clear (on SEQ its lane; else the pattern) */
         seq_clear(ui.page == PG_SEQ);
@@ -317,10 +311,11 @@ static void input(void)
             pat_read_back();             /* (into the pattern playing: SAVE keeps it) */
             set_dirty = 1u;
             app_say("RANDOMIZE", "");
-        } else
-            app_say("ARP", "GENERATOR");
+        }
         ui.page = PG_GEN;
         ui.redraw |= RG_FOOT | RG_BLOCKS;
+        if (!(btn & 1u << B_SEL))
+            page_say();
     }
     if (bdn & 1u << B_FX && key_tuned() >= 0) {   /* FX with a key held: its knobs, loop <-> slice effect */
         ui.key_layer ^= 1u;
@@ -341,9 +336,9 @@ static void input(void)
         if (ui.page == PG_FX) {
             ui.fx_hold = 1u;
             ui.fx_turned = 0u;
-        } else
-            app_say("FX CHAIN", "");
+        }
         ui.page = PG_FX;
+        page_say();
         ui.redraw |= RG_FOOT | RG_BLOCKS;
     }
     if (ui.fx_hold && !(btn & 1u << B_FX)) {   /* FX let go: alone, the next slot; with ALGORITHM turned, a move */
@@ -440,11 +435,11 @@ static void input(void)
                 ui.redraw |= RG_BLOCKS | RG_FOOT;
             } else if (ui.page == PG_SEQ) {   /* SEQ: the lane its keys edit */
                 ui.seq_lane = (uint8_t)((ui.seq_lane + (d > 0 ? 1u : NSEQL - 1u)) % NSEQL);
-                app_say("SEQ", SEQ_LANE_NAME[ui.seq_lane]);
+                page_say();
                 ui.redraw |= RG_BLOCKS | RG_FOOT;
             } else if (ui.page == PG_PERC) {   /* the snare or the hat: SOUND or SHAPE */
                 ui.ppage ^= 1u;
-                app_say(PERC_VOICE_NAME[ui.pvoice % PERC_VOICES], ui.ppage ? "SHAPE" : "SOUND");
+                page_say();
                 ui.redraw |= RG_BLOCKS | RG_FOOT;
             } else if (ui.page == PG_FX)
                 fx_algo(d, 0u);
@@ -629,6 +624,40 @@ static void draw_tabs(void)
         cv_text(236 - text_w(&FONT_T, t), 1, &FONT_T, t, C_HI);
     }
     cv_blit(0, 74);
+}
+
+/* the header, when a page opens or turns to another part: the button as printed and the part as its tab shows it
+ * ("GLO PITCH", "EDIT KICK SUB FX", "FX SLOT 2 TREMOLO", "SEQ HAT", "ENV TAP TEMPO") */
+static void page_say(void)
+{
+    static const char *const BTN[NPAGES] = {"HOME", "ARP", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV"};
+    static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
+    static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
+    char t[24];
+    t[0] = 0;
+    switch (ui.page) {
+    case PG_HOME: text_cat(t, "PERFORM"); break;
+    case PG_GEN: text_cat(t, "GENERATOR"); break;
+    case PG_GLOBAL: text_cat(t, GPART[ui.gpage % 3u]); break;
+    case PG_MIX: text_cat(t, ui.mpage ? "GROOVE" : "LEVELS"); break;
+    case PG_SEQ: text_cat(t, SEQL[ui.seq_lane % NSEQL]); break;
+    case PG_TAP: text_cat(t, "TAP TEMPO"); break;
+    case PG_FX:
+        text_cat(t, "SLOT ");
+        int_text((int32_t)(ui.fx_focus & 3u) + 1, t + 5);
+        text_cat(t, " ");
+        text_cat(t, BRK_FXT_NAME[set.fx.slot[ui.fx_focus & 3u].type]);
+        break;
+    case PG_KICK:
+        text_cat(t, "KICK ");
+        kick_part_name(kick_part(), t);
+        break;
+    default:
+        text_cat(t, PERC_VOICE_NAME[ui.pvoice % PERC_VOICES]);
+        text_cat(t, ui.ppage ? " SHAPE" : " SOUND");
+        break;
+    }
+    app_say(BTN[ui.page % NPAGES], t);
 }
 
 /* SEL held alone: its combinations, on the strip (FX page: its own two) */

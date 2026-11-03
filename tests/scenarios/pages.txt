@@ -1,0 +1,67 @@
+# CHOPPAH: every page button, again for its next part, and ALGORITHM where it picks a part: each one says the button
+# and the part in the header (as its tabs show), and lights its button
+#   app/build/host/choppah_host tests/scenarios/pages.txt app/build/scenarios
+wait 2600
+tap HOME
+wait 120
+expect page 0
+shot n_home.png
+tap ARP
+wait 120
+expect page 1
+shot n_arp.png
+tap FX
+wait 120
+expect page 2
+shot n_fx.png
+tap FX
+wait 120
+expect fx_focus 1
+shot n_fx2.png
+tap GLO
+wait 120
+expect page 3
+shot n_glo.png
+tap GLO
+wait 120
+expect gpage 1
+shot n_glo2.png
+turn ALGO 1 10
+wait 120
+expect gpage 2
+shot n_glo3.png
+tap EDIT
+wait 120
+expect page 4
+shot n_edit.png
+turn ALGO 2 10
+wait 120
+shot n_edit_part.png
+tap EDIT
+wait 120
+expect page 7
+shot n_edit2.png
+turn ALGO 1 10
+wait 120
+shot n_edit2_part.png
+tap LFO
+wait 120
+expect page 5
+shot n_lfo.png
+tap LFO
+wait 120
+shot n_lfo2.png
+tap ENV
+wait 120
+expect page 8
+shot n_env.png
+wait 1500
+shot n_env_later.png
+tap SEQ
+wait 120
+expect page 6
+shot n_seq.png
+tap SEQ
+wait 120
+expect seq_lane 1
+shot n_seq2.png

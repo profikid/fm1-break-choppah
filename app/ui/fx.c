@@ -169,7 +169,10 @@ static void fx_algo(int32_t d, uint32_t sel)
     }
     ui.fx_focus = (uint8_t)b;
     int_text((int32_t)b + 1, n);
-    app_say(sel ? "MOVED TO" : "SLOT", n);
+    if (sel)
+        app_say("MOVED TO", n);
+    else
+        page_say();
     ui.redraw |= RG_BLOCKS | RG_FOOT;
 }
 static int delay_slot(void)              /* the chain's DELAY in use (the first one on), -1 none */

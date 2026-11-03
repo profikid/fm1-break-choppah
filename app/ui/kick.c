@@ -27,8 +27,6 @@ static void kick_part_name(uint32_t p, char *t)
 }
 static void kick_part_set(uint32_t p)
 {
-    char t[16];
-    t[0] = 0;
     if (p == 0u)
         ui.kpage = KP_MIX;
     else if (p == KPARTS - 2u)
@@ -39,8 +37,7 @@ static void kick_part_set(uint32_t p)
         ui.kpage = (p - 1u) & 1u ? KP_FX : KP_LAYER;
         ui.klayer = (uint8_t)((p - 1u) / 2u);
     }
-    kick_part_name(p, t);
-    app_say("KICK", t);
+    page_say();
 }
 static const char *const KN_KICK[KPAGES][4] = {{"SUB", "PUNCH", "GRIT", "CLICK"},
                                                {"LEVEL", "PITCH", "DECAY", "TONE"},

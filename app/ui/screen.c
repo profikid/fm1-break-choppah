@@ -221,8 +221,12 @@ static void draw_tap(const brk_status_t *st, uint32_t now, int full)
                 cv_rect(48, 140, 30, 3, C_BLOCK);
                 cv_rect(48, 140, (int32_t)set.click * 30 / 100, 3, C_HI);
             }
-            cv_text(8, 158, &FONT_XS, "TAP", C_GRAY);
-            cv_text(8, 174, &FONT_XS, ext ? "EXT CLOCK" : "ENV / KEYS", C_DIM);
+            cv_text(8, 156, &FONT_XS, ext ? "EXT CLOCK" : "TAP: ENV / KEYS", C_DIM);
+            {                            /* the page's tab, as on every other page */
+                int32_t x = cv_text(8, 176, &FONT_T, "ENV", C_WHITE) + 6, w = text_w(&FONT_T, "TAP TEMPO") + 8;
+                cv_rect(x, 175, w, 13, C_HI);
+                cv_text(x + 4, 176, &FONT_T, "TAP TEMPO", C_BLACK);
+            }
             if (st->playing && !ext) {   /* the beat at the right: 1 (white) .. 4 */
                 char t[2] = {(char)('1' + (beat & 3)), 0};
                 cv_text(200, 140, &FONT_XS, "BEAT", C_GRAY);
