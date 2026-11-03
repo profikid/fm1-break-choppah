@@ -1237,6 +1237,19 @@ static void test_perc(void)
         CHECK(e[0] > e[1] * 4.0f, "snare body at its tune (%.0f Hz): %.1f dB over 2.9x it", want,
               10.0f * log10f(e[0] / (e[1] + 1e-9f)));
     }
+    {                                    /* the screen's shape of a hit: loud at its start, quiet by its end */
+        perc_t ps;
+        uint8_t px[66];
+        uint32_t v2, c, pk;
+        perc_defaults(&ps);
+        for (v2 = 0; v2 < PERC_VOICES; v2++) {
+            perc_shape(v2, &ps.v[v2], px, 66u, 400u, 30u);
+            for (c = 0, pk = 0; c < 66u; c++)
+                pk = px[c] > pk ? px[c] : pk;
+            CHECK(pk >= 3u && px[65] < pk / 2u && (px[0] == pk || px[1] == pk || px[2] == pk),
+                  "perc_shape %u: a hit at its start, then its tail (%u .. %u)", v2, pk, px[65]);
+        }
+    }
 }
 
 /* the kick (PRD K-*): its layers, its decay, its hits on their samples, the presets, the steps' events */

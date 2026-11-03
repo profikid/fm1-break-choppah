@@ -560,25 +560,6 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
         fx_value(ui.fx_focus, i, t);
 }
 
-/* the line under the waveform: what the white keys, ALGORITHM and PRESETS do on this page (amber: the keys are
- * steps here, not slices) */
-static void page_help(void)
-{
-    static const char *const ALGO[NPAGES] = {"BREAK", "BREAK", "SLOT", "PART", "PART", "BREAK", "LANE", "PART", "BREAK"};
-    static const char *const PRE[NPAGES] = {"PATTERN", "PATTERN", "EFFECT", "PATTERN", "KICK", "PATTERN", "PATTERN",
-                                            "SOUND", "PATTERN"};
-    char t[48] = "KEYS ";
-    int steps = !slices_page();
-    text_cat(t, ui.page != PG_SEQ ? "SLICES" : ui.seq_lane < SL_KICK ? "PICK STEP" : "LANE STEPS");
-    text_cat(t, "   ALGO ");
-    text_cat(t, ALGO[ui.page % NPAGES]);
-    text_cat(t, "   PRESETS ");
-    text_cat(t, PRE[ui.page % NPAGES]);
-    cv_begin(240, 12, C_BLACK);
-    cv_text((240 - text_w(&FONT_T, t)) / 2, 0, &FONT_T, t, steps ? C_AMB : C_DIM);
-    cv_blit(0, 76);
-}
-
 /* the tab bar under the waveform: the button's name, then the page's parts as tabs (the one you are on lit: the
  * button again, or ALGORITHM, goes to the next); EDIT and FX also name the part edited, "< SUB FX >" */
 static int32_t tab(int32_t x, const char *s, int on)
@@ -632,7 +613,7 @@ static void draw_tabs(void)
         text_cat(t, " >");
         cv_text(236 - text_w(&FONT_T, t), 1, &FONT_T, t, C_HI);
     }
-    cv_blit(0, 62);
+    cv_blit(0, 74);
 }
 
 /* SEL held alone: its combinations, on the strip (FX page: its own two) */
@@ -674,10 +655,8 @@ static void draw_foot(const brk_status_t *st)
                                               {"TEMPO", "FINE", "HALF / X2", ""}};
     uint32_t i;
     char t[16];
-    if (ui.page != PG_TAP) {             /* (TAP draws those rows itself) */
+    if (ui.page != PG_TAP)               /* (TAP draws those rows itself) */
         draw_tabs();
-        page_help();
-    }
     cv_begin(240, 48, C_BLACK);
     for (i = 0; i < 11u; i++) {
         int on = (st->pads >> i) & 1u;

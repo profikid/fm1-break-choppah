@@ -171,6 +171,31 @@ void perc_render(float *out, uint32_t n, const uint16_t *at, const uint8_t *who,
     }
 }
 
+void perc_shape(uint32_t voice, const perc_voice_t *s, uint8_t *px, uint32_t n, uint32_t ms, uint32_t height)
+{
+    pc_t c;
+    pv_t v;
+    uint32_t i, k, per = ms * (BRK_SR / 1000u) / (n ? n : 1u);
+    voice %= PERC_VOICES;
+    pc_make(voice, s, 1.0f, &c);
+    for (k = 0; k < 6u; k++)
+        v.ph[k] = 0.0f;
+    v.hp1 = v.hp2 = v.lp = v.last = v.declick = 0.0f;
+    pv_hit(&v);
+    v.declick = 0.0f;
+    for (i = 0; i < n; i++) {
+        uint32_t j;
+        float pk = 0.0f;
+        for (j = 0; j < per; j++) {
+            float x = voice == PV_SNARE ? snare_tick(&v, &c) : hat_tick(&v, &c);
+            x = brk_absf(soft(x * c.g) * c.make * c.lvl);
+            if (x > pk)
+                pk = x;
+        }
+        px[i] = (uint8_t)(brk_clampf(pk, 0.0f, 1.0f) * (float)height + 0.5f);
+    }
+}
+
 /* the built-in sounds: level, tune, decay, tone, snap (the hat's cut), drive */
 static const float PRESET[PERC_VOICES][PERC_PRESETS][6] = {
     {{0.80f, 0.45f, 0.40f, 0.50f, 0.55f, 0.10f},    /* 909 */

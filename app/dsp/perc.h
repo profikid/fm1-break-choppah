@@ -33,3 +33,6 @@ void perc_hit(uint32_t voice);           /* main loop (a MIDI note): at the next
 /* render: n samples into out (overwritten); hits at the sample offsets at[0..nat-1] (rising), who[k] the voices
  * (bit PV_*) hit there */
 void perc_render(float *out, uint32_t n, const uint16_t *at, const uint8_t *who, uint32_t nat);
+/* main loop: one hit of the voice as the screen draws it, offline: px[i] the peak (0..height) of the ith of n columns
+ * over its first ms milliseconds, at its level (not the volume) */
+void perc_shape(uint32_t voice, const perc_voice_t *v, uint8_t *px, uint32_t n, uint32_t ms, uint32_t height);

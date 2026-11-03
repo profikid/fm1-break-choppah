@@ -48,8 +48,6 @@ The slicer view, top to bottom:
 - **The break:** its waveform, the slice markers, the slice sounding lit, the playhead.
 - **Tabs:** the button you pressed (as printed on the panel), then the page's parts as tabs, the one you are on lit:
   the button again (or ALGORITHM) goes to the next. On EDIT and FX the part edited shows at the right, "< SUB FX >".
-- **Help line:** what the white keys, ALGORITHM and PRESETS do on this page; amber on SEQ, where the white keys are
-  steps.
 - **Slice blocks:** sixteen blocks, one per white key, each with its slice's waveform. The slice sounding is lit;
   a key held is outlined; a dot marks a key with a loop of its own (§3, key loops).
 - **Pads:** the eleven black-key pads, lit while held.
@@ -62,7 +60,7 @@ the white keys play slices everywhere but SEQ and ENV (tap tempo). **SEL + ALGOR
 PRESETS the pattern on every page.** A page's button pressed again is its next part. **Press SEL** alone and the strip
 lists its combinations (SEL again, or any other button, key or knob, closes it). The control map (§11) shows all of it at once.
 
-![SEL pressed: its combinations on the strip; the help line under the waveform; the HOME knobs](img/screen-selhelp.png "SEL pressed")
+![SEL pressed: its combinations on the strip; the HOME knobs](img/screen-selhelp.png "SEL pressed")
 
 ## 3. Playing
 
@@ -306,7 +304,8 @@ around it together (MIXER GROOVE K2).
 
 **EDIT** opens the drum edited last; **EDIT again** goes to the next: KICK → SNARE → HAT → KICK (the tabs show which).
 **ALGORITHM** turns through the drum's parts, **PRESETS** loads a built-in sound. The lower strip shows the three
-drums side by side, the one edited outlined, each with its level, lit on its hits. The white keys keep playing slices.
+drums side by side, each with its waveform (one hit, drawn again as you change the sound), the one edited outlined,
+lit on its hits. The white keys keep playing slices.
 
 ### The kick
 
