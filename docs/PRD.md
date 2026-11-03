@@ -75,7 +75,7 @@ The panel works in two layers. **Keys** are always the instrument; **buttons** p
 | **HOME** | Main screen; **hold HOME + PLAY** = reset to bar 1; **HOME + SELECT** = tempo |
 | **REC** | Looper: record → loop → overdub → loop (§4.3); hold = clear |
 | **SEQ** | Step sequencer edit |
-| **ARP** | SEL + ARP: randomize (the generator itself is HOME's second part since 3 Nov 2026; ARP alone is free) |
+| **ARP** | FILL: fills on the white keys (B-51); SEL + ARP: randomize (the generator is HOME's second part since 3 Nov 2026) |
 | **EDIT** | Break / slice editor |
 | **FX** | DSP effects page (§4.5) |
 | **ENV** | Slice envelope and gate |
@@ -278,6 +278,7 @@ on the keys, eyes on the crowd.
 | B-46 | **SEQ drum lanes' knobs:** K1 FILL (n hits spread evenly from the downbeat, Euclidean), K2 ROTATE, K3 clear (left) / four on the floor (right), K4 copy the previous pattern's lane | P2 | *Done; scenario controls.txt* |
 | B-47 | **SEL pressed alone** (held a second until 3 Nov 2026, when tap tempo left SEL): the strip lists the SEL combinations (FX page: SEL + FX, FX + ALGO); SEL again, or any other button, key or knob, closes it | P2 | *Done; scenario controls.txt* |
 | B-50 | **EDIT's drums show their waveforms** (3 Nov 2026): the lower strip's three boxes each draw one hit of the drum (`kick_shape`, `perc_shape`: offline, worked out again when its settings change), over a window fitting its decay, as tall as the box | P2 | *Done; engine test: perc_shape a hit, then its tail* |
+| B-51 | **Fills on ARP** (3 Nov 2026): eight fills on the white keys, 1–8 to end on the next downbeat (2 bars: the loop's end), 9–16 at once: ROLL (the slice it began on, ratchets speeding up), SNARE / KICK rushes (the break's beat-2 / first slice), RANDOM, REVERSE (the pattern backwards), STOP (a tape stop to rest on its last step), DROP (silent), HALF; K1 length 1/4 · 1/2 · 1 · 2 bars, K2 pitch ramp ±12, K3 density ×1–×4, K4 auto fill every 2 / 4 / 8 / 16 bars (the fill ALGORITHM picks). In the engine (`brk_fill`, `brk_fill_auto`: step-placed, STOP and HALF through their pads), settings appended (SET_SIZE_MIN now the first appended field's offset) | P1 | *Done; engine test test_fill; scenario fill.txt* |
 | B-48 | **SEQ sequences, EDIT designs** (3 Nov 2026, the user's call): the drums' steps live on SEQ's lanes only (the white keys play slices on every other page); EDIT holds the kick, the snare and the hat (EDIT again: the next drum; ALGORITHM the drum's part: the kick's 11 = MIX, each layer and its FX, MACRO, OUT; the snare's / hat's SOUND, SHAPE); the lower strip shows the three drums, lit on their hits. ENV went to tap tempo (A-38) | P1 | *Done; scenarios kick.txt, perc.txt* |
 | B-49 | **A tab bar** replaces B-41's dots: right under the header on every page (since 3 Nov 2026; first under the waveform), tap tempo's too, the button's name as printed, then the page's parts as tabs (the one you are on filled amber), and on EDIT / FX the part edited, "< SUB FX >"; the help line (B-43) under it | P1 | *Done* |
 

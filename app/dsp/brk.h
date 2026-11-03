@@ -122,7 +122,20 @@ typedef struct {
     uint16_t key_n;                      /* repeats since the key went down */
     uint8_t key_rev;                     /* this repeat plays backwards */
     int8_t bar16;                        /* the step's place in the bar, 0..15 (as brk_step_events), -1 none yet */
+    uint8_t fill;                        /* the fill playing: its FILL_* + 1, 0 none */
+    uint8_t fill_armed;                  /* a fill waiting for its moment: FILL_* + 1, 0 none */
+    uint8_t fill_i, fill_len;            /* the step of it playing, of its steps */
 } brk_status_t;
+
+/* fills (PRD B-51): a few steps of the loop played another way, then the pattern again. brk_fill arms one: at once
+ * (the next step) or so that it ends on a bar line (at_end: a 1/4, 1/2 or 1-bar fill on the next bar's downbeat, a
+ * 2-bar one on the loop's end); brk_fill_auto plays one at the end of every `bars` bars. PITCH: semitones reached
+ * by its last step (a ramp; RANDOM: a random pitch up to it); DENSITY 1..4: hits a step at the start (ROLL, SNARE,
+ * KICK: they speed up to three times that), RANDOM's doubles */
+enum { FILL_ROLL, FILL_SNARE, FILL_KICK, FILL_RANDOM, FILL_REVERSE, FILL_STOP, FILL_DROP, FILL_HALF, BRK_FILLS };
+extern const char *const BRK_FILL_NAME[BRK_FILLS];
+void brk_fill(uint32_t type, uint32_t steps, int32_t pitch, uint32_t density, int at_end);
+void brk_fill_auto(uint32_t bars, uint32_t type, uint32_t steps, int32_t pitch, uint32_t density);   /* bars 0: off */
 
 void brk_init(void);
 void brk_set_break(const brk_break_t *b);   /* main loop; takes effect at once (call stopped, or at a bar) */

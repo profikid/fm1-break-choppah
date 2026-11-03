@@ -62,7 +62,7 @@ The slicer view, top to bottom:
 **The rules.** ALGORITHM picks what you edit on the page (an FX slot, a drum's part, a SEQ lane, GLOBAL's part); on HOME (both its parts) and the MIXER, where there is nothing to pick, it is the break. PRESETS picks what goes
 in (an effect, a kick, a snare or hat sound); elsewhere it is the pattern. **SEQ is where everything is sequenced**
 (the break's steps and the kick, snare and hat lanes), **EDIT where the drums' sounds are made** (kick, snare, hat);
-the white keys play slices everywhere but SEQ and ENV (tap tempo). **SEL + ALGORITHM is the break and SEL +
+the white keys play slices everywhere but SEQ, ENV (tap tempo) and ARP (fills). **SEL + ALGORITHM is the break and SEL +
 PRESETS the pattern on every page.** A page's button pressed again is its next part. **Press SEL** alone and the strip
 lists its combinations (SEL again, or any other button, key or knob, closes it). The control map (§11) shows all of it at once.
 
@@ -189,6 +189,36 @@ the keys play slices) is written into the pattern at the step it lands on, and s
 36 / 38 / 42 into the kick, snare and hat lanes. REC again stops. **SEL + REC** clears: on SEQ the lane shown, on any
 other page the whole pattern. SEL + ARP (a random pattern) writes into the pattern playing. **SEL + SAVE undoes**
 either (and FILL, CLR / 4X4 and COPY on a drum lane); press it again to redo. SAVE keeps all 16.
+
+### Fills
+
+**ARP** opens FILL: eight fills to throw, each a few steps of the loop played another way, then the pattern again.
+
+![FILL: KICK thrown at once (lit), ROLL picked (outlined), ROLL's steps drawn below](img/screen-fill.png "FILL")
+
+| White key | Fill | What it plays |
+| --- | --- | --- |
+| 1 / 9 | ROLL | The slice it began on, again and again, faster towards its end |
+| 2 / 10 | SNARE | A snare rush: the break's snare (its beat 2) faster and faster |
+| 3 / 11 | KICK | A kick rush: the break's first hit faster and faster |
+| 4 / 12 | RANDOM | Random slices at random pitches (DENSITY doubles some) |
+| 5 / 13 | REVERSE | The pattern's own slices, backwards |
+| 6 / 14 | STOP | A tape stop that comes to rest on the fill's last step |
+| 7 / 15 | DROP | Nothing: the break drops out (the drums play on) |
+| 8 / 16 | HALF | The pattern at half speed |
+
+Keys **1–8** throw a fill so that it ends on the next downbeat (a 2-bar fill: on the loop's end); keys **9–16** throw
+it at once. While it plays its card and keys light; a fill waiting for its moment is outlined amber.
+
+| Knob | Sets |
+| --- | --- |
+| K1 LENGTH | 1/4 bar · 1/2 bar (the start) · 1 bar · 2 bars |
+| K2 PITCH | −12 … +12 semitones, reached by the fill's last step: a riser up, a drop down (RANDOM: how far its pitches go) |
+| K3 DENSITY | ×1 … ×4 hits a step to start (ROLL, SNARE, KICK speed up to three times that) |
+| K4 AUTO | OFF · every 2, 4, 8 or 16 bars: the fill picked plays by itself at the end of each phrase |
+| ALGORITHM | The fill picked: the auto fill's, and the one drawn step by step under the cards |
+
+SAVE keeps the settings.
 
 ## 6. The FX chain
 
@@ -402,6 +432,7 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | Reset all (twice) |
 | GLO a third time (BT audio) | On / off | Device | Scan | Connect / hang up |
+| ARP (fill; white keys throw fills) | Length | Pitch | Density | Auto |
 | ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | Click level (0: off) |
 | EDIT (kick; ALGORITHM its part) | see §8: MIX, SUB … CLICK FX, MACRO, OUT | | | |
 | EDIT again (snare, then hat) | Level · Snap / cut | Tune · Drive | Decay | Tone |
@@ -413,7 +444,7 @@ the slice lit in the waveform shrinks with it. It covers the loop's slices, ratc
 
 The generator rearranges the break as it plays: **complexity** is how often it jumps, **anchor** keeps the kick and
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
-of a phrase; it is HOME's second part (HOME again). SEL + ARP writes a random pattern (ARP alone is free now).
+of a phrase; it is HOME's second part (HOME again). SEL + ARP writes a random pattern (ARP alone opens the fills).
 
 ## 11. The control map
 

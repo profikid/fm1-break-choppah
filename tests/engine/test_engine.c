@@ -830,6 +830,63 @@ static void test_swap(void)
     CHECK(brk_get_break() == &brk, "stopped: in at once");
 }
 
+/* fills: a ROLL at once repeats the slice it began on for its steps, then the pattern again; a DROP is quiet; a
+ * fill at the bar's end starts so that it ends on the downbeat; the auto fill comes at each phrase's end */
+static void test_fill(void)
+{
+    uint32_t sl, k, ok;
+    brk_status_t st;
+    int32_t at[6];
+    uint8_t on[6];
+    float pk;
+    fresh(1);                            /* 1 bar, 16 slices: a slice a step */
+    sl = brk_step_len_samples();
+    brk_play(1);
+    render(buf, sl * 2u + sl / 2u, 0, 0, 0);   /* half into step 2 */
+    brk_fill(FILL_ROLL, 4u, 0, 1, 0);
+    for (k = 0; k < 6u; k++) {
+        render(buf, sl, 0, 0, 0);
+        brk_status(&st);
+        at[k] = st.slice;
+        on[k] = st.fill;
+    }
+    CHECK(at[0] == 3 && at[1] == 3 && at[2] == 3 && at[3] == 3 && at[4] == 7 && on[0] == FILL_ROLL + 1 &&
+          on[3] == FILL_ROLL + 1 && on[4] == 0, "ROLL: slice 3 for four steps, then 7 (%d %d %d %d %d; on %u %u)",
+          at[0], at[1], at[2], at[3], at[4], on[0], on[4]);
+    fresh(1);
+    brk_play(1);
+    render(buf, sl * 2u + sl / 2u, 0, 0, 0);
+    brk_fill(FILL_DROP, 4u, 0, 1, 0);
+    render(buf, sl / 2u + 1024u, 0, 0, 0);   /* (into its first step, the fade done) */
+    pk = render(buf, sl * 3u, 0, 0, 0);
+    CHECK(pk < 1e-3f, "DROP: quiet (%.4f)", pk);
+    pk = render(buf, sl * 2u, 0, 0, 0);
+    CHECK(pk > 0.01f, "after the DROP: the break again (%.3f)", pk);
+    fresh(1);
+    brk_play(1);
+    render(buf, sl + sl / 2u, 0, 0, 0);   /* half into step 1 */
+    brk_fill(FILL_KICK, 4u, 0, 1, 1);    /* to end on the downbeat: steps 12..15 */
+    for (k = 2u, ok = 1u; k < 17u; k++) {
+        render(buf, sl, 0, 0, 0);
+        brk_status(&st);
+        if ((k >= 12u && k < 16u) != (st.fill == FILL_KICK + 1) || (k >= 12u && k < 16u && st.slice != 0))
+            ok = 0u;
+    }
+    CHECK(ok, "KICK at the bar's end: steps 12-15, slice 0");
+    fresh(1);
+    brk_fill_auto(1u, FILL_SNARE, 4u, 0, 1);
+    brk_play(1);
+    render(buf, sl / 2u, 0, 0, 0);
+    for (k = 0, ok = 0u; k < 32u; k++) {   /* two bars: eight fill steps, the snare's slice (4) */
+        brk_status(&st);
+        if (st.fill == FILL_SNARE + 1 && st.slice == 4)
+            ok++;
+        render(buf, sl, 0, 0, 0);
+    }
+    brk_fill_auto(0u, 0u, 4u, 0, 1);
+    CHECK(ok == 8u, "the auto SNARE fill: the last four steps of each bar (%u)", ok);
+}
+
 /* the snap: where a key pressed while playing begins. A 1-bar break of 16 slices: a slice is a 16th */
 static void test_snap(void)
 {
@@ -1429,6 +1486,7 @@ int main(int argc, char **argv)
     test_keep_length();
     test_gate();
     test_swap();
+    test_fill();
     test_snap();
     test_reverb();
     test_stop();

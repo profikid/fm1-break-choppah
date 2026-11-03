@@ -119,4 +119,4 @@ wait 150
 expect page 1
 tap ARP
 wait 150
-expect page 1
+expect page 9

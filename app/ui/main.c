@@ -43,6 +43,10 @@ static void tap_knob(int k, int32_t d)   /* TAP: K1 the tempo, K2 finer, K3 half
 static void knob_turn(int k, int32_t d)
 {
     brk_fx_t *f = &set.fx;
+    if (ui.page == PG_FILL) {
+        fill_turn(k - EN_K1, d);
+        return;
+    }
     if (ui.page == PG_TAP) {
         tap_knob(k, d);
         return;
@@ -220,6 +224,11 @@ static void input(void)
         return;
     }
     for (i = 0; i < 16u; i++) {          /* white keys: slices, or on the soundboard its sounds */
+        if (ui.page == PG_FILL) {        /* the FILL page: 1-8 a fill to the bar's end, 9-16 the same at once */
+            if (kdn >> WK[i] & 1u)
+                fill_throw(i % 8u, i >= 8u);
+            continue;
+        }
         if (ui.page == PG_TAP) {         /* the TAP page: every white key taps */
             if (kdn >> WK[i] & 1u)
                 tap_or_ext(now);
@@ -334,12 +343,18 @@ static void input(void)
         ui.redraw |= RG_HEAD;
     }
     if (bdn & 1u << B_ARP && btn & 1u << B_SEL) {   /* SEL + ARP: a random pattern (SEL + SAVE takes it back) */
-        undo_mark(UNDO_RANDOM);              /* (the generator itself is HOME's second part; ARP alone is free) */
+        undo_mark(UNDO_RANDOM);              /* (the generator itself is HOME's second part) */
         brk_randomize();
         pat_read_back();                 /* (into the pattern playing: SAVE keeps it) */
         set_dirty = 1u;
         app_say("RANDOMIZE", "");
         ui.redraw |= RG_BLOCKS;
+    } else if (bdn & 1u << B_ARP) {      /* ARP: the FILL page */
+        if (ui.page != PG_FILL)
+            slices_let_go(keys);
+        ui.page = PG_FILL;
+        ui.redraw |= RG_FOOT | RG_BLOCKS;
+        page_say();
     }
     if (bdn & 1u << B_FX && key_tuned() >= 0) {   /* FX with a key held: its knobs, loop <-> slice effect */
         ui.key_layer ^= 1u;
@@ -452,7 +467,12 @@ static void input(void)
                 fx_algo(d, 1u);          /* FX held: the slot moves along the chain */
             else if (btn & 1u << B_SEL)
                 break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
-            else if (ui.page == PG_GLOBAL)   /* GLOBAL: its part */
+            else if (ui.page == PG_FILL) {   /* FILL: the fill picked (the auto fill's, the preview's) */
+                set.fill_type = (uint8_t)((set.fill_type + (d > 0 ? 1u : BRK_FILLS - 1u)) % BRK_FILLS);
+                changed();
+                page_say();
+                ui.redraw |= RG_BLOCKS | RG_FOOT;
+            } else if (ui.page == PG_GLOBAL)   /* GLOBAL: its part */
                 global_part((ui.gpage + (d > 0 ? 1u : 2u)) % 3u);
             else if (ui.page == PG_KICK) {    /* the kick: its part (MIX, each layer and its FX, MACRO, OUT) */
                 kick_part_set((kick_part() + (d > 0 ? 1u : KPARTS - 1u)) % KPARTS);
@@ -510,7 +530,7 @@ static void leds(void)
     brk_status(&st);
     if (st.playing)
         b |= 1u << B_PLAY;
-    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_HOME, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_EDIT, B_ENV};
+    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_HOME, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_EDIT, B_ENV, B_ARP};
     b |= 1u << PAGE_BTN[ui.page];
     if (ui.rec)
         b |= 1u << B_REC;
@@ -534,6 +554,10 @@ static void leds(void)
 static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown under its name */
 {
     t[0] = 0;
+    if (ui.page == PG_FILL) {
+        fill_value(i, t);
+        return;
+    }
     if (ui.page == PG_TAP) {
         if (i < 2)
             tenths_text(set.tempo_x10, t);
@@ -605,7 +629,7 @@ static int32_t tab(int32_t x, const char *s, int on)
 }
 static void draw_tabs(void)
 {
-    static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV"};
+    static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP"};
     static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
     static const char *const SLOT[4] = {"1", "2", "3", "4"};
     static const char *const DRUM[3] = {"KICK", "SNARE", "HAT"};
@@ -622,6 +646,10 @@ static void draw_tabs(void)
     }
     else if (ui.page == PG_TAP)
         tab(x, "TAP TEMPO", 1);
+    else if (ui.page == PG_FILL) {
+        tab(x, "FILL", 1);
+        text_cat(part, BRK_FILL_NAME[set.fill_type % BRK_FILLS]);
+    }
     else if (ui.page == PG_GLOBAL)
         for (i = 0; i < 3u; i++)
             x = tab(x, GPART[i], i == ui.gpage);
@@ -656,7 +684,7 @@ static void draw_tabs(void)
  * ("GLO PITCH", "EDIT KICK SUB FX", "FX SLOT 2 TREMOLO", "SEQ HAT", "ENV TAP TEMPO") */
 static void page_say(void)
 {
-    static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV"};
+    static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP"};
     static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
     static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
     char t[24];
@@ -668,6 +696,10 @@ static void page_say(void)
     case PG_MIX: text_cat(t, ui.mpage ? "GROOVE" : "LEVELS"); break;
     case PG_SEQ: text_cat(t, SEQL[ui.seq_lane % NSEQL]); break;
     case PG_TAP: text_cat(t, "TAP TEMPO"); break;
+    case PG_FILL:
+        text_cat(t, "FILL ");
+        text_cat(t, BRK_FILL_NAME[set.fill_type % BRK_FILLS]);
+        break;
     case PG_FX:
         text_cat(t, "SLOT ");
         int_text((int32_t)(ui.fx_focus & 3u) + 1, t + 5);
@@ -722,7 +754,8 @@ static void draw_foot(const brk_status_t *st)
                                               {"BREAK", "KICK", "PERC", "FX"},
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
                                               {"", "", "", ""},
-                                              {"TEMPO", "FINE", "HALF / X2", "CLICK"}};
+                                              {"TEMPO", "FINE", "HALF / X2", "CLICK"},
+                                              {"LENGTH", "PITCH", "DENSITY", "AUTO"}};
     uint32_t i;
     char t[16];
     draw_tabs();
@@ -919,7 +952,9 @@ void app_frame(void)
         ui.fx_drawn = now;
     }
     if (ui.redraw & RG_BLOCKS) {
-        if (ui.page == PG_TAP) {
+        if (ui.page == PG_FILL)
+            draw_fill(&st);
+        else if (ui.page == PG_TAP) {
             draw_tap(&st, now, (ui.redraw & RG_ALL) == RG_ALL);
             ui.panel_drawn = now;
         } else if (ui.page == PG_SEQ)
@@ -973,8 +1008,10 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
 int app_expect(const char *what, int *got)
 {
     static const char *const W[] = {"page", "gpage", "kpage", "seq_lane", "fx_focus", "fx_on", "lane_kick",
-                                    "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo"};
-    int v[14];
+                                    "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo",
+                                    "fill", "fill_armed", "fill_type"};
+    int v[17];
+    brk_status_t bs;
     uint32_t i;
     v[0] = ui.page;
     v[1] = ui.gpage;
@@ -990,7 +1027,11 @@ int app_expect(const char *what, int *got)
     v[11] = ui.help;
     v[12] = set.drums_chain;
     v[13] = ui.lobo_t != 0u;
-    for (i = 0; i < 14u; i++)
+    brk_status(&bs);
+    v[14] = bs.fill;
+    v[15] = bs.fill_armed;
+    v[16] = set.fill_type;
+    for (i = 0; i < 17u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

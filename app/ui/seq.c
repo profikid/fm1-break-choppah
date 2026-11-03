@@ -245,6 +245,10 @@ static uint32_t keys_lit(const brk_status_t *st)   /* the white keys' lights on 
 {
     if (ui.page == PG_TAP)
         return st->playing && st->bar16 >= 0 && !(st->bar16 & 3) ? 0xFFFFu : 0u;
+    if (ui.page == PG_FILL) {            /* FILL: the keys of the fill playing (or waiting) */
+        int32_t f = st->fill ? st->fill - 1 : st->fill_armed ? st->fill_armed - 1 : -1;
+        return f >= 0 ? (1u << f | 1u << (f + 8)) : 0u;
+    }
     uint32_t m = 0u, l = ui.seq_lane >= SL_KICK ? ui.seq_lane - SL_KICK : NLANES, i;
     if (l < NLANES) {
         m = pat_now()->lane[l];
