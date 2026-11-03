@@ -109,39 +109,116 @@ static void intro_draw(uint32_t now)
     }
 }
 
-/* TAP TEMPO (ENV): the whole screen between the header and the pads. The tempo in big digits (lit as a tap lands),
- * the bar's four beats (the one playing lit, the first brighter), the taps of this run, what to press */
-static void draw_tap(const brk_status_t *st, uint32_t now)
+/* TAP TEMPO (ENV): the whole screen between the header and the pads. The tempo on an LED display (seven-segment
+ * digits drawn as bevelled bars, the unlit ones a ghost), a metronome swinging in time (its bob lit on each beat,
+ * white on the bar's first), a ripple from its pivot on each tap. The display redraws when the tempo or the taps
+ * change; the metronome about 25 times a second */
+#define TP_OFF RGB(44, 30, 10)            /* an unlit segment */
+static void tp_seg(int32_t x, int32_t y, int32_t len, int horiz, uint16_t c)   /* a bevelled bar, 6 thick */
 {
-    uint32_t band, i;
-    char t[16];
-    int flash = ui.tap_last && now - ui.tap_last < 120u, ext = ext_active();
-    int32_t beat = st->playing && st->bar16 >= 0 ? st->bar16 / 4 : -1;
-    tenths_text(set.tempo_x10, t);
-    for (band = 0; band < 3u; band++) {
-        int32_t top = 30 + (int32_t)band * 60, h = band < 2u ? 60 : 42, w = 3 * text_w(&FONT_B, t);
+    int32_t i;
+    for (i = 0; i < 6; i++) {
+        int32_t in = i < 3 ? 2 - i : i - 3;       /* 2 1 0 0 1 2: the bevel */
+        if (horiz)
+            cv_rect(x + in, y + i, len - 2 * in, 1, c);
+        else
+            cv_rect(x + i, y + in, 1, len - 2 * in, c);
+    }
+}
+static void tp_digit(int32_t x, int32_t y, int d, uint16_t on)   /* 30 wide, 50 tall; d < 0: all unlit */
+{
+    static const uint8_t SEG[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F};   /* gfedcba */
+    uint32_t m = d >= 0 && d <= 9 ? SEG[d] : 0u;
+    tp_seg(x + 3, y, 24, 1, m & 1u ? on : TP_OFF);                /* a */
+    tp_seg(x + 24, y + 3, 21, 0, m & 2u ? on : TP_OFF);           /* b */
+    tp_seg(x + 24, y + 26, 21, 0, m & 4u ? on : TP_OFF);          /* c */
+    tp_seg(x + 3, y + 44, 24, 1, m & 8u ? on : TP_OFF);           /* d */
+    tp_seg(x, y + 26, 21, 0, m & 16u ? on : TP_OFF);              /* e */
+    tp_seg(x, y + 3, 21, 0, m & 32u ? on : TP_OFF);               /* f */
+    tp_seg(x + 3, y + 22, 24, 1, m & 64u ? on : TP_OFF);          /* g */
+}
+static void tp_circle(int32_t cx, int32_t cy, int32_t r, uint16_t c)
+{
+    uint32_t i, n = (uint32_t)r * 6u + 24u;
+    for (i = 0; i < n; i++) {
+        float t = (float)i / (float)n;
+        cv_rect(cx + (int32_t)((float)r * brk_sin_turns(t + 0.25f)), cy + (int32_t)((float)r * brk_sin_turns(t)), 2, 2, c);
+    }
+}
+static void draw_tap(const brk_status_t *st, uint32_t now, int full)
+{
+    static uint32_t a_sig = 0xFFFFFFFFu;
+    int ext = ext_active(), flash = ui.tap_last && now - ui.tap_last < 110u;
+    uint32_t v = set.tempo_x10, sig = v | (uint32_t)flash << 16 | (uint32_t)ext << 17 | (ui.ntaps < 15u ? ui.ntaps : 15u) << 18;
+    uint32_t band;
+    float beats, sw, fr;
+    int32_t beat, px, py, bx, by, i;
+    if (st->playing && st->bar16 >= 0)   /* where in the bar: the engine's, or (stopped) the clock's at the tempo */
+        beats = ((float)st->bar16 + st->phase) * 0.25f;
+    else
+        beats = (float)(now % 600000u) * (float)v * (1.0f / 600000.0f);
+    beat = (int32_t)beats;
+    fr = beats - (float)beat;
+    sw = 0.42f * brk_sin_turns(beats * 0.5f + 0.25f);   /* the swing: at an end on each beat (radians) */
+    px = 120;
+    py = 186;
+    bx = px + (int32_t)(82.0f * brk_sin_turns(sw * 0.159155f));
+    by = py - (int32_t)(82.0f * brk_sin_turns(sw * 0.159155f + 0.25f));
+    for (band = full || sig != a_sig ? 0u : 1u; band < 3u; band++) {
+        int32_t top = 30 + (int32_t)band * 60, h = band < 2u ? 60 : 42;
         cv_begin(240, (uint32_t)h, C_BLACK);
         cv_oy = -top;                    /* (screen rows: the canvas shows top..top + h - 1) */
-        cv_text(8, 34, &FONT_XS, "TAP TEMPO", C_GRAY);
-        cv_text(232 - text_w(&FONT_XS, ext ? "EXT CLOCK" : "BPM"), 34, &FONT_XS, ext ? "EXT CLOCK" : "BPM",
-                ext ? C_AMB : C_GRAY);
-        if (flash)
-            cv_rect(0, 52, 240, 54, C_HI);
-        cv_textn((240 - w) / 2, 56, &FONT_B, t, flash ? C_BLACK : ext ? C_GRAY : C_WHITE, 3u);
-        for (i = 0; i < 4u; i++) {       /* the beats */
-            int32_t x = 8 + (int32_t)i * 57, on = (int32_t)i == beat;
-            cv_rect(x, 114, 53, 34, on ? (i ? C_HI : C_WHITE) : C_BLOCK);
-            t[0] = (char)('1' + i);
-            t[1] = 0;
-            cv_text(x + 4, 116, &FONT_XS, t, on ? C_BLACK : C_GRAY);
+        if (band == 0u) {                /* the display: TAP TEMPO, the taps, the tempo, BPM */
+            uint16_t on = flash ? C_WHITE : ext ? C_GRAY : C_HI;
+            int32_t x = 14;
+            tp_digit(x, 36, v >= 1000u ? (int)(v / 1000u) : -1, on);
+            tp_digit(x + 38, 36, v >= 100u ? (int)(v / 100u % 10u) : -1, on);
+            tp_digit(x + 76, 36, (int)(v / 10u % 10u), on);
+            cv_rect(x + 112, 80, 6, 6, on);                     /* the point */
+            tp_digit(x + 124, 36, (int)(v % 10u), on);
+            for (i = 0; i < 8; i++)      /* this run's taps, two rows of four */
+                cv_rect(186 + (i & 3) * 11, 40 + (i >> 2) * 10, 8, 7, (uint32_t)i < ui.ntaps ? C_HI : C_LINE);
+            cv_text(186, 70, &FONT_XS, ext ? "EXT" : "BPM", ext ? C_AMB : C_GRAY);
         }
-        for (i = 0; i < 8u; i++)         /* this run's taps (up to eight count) */
-            cv_rect(8 + (int32_t)i * 12, 158, 8, 8, i < ui.ntaps ? C_HI : C_LINE);
-        cv_text(112, 155, &FONT_XS, ui.ntaps ? "TAPS" : "NO TAPS YET", C_DIM);
-        cv_text(8, 174, &FONT_XS, "ENV OR ANY WHITE KEY: TAP", C_GRAY);
+        if (band >= 1u) {                /* the metronome */
+            for (i = 94; i < 190; i++) { /* its body: a tall triangle, the apex up */
+                int32_t w = (i - 94) * 58 / 96;
+                cv_rect(px - w, i, 2 * w + 1, 1, RGB(30, 26, 20));
+                cv_rect(px - w - 1, i, 2, 1, C_LINE);
+                cv_rect(px + w, i, 2, 1, C_LINE);
+            }
+            for (i = 0; i < 5; i++)      /* its scale, down the middle */
+                cv_rect(px - 6 + (i & 1) * 2, 120 + i * 11, 13 - (i & 1) * 4, 2, C_LINE);
+            if (ui.tap_last && now - ui.tap_last < 320u) {   /* a tap: a ripple from the pivot */
+                uint32_t age = now - ui.tap_last;
+                tp_circle(px, py, 12 + (int32_t)age / 4, age < 160u ? C_HI : C_AMB);
+            }
+            for (i = 0; i <= 40; i++)    /* the arm */
+                cv_rect(px + (bx - px) * i / 40 - 1, py + (by - py) * i / 40 - 1, 3, 3, C_GRAY);
+            {
+                uint16_t bob = fr < 0.18f ? ((beat & 3) == 0 && st->playing ? C_WHITE : C_HI) : RGB(150, 100, 30);
+                int32_t r;
+                for (r = -9; r <= 9; r++) {   /* the bob: a disc */
+                    int32_t w = 0;
+                    while ((w + 1) * (w + 1) + r * r <= 81)
+                        w++;
+                    cv_rect(bx - w, by + r, 2 * w + 1, 1, bob);
+                }
+            }
+            cv_rect(px - 14, py, 29, 4, C_LINE);                /* the pivot */
+            cv_rect(px - 3, py - 3, 7, 7, C_GRAY);
+            cv_text(8, 158, &FONT_XS, "TAP", C_GRAY);
+            cv_text(8, 174, &FONT_XS, ext ? "EXT CLOCK" : "ENV / KEYS", C_DIM);
+            if (st->playing && !ext) {   /* the beat at the right: 1 (white) .. 4 */
+                char t[2] = {(char)('1' + (beat & 3)), 0};
+                cv_text(200, 140, &FONT_XS, "BEAT", C_GRAY);
+                cv_text2(206, 156, &FONT_XS, t, (beat & 3) == 0 ? C_WHITE : C_HI);
+            }
+        }
         cv_oy = 0;
         cv_blit(0, (uint32_t)top);
     }
+    a_sig = sig;
 }
 
 /* RESET ALL's screen: a brain seen from the side, an ice pick in through the eye socket, the frontal lobe gone grey,

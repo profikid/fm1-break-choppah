@@ -745,10 +745,8 @@ void app_frame(void)
         ui.redraw = RG_ALL;
     }
     ui.drawn_page = ui.page;
-    if (ui.page == PG_TAP && ui.tap_last && now - ui.tap_last >= 120u) {   /* the tap's flash over */
-        ui.tap_last = 0u;
+    if (ui.page == PG_TAP && now - ui.panel_drawn >= 40u)   /* TAP: the metronome swings, ~25 times a second */
         ui.redraw |= RG_BLOCKS;
-    }
     if (ui.ntaps && now - ui.taps[(ui.ntaps - 1u) % TAPS] > 2000u) {   /* a pause: the run is over */
         ui.ntaps = 0u;
         ui.redraw |= ui.page == PG_TAP ? RG_BLOCKS : 0;
@@ -852,9 +850,10 @@ void app_frame(void)
         ui.fx_drawn = now;
     }
     if (ui.redraw & RG_BLOCKS) {
-        if (ui.page == PG_TAP)
-            draw_tap(&st, now);
-        else if (ui.page == PG_SEQ)
+        if (ui.page == PG_TAP) {
+            draw_tap(&st, now, (ui.redraw & RG_ALL) == RG_ALL);
+            ui.panel_drawn = now;
+        } else if (ui.page == PG_SEQ)
             draw_seq(&st);
         else if (ui.page == PG_PERC)
             draw_perc(&st);

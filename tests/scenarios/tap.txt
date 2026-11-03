@@ -61,3 +61,11 @@ expect help 1
 tap HOME
 wait 100
 expect help 0
+tap ENV
+wait 1000
+shot t_swing1.png
+wait 130
+shot t_swing2.png
+tap ENV
+wait 60
+shot t_ripple.png

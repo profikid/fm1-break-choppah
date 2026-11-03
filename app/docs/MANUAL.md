@@ -82,14 +82,15 @@ lists its combinations (SEL again, or any other button, key or knob, closes it).
 
 ### Tap tempo
 
-**ENV** opens TAP TEMPO, which takes the whole screen: the tempo in big digits, the bar's four beats (the one playing
-lit), this run's taps. Tap **ENV again** in time, or **any white key** (the keys flash on the beat). The tempo follows
-from the second tap and settles as you go on (the average of the last eight taps); the digits light up on each tap.
+**ENV** opens TAP TEMPO, which takes the whole screen: the tempo on an LED display, a metronome swinging in time (its
+bob lights on each beat, white on the bar's first; BEAT counts 1–4 while playing), this run's taps beside the display. Tap **ENV again** in time, or **any white key** (the keys flash on the beat). The tempo follows
+from the second tap and settles as you go on (the average of the last eight taps); each tap flashes the display and
+sends a ripple out from the metronome.
 Stop for 2 seconds to start a new count; a tap far off the pace starts a new count from the tap before it. **K1** sets
 the tempo a BPM at a time, **K2** a tenth, **K3** halves it (left) or doubles it (right). Following an outside clock,
 it says EXT CLOCK and waits.
 
-![TAP TEMPO: 160.0 BPM, the second beat playing, six taps](img/screen-tap.png "TAP TEMPO")
+![TAP TEMPO: 160.0 BPM on the LED display, six taps, the metronome on the second beat, a tap's ripple](img/screen-tap.png "TAP TEMPO")
 
 ![A slice held](img/screen-held.png "Slice 10 held")
 
