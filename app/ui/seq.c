@@ -61,7 +61,7 @@ static void lane_toggle(uint32_t l, uint32_t i)
     p->lane[l] ^= (uint16_t)(1u << i);
     pat_lanes_out();
     say_int(p->lane[l] >> i & 1u ? LANE_NAME[l] : "OFF", (int32_t)i + 1, "");
-    ui.redraw |= RG_BLOCKS;
+    ui.redraw |= RG_BLOCKS | RG_FOOT;
     set_dirty = 1u;
 }
 /* REC: the step a key or a note lands on (the one playing, or the next past its middle) */
@@ -243,8 +243,7 @@ static void pattern_pick(int32_t d)      /* PRESETS: the next or previous patter
 }
 static uint32_t keys_lit(const brk_status_t *st)   /* the white keys' lights on a lane's page */
 {
-    uint32_t m = 0u, l = ui.page == PG_KICK ? LANE_KICK : ui.page == PG_PERC ? LANE_SNARE + ui.pvoice
-                 : ui.seq_lane >= SL_KICK ? ui.seq_lane - SL_KICK : NLANES, i;
+    uint32_t m = 0u, l = ui.seq_lane >= SL_KICK ? ui.seq_lane - SL_KICK : NLANES, i;
     if (l < NLANES) {
         m = pat_now()->lane[l];
         if (st->playing && st->bar16 >= 0)

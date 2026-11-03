@@ -45,17 +45,19 @@ The slicer view, top to bottom:
   while recording, a level meter (left and right, what leaves after MASTER: amber from
   −8 dB, white near full scale), the tempo.
 - **The break:** its waveform, the slice markers, the slice sounding lit, the playhead.
+- **Tabs:** the button you pressed (as printed on the panel), then the page's parts as tabs, the one you are on lit:
+  the button again (or ALGORITHM) goes to the next. On EDIT and FX the part edited shows at the right, "< SUB FX >".
+- **Help line:** what the white keys, ALGORITHM and PRESETS do on this page; amber on SEQ, where the white keys are
+  steps.
 - **Slice blocks:** sixteen blocks, one per white key, each with its slice's waveform. The slice sounding is lit;
   a key held is outlined; a dot marks a key with a loop of its own (§3, key loops).
 - **Pads:** the eleven black-key pads, lit while held.
-- **Under the waveform:** one line saying what the white keys, ALGORITHM and PRESETS do on this page; amber when
-  the white keys are steps here, not slices.
-- **Knobs:** the page's four knobs and their values. Between the pads and the knobs, a dot for each part of the page
-  (the one lit is where you are): pressing the page's button again goes to the next.
+- **Knobs:** the page's four knobs and their values.
 
-**The rules.** ALGORITHM picks what you edit on the page (an FX slot, a kick layer, a SEQ lane, a drum voice,
-GLOBAL's part); on HOME, ARP and the MIXER, where there is nothing to pick, it is the break. PRESETS picks what goes
-in (an effect, a kick, a snare or hat sound); elsewhere it is the pattern. **SEL + ALGORITHM is the break and SEL +
+**The rules.** ALGORITHM picks what you edit on the page (an FX slot, a drum's part, a SEQ lane, GLOBAL's part); on HOME, ARP and the MIXER, where there is nothing to pick, it is the break. PRESETS picks what goes
+in (an effect, a kick, a snare or hat sound); elsewhere it is the pattern. **SEQ is where everything is sequenced**
+(the break's steps and the kick, snare and hat lanes), **EDIT where the drums' sounds are made** (kick, snare, hat);
+the white keys play slices everywhere but SEQ. **SEL + ALGORITHM is the break and SEL +
 PRESETS the pattern on every page.** A page's button pressed again is its next part. **Hold SEL** alone for a second
 and the strip lists its combinations.
 
@@ -284,14 +286,20 @@ Bluetooth audio on starts the radio even when Bluetooth MIDI is off.
 ## 8. The drums: kick, snare, hat
 
 Three synthesised drums play under the break, in time with it (swing included), on the pattern's drum lanes (§5):
-the kick on EDIT, the snare and the hat on ENV. They go through the FX chain or around it together (MIXER GROOVE K2).
+their steps are SEQ's KICK, SNARE and HAT lanes; their sounds are made on **EDIT**. They go through the FX chain or
+around it together (MIXER GROOVE K2).
+
+**EDIT** opens the drum edited last; **EDIT again** goes to the next: KICK → SNARE → HAT → KICK (the tabs show which).
+**ALGORITHM** turns through the drum's parts, **PRESETS** loads a built-in sound. The lower strip shows the three
+drums side by side, the one edited outlined, each with its level, lit on its hits. The white keys keep playing slices.
 
 ### The kick
 
-**EDIT** opens the KICK page: a synthesised kick for gabber, hardcore and techno. **EDIT again** steps
-through its sub-pages: MIX → LAYER → LAYER FX → MACRO → OUT.
+A synthesised kick for gabber, hardcore and techno. ALGORITHM turns through its parts: MIX → SUB → SUB FX → PUNCH →
+PUNCH FX → GRIT → GRIT FX → CLICK → CLICK FX → MACRO → OUT (each layer's part is its LAYER knobs, its FX part its
+LAYER FX knobs).
 
-![The KICK page on MIX: the kick's shape, the layers' levels, the three drum lanes](img/screen-kick.png "The KICK page")
+![EDIT on the kick: the kick's shape, the layers' levels, the three drums below](img/screen-kick.png "The kick on EDIT")
 
 The kick is four layers summed and pushed into a clipper:
 
@@ -304,29 +312,28 @@ The kick is four layers summed and pushed into a clipper:
 
 | Control | Does |
 | --- | --- |
-| White keys | The kick lane's 16 steps of the bar, on and off (lit: on; the step playing flips). Empty to start |
-| ALGORITHM | The layer LAYER and LAYER FX edit |
+| ALGORITHM | The part: MIX, a layer (SUB, PUNCH, GRIT, CLICK), its FX, MACRO, OUT |
 | PRESETS | A built-in kick: 909, TECHNO, EARLY HC, ROTTERDAM (the start), INDUSTRIAL, DISTORTO. The steps, routing and volume stay |
 | MIDI note 36 (C1) | Plays the kick, from any channel, also while stopped |
 
-| Sub-page | K1 | K2 | K3 | K4 |
+| Part | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
 | MIX | SUB level | PUNCH level | GRIT level | CLICK level |
-| LAYER | Level | Pitch | Decay | Tone |
-| LAYER FX | Effect: OFF · DRIVE · CRUNCH · FILTER · RING MOD | A (gain · bits · cutoff · frequency) | B (tone · rate · resonance) | Wet |
+| SUB · PUNCH · GRIT · CLICK | Level | Pitch | Decay | Tone |
+| … FX | Effect: OFF · DRIVE · CRUNCH · FILTER · RING MOD | A (gain · bits · cutoff · frequency) | B (tone · rate · resonance) | Wet |
 | MACRO | SUB (level, tail, weight) | PUNCH (level, sweep, click) | GRIT (level, dirt, tail) | INTENSITY |
 | OUT | Volume | | | |
 
 **INTENSITY** is the drive into the clipper: low is a clean, round kick; past half the clip turns hard, the tail
 flattens into the long, distorted gabber kick. The strip shows the kick's shape (its first 600 ms), the layers'
-levels (the layer edited outlined, amber with an effect on) and the three drum lanes with the playhead.
+levels (the layer edited outlined, amber with an effect on). Its steps: SEQ's KICK lane (empty to start).
 
 ### The snare and the hat
 
-![SNARE / HAT on the hat's SOUND knobs, its lane outlined](img/screen-perc.png "The SNARE / HAT page")
+![EDIT on the hat: its six settings, the three drums below](img/screen-perc.png "The hat on EDIT")
 
-**ENV** opens SNARE / HAT. **ALGORITHM** picks the voice, **ENV again** turns between its SOUND and SHAPE knobs,
-**PRESETS** picks a built-in sound, and the white keys are that voice's 16 steps.
+**EDIT** again from the kick: the snare, then the hat. **ALGORITHM** turns between its SOUND and SHAPE knobs,
+**PRESETS** picks a built-in sound. Their steps: SEQ's SNARE and HAT lanes.
 
 | Voice | Is | Presets |
 | --- | --- | --- |
@@ -338,8 +345,8 @@ levels (the layer edited outlined, amber with an effect on) and the three drum l
 | SOUND | Level | Tune | Decay | Tone (the hat: METAL / NOISE) |
 | SHAPE | Snap (the hat: CUT, the high-pass) | Drive | | |
 
-MIDI notes 38 (D1) play the snare, 42, 44 and 46 the hat, also while stopped. The white keys play slices again on
-every other page (HOME, ARP, FX, GLOBAL, MIXER). SAVE keeps the drums with the rest.
+MIDI notes 38 (D1) play the snare, 42, 44 and 46 the hat, also while stopped. SAVE keeps the drums with the rest.
+(ENV, which used to open SNARE / HAT, is free now.)
 
 ## 9. The mixer
 
@@ -368,12 +375,11 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | FX (the chain) | the focused slot's effect: its three settings | | | Its mix |
 | SEQ (patterns) | Slice | Pitch | Hits | Reverse |
 | SEQ, a drum lane | Fill | Rotate | Clear / 4x4 | Copy |
-| ENV (snare / hat) | Level | Tune | Decay | Tone |
-| ENV again (shape) | Snap / cut | Drive | | |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | Reset all (twice) |
 | GLO a third time (BT audio) | On / off | Device | Scan | Connect / hang up |
-| EDIT (kick) | see §8: MIX, LAYER, LAYER FX, MACRO, OUT | | | |
+| EDIT (kick; ALGORITHM its part) | see §8: MIX, SUB … CLICK FX, MACRO, OUT | | | |
+| EDIT again (snare, then hat) | Level · Snap / cut | Tune · Drive | Decay | Tone |
 
 **Gate** (HOME K1) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then
 quiet until the next; down to 5 % for clipped, staccato chops; 100 % is off. It follows the tempo and the pitch, and

@@ -6,6 +6,42 @@
  * steps, ALGORITHM the layer, PRESETS the built-in kicks, SEL + EDIT through the FX chain or around it */
 enum { KP_MIX, KP_LAYER, KP_FX, KP_MACRO, KP_OUT, KPAGES };
 static const char *const KPAGE_NAME[KPAGES] = {"MIX", "LAYER", "LAYER FX", "MACRO", "OUT"};
+/* the kick's parts in a row, as ALGORITHM turns through them: MIX, SUB, SUB FX, PUNCH, PUNCH FX, GRIT, GRIT FX,
+ * CLICK, CLICK FX, MACRO, OUT (each a sub-page, and for a layer its layer) */
+#define KPARTS (3u + 2u * KICK_LAYERS)
+static uint32_t kick_part(void)
+{
+    return ui.kpage == KP_MIX ? 0u : ui.kpage == KP_MACRO ? KPARTS - 2u : ui.kpage == KP_OUT ? KPARTS - 1u
+           : 1u + ui.klayer * 2u + (ui.kpage == KP_FX ? 1u : 0u);
+}
+static void kick_part_name(uint32_t p, char *t)
+{
+    if (p == 0u || p >= KPARTS - 2u) {
+        text_cat(t, KPAGE_NAME[p == 0u ? KP_MIX : p == KPARTS - 2u ? KP_MACRO : KP_OUT]);
+        return;
+    }
+    text_cat(t, KICK_LAYER_NAME[(p - 1u) / 2u]);
+    if (!((p - 1u) & 1u))
+        return;
+    text_cat(t, " FX");
+}
+static void kick_part_set(uint32_t p)
+{
+    char t[16];
+    t[0] = 0;
+    if (p == 0u)
+        ui.kpage = KP_MIX;
+    else if (p == KPARTS - 2u)
+        ui.kpage = KP_MACRO;
+    else if (p == KPARTS - 1u)
+        ui.kpage = KP_OUT;
+    else {
+        ui.kpage = (p - 1u) & 1u ? KP_FX : KP_LAYER;
+        ui.klayer = (uint8_t)((p - 1u) / 2u);
+    }
+    kick_part_name(p, t);
+    app_say("KICK", t);
+}
 static const char *const KN_KICK[KPAGES][4] = {{"SUB", "PUNCH", "GRIT", "CLICK"},
                                                {"LEVEL", "PITCH", "DECAY", "TONE"},
                                                {"EFFECT", "", "", "WET"},
@@ -143,6 +179,28 @@ static void kick_knob_turn(int i, int32_t d)
 static uint8_t kick_px[KS_W];
 static uint32_t kick_px_sig = 1u;
 
+/* EDIT's lower strip: the three drums side by side, the one edited outlined, each with its level, lit on its hits */
+static void draw_drums(const brk_status_t *st)
+{
+    static const char *const NAME[3] = {"KICK", "SNARE", "HAT"};
+    float lv[3];
+    uint32_t i;
+    lv[0] = set.kick.volume;
+    lv[1] = set.perc.v[PV_SNARE].level * set.perc.volume;
+    lv[2] = set.perc.v[PV_HAT].level * set.perc.volume;
+    cv_begin(240, 52, C_BLACK);
+    for (i = 0; i < 3u; i++) {
+        int32_t x = 2 + (int32_t)i * 80;
+        int sel = i == ui.einst, hit = st->playing && st->bar16 >= 0 && (lane_now[i] >> st->bar16 & 1u);
+        cv_rect(x, 4, 76, 44, sel ? C_WHITE : C_LINE);
+        cv_rect(x + 1, 5, 74, 42, hit ? C_BLOCK_HI : C_BLACK);
+        cv_text(x + 6, 9, &FONT_XS, NAME[i], hit ? C_BLACK : sel ? C_HI : C_GRAY);
+        cv_rect(x + 6, 32, 64, 5, C_BLOCK);
+        cv_rect(x + 6, 32, (int32_t)(64.0f * brk_clampf(lv[i], 0.0f, 1.0f) + 0.5f), 5, sel ? C_HI : C_GRAY);
+    }
+    cv_blit(0, 140);
+}
+
 static void draw_kick(const brk_status_t *st)
 {
     const kick_t *k = &set.kick;
@@ -159,7 +217,9 @@ static void draw_kick(const brk_status_t *st)
         if (kick_px[i])
             cv_rect(4 + (int32_t)i, 26 - kick_px[i] / 2, 1, kick_px[i] | 1, k->volume > 0.0f ? C_HI : C_DIM);
     cv_rect(4, 26, KS_W, 1, C_LINE);
-    cv_text(6, 0, &FONT_XS, KPAGE_NAME[ui.kpage % KPAGES], C_GRAY);
+    t[0] = 0;
+    kick_part_name(kick_part(), t);
+    cv_text(6, 0, &FONT_XS, t, C_GRAY);
     for (i = 0; i < KICK_LAYERS; i++) {  /* the layers' levels, the one edited outlined */
         int32_t x = 172 + (int32_t)i * 17, h = (int32_t)(k->l[i].level * 36.0f + 0.5f);
         int sel = i == ui.klayer && (ui.kpage == KP_LAYER || ui.kpage == KP_FX);
@@ -172,5 +232,5 @@ static void draw_kick(const brk_status_t *st)
         cv_text(x + 4, 41, &FONT_XS, t, sel ? C_HI : C_GRAY);
     }
     cv_blit(0, 88);
-    draw_lanes(st, LANE_KICK);
+    draw_drums(st);
 }

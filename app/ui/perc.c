@@ -38,7 +38,7 @@ static void perc_turn(int i, int32_t d)
     changed();
 }
 
-/* the SNARE / HAT page: the voice's six settings as bars (the sub-page's lit); then the lanes */
+/* the SNARE / HAT page (EDIT): the voice's six settings as bars (the part's lit); then the three drums */
 static void draw_perc(const brk_status_t *st)
 {
     const perc_voice_t *v = &set.perc.v[ui.pvoice % PERC_VOICES];
@@ -58,5 +58,5 @@ static void draw_perc(const brk_status_t *st)
         cv_rect(x, y + 13, (int32_t)(52.0f * P[i] + 0.5f), 3, lit ? C_HI : C_DIM);
     }
     cv_blit(0, 88);
-    draw_lanes(st, LANE_SNARE + ui.pvoice);
+    draw_drums(st);
 }

@@ -77,6 +77,22 @@ static void knob_turn(int k, int32_t d)
     changed();
 }
 
+/* EDIT: the drum ui.einst's sound (the kick's page, or the snare's or the hat's) */
+static void edit_open(void)
+{
+    char t[16];
+    t[0] = 0;
+    ui.page = ui.einst ? PG_PERC : PG_KICK;
+    ui.redraw |= RG_FOOT | RG_BLOCKS;
+    if (ui.einst) {
+        ui.pvoice = (uint8_t)(ui.einst - 1u);
+        app_say(PERC_VOICE_NAME[ui.pvoice], ui.ppage ? "SHAPE" : "SOUND");
+    } else {
+        kick_part_name(kick_part(), t);
+        app_say("KICK", t);
+    }
+}
+
 /* a break change (ALGORITHM): its name at once, the break itself at the next bar. Playing, break_poll waits for
  * the bar's last 16th, mutes the break (it runs on, the clock and the drums too), decodes the new one over pcm_a
  * once the fade is done, and the render swaps it in on the next step: the bar's first. Stopped: at once */
@@ -152,16 +168,6 @@ static void input(void)
     if (keys != ui.keys || btn != ui.btn)
         ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
     for (i = 0; i < 16u; i++) {          /* white keys: slices, or on the soundboard its sounds */
-        if (ui.page == PG_KICK) {        /* the KICK page: the kick's 16 steps, on and off */
-            if (kdn >> WK[i] & 1u)
-                lane_toggle(LANE_KICK, i);
-            continue;
-        }
-        if (ui.page == PG_PERC) {        /* the SNARE / HAT page: that voice's steps */
-            if (kdn >> WK[i] & 1u)
-                lane_toggle(LANE_SNARE + ui.pvoice, i);
-            continue;
-        }
         if (ui.page == PG_SEQ) {         /* the SEQ page: a break step to edit, or a drum lane's steps */
             if (kdn >> WK[i] & 1u)
                 seq_key(i);
@@ -218,33 +224,16 @@ static void input(void)
     }
     if (bdn & 1u << B_GLO)               /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, BT audio */
         global_part(ui.page == PG_GLOBAL ? (ui.gpage + 1u) % 3u : 0u);
-    if (bdn & 1u << B_EDIT) {            /* EDIT: the KICK page; again, its next sub-page */
-        if (ui.page == PG_KICK)
-            ui.kpage = (uint8_t)((ui.kpage + 1u) % KPAGES);
-        else {
-            slices_let_go(keys);
-            ui.kpage = KP_MIX;
-        }
-        ui.page = PG_KICK;
-        ui.redraw |= RG_FOOT | RG_BLOCKS;
-        app_say("KICK", KPAGE_NAME[ui.kpage]);
+    if (bdn & 1u << B_EDIT) {            /* EDIT: the drums' sounds, the one edited last; again, the next drum */
+        if (ui.page == PG_KICK || ui.page == PG_PERC)
+            ui.einst = (uint8_t)((ui.einst + 1u) % 3u);
+        edit_open();
     }
     if (bdn & 1u << B_LFO) {             /* LFO: the MIXER (the break, the kick, FX main, FX overlay); again, groove */
         ui.mpage = ui.page == PG_MIX ? (uint8_t)!ui.mpage : 0u;
         ui.page = PG_MIX;
         ui.redraw |= RG_FOOT | RG_BLOCKS;
         app_say("MIXER", ui.mpage ? "GROOVE" : "LEVELS");
-    }
-    if (bdn & 1u << B_ENV) {             /* ENV: the SNARE / HAT page; again, its next sub-page */
-        if (ui.page == PG_PERC)
-            ui.ppage ^= 1u;
-        else {
-            slices_let_go(keys);
-            ui.ppage = 0u;
-        }
-        ui.page = PG_PERC;
-        ui.redraw |= RG_FOOT | RG_BLOCKS;
-        app_say(PERC_VOICE_NAME[ui.pvoice % PERC_VOICES], ui.ppage ? "SHAPE" : "SOUND");
     }
     if (bdn & 1u << B_SEQ) {             /* SEQ: the pattern's steps and lanes; again, the next lane */
         if (ui.page != PG_SEQ)
@@ -390,17 +379,16 @@ static void input(void)
                 break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
             else if (ui.page == PG_GLOBAL)   /* GLOBAL: its part */
                 global_part((ui.gpage + (d > 0 ? 1u : 2u)) % 3u);
-            else if (ui.page == PG_KICK) {    /* the KICK page: the layer its LAYER and LAYER FX pages edit */
-                ui.klayer = (uint8_t)((ui.klayer + (d > 0 ? 1u : KICK_LAYERS - 1u)) % KICK_LAYERS);
-                app_say("LAYER", KICK_LAYER_NAME[ui.klayer]);
+            else if (ui.page == PG_KICK) {    /* the kick: its part (MIX, each layer and its FX, MACRO, OUT) */
+                kick_part_set((kick_part() + (d > 0 ? 1u : KPARTS - 1u)) % KPARTS);
                 ui.redraw |= RG_BLOCKS | RG_FOOT;
             } else if (ui.page == PG_SEQ) {   /* SEQ: the lane its keys edit */
                 ui.seq_lane = (uint8_t)((ui.seq_lane + (d > 0 ? 1u : NSEQL - 1u)) % NSEQL);
                 app_say("SEQ", SEQ_LANE_NAME[ui.seq_lane]);
                 ui.redraw |= RG_BLOCKS | RG_FOOT;
-            } else if (ui.page == PG_PERC) {   /* SNARE / HAT: the voice */
-                ui.pvoice ^= 1u;
-                app_say("VOICE", PERC_VOICE_NAME[ui.pvoice]);
+            } else if (ui.page == PG_PERC) {   /* the snare or the hat: SOUND or SHAPE */
+                ui.ppage ^= 1u;
+                app_say(PERC_VOICE_NAME[ui.pvoice % PERC_VOICES], ui.ppage ? "SHAPE" : "SOUND");
                 ui.redraw |= RG_BLOCKS | RG_FOOT;
             } else if (ui.page == PG_FX)
                 fx_algo(d, 0u);
@@ -447,7 +435,7 @@ static void leds(void)
     brk_status(&st);
     if (st.playing)
         b |= 1u << B_PLAY;
-    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_ARP, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_ENV};
+    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_ARP, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_EDIT};
     b |= 1u << PAGE_BTN[ui.page];
     if (ui.rec)
         b |= 1u << B_REC;
@@ -523,20 +511,75 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
  * steps here, not slices) */
 static void page_help(void)
 {
-    static const char *const ALGO[NPAGES] = {"BREAK", "BREAK", "SLOT", "PART", "LAYER", "BREAK", "LANE", "VOICE"};
+    static const char *const ALGO[NPAGES] = {"BREAK", "BREAK", "SLOT", "PART", "PART", "BREAK", "LANE", "PART"};
     static const char *const PRE[NPAGES] = {"PATTERN", "PATTERN", "EFFECT", "PATTERN", "KICK", "PATTERN", "PATTERN",
                                             "SOUND"};
     char t[48] = "KEYS ";
     int steps = !slices_page();
-    text_cat(t, ui.page == PG_KICK ? "KICK STEPS" : ui.page == PG_PERC ? (ui.pvoice ? "HAT STEPS" : "SNARE STEPS")
-                : ui.page != PG_SEQ ? "SLICES" : ui.seq_lane < SL_KICK ? "PICK STEP" : "LANE STEPS");
+    text_cat(t, ui.page != PG_SEQ ? "SLICES" : ui.seq_lane < SL_KICK ? "PICK STEP" : "LANE STEPS");
     text_cat(t, "   ALGO ");
     text_cat(t, ALGO[ui.page % NPAGES]);
     text_cat(t, "   PRESETS ");
     text_cat(t, PRE[ui.page % NPAGES]);
+    cv_begin(240, 12, C_BLACK);
+    cv_text((240 - text_w(&FONT_T, t)) / 2, 0, &FONT_T, t, steps ? C_AMB : C_DIM);
+    cv_blit(0, 76);
+}
+
+/* the tab bar under the waveform: the button's name, then the page's parts as tabs (the one you are on lit: the
+ * button again, or ALGORITHM, goes to the next); EDIT and FX also name the part edited, "< SUB FX >" */
+static int32_t tab(int32_t x, const char *s, int on)
+{
+    int32_t w = text_w(&FONT_T, s) + 8;
+    cv_rect(x, 0, w, 13, on ? C_HI : C_BLOCK);
+    cv_text(x + 4, 1, &FONT_T, s, on ? C_BLACK : C_GRAY);
+    return x + w + 3;
+}
+static void draw_tabs(void)
+{
+    static const char *const BTN[NPAGES] = {"HOME", "ARP", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT"};
+    static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
+    static const char *const SLOT[4] = {"1", "2", "3", "4"};
+    static const char *const DRUM[3] = {"KICK", "SNARE", "HAT"};
+    static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
+    uint32_t i;
+    int32_t x;
+    char part[20];
+    part[0] = 0;
     cv_begin(240, 14, C_BLACK);
-    cv_text((240 - text_w(&FONT_T, t)) / 2, 1, &FONT_T, t, steps ? C_AMB : C_DIM);
-    cv_blit(0, 73);
+    x = cv_text(4, 1, &FONT_T, BTN[ui.page % NPAGES], C_WHITE) + 6;
+    if (ui.page == PG_HOME)
+        tab(x, "PERFORM", 1);
+    else if (ui.page == PG_GEN)
+        tab(x, "GENERATOR", 1);
+    else if (ui.page == PG_GLOBAL)
+        for (i = 0; i < 3u; i++)
+            x = tab(x, GPART[i], i == ui.gpage);
+    else if (ui.page == PG_MIX) {
+        x = tab(x, "LEVELS", !ui.mpage);
+        tab(x, "GROOVE", ui.mpage);
+    } else if (ui.page == PG_SEQ)
+        for (i = 0; i < NSEQL; i++)
+            x = tab(x, SEQL[i], i == ui.seq_lane);
+    else if (ui.page == PG_FX) {
+        for (i = 0; i < BRK_FX_SLOTS; i++)
+            x = tab(x, SLOT[i], i == (ui.fx_focus & 3u));
+        text_cat(part, BRK_FXT_NAME[set.fx.slot[ui.fx_focus & 3u].type]);
+    } else {                             /* EDIT: the drum, and its part */
+        for (i = 0; i < 3u; i++)
+            x = tab(x, DRUM[i], i == ui.einst);
+        if (ui.page == PG_KICK)
+            kick_part_name(kick_part(), part);
+        else
+            text_cat(part, ui.ppage ? "SHAPE" : "SOUND");
+    }
+    if (part[0]) {                       /* "< PART >": ALGORITHM turns it */
+        char t[24] = "< ";
+        text_cat(t, part);
+        text_cat(t, " >");
+        cv_text(236 - text_w(&FONT_T, t), 1, &FONT_T, t, C_HI);
+    }
+    cv_blit(0, 62);
 }
 
 /* SEL held alone: its combinations, on the strip (FX page: its own two) */
@@ -575,8 +618,9 @@ static void draw_foot(const brk_status_t *st)
                                               {"BREAK", "KICK", "PERC", "FX"},
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
                                               {"", "", "", ""}};
-    uint32_t i, n = 0u, at = 0u;
+    uint32_t i;
     char t[16];
+    draw_tabs();
     page_help();
     cv_begin(240, 48, C_BLACK);
     for (i = 0; i < 11u; i++) {
@@ -585,21 +629,6 @@ static void draw_foot(const brk_status_t *st)
         cv_rect(x, 0, 20, 14, on ? C_HI : C_BLOCK);
         cv_text(x + (20 - text_w(&FONT_T, PAD_NAME[i])) / 2, 1, &FONT_T, PAD_NAME[i], on ? C_BLACK : C_GRAY);
     }
-    /* where "press again" is: the page's parts (FX: its slots; SEQ: its lanes), a dot each, between pads and knobs */
-    if (ui.page == PG_GLOBAL)
-        n = 3u, at = ui.gpage;
-    else if (ui.page == PG_KICK)
-        n = KPAGES, at = ui.kpage;
-    else if (ui.page == PG_MIX)
-        n = 2u, at = ui.mpage;
-    else if (ui.page == PG_PERC)
-        n = 2u, at = ui.ppage;
-    else if (ui.page == PG_FX)
-        n = BRK_FX_SLOTS, at = ui.fx_focus & 3u;
-    else if (ui.page == PG_SEQ)
-        n = NSEQL, at = ui.seq_lane;
-    for (i = 0; i < n; i++)
-        cv_rect(120 - (int32_t)n * 5 + (int32_t)i * 10, 15, 7, 2, i == at ? C_HI : C_GRAY);
     for (i = 0; i < 4u; i++) {
         static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
         static const char *const KN_GROOVE[4] = {"SWING", "DRUMS", "", ""};

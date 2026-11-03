@@ -1,5 +1,5 @@
-# CHOPPAH: the SNARE / HAT page on ENV. White keys: the voice's steps; ALGORITHM the voice; ENV again SOUND / SHAPE;
-# PRESETS its sounds; MIDI notes 38 and 42 play them
+# CHOPPAH: the snare and the hat on EDIT (EDIT again from the kick: the snare, then the hat). ALGORITHM turns SOUND /
+# SHAPE; PRESETS their sounds; their steps are on SEQ's SNARE and HAT lanes; MIDI notes 38 and 42 play them
 #   app/build/host/choppah_host tests/scenarios/perc.txt app/build/scenarios
 wait 2600
 tap LFO
@@ -7,17 +7,29 @@ wait 100
 turn K1 -50 10
 turn K2 -50 10
 wait 100
-tap ENV
-wait 300
+tap SEQ
+tap SEQ
+tap SEQ
+tap SEQ
+wait 100
+expect seq_lane 3
 tapkey w4
 tapkey w12
-turn ALGO 1 10
+tap SEQ
 wait 100
+expect seq_lane 4
 tapkey w2
 tapkey w6
 tapkey w10
 tapkey w14
 wait 200
+expect lane_hat 17476
+shot q_hat.png
+tap EDIT
+tap EDIT
+tap EDIT
+wait 300
+expect page 7
 shot p_hat.png
 tap PLAY
 wav perc.wav
@@ -26,7 +38,7 @@ wait 1500
 expect peak_db_min -30
 wavstop
 shot p_playing.png
-tap ENV
+turn ALGO 1 10
 turn K1 3 10
 wait 200
 shot p_shape.png

@@ -35,6 +35,7 @@ static struct {
     uint8_t mpage;                       /* the MIXER's half: 0 LEVELS (break, kick, perc, FX), 1 GROOVE */
     uint8_t seq_lane, seq_step;          /* the SEQ page: the lane (SL_*) and the break step (0..31) it edits */
     uint8_t pvoice, ppage, ppreset[PERC_VOICES];   /* the SNARE / HAT page: its voice, sub-page, presets */
+    uint8_t einst;                       /* EDIT, the drums' design: 0 the kick (PG_KICK), 1 the snare, 2 the hat (PG_PERC) */
     uint8_t rec;                         /* REC: white keys and MIDI notes write into the pattern as it plays */
     uint8_t help;                        /* SEL held alone a second: the SEL combinations on the strip */
     uint8_t fx_hold, fx_turned;          /* FX held on the FX page (up alone: the next slot); a knob turned meanwhile */
@@ -47,7 +48,7 @@ static struct {
     uint8_t redraw;                      /* RG_* bits: the regions to draw again */
 } ui;
 /* the white keys play slices (or, on the SEQ, KICK and SNARE / HAT pages, steps) */
-static int slices_page(void) { return ui.page != PG_SEQ && ui.page != PG_KICK && ui.page != PG_PERC; }
+static int slices_page(void) { return ui.page != PG_SEQ; }   /* (the drums' steps are SEQ's alone) */
 enum { RG_HEAD = 1, RG_WAVE = 2, RG_BLOCKS = 4, RG_FOOT = 8, RG_ALL = 15, RG_FX = 16 };
 
 static void text_cat(char *d, const char *s)
