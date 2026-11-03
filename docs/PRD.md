@@ -75,7 +75,7 @@ The panel works in two layers. **Keys** are always the instrument; **buttons** p
 | **HOME** | Main screen; **hold HOME + PLAY** = reset to bar 1; **HOME + SELECT** = tempo |
 | **REC** | Looper: record → loop → overdub → loop (§4.3); hold = clear |
 | **SEQ** | Step sequencer edit |
-| **ARP** | FILL: fills on the white keys (B-51); SEL + ARP: randomize (the generator is HOME's second part since 3 Nov 2026) |
+| **ARP** | OVERLAY: sixteen effects on the white keys (B-52); SEL + ARP: randomize (the generator is HOME's second part since 3 Nov 2026) |
 | **EDIT** | Break / slice editor |
 | **FX** | DSP effects page (§4.5) |
 | **ENV** | Slice envelope and gate |
@@ -274,11 +274,12 @@ on the keys, eyes on the crowd.
 | B-42 | **Undo:** one copy of the pattern before SEL + ARP, SEL + REC and a drum lane's FILL / CLR / COPY (a burst of one change is one); SEL + SAVE swaps it back (again: redo); ~140 B of RAM | P1 | *Done; scenario controls.txt* |
 | B-43 | ~~**The page's help line** under the waveform: KEYS / ALGO / PRESETS~~ Removed 3 Nov 2026 (the user's call: the tabs say enough; the waveform has its rows back, 44) | P2 | *Removed* |
 | B-44 | **The drums' route has one home**, MIXER GROOVE K2: SEL + EDIT and KICK OUT's ROUTE removed | P2 | *Done* |
-| B-45 | **HOME K3 FX, K4 COMPLEXITY** (mirrors of MIXER K4 and ARP K1) | P2 | *Done* |
+| B-45 | **HOME K3 FX, K4 COMPLEXITY** (mirrors of MIXER K4 and the GENERATOR's K1) | P2 | *Done* |
 | B-46 | **SEQ drum lanes' knobs:** K1 FILL (n hits spread evenly from the downbeat, Euclidean), K2 ROTATE, K3 clear (left) / four on the floor (right), K4 copy the previous pattern's lane | P2 | *Done; scenario controls.txt* |
 | B-47 | **SEL pressed alone** (held a second until 3 Nov 2026, when tap tempo left SEL): the strip lists the SEL combinations (FX page: SEL + FX, FX + ALGO); SEL again, or any other button, key or knob, closes it | P2 | *Done; scenario controls.txt* |
 | B-50 | **EDIT's drums show their waveforms** (3 Nov 2026): the lower strip's three boxes each draw one hit of the drum (`kick_shape`, `perc_shape`: offline, worked out again when its settings change), over a window fitting its decay, as tall as the box | P2 | *Done; engine test: perc_shape a hit, then its tail* |
-| B-51 | **Fills on ARP** (3 Nov 2026): eight fills on the white keys, 1–8 to end on the next downbeat (2 bars: the loop's end), 9–16 at once: ROLL (the slice it began on, ratchets speeding up), SNARE / KICK rushes (the break's beat-2 / first slice), RANDOM, REVERSE (the pattern backwards), STOP (a tape stop to rest on its last step), DROP (silent), HALF; K1 length 1/4 · 1/2 · 1 · 2 bars, K2 pitch ramp ±12, K3 density ×1–×4, K4 auto fill every 2 / 4 / 8 / 16 bars (the fill ALGORITHM picks). In the engine (`brk_fill`, `brk_fill_auto`: step-placed, STOP and HALF through their pads), settings appended (SET_SIZE_MIN now the first appended field's offset) | P1 | *Done; engine test test_fill; scenario fill.txt* |
+| B-51 | ~~**Fills on ARP**~~ (3 Nov 2026, v0.52): eight fills on the white keys (ROLL, SNARE / KICK rushes, RANDOM, REVERSE, STOP, DROP, HALF), an auto fill. **Dropped** for B-52 the same day: the engine's fills removed, their 8 settings bytes kept as reserved | — | *Replaced by B-52* |
+| B-52 | **Overlay effects on ARP** (3 Nov 2026): sixteen effects over the whole mix (after the FX chain), one a white key, on while held, any together, each fading in and out over 5 ms: DIVE (low-pass sweeping down), RISE (high-pass sweeping up), RADIO (band-pass), WAH (resonant band on the beat), CRUSH (bits), LO-FI (sample rate), DIST, RING (ring mod), CHOP / GATE (level cut on the rate, twice it), DUCK (pump each beat), PAN (auto-pan), BOOM (bass), WOBBLE (tape wow / flutter), JET (flanger), CUT (silence). Each its own AMOUNT (K1: the one touched last); K2 RATE 1/4–1/32, K3 SWEEP 1/4 bar–2 bars, K4 LATCH (press on / press off, latched ones stay on other pages). `dsp/ovl.c` (platform-free), a 4 KB delay line in the pool, settings appended after the reserved bytes | P1 | *Done; engine test test_ovl; scenario overlay.txt* |
 | B-48 | **SEQ sequences, EDIT designs** (3 Nov 2026, the user's call): the drums' steps live on SEQ's lanes only (the white keys play slices on every other page); EDIT holds the kick, the snare and the hat (EDIT again: the next drum; ALGORITHM the drum's part: the kick's 11 = MIX, each layer and its FX, MACRO, OUT; the snare's / hat's SOUND, SHAPE); the lower strip shows the three drums, lit on their hits. ENV went to tap tempo (A-38) | P1 | *Done; scenarios kick.txt, perc.txt* |
 | B-49 | **A tab bar** replaces B-41's dots: right under the header on every page (since 3 Nov 2026; first under the waveform), tap tempo's too, the button's name as printed, then the page's parts as tabs (the one you are on filled amber), and on EDIT / FX the part edited, "< SUB FX >"; the help line (B-43) under it | P1 | *Done* |
 
@@ -300,6 +301,7 @@ on the keys, eyes on the crowd.
 | LFO (mixer, built) | Break level | Kick level | Snare and hat level | FX | LFO again: swing · drums route |
 | SEQ (built) | Step slice | Step pitch | Hits (ratchet) | Reverse | ALGORITHM: the lane |
 | HOME again (generator) | Complexity | Anchor | Roll | Fill | Retrig 2× · 3× · 4× · 8× |
+| ARP (overlay, built) | Amount (the effect touched last) | Rate | Sweep | Latch | White keys: the 16 effects (B-52) |
 | EDIT (break) | Slice select | Start nudge | Slice count | Native BPM | Gain · Trim · Name · Mode (repitch/stretch) |
 | FX | Focused FX param 1 | param 2 | param 3 | Mix | Next FX · on/off |
 | ENV (snare / hat, built) | Level | Tune | Decay | Tone | ENV again: snap / cut · drive |

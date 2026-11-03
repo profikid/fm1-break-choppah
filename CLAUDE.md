@@ -6,8 +6,8 @@ E-*, N-*; milestones M0–M8). Keep the PRD in step when scope changes.
 ## Layout
 
 `app/app.c` is the core (settings, patterns, MIDI, the render); it ends by including `app/ui/*.c` in order (common,
-fx, pads, keys, bta, global, seq, kick, perc, fill, mixer, screen, main): one unity build, so a page file sees what the
-files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick, perc, …).
+fx, pads, keys, bta, global, ovl, seq, kick, perc, mixer, screen, main): one unity build, so a page file sees what the
+files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick, perc, ovl, …).
 
 ## Hard rules
 
@@ -21,9 +21,9 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - Pool RAM budget (PRD 8.2): canvas 240×60 (28 KB) + PCM buffers + the Bluetooth audio queue; the build wants 8 KB
   of the 344 KB spare.
 - Flash writes stall audio: only on SAVE or while stopped.
-- Settings (`settings_t`, magic CHP7) only grow at the end: append new fields after the last one (`fill_rsv`) and
+- Settings (`settings_t`, magic CHP7) only grow at the end: append new fields after the last one (`ovl_rsv`) and
   give them defaults in `settings_defaults()`; a shorter (older) save loads into the front (`SET_SIZE_MIN`: the
-  offset of the first appended field, `fill_type`; keep it there).
+  offset of the first appended field, `rsv2`, the dropped fills' bytes; keep it there).
   Anything else needs a new magic (saves lost). Patterns are their own object (`OBJ_PAT`, 0xDA000, magic PAT1).
 - Bluetooth MIDI is on (`ble = true`, `ble_stack = "own"`: fm1-base's own stack, nothing of JieLi's); the GLOBAL
   page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash. Bluetooth audio out

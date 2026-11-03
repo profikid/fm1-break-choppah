@@ -1,0 +1,56 @@
+# CHOPPAH: the OVERLAY page on ARP. Each white key an effect over everything, on while held (any together); K1 the
+# amount of the one touched last, K2 the rate, K3 the sweep, K4 LATCH (a press then switches it on and off)
+#   app/build/host/choppah_host tests/scenarios/overlay.txt app/build/scenarios
+wait 2600
+tap ARP
+wait 150
+expect page 9
+shot o_page.png
+tap PLAY
+wait 600
+key w15 down
+wait 100
+expect ovl_on 32768
+peakreset
+wait 300
+expect peak_db_max -60
+key w15 up
+wait 100
+expect ovl_on 0
+peakreset
+wait 300
+expect peak_db_min -30
+key w0 down
+key w8 down
+wait 700
+expect ovl_on 257
+shot o_held.png
+key w0 up
+key w8 up
+wait 100
+expect ovl_last 8
+turn K1 -10 10
+wait 100
+turn K4 1 10
+wait 100
+expect ovl_latch 1
+tapkey w4
+tapkey w13
+wait 300
+expect ovl_on 8208
+shot o_latched.png
+tap HOME
+wait 150
+expect page 0
+expect ovl_on 8208
+tap ARP
+wait 150
+tapkey w4
+wait 100
+expect ovl_on 8192
+turn K4 -1 10
+wait 100
+expect ovl_on 0
+tap HOME
+wait 150
+expect page 0

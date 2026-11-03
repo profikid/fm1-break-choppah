@@ -82,9 +82,6 @@ static void global_turn(int i, int32_t d)
     changed();
 }
 
-/* the slicer: sixteen blocks, one per white key, each with its slice's waveform and number; the one sounding is lit
- * and a key held is outlined */
-/* the soundboard: sixteen tiles in key order, 4 x 4; a sound playing fills its tile, burning down like a fuse */
 /* the GLOBAL page's panel: Bluetooth, the clock coming in, the clock going out, MIDI through each port */
 static void draw_global(const brk_status_t *st)
 {

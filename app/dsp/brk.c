@@ -105,21 +105,6 @@ static uint16_t ev_off[EV_MAX];          /* the last render's steps: offsets and
 static uint8_t ev_idx[EV_MAX];
 static uint32_t ev_cnt;
 static uint32_t steps_total;             /* steps begun since the reset (the outside clock counts from its start) */
-/* fills: a request (a word: brk_fill), the auto fill (a word: brk_fill_auto), the one playing */
-#define FW(t, n, p, d, e, b) ((uint32_t)(t) | (uint32_t)(n) << 4 | (uint32_t)((p) + 16) << 10 | (uint32_t)(d) << 15 | \
-                              (uint32_t)(e) << 18 | (uint32_t)(b) << 19)
-#define FW_TYPE(w) ((w) & 15u)
-#define FW_LEN(w) (((w) >> 4) & 63u)
-#define FW_PITCH(w) ((int32_t)(((w) >> 10) & 31u) - 16)
-#define FW_DENS(w) (((w) >> 15) & 7u)
-#define FW_ATEND(w) (((w) >> 18) & 1u)
-#define FW_BARS(w) (((w) >> 19) & 31u)
-static volatile uint32_t p_fill, p_fill_seq, p_fill_auto;
-static uint32_t fill_seen, fill_arm, fill_w;
-static uint8_t fill_armed, fill_on;
-static uint32_t fill_left, fill_i;
-static int32_t fill_slice;
-const char *const BRK_FILL_NAME[BRK_FILLS] = {"ROLL", "SNARE", "KICK", "RANDOM", "REVERSE", "STOP", "DROP", "HALF"};
 static int was_playing;                  /* the transport at the last render: a stop fades the break out */
 static volatile uint32_t n_renders;
 
@@ -438,102 +423,6 @@ static void key_snap(const brk_break_t *b, int32_t s)
         pending_wait = (target - pos) * step_len();
 }
 
-/* the fill, at each step: a request taken, one started at its moment (or the auto fill at a phrase's end), counted
- * down; fill_on: this step is one of its */
-static void fill_step(const brk_break_t *b)
-{
-    uint32_t at = steps_total, w = 0u;
-    if (p_fill_seq != fill_seen) {
-        fill_seen = p_fill_seq;
-        fill_arm = p_fill;
-        fill_armed = 1u;
-    }
-    if (!fill_left) {
-        if (fill_armed) {
-            uint32_t len = FW_LEN(fill_arm), unit = len <= 16u ? 16u : 32u;
-            if (!FW_ATEND(fill_arm) || at % unit == unit - len) {
-                w = fill_arm;
-                fill_armed = 0u;
-            }
-        } else if (FW_BARS(p_fill_auto)) {
-            uint32_t a = p_fill_auto, unit = FW_BARS(a) * 16u, len = FW_LEN(a);
-            if (len <= unit && at % unit == unit - len)
-                w = a;
-        }
-        if (w && FW_LEN(w)) {            /* it starts: what it repeats, taken now */
-            const brk_step_t *p = &pat[(uint32_t)step % BRK_MAX_STEPS];
-            fill_w = w;
-            fill_left = FW_LEN(w);
-            fill_slice = p->slice >= 0 ? p->slice : follow_slice(b, (uint32_t)step);
-            if (fill_slice < 0)
-                fill_slice = 0;
-            if (FW_TYPE(w) == FILL_DROP) {   /* (the drop: what sounds fades out) */
-                uint32_t k;
-                for (k = 0; k < 2u; k++)
-                    if (v[k].active) {
-                        v[k].amp_to = 0.0f;
-                        v[k].amp_step = v[k].amp / FADE_OUT + 1e-6f;
-                        v[k].loop = v[k].wrap = 0u;
-                    }
-            }
-        }
-    }
-    fill_on = fill_left ? 1u : 0u;
-    if (fill_left) {
-        fill_i = FW_LEN(fill_w) - fill_left;
-        fill_left--;
-    }
-}
-
-/* a fill's step (the types that choose their own slices: STOP and HALF play the pattern under their pad) */
-static int fill_play(const brk_break_t *b)
-{
-    uint32_t t = FW_TYPE(fill_w), len = FW_LEN(fill_w), d = FW_DENS(fill_w), hits = 1u;
-    int32_t s, pitch = FW_PITCH(fill_w);
-    int rev = 0;
-    float ramp = (float)pitch * (float)(fill_i + 1u) / (float)len;
-    if (t == FILL_STOP || t == FILL_HALF)
-        return 0;
-    if (t == FILL_DROP)
-        return 1;                        /* (quiet) */
-    if (d < 1u)
-        d = 1u;
-    if (t == FILL_ROLL || t == FILL_SNARE || t == FILL_KICK) {
-        s = t == FILL_ROLL ? fill_slice : follow_slice(b, t == FILL_SNARE ? 4u : 0u);
-        hits = d + d * 2u * fill_i / len;   /* faster towards its end */
-        if (hits > 8u)
-            hits = 8u;
-        step_pitch = ramp;
-    } else if (t == FILL_RANDOM) {
-        s = (int32_t)(brk_rand(&rng) % b->nslices);
-        step_pitch = (float)(int32_t)((brk_randf(&rng) * 2.0f - 1.0f) * (float)(pitch < 0 ? -pitch : pitch));
-        hits = brk_randf(&rng) * 4.0f < (float)(d - 1u) ? 2u : 1u;
-    } else {                             /* REVERSE: the pattern's own slice, backwards */
-        const brk_step_t *p = &pat[step];
-        int32_t f = follow_slice(b, (uint32_t)step);
-        s = p->slice >= 0 ? p->slice : f >= 0 ? f : fill_slice;
-        rev = 1;
-        step_pitch = ramp;
-    }
-    if (s < 0 || (uint32_t)s >= b->nslices)
-        s = 0;
-    if (hits > 1u) {
-        rat_count = hits - 1u;
-        rat_len = (float)step_in_len / (float)hits;
-        rat_left = rat_len;
-        rat_slice = s;
-        rat_rev = rev;
-        rat_pitch = step_pitch;
-    }
-    key_pitch = 0.0f;
-    {
-        float keep = step_pitch;
-        trigger(b, s, rev);
-        step_pitch = keep;
-    }
-    return 1;
-}
-
 static void on_step(const brk_break_t *b)
 {
     uint32_t n = loop_steps(b);
@@ -548,7 +437,6 @@ static void on_step(const brk_break_t *b)
     step_pitch = 0.0f;
     if (p_ps.gate_div != 0u || !(step & 1))
         gate_pos = 0.0f;                 /* the gate starts with the step (1/8: every other step) */
-    fill_step(b);
     if (suppressed())
         return;
     p = &pat[step];
@@ -563,8 +451,6 @@ static void on_step(const brk_break_t *b)
             roll_begin(b);
         return;
     }
-    if (fill_on && fill_play(b))        /* a fill's step: its own slice */
-        return;
     if (((pads_now >> PAD_RANDOM) & 1u) && brk_randf(&rng) < p_ps.rnd_amount) {
         s = (int32_t)(brk_rand(&rng) % b->nslices);   /* a random slice, and a random pitch for it */
         step_pitch = (float)(int32_t)((brk_randf(&rng) * 2.0f - 1.0f) * p_ps.rnd_pitch);
@@ -732,8 +618,7 @@ static const brk_break_t *swap_now(void);
 void brk_render(float *out, uint32_t n)
 {
     const brk_break_t *b = brk_now;
-    uint32_t i, pads = p_pads | (fill_on && FW_TYPE(fill_w) == FILL_STOP ? 1u << PAD_TAPESTOP : 0u) |
-                          (fill_on && FW_TYPE(fill_w) == FILL_HALF ? 1u << PAD_HALF : 0u);   /* (a fill's pad) */
+    uint32_t i, pads = p_pads;
     float sl = step_len(), inc, pf, half, ratio, sw = brk_clampf(p_swing, 0.5f, 0.75f);
     int playing = p_playing, keep = p_keep;
     n_renders++;
@@ -755,15 +640,11 @@ void brk_render(float *out, uint32_t n)
         bar = 0u;
         to_next = 0.0f;
         steps_total = 0u;
-        fill_left = 0u;
-        fill_on = fill_armed = 0u;
     }
     clk_cnt = 0u;
     ev_cnt = 0u;
     if (was_playing && !playing) {       /* stopped: the break fades out (2 ms), but a key held loops on */
         uint32_t k;
-        fill_left = 0u;                  /* (and a fill is over) */
-        fill_on = 0u;
         pending = BRK_NO_SLICE;
         roll_slice = -1;
         roll_arm = 0u;
@@ -903,9 +784,8 @@ void brk_render(float *out, uint32_t n)
             }
         }
         /* tape stop: stop_beats down to nothing, spin_steps back up */
-        if ((pads_now >> PAD_TAPESTOP) & 1u) {   /* (a STOP fill: stopped at its own end) */
-            tape -= 1.0f / ((fill_on && FW_TYPE(fill_w) == FILL_STOP ? (float)FW_LEN(fill_w)
-                             : brk_clampf(p_ps.stop_beats, 0.25f, 4.0f) * 4.0f) * sl);
+        if ((pads_now >> PAD_TAPESTOP) & 1u) {
+            tape -= 1.0f / (brk_clampf(p_ps.stop_beats, 0.25f, 4.0f) * 4.0f * sl);
             if (tape < 0.0f)
                 tape = 0.0f;
         } else if (tape < 1.0f) {
@@ -969,10 +849,6 @@ void brk_render(float *out, uint32_t n)
     status.key_n = (uint16_t)key_n;
     status.key_rev = (uint8_t)(v[cur].dir < 0.0f);
     status.bar16 = steps_total ? (int8_t)((steps_total - 1u) & 15u) : (int8_t)-1;
-    status.fill = (uint8_t)(fill_on ? FW_TYPE(fill_w) + 1u : 0u);
-    status.fill_armed = (uint8_t)(fill_armed ? FW_TYPE(fill_arm) + 1u : 0u);
-    status.fill_i = (uint8_t)fill_i;
-    status.fill_len = (uint8_t)(fill_on ? FW_LEN(fill_w) : 0u);
 }
 
 /* -------------------------------------------------------------- main loop --- */
@@ -1116,19 +992,6 @@ static const brk_break_t *swap_now(void)
     return brk_now;
 }
 const brk_break_t *brk_get_break(void) { return brk_now; }
-void brk_fill(uint32_t type, uint32_t steps, int32_t pitch, uint32_t density, int at_end)
-{
-    steps = steps < 1u ? 1u : steps > 32u ? 32u : steps;
-    pitch = pitch < -12 ? -12 : pitch > 12 ? 12 : pitch;
-    p_fill = FW(type % BRK_FILLS, steps, pitch, density > 7u ? 7u : density, at_end ? 1u : 0u, 0u);
-    p_fill_seq++;
-}
-void brk_fill_auto(uint32_t bars, uint32_t type, uint32_t steps, int32_t pitch, uint32_t density)
-{
-    steps = steps < 1u ? 1u : steps > 32u ? 32u : steps;
-    pitch = pitch < -12 ? -12 : pitch > 12 ? 12 : pitch;
-    p_fill_auto = FW(type % BRK_FILLS, steps, pitch, density > 7u ? 7u : density, 1u, bars > 31u ? 31u : bars);
-}
 void brk_play(int on)
 {
     if (on && !p_playing)

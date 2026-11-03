@@ -10,6 +10,7 @@
 #include "brk_fx.h"
 #include "brk_synth.h"
 #include "kick.h"
+#include "ovl.h"
 #include "perc.h"
 
 #define RATE 22050u
@@ -830,63 +831,6 @@ static void test_swap(void)
     CHECK(brk_get_break() == &brk, "stopped: in at once");
 }
 
-/* fills: a ROLL at once repeats the slice it began on for its steps, then the pattern again; a DROP is quiet; a
- * fill at the bar's end starts so that it ends on the downbeat; the auto fill comes at each phrase's end */
-static void test_fill(void)
-{
-    uint32_t sl, k, ok;
-    brk_status_t st;
-    int32_t at[6];
-    uint8_t on[6];
-    float pk;
-    fresh(1);                            /* 1 bar, 16 slices: a slice a step */
-    sl = brk_step_len_samples();
-    brk_play(1);
-    render(buf, sl * 2u + sl / 2u, 0, 0, 0);   /* half into step 2 */
-    brk_fill(FILL_ROLL, 4u, 0, 1, 0);
-    for (k = 0; k < 6u; k++) {
-        render(buf, sl, 0, 0, 0);
-        brk_status(&st);
-        at[k] = st.slice;
-        on[k] = st.fill;
-    }
-    CHECK(at[0] == 3 && at[1] == 3 && at[2] == 3 && at[3] == 3 && at[4] == 7 && on[0] == FILL_ROLL + 1 &&
-          on[3] == FILL_ROLL + 1 && on[4] == 0, "ROLL: slice 3 for four steps, then 7 (%d %d %d %d %d; on %u %u)",
-          at[0], at[1], at[2], at[3], at[4], on[0], on[4]);
-    fresh(1);
-    brk_play(1);
-    render(buf, sl * 2u + sl / 2u, 0, 0, 0);
-    brk_fill(FILL_DROP, 4u, 0, 1, 0);
-    render(buf, sl / 2u + 1024u, 0, 0, 0);   /* (into its first step, the fade done) */
-    pk = render(buf, sl * 3u, 0, 0, 0);
-    CHECK(pk < 1e-3f, "DROP: quiet (%.4f)", pk);
-    pk = render(buf, sl * 2u, 0, 0, 0);
-    CHECK(pk > 0.01f, "after the DROP: the break again (%.3f)", pk);
-    fresh(1);
-    brk_play(1);
-    render(buf, sl + sl / 2u, 0, 0, 0);   /* half into step 1 */
-    brk_fill(FILL_KICK, 4u, 0, 1, 1);    /* to end on the downbeat: steps 12..15 */
-    for (k = 2u, ok = 1u; k < 17u; k++) {
-        render(buf, sl, 0, 0, 0);
-        brk_status(&st);
-        if ((k >= 12u && k < 16u) != (st.fill == FILL_KICK + 1) || (k >= 12u && k < 16u && st.slice != 0))
-            ok = 0u;
-    }
-    CHECK(ok, "KICK at the bar's end: steps 12-15, slice 0");
-    fresh(1);
-    brk_fill_auto(1u, FILL_SNARE, 4u, 0, 1);
-    brk_play(1);
-    render(buf, sl / 2u, 0, 0, 0);
-    for (k = 0, ok = 0u; k < 32u; k++) {   /* two bars: eight fill steps, the snare's slice (4) */
-        brk_status(&st);
-        if (st.fill == FILL_SNARE + 1 && st.slice == 4)
-            ok++;
-        render(buf, sl, 0, 0, 0);
-    }
-    brk_fill_auto(0u, 0u, 4u, 0, 1);
-    CHECK(ok == 8u, "the auto SNARE fill: the last four steps of each bar (%u)", ok);
-}
-
 /* the snap: where a key pressed while playing begins. A 1-bar break of 16 slices: a slice is a 16th */
 static void test_snap(void)
 {
@@ -1472,6 +1416,63 @@ static void test_kick(void)
     }
 }
 
+/* the overlay effects (ARP): nothing on passes the sound through as it is; each one changes it and stays bounded;
+ * CUT silences, DIVE darkens over its sweep, RISE thins; let go, it fades back to the dry sound */
+static int16_t ovl_buf[2u * OVL_LINE];
+static float ovl_tone(uint32_t i, float hz) { return 0.4f * sinf(6.2831853f * hz * (float)i / (float)BRK_SR); }
+static void ovl_run(uint32_t on, uint32_t from, uint32_t n, float hz, float *peak, float *diff)
+{
+    static uint8_t amt[OVL_N];
+    uint32_t i, j;
+    float l[BLOCK], r[BLOCK], spb = (float)BRK_SR * 60.0f / 120.0f;
+    for (i = 0; i < OVL_N; i++)
+        amt[i] = 100u;
+    ovl_set(on, amt, 2u, 0u);
+    *peak = 0.0f;
+    *diff = 0.0f;
+    for (i = from; i < from + n; i += BLOCK) {
+        for (j = 0; j < BLOCK; j++)
+            l[j] = r[j] = ovl_tone(i + j, hz) + 0.2f * ovl_tone(i + j, 97.0f);
+        ovl_process(l, r, BLOCK, (float)i / spb, spb);
+        for (j = 0; j < BLOCK; j++) {
+            float d = ovl_tone(i + j, hz) + 0.2f * ovl_tone(i + j, 97.0f);
+            if (i + j >= from + n / 2u) {    /* the second half: past the fade and the sweep */
+                if (fabsf(l[j]) > *peak) *peak = fabsf(l[j]);
+                if (fabsf(r[j]) > *peak) *peak = fabsf(r[j]);
+                *diff += fabsf(l[j] - d) + fabsf(r[j] - d);
+            }
+            if (!(l[j] == l[j]) || !(r[j] == r[j]))
+                *peak = 99.0f;
+        }
+    }
+    *diff /= (float)n;
+}
+static void test_ovl(void)
+{
+    uint32_t k;
+    float pk, df, dry;
+    ovl_init(ovl_buf);
+    ovl_run(0u, 0u, 22050u, 2000.0f, &dry, &df);
+    CHECK(df < 1e-6f && ovl_sounding() == 0u, "OVERLAY: nothing on, the sound passes as it is (%.6f off)", df);
+    for (k = 0; k < OVL_N; k++) {
+        ovl_init(ovl_buf);
+        ovl_run(1u << k, 0u, 44100u, 2000.0f, &pk, &df);
+        CHECK(pk < 1.5f, "OVERLAY %s: bounded (peak %.2f)", OVL_NAME[k], pk);
+        CHECK(df > 0.01f, "OVERLAY %s: audible (%.4f off the dry sound)", OVL_NAME[k], df);
+    }
+    ovl_init(ovl_buf);
+    ovl_run(1u << OV_CUT, 0u, 22050u, 2000.0f, &pk, &df);
+    CHECK(pk < 0.001f, "OVERLAY CUT: silence (peak %.4f)", pk);
+    ovl_init(ovl_buf);
+    ovl_run(1u << OV_DIVE, 0u, 88200u, 8000.0f, &pk, &df);
+    CHECK(pk < 0.15f, "OVERLAY DIVE: an 8 kHz tone down past the sweep (peak %.3f of ~0.6)", pk);
+    ovl_init(ovl_buf);
+    ovl_run(1u << OV_RISE, 0u, 88200u, 97.0f, &pk, &df);
+    CHECK(pk < 0.1f, "OVERLAY RISE: the low end gone past the sweep (peak %.3f)", pk);
+    ovl_run(0u, 88200u, 22050u, 2000.0f, &pk, &df);   /* let go: back to dry (the filter's tail aside) */
+    CHECK(df < 0.002f && ovl_sounding() == 0u, "OVERLAY: let go, back to the dry sound (%.4f off)", df);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -1486,7 +1487,6 @@ int main(int argc, char **argv)
     test_keep_length();
     test_gate();
     test_swap();
-    test_fill();
     test_snap();
     test_reverb();
     test_stop();
@@ -1503,6 +1503,7 @@ int main(int argc, char **argv)
     test_pad_settings();
     test_dub();
     test_styles();
+    test_ovl();
     printf("%d of %d checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;
 }

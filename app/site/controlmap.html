@@ -166,11 +166,11 @@
       { n: "PERFORM", k: ["GATE", "DJ FILTER", "FX", "COMPLEXITY"], strip: "16 SLICE BLOCKS", note: "the slice playing lit; a held key outlined" },
       { n: "GENERATOR", k: ["COMPLEXITY", "ANCHOR", "ROLL", "FILL"], strip: "16 SLICE BLOCKS", note: "HOME again" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
-      notes: [["SEL", "Pressed alone: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["ARP", "The fills"]] },
-    { id: "arp", btn: "ARP", name: "FILL", sub: "Eight fills to throw", again: "nothing", subs: [
-      { n: "FILL", k: ["LENGTH", "PITCH", "DENSITY", "AUTO"], strip: "8 FILL CARDS · THE PICKED ONE STEP BY STEP", note: "1-8: to the bar's end · 9-16: at once" } ],
-      algo: "Fill (auto's)", presets: "Pattern P1–P16", keys: "fills",
-      notes: [["Keys 1-8 · 9-16", "ROLL SNARE KICK RANDOM REVERSE STOP DROP HALF"], ["K4 AUTO", "The picked fill every 2-16 bars"], ["SEL + ARP", "A random pattern (SEL + SAVE undoes)"]] },
+      notes: [["SEL", "Pressed alone: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["ARP", "The overlays"]] },
+    { id: "arp", btn: "ARP", name: "OVERLAY", sub: "Sixteen effects to hold", again: "nothing", subs: [
+      { n: "OVERLAY", k: ["AMOUNT", "RATE", "SWEEP", "LATCH"], strip: "16 EFFECT CARDS, 4 × 4 · LIT WHILE ON · EACH ITS AMOUNT", note: "Hold a key: its effect, over everything" } ],
+      algo: "Break", presets: "Pattern P1–P16", keys: "overlays",
+      notes: [["Keys 1-8", "DIVE RISE RADIO WAH CRUSH LO-FI DIST RING"], ["Keys 9-16", "CHOP GATE DUCK PAN BOOM WOBBLE JET CUT"], ["K4 LATCH", "A press on, a press off (stays on other pages)"], ["SEL + ARP", "A random pattern (SEL + SAVE undoes)"]] },
     { id: "fx", btn: "FX", name: "FX CHAIN", sub: "Four slots in series", again: "next slot (4)", part: true, subs: [1, 2, 3, 4].map(n =>
       ({ n: "SLOT " + n, k: ["PARAM 1", "PARAM 2", "PARAM 3", "MIX"], strip: "THE CHAIN: 4 SLOTS", note: n === 1 ? "the focused slot outlined" : "" })),
       algo: "Slot", presets: "Effect", keys: "slices",
@@ -226,7 +226,7 @@
   $("subs").addEventListener("click", e => { const b = e.target.closest(".sub"); if (b) { sub = +b.dataset.i; render(); } });
 
   function render() {
-    const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps" || p.keys === "taps" || p.keys === "fills";
+    const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps" || p.keys === "taps" || p.keys === "overlays";
     root.querySelectorAll(".pbtn").forEach((b, i) => b.setAttribute("aria-pressed", String(i === cur)));
     $("subs").innerHTML = p.subs.map((x, i) => '<button type="button" class="sub" data-i="' + i + '" aria-pressed="' + (i === sub) + '">' + x.n + "</button>").join("");
     const tabs = p.id === "edit" ? ["KICK", "SNARE", "HAT"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
@@ -248,7 +248,7 @@
     }
     [0, 1, 3, 4, 5, 7, 8, 10, 11, 12, 14].forEach((g, j) => { h += '<div class="bk" style="left:calc(' + (g + 1) + ' * 100% / 16 - 100% / 16 * .31)">' + PADS[j] + "</div>"; });
     $("kbd").innerHTML = h;
-    $("keyrole").innerHTML = "<span>White keys: <b>" + (p.keys === "fills" ? "1-8 A FILL TO THE BAR'S END, 9-16 AT ONCE" : p.keys === "taps" ? "EVERY KEY TAPS THE TEMPO" : steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : "SLICES 1–16 (hold to loop)") +
+    $("keyrole").innerHTML = "<span>White keys: <b>" + (p.keys === "overlays" ? "HOLD FOR AN EFFECT: 1 DIVE … 16 CUT (ANY TOGETHER)" : p.keys === "taps" ? "EVERY KEY TAPS THE TEMPO" : steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : "SLICES 1–16 (hold to loop)") +
       "</b></span><span>Black keys: <b>PADS (momentary, any page)</b></span>";
     $("notes").innerHTML = p.notes.map(([a, b]) => '<div class="note"><span>' + a + "</span>" + b + "</div>").join("") ||
       '<div class="note"><span>No combinations</span>Only the controls every page shares.</div>';

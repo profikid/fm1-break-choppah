@@ -13,6 +13,7 @@
 #include "brk_math.h"
 #include "brk_synth.h"
 #include "kick.h"
+#include "ovl.h"
 #include "perc.h"
 #if defined(__has_include)
 #if __has_include("bank_data.h")
@@ -60,15 +61,15 @@ typedef struct {
     brk_slicefx_t slx[BRK_KEYS];         /* each slice's own effect and level (a key held, FX: its other layer) */
     kick_t kick;                         /* the kick (PRD K-*): its sound and level */
     perc_t perc;                         /* the snare and the hat (PRD K-10): their sounds and level */
-    /* (appended 3 Nov 2026: the fills, ARP's page, PRD B-51) */
-    uint8_t fill_type;                   /* the fill ALGORITHM picked (FILL_*): the auto fill's and the preview's */
-    uint8_t fill_len;                    /* its length: 0 1/4 bar, 1 1/2, 2 1 bar, 3 2 bars */
-    uint8_t fill_dens;                   /* its density, 1..4 */
-    uint8_t fill_auto;                   /* the auto fill: 0 off, every 2, 4, 8, 16 bars (1..4) */
-    int8_t fill_pitch;                   /* the pitch it ramps to, -12..12 */
-    uint8_t fill_rsv[3];
+    uint8_t rsv2[8];                     /* (v0.52's fills, gone; their bytes kept: older saves still load) */
+    /* (appended 3 Nov 2026: the overlay effects, ARP's page, PRD B-52) */
+    uint8_t ovl_amt[16];                 /* each white key's effect's amount, 0..100 (OV_*) */
+    uint8_t ovl_rate;                    /* CHOP's rate (GATE, WAH, PAN follow it): 0 1/4 .. 3 1/32 */
+    uint8_t ovl_sweep;                   /* DIVE's and RISE's sweep: 0 1/4 bar .. 3 2 bars */
+    uint8_t ovl_latch;                   /* 1: a white key switches its effect on and off (0: on while held) */
+    uint8_t ovl_rsv;
 } settings_t;
-#define SET_SIZE_MIN offsetof(settings_t, fill_type)   /* the shortest save that loads: CHP7's first size */
+#define SET_SIZE_MIN offsetof(settings_t, rsv2)   /* the shortest save that loads: CHP7's first size */
 _Static_assert(sizeof(settings_t) <= 3840u, "a store object holds 3840 bytes");
 static settings_t set;
 static uint8_t set_dirty;
@@ -101,8 +102,10 @@ static void settings_defaults(void)
     }
     kick_defaults(&set.kick);
     perc_defaults(&set.perc);
-    set.fill_len = 1u;                   /* a half-bar fill, */
-    set.fill_dens = 2u;                  /* two hits a step to start */
+    for (k = 0; k < 16u; k++)            /* the overlays: full, the sweeps and the dirt a little less */
+        set.ovl_amt[k] = k == OV_DIVE || k == OV_RISE || k == OV_CRUSH || k == OV_DIST || k == OV_BOOM ? 70u : 100u;
+    set.ovl_rate = 2u;                   /* 1/16 */
+    set.ovl_sweep = 2u;                  /* a bar */
 }
 
 static int pitch_keeps(void) { return set.pitch_keep != 2u; }   /* KEEP LENGTH unless SPEED was chosen */
@@ -129,11 +132,6 @@ static void settings_apply(void)
     brk_snap(SNAP_SL[snap_index()]);
     kick_set(&set.kick);
     perc_set(&set.perc);
-    {                                    /* the auto fill */
-        static const uint8_t BARS[5] = {0u, 2u, 4u, 8u, 16u};
-        brk_fill_auto(BARS[set.fill_auto % 5u], set.fill_type, 4u << (set.fill_len & 3u), set.fill_pitch,
-                      set.fill_dens ? set.fill_dens : 1u);
-    }
     {
         uint32_t k;
         for (k = 0; k < BRK_KEYS; k++) {
@@ -230,6 +228,7 @@ static void pat_read_back(void)          /* the engine's steps into the pattern 
 static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 #define CH_DUB_LEN 30720u                /* the dub delay's line: 0.70 s a side, 3/8 down to 97 BPM, 1/2 to 172 */
 static int16_t dub_line[CH_DUB_LEN] PLAT_POOL;
+static int16_t ovl_line[2u * OVL_LINE] PLAT_POOL;   /* the overlays' WOBBLE and JET (4 KB) */
 static brk_break_t brk0;
 static brk_break_t brk_cur[2];           /* the bank's break playing (pcm_a holds it), and the next one's: the render
                                           * keeps its own while the next is written */
@@ -357,6 +356,7 @@ void app_init(void)
     brk_fx_delay_buffer(dub_line, CH_DUB_LEN);
     kick_init();
     perc_init();
+    ovl_init(ovl_line);
     n_synth = n_breaks = 0u;             /* the breaks are the bank's (breaks/breaks.txt) */
     while (n_breaks < BANK_SLOTS && bank_slot(n_breaks))
         n_breaks++;
@@ -572,6 +572,19 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         brk_status(&st);
         /* the break through the DJ filter, the drums joining it into the chain (or around it) */
         brk_fx_process(mono, set.drums_chain ? kick : 0, echo, verb, set.drums_chain ? 0 : kick, l, r, m, st.pads);
+        {                                /* the overlays (ARP's white keys), on the whole mix: on the engine's beat while
+                                          * playing, a clock of their own stopped */
+            static float beat;
+            float spb = (float)BRK_SR * 600.0f / (float)(set.tempo_x10 ? set.tempo_x10 : 1700u);
+            if (st.playing)
+                beat = (float)(st.bar % 64u) * 4.0f + ((float)(st.bar16 < 0 ? 0 : st.bar16) + st.phase) * 0.25f;
+            ovl_process(l, r, m, beat, spb);
+            if (!st.playing) {
+                beat += (float)m / spb;
+                if (beat >= 256.0f)
+                    beat -= 256.0f;
+            }
+        }
         if (nclick || click_env > 1e-3f) {   /* the metronome's click: dry, over everything, both sides */
             uint32_t j = 0u;
             for (i = 0; i < m; i++) {
@@ -638,10 +651,10 @@ void app_panic(void)
 #include "ui/keys.c"
 #include "ui/bta.c"
 #include "ui/global.c"
+#include "ui/ovl.c"
 #include "ui/seq.c"
 #include "ui/kick.c"
 #include "ui/perc.c"
-#include "ui/fill.c"
 #include "ui/mixer.c"
 #include "ui/screen.c"
 #include "ui/main.c"
