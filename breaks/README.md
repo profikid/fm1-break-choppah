@@ -39,4 +39,10 @@ mono, 22.05 kHz, IMA ADPCM, 16 slices a break with the markers on the drum hits.
 (8 classics at 2 bars: ~360 KB) and a break may be at most 106,496 samples (2 bars at 99.4 BPM and up); `./build.sh
 bank` builds the bank on its own and says whether it fits. The tool reads integer PCM (8–32 bit) and float WAVs.
 
+Every break is brought to the same loudness, −16 dBFS RMS over its loud parts (the quiet gaps left out), and a
+look-ahead limiter (2 ms ahead, 40 ms release) holds its peaks under −0.2 dBFS, so a spiky break is as loud as a dense
+one: THINK gains 11.6 dB with 9.7 dB off its few loudest hits, AMEN 3.9 dB (3.6 off its peaks), COLD SWEAT 2.4 dB.
+The build prints each break's gain and how much its peaks were held down; `--loudness 0` puts the peaks at full scale
+instead (the old way, which left THINK about 8 dB quieter than DRUMMER).
+
 Uploading breaks to the FM-1 without rebuilding (the flash's data area, ~356 KB more) is milestone M5.

@@ -184,6 +184,56 @@ def adpcm_decode(data, n):
     return out
 
 
+def loudness_db(x, rate):
+    """the break's level: the RMS of its 50 ms windows, the windows 20 dB under the plain mean left out (quiet gaps
+    don't make a sparse break look quiet), in dBFS"""
+    w = max(1, int(rate * 0.05))
+    win = [sum(v * v for v in x[i:i + w]) / w for i in range(0, max(1, len(x) - w + 1), w)]
+    mean = sum(win) / len(win)
+    loud = [e for e in win if e > mean * 0.01] or win
+    return 10.0 * math.log10(max(1e-12, sum(loud) / len(loud)))
+
+
+def limit(y, rate, ceiling):
+    """a look-ahead limiter (2 ms ahead, 40 ms release, no clipping): -> the samples, its most gain off (a factor)"""
+    n, la = len(y), max(1, int(rate * 0.002))
+    req = [min(1.0, ceiling / abs(v)) if v else 1.0 for v in y]
+    ahead, q, h = [1.0] * n, [], 0              # the least gain any sample in the next la wants (a sliding minimum)
+    for i in range(n - 1, -1, -1):
+        while len(q) > h and req[q[-1]] >= req[i]:
+            q.pop()
+        q.append(i)
+        while q[h] > i + la - 1:
+            h += 1
+        ahead[i] = req[q[h]]
+    rel = 1.0 - math.exp(-1.0 / (rate * 0.04))
+    env, held = 1.0, [1.0] * n                  # down at once (it looks ahead), back up slowly
+    for i in range(n):
+        env = ahead[i] if ahead[i] < env else env + (1.0 - env) * rel
+        held[i] = env
+    out, acc, most = [0.0] * n, float(la), 1.0   # a la-long average: the gain glides down onto each peak (as if
+    for i in range(n):                           # la samples at 1 came before)
+        acc += held[i] - (held[i - la] if i >= la else 1.0)
+        gi = min(acc / la, req[i])               # (never over the ceiling)
+        most = min(most, gi)
+        out[i] = y[i] * gi
+    return out, most
+
+
+def level(x, rate, target_db, ceiling=0.98):
+    """brings the break to target_db (loudness_db) and holds its peaks under the ceiling (limit): every break as loud
+    as the others, whatever its few loudest hits. The limiter takes some level too, so the gain is found again until
+    the result is within 0.2 dB. -> the samples, the gain (dB) and the most the limiter took off (dB)"""
+    g = 10.0 ** ((target_db - loudness_db(x, rate)) / 20.0)
+    for _ in range(5):
+        out, most = limit([v * g for v in x], rate, ceiling)
+        err = target_db - loudness_db(out, rate)
+        if abs(err) < 0.2:
+            break
+        g *= 10.0 ** (err / 20.0)
+    return out, 20.0 * math.log10(g), -20.0 * math.log10(most)
+
+
 def read_list(path):
     """the catalogue's lines marked *, as specs FILE:BPM:BARS:NAME (FILE resolved) and the FILE as written"""
     specs = []
@@ -213,8 +263,12 @@ def prepare(spec, args, shown=None):
     x = x[:int(round(bar_len * bars))]       # exactly the bars asked for
     if len(x) < int(bar_len * bars) - 2:
         raise SystemExit(f"{path}: shorter than {bars} bar(s) at {bpm:.2f} BPM")
-    peak = max(1e-9, max(abs(v) for v in x))
-    x = [v * (0.98 / peak) for v in x]       # normalise
+    if args.loudness:                        # every break as loud as the others (its peaks limited)
+        x, gain_db, lim_db = level(x, rate, args.loudness)
+    else:                                    # the loudest sample at full scale
+        peak = max(1e-9, max(abs(v) for v in x))
+        gain_db, lim_db = 20.0 * math.log10(0.98 / peak), 0.0
+        x = [v * (0.98 / peak) for v in x]
     x = resample(x, rate, args.rate)
     if len(x) > BANK_MAX_LEN:
         raise SystemExit(f"{shown or path}: {bars} bar(s) at {bpm:.2f} BPM are {len(x)} samples, the firmware's buffer "
@@ -224,7 +278,8 @@ def prepare(spec, args, shown=None):
     data = adpcm_encode(x)
     name = (given or (args.name_prefix + path.stem)).upper()[:11]
     return {"name": name, "file": shown or str(path), "bpm": round(bpm, 2), "bars": bars, "rate": args.rate,
-            "len": len(x), "nslices": nslices, "slices": pts, "data": data, "pcm": x}
+            "len": len(x), "nslices": nslices, "slices": pts, "data": data, "pcm": x,
+            "gain_db": round(gain_db, 1), "limit_db": round(lim_db, 1)}
 
 
 def build_bank(slots):
@@ -252,6 +307,9 @@ def main():
                     help="slices a break whatever its bars (16: one per white key) instead of --slices a bar")
     ap.add_argument("--rate", type=int, default=22050, help="sample rate in the bank (default 22050, PRD Q4)")
     ap.add_argument("--transients", action="store_true", help="move markers to the nearest hit")
+    ap.add_argument("--loudness", type=float, default=-16.0,
+                    help="every break to this level, dBFS RMS of its loud parts, its peaks limited (default -16; "
+                         "0: peaks to full scale instead)")
     ap.add_argument("--name-prefix", default="", help="put before each name")
     ap.add_argument("-o", "--out", type=Path, default=Path("build/bank.bin"))
     ap.add_argument("--dry-run", action="store_true", help="report what fits, write nothing")
@@ -268,7 +326,8 @@ def main():
     bank = build_bank(slots)
     for s in slots:
         line = (f"{s['name']:<12} {s['bpm']:7.2f} BPM  {s['bars']} bar(s)  {s['nslices']:2} slices  "
-                f"{s['len'] / s['rate']:5.2f} s  {len(s['data']) / 1024:6.1f} KB")
+                f"{s['len'] / s['rate']:5.2f} s  {len(s['data']) / 1024:6.1f} KB  {s['gain_db']:+5.1f} dB"
+                f"{'  peaks -%.1f dB' % s['limit_db'] if s['limit_db'] >= 0.1 else ''}")
         if args.verify:
             d = adpcm_decode(s["data"], s["len"])
             sig = sum((v * 32767.0) ** 2 for v in s["pcm"])

@@ -179,7 +179,7 @@ ABG's four, plus the master section a live unit needs.
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
 | A-60 | Import up to **8 custom loops** | P0 | |
-| A-61 | **Prep tool** (`tools/prep_breaks.py`, Python stdlib only): WAV in → trim to whole bars (by BPM or detected) → slice markers (grid or transient) → resample → IMA ADPCM → bank image + manifest | P0 | Amen 2 bars fits in < 45 KB |
+| A-61 | **Prep tool** (`tools/prep_breaks.py`, Python stdlib only): WAV in → trim to whole bars (by BPM or detected) → loudness to −16 dBFS RMS of the loud parts with a look-ahead peak limiter (3 Nov 2026; was peak-normalised, THINK sat ~8 dB under DRUMMER) → slice markers (grid or transient) → resample → IMA ADPCM → bank image + manifest | P0 | Amen 2 bars fits in < 45 KB; the 8 breaks within 0.6 dB of each other at the output (simulator) |
 | A-62 | **Upload** over USB: CLI (`tools/fm1_breaks.py upload`) and a web page (Chrome/Edge, Web MIDI SysEx) | P0 | A full bank uploads in < 60 s; a failed upload leaves the old bank intact (A/B or verify-then-commit) |
 | A-63 | On-device slice editor (EDIT): move markers, nudge in 1 ms, set slice count, set native BPM, rename | P1 | |
 | A-64 | Bank capacity shown before upload ("what fits"), including `--dry-run` without the FM-1 | P0 | |
