@@ -150,7 +150,7 @@ static void draw_tap(const brk_status_t *st, uint32_t now, int full)
     static uint32_t a_sig = 0xFFFFFFFFu;
     int ext = ext_active(), flash = ui.tap_last && now - ui.tap_last < 110u;
     uint32_t v = set.tempo_x10, sig = v | (uint32_t)flash << 16 | (uint32_t)ext << 17 | (ui.ntaps < 15u ? ui.ntaps : 15u) << 18 |
-                                      (uint32_t)set.click << 22;
+                                      (uint32_t)(set.click != 0u) << 22;
     uint32_t band;
     float beats, sw, fr;
     int32_t beat, px, py, bx, by, i;
@@ -208,8 +208,19 @@ static void draw_tap(const brk_status_t *st, uint32_t now, int full)
             }
             cv_rect(px - 14, py, 29, 4, C_LINE);                /* the pivot */
             cv_rect(px - 3, py - 3, 7, 7, C_GRAY);
-            cv_text(8, 124, &FONT_XS, "CLICK", set.click ? C_HI : C_DIM);   /* (K4) */
-            cv_text(8, 138, &FONT_XS, set.click ? "ON" : "OFF", set.click ? C_HI : C_DIM);
+            {                            /* the click's level (K4): a bar, OFF at 0 */
+                char cl[8];
+                cl[0] = 0;
+                if (set.click) {
+                    int_text(set.click, cl);
+                    text_cat(cl, "%");
+                } else
+                    text_cat(cl, "OFF");
+                cv_text(8, 120, &FONT_XS, "CLICK", set.click ? C_HI : C_DIM);
+                cv_text(8, 134, &FONT_XS, cl, set.click ? C_WHITE : C_DIM);
+                cv_rect(48, 140, 30, 3, C_BLOCK);
+                cv_rect(48, 140, (int32_t)set.click * 30 / 100, 3, C_HI);
+            }
             cv_text(8, 158, &FONT_XS, "TAP", C_GRAY);
             cv_text(8, 174, &FONT_XS, ext ? "EXT CLOCK" : "ENV / KEYS", C_DIM);
             if (st->playing && !ext) {   /* the beat at the right: 1 (white) .. 4 */

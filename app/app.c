@@ -51,8 +51,8 @@ typedef struct {
     uint8_t bta_on;                      /* Bluetooth audio out (GLOBAL, third part): on at power-on, the last device
                                           * connected again */
     uint8_t bta_codec;                   /* its SBC coding: 0 joint stereo (fm1-base's), 1 plain stereo */
-    uint8_t click;                       /* the metronome's click (TAP K4): 1 on each beat while playing (was a spare
-                                          * byte: older saves have it off) */
+    uint8_t click;                       /* the metronome's click (TAP K4): its level, 0 (off) .. 100 %, on each beat
+                                          * while playing (was a spare byte: older saves have it off) */
     uint8_t rsv;
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
@@ -567,7 +567,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
                     click_inc = (click_hi[j] ? 2400.0f : 1500.0f) / (float)BRK_SR;
                     j++;
                 }
-                x = 0.5f * click_env * brk_sin_turns(click_ph);
+                x = (float)set.click * 0.006f * click_env * brk_sin_turns(click_ph);   /* (100 %: 0.6) */
                 click_ph += click_inc;
                 if (click_ph >= 1.0f)
                     click_ph -= 1.0f;

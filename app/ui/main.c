@@ -23,10 +23,13 @@ static void tap_knob(int k, int32_t d)   /* TAP: K1 the tempo, K2 finer, K3 half
         v += d;
     else if (k == EN_K3)
         v = d > 0 ? v * 2 : v / 2;
-    else {                               /* K4: the metronome's click, right on, left off */
-        set.click = d > 0 ? 1u : 0u;
+    else {                               /* K4: the metronome's click, its level: 0 off .. 100 % */
+        set.click = (uint8_t)clamp((int32_t)set.click + d * 5, 0, 100);
         changed();
-        app_say("CLICK", set.click ? "ON" : "OFF");
+        if (set.click)
+            say_int("CLICK", set.click, "%");
+        else
+            app_say("CLICK", "OFF");
         ui.redraw |= RG_BLOCKS;
         return;
     }
@@ -515,8 +518,11 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
             tenths_text(set.tempo_x10, t);
         else if (i == 2)
             text_cat(t, "L / R");
-        else
-            text_cat(t, set.click ? "ON" : "OFF");
+        else if (set.click) {
+            int_text(set.click, t);
+            text_cat(t, "%");
+        } else
+            text_cat(t, "OFF");
         return;
     }
     if (ui.page == PG_GLOBAL) {
