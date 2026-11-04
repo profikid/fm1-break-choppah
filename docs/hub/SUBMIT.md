@@ -127,11 +127,13 @@ Fixed in <https://github.com/charlesvestal/fm1-base/pull/35>: the parts the stor
 (`e75b072`), so the released packages already accept both parts: **a player on a UC25HQ80 can install CHOPPAH and
 leave it again.**
 
-The fix is still an open pull request upstream (fm1-base #35), so it is not yet in fm1-base's own `main`. CHOPPAH
-pins the commit directly, which is the same thing the pin always does; when upstream merges it, the pin needs no
-change.
+The fix is still an open pull request upstream (fm1-base #35) and an open issue upstream (fm1-base #36), so it is not
+yet in fm1-base's own `main`. CHOPPAH pins the commit directly, which is the same thing the pin always does; when
+upstream merges it, the pin needs no change.
 
-The loader itself (felucca-bsp's) has no flash-id check and writes the package on either part.
+The loader itself (felucca-bsp's) has no flash-id check and writes the package on either part. Two other places
+accept only the Puya and are in felucca-bsp (Leo's repo), so they are left alone for now: `bsp/tools/fm1_rescue.py`
+(the rescue script refuses a UC25HQ80 unit) and `bsp/examples/hwtest/hwtest.c` (an example).
 
 ## The other directories
 
