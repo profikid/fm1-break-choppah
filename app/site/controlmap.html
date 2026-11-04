@@ -171,8 +171,10 @@
       { n: "OVERLAY", k: ["AMOUNT", "RATE", "SWEEP", "LATCH"], strip: "16 EFFECT CARDS, 4 × 4 · LIT WHILE ON · EACH ITS AMOUNT", note: "Hold a key: its effect, over everything" } ],
       algo: "Break", presets: "Pattern P1–P16", keys: "overlays",
       notes: [["Keys 1-8", "DIVE RISE RADIO WAH CRUSH LO-FI DIST RING"], ["Keys 9-16", "CHOP GATE DUCK PAN BOOM WOBBLE JET CUT"], ["K4 LATCH", "A press on, a press off (stays on other pages)"], ["SEL + ARP", "A random pattern (SEL + SAVE undoes)"]] },
-    { id: "fx", btn: "FX", name: "FX CHAIN", sub: "Four slots in series", again: "next slot (4)", part: true, subs: [1, 2, 3, 4].map(n =>
-      ({ n: "SLOT " + n, k: ["PARAM 1", "PARAM 2", "PARAM 3", "MIX"], strip: "THE CHAIN: 4 SLOTS", note: n === 1 ? "the focused slot outlined" : "" })),
+    { id: "fx", btn: "FX", name: "FX CHAIN", sub: "Four slots in series", again: "next part (MAIN, MORE, MOD), then the next slot", part: true, subs: [
+      { n: "MAIN", k: ["PARAM 1", "PARAM 2", "PARAM 3", "MIX"], strip: "THE EFFECT LIVE · THE CHAIN · ITS MODULATOR · IN / OUT", note: "ALGORITHM: the slot (1–4)" },
+      { n: "MORE", k: ["EXTRA 1", "EXTRA 2", "EXTRA 3", "EXTRA 4"], strip: "THE EFFECT LIVE · THE CHAIN · ITS MODULATOR · IN / OUT", note: "each effect its own: see §6" },
+      { n: "MOD", k: ["RATE", "DEPTH", "SHAPE", "TARGET"], strip: "THE EFFECT LIVE · THE CHAIN · ITS MODULATOR · IN / OUT", note: "ENV follows the effect's input" } ],
       algo: "Slot", presets: "Effect", keys: "slices",
       notes: [["SEL + FX", "Bypass the focused slot"], ["FX held + ALGO", "Move the slot along the chain"], ["Key held + FX", "That key's slice effect on K1–K4"],
               ["MB COMP focused", "FX again steps AMOUNT · LOW · MID · HIGH · GAIN · X-OVER, then the next slot"],
@@ -231,10 +233,10 @@
     const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps" || p.keys === "taps" || p.keys === "overlays";
     root.querySelectorAll(".pbtn").forEach((b, i) => b.setAttribute("aria-pressed", String(i === cur)));
     $("subs").innerHTML = p.subs.map((x, i) => '<button type="button" class="sub" data-i="' + i + '" aria-pressed="' + (i === sub) + '">' + x.n + "</button>").join("");
-    const tabs = p.id === "edit" ? ["KICK", "SNARE", "HAT"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
-    const on = p.id === "edit" ? (sub < 5 ? 0 : 1) : sub;
+    const tabs = p.id === "edit" ? ["KICK", "SNARE", "HAT"] : p.id === "fx" ? ["1", "2", "3", "4"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
+    const on = p.id === "edit" ? (sub < 5 ? 0 : 1) : p.id === "fx" ? 0 : sub;
     $("tabs").innerHTML = "<b>" + p.btn + "</b>" + tabs.map((t, i) => '<span class="' + (i === on ? "on" : "") + '">' + t + "</span>").join("") +
-      (p.part ? "<em>&lt; " + (p.id === "edit" ? s.n.split(" · ")[1] : "TREMOLO") + " &gt;</em>" : "");
+      (p.part ? "<em>&lt; " + (p.id === "edit" ? s.n.split(" · ")[1] : "TREMOLO" + (sub ? " " + s.n : "")) + " &gt;</em>" : "");
     $("strip").innerHTML = s.strip + (s.note ? "<em>" + s.note + "</em>" : "");
     $("knobs").innerHTML = s.k.map((k, i) => k ? "<div>" + k + "<b>·····</b></div>" : '<div class="empty">K' + (i + 1) + "<b>&nbsp;</b></div>").join("");
     $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter", 1], ["TABS", p.btn + " › " + tabs.join(" · "), 0], ["WAVEFORM", "The break, the slice lit, the playhead", 1],

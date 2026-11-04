@@ -254,14 +254,16 @@ They follow the tempo playing (stopped, they keep time by themselves). SAVE keep
 **FX** opens the master effects chain: four slots in series, the break (through its DJ filter, with the kick when it
 goes through the chain) into slot 1, then 2, 3 and 4, then on to the drums when they go around the chain, the DUB
 pad's delay and the limiter. Each slot holds any effect (two of one are fine), with
-three settings, a mix and a bypass. The tiles show the chain in order (lit: on), the one you tune outlined; below,
-its settings as bars over K1–K4.
+three settings, a mix and a bypass, and more knobs on two more parts (MORE and MOD, below). The screen shows the
+effect you tune as a live picture; under it the chain in order (yours lit, the bypassed ones dim), its modulator and
+its level in and out.
 
-![The FX chain: CRUNCH, then TREMOLO, then DRIVE, RING MOD bypassed](img/screen-fxchain.png "The FX chain")
+![FILTER in slot 2: its response, the cutoff swept by its modulator](img/screen-fxchain.png "The FX chain")
 
 | Control | Does |
 | --- | --- |
-| ALGORITHM · FX again | The slot to tune (1–4); on an MB COMP, FX again first steps through its six parts |
+| ALGORITHM | The slot to tune (1–4) |
+| FX again | The slot's next part: MAIN, MORE, MOD (an MB COMP: its six), then the next slot |
 | PRESETS | The effect in that slot, through the library (EMPTY first); a new effect comes in on, at its own starting settings |
 | K1–K3 · K4 | Its settings · its mix |
 | SEL + FX | That slot on / bypassed |
@@ -304,6 +306,54 @@ The chain starts as CRUNCH → FILTER → FLANGER → RING MOD, all bypassed: SE
 CRUNCH used to be HOME's K4; it is slot 1 now.
 
 STOP fades the break out at once (a white key held keeps looping); the reverb's and the dub delay's tails ring on.
+
+### Each effect's view, MORE and MOD
+
+Every effect (but MB COMP, which has its own page, below) has three parts, stepped by **FX again**: **MAIN** (its
+three settings and mix, as in the table above), **MORE** (its extra knobs) and **MOD** (a modulator that moves one of
+its settings in time). The tab bar names the part (`< FILTER MOD >`), the strip shows it lit.
+
+The picture above follows the sound as you turn:
+
+- **FILTER, FLANGER:** the response from 20 Hz to 20 kHz (the cutoff and resonance; the flanger's comb sweeping as
+  it plays). **EQ:** its three bands, ±12 dB about the middle line.
+- **DRIVE, CLIP, TAPE, CRUNCH:** a tone through it, the clean tone grey behind: rounded, squared, folded, stepped.
+  **PUNCH:** two hits, their peaks held down. **RING MOD:** the tone times its carrier. **TREMOLO:** a tone under two
+  of its cycles.
+- **REVERB:** its decay over 3 s (0 to −60 dB), the pre-delay a gap. **DELAY:** its echoes, left up and right down,
+  each quieter by the feedback.
+
+Below: the chain, then the modulator's cycle with where it is now (the white dot) and what it moves, and the
+effect's level in and out.
+
+![EQ's MORE part: the low shelf moved up, a wider mid](img/screen-fx-more.png "MORE")
+
+| Effect | MORE K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- |
+| FILTER | Drive into it | Slope: 12 · 24 dB | Spread (the right's cutoff higher: a stereo filter) | |
+| CRUNCH | Tone (a low-pass after it; OFF at full) | Dither (noise under the steps) | | |
+| DRIVE | Shape: SOFT · TUBE · HARD · FOLD | Bias (lopsided: even harmonics) | Low cut before it (OFF … 800 Hz) | |
+| PUNCH | Ratio (1.5:1 … 20:1) | Make-up (+0 … +12 dB) | SC HPF (the lows don't pump it; OFF … 300 Hz) | |
+| FLANGER | Delay (where the sweep starts, 0.2 – 2.7 ms) | Spread (the right's phase, 0 – 180°) | Sync (OFF, or the sweep on the tempo: 4 bars … 1/4) | |
+| RING MOD | Wave: SINE · TRI · SQUARE | Mode: RING · AM | | |
+| TREMOLO | Shape: SINE · TRI · SQUARE · SAW | Smooth (the edges rounded) | | |
+| REVERB | Width | Low cut into it (OFF … 600 Hz) | Mod (the tail's wobble) | Diffusion |
+| DELAY | Width (mono … full ping-pong) | Low cut in its loop (each echo thinner) | Duck (the echoes duck under what plays) | |
+| EQ | Low shelf's frequency (40 – 400 Hz) | Mid's Q (0.3 – 4) | High shelf's frequency (2 – 16 kHz) | Level (±12 dB) |
+| TAPE | Flutter | Wow's rate (0.1 – 3 Hz) | Hiss | |
+| CLIP | Bias (lopsided) | Output (−12 … 0 dB) | | |
+
+Every MORE knob starts where the effect always was, so a saved sound plays as it did.
+
+| MOD | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- |
+| | Rate on the tempo (4 bars … 1/16, 1/4T, 1/8T) | Depth (OFF in the middle; left moves it the other way) | Shape: SINE · TRIANGLE · SAW · RAMP · SQUARE · S&H · ENV | Target: the effect's K1, K2, K3 or MIX |
+
+**ENV** follows the effect's own input: the louder the break hits, the further it moves (a filter that opens on
+every snare, a drive that bites on the kicks). **S&H** jumps to a new random place each cycle. The foot shows the
+setting it moves as the modulator leaves it.
+
+![TAPE: a tone through its curve, the clean tone grey behind it](img/screen-fx-tape.png "TAPE")
 
 ### MB COMP
 
@@ -488,7 +538,7 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | LFO (mixer) | Break level | Kick level | Snare and hat level | FX (the chain, dry to wet) |
 | LFO again (groove) | Swing | Drums: through the chain or around it | | |
 | HOME again (generator) | Complexity | Anchor | Roll | Fill |
-| FX (the chain) | the focused slot's effect: its three settings (an MB COMP: six parts on FX again, see §6) | | | Its mix |
+| FX (the chain) | the focused slot's effect: its three settings (FX again: its MORE and MOD parts; an MB COMP its six, see §6) | | | Its mix |
 | SEQ (patterns) | Slice | Pitch | Hits | Reverse |
 | SEQ, a drum lane | Fill | Rotate | Clear / 4x4 | Copy |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
