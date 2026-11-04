@@ -2,13 +2,37 @@ name: mutant.cloud
 on:
   release:
     types: [published]
+  # The release is made by the build workflow with the default GITHUB_TOKEN, and
+  # events from GITHUB_TOKEN do not trigger other workflows. So the release
+  # trigger above never fires: this workflow is run by hand instead, with the
+  # tag of the release to publish.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to publish (empty = the latest release)
+        required: false
+        default: ''
 permissions:
   id-token: write
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Which release
+        id: tag
+        env:
+          WANTED: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$WANTED"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Publishing $TAG"
+
       - uses: konsumer/mutantcloud@main
         with:
+          tag: ${{ steps.tag.outputs.tag }}
           name: CHOPPAH
           devices: fm1
