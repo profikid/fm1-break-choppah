@@ -103,6 +103,7 @@ jobs:
           ./build.sh --web --release "$VERSION"     # the emulator shows the version too
           /usr/bin/python3 base/tools/make_site.py app "app/build/choppah-$VERSION.fwsc" "$VERSION" site
           /usr/bin/python3 tools/site_style.py site    # CHOPPAH's look, and the control map in the manual
+          /usr/bin/python3 tools/site_latest.py site   # a stable name for the package, so a catalogue's link keeps working
 
       - uses: actions/upload-pages-artifact@v3
         with:
