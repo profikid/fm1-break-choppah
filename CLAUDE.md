@@ -21,15 +21,16 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - Pool RAM budget (PRD 8.2): canvas 240×60 (28 KB) + PCM buffers + the Bluetooth audio queue; the build wants 8 KB
   of the 344 KB spare.
 - Flash writes stall audio: only on SAVE or while stopped.
-- Settings (`settings_t`, magic CHP7) only grow at the end: append new fields after the last one (`mbc`, MB COMP's detail per slot) and
+- Settings (`settings_t`, magic CHP7) only grow at the end: append new fields after the last one (`fxx`, each FX slot's extras) and
   give them defaults in `settings_defaults()`; a shorter (older) save loads into the front (`SET_SIZE_MIN`: the
   offset of the first appended field, `rsv2`, the dropped fills' bytes; keep it there).
   Anything else needs a new magic (saves lost). Patterns are their own object (`OBJ_PAT`, 0xDA000, magic PAT1).
 - Bluetooth MIDI is on (`ble = true`, `ble_stack = "own"`: fm1-base's own stack, nothing of JieLi's); the GLOBAL
   page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash. Bluetooth audio out
   (`bt_audio = true`, A2DP) is on too: ~37 KB of flash, its packet queue in the pool (`BP_MQ_ATTR` in app.h).
-- Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); ~577 KB used on
-  4 Nov 2026, ~4.6 KB left: block-rate engine code is `BRK_COLD` (built for size) (`APP_SYS_TEXT` in app.h draws the platform's screens in CHOPPAH's faces,
+- Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); 581,036 B used on
+  4 Nov 2026: **~0.5 KB left, the flash is full**. Anything new needs something taken out first (ask Laurens what).
+  Block-rate engine code is `BRK_COLD` (built for size) (`APP_SYS_TEXT` in app.h draws the platform's screens in CHOPPAH's faces,
   saving fm1-base's fonts): check `./build.sh`'s image line;
   the canvas is 240×60 (`APP_CANVAS_PX`), so draw in strips of ≤ 60 rows (draw_fx / draw_key draw two bands).
 - Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;
@@ -69,7 +70,7 @@ come from the host scenarios (`app/build/scenarios/*.png`, copied into `app/docs
 
 ## Platform facts (fm1-base 2d8ed74, Nov 2026)
 
-44.1 kHz stereo, 256-frame blocks; 581 KB app flash; 96 KB RAM + 336 KB pool; 240×240 screen; 27 keys
+44.1 kHz stereo, 256-frame blocks; 581,564 B app flash; 96 KB RAM + 336 KB pool; 240×240 screen; 27 keys
 (16 white / 11 black, `PLAT_WHITE_KEYS` / `PLAT_BLACK_KEYS`); 14 buttons (`B_*`), 7 encoders (`EN_*`), MASTER pot.
 Store objects ≤ 3840 B; data area 0x97000–0xDFFFF, XDATA0 0x93000–0x96FFF, XDATA1 0xE5000–0xFBFFF (keep bytes
 0xF00–0xF07 of each XDATA sector erased).
