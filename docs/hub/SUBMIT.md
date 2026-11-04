@@ -3,7 +3,11 @@
 Everything the hub asks for (<https://thefirmwarehub.com/submit/>, <https://thefirmwarehub.com/kb/>), ready to send.
 
 The hub takes a firmware by **mail**, not by pull request: `zven@thefirmwarehub.com`. Its form ("Mail me your
-firmware" on the submit page) opens the same subject and the same questions.
+firmware" on the submit page) opens the same subject and the same questions. The hub's own instructions for this,
+written for an assistant, are at <https://thefirmwarehub.com/fmhub.md>.
+
+**The quickest way to send it:** the button on the submit page fills in the questions. Fill in the answers below and
+send it from your own address.
 
 ## The mail
 
@@ -13,7 +17,7 @@ Links only, no attachments. Send it after the tests below have passed and the re
 >
 > Name of the firmware: CHOPPAH
 > Your name (as it should appear): Laurens Profittlich
-> Repository: https://github.com/profikid/fm1-break-choppah (release v0.65, choppah-0.65.fwsc attached)
+> Repository: https://github.com/profikid/fm1-break-choppah (release v0.66, choppah-0.66.fwsc attached)
 > Identity (FM-1_...): FM-1_86
 > Licence: MPL-2.0, the complete source in the repository
 > What it does (two or three sentences): An Amen break chopper: eight classic breaks cut into 16 slices on the
@@ -28,8 +32,9 @@ Links only, no attachments. Send it after the tests below have passed and the re
 >
 > It keeps its own store and does not read other firmwares' projects or samples. USB port name: CHOPPAH FM-1.
 
-**What it does** is also in the repository's `fmhub.json` (the hub reads that every three hours and keeps the card
-up to date by itself). The mail repeats it so nothing is missing when the hub reads it.
+The hub's own rules say the text, the picture, the cheat sheet and the links come from `fmhub.json` and do **not**
+go in the mail. The mail repeats the text so nothing is missing when the hub reads it; the picture and the links are
+in the file either way.
 
 ## The card
 
@@ -45,15 +50,34 @@ up to date by itself). The mail repeats it so nothing is missing when the hub re
 
 ## The package
 
-- **File:** CHOPPAH 0.65, the installer's `choppah-0.65.fwsc` (611,743 B, SHA-256
-  `4ff23087442b2da631eb57f8e0a7b56464c263d1436cd63d199378c89f28c188`); the release v0.65 attaches the same file.
+- **File:** CHOPPAH 0.66, the installer's `choppah-0.66.fwsc`; the release v0.66 attaches the same file.
 - **Release:** GitHub releases, one per merge. The hub takes every later release by itself, within three hours.
-- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86006500` for 0.65. The hub's own list of identities
+- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86006600` for 0.66. The hub's own list of identities
   has no `FM-1_86*`, so the prefix is free and the hub can tell exactly which firmware is on a connected FM-1.
 - **Update loader:** felucca-bsp's, the platform's loader (fm1-base's `base/bsp/loader/`), shipped in the package.
 - **USB:** a MIDI device named "CHOPPAH FM-1".
 - **What it keeps:** its own store in the data area (`APP_STORE_MAP`: the settings, the panel, the Bluetooth keys and
   the 16 patterns); it does not read other firmwares' projects or samples.
+
+## The six requirements, checked
+
+The hub lists a firmware only when all six are met (`fmhub.md`, section 1). Five can be checked from here:
+
+| # | Requirement | CHOPPAH |
+|---|---|---|
+| 1 | Open source, the complete source in the repository | MPL-2.0, `LICENSE` in the root, the source at every tag |
+| 2 | A GitHub release with the `.fwsc` attached | every release attaches it; the hub takes each one by itself |
+| 3 | Its own `FM-1_` identity, free on the hub | `FM-1_86` (`FM-1_86006600` in 0.66); no `FM-1_86*` on the hub |
+| 4 | The update loader in the package | felucca-bsp's loader, shipped in every package |
+| 5 | Tested on a real FM-1, leaving it again works | **the test below: yours to run** |
+| 6 | An `fmhub.json` in the repository root | `fmhub.json`, on `main`; the hub reads it every three hours |
+
+The card's file also has to hold to the hub's rules: only the seven fields (`what`, `author`, `kinds`, `play`, `editor`,
+`cheat`, `image`), the text in English without links or code, the picture square between 240 × 240 and 1024 × 1024 and
+at most 300 KB. `docs/img/card.png` is 240 × 240 PNG, 9 KB: the best the rules ask for (a capture of the FM-1's own
+screen at exactly 240 × 240).
+
+To see what the hub will make of the file: <https://thefirmwarehub.com/kb/#fmhub> ("Check your file").
 
 ## Before sending: the hub's tests, on a real FM-1, with that file
 
