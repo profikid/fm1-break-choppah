@@ -6,7 +6,9 @@ CHOPPAH is an Amen break chopper for the M-VAVE FM-1: eight classic breaks built
 - License: MPL-2.0
 - Built on: fm1-base
 
-The package is served from the project's own site (`https://profikid.github.io/fm1-break-choppah/firmware/choppah-0.85.fwsc`, with CORS), not from the GitHub release URL: a release URL redirects, and the browser cannot follow that. The site keeps only the newest package, so the URL follows the release; the `installer` link is the stable one and finds the package itself.
+The package is served from the project's own site (`https://profikid.github.io/fm1-break-choppah/firmware/choppah-latest.fwsc`, with CORS), not from the GitHub release URL: a release URL redirects, and the browser cannot follow that.
+
+The site's own download is the one package of the build that made it, so its name carries the version and the older URL is gone at the next release. The site now publishes the same package under `choppah-latest.fwsc` as well, so the link in this entry keeps working from release to release. The `installer` link is stable too and finds the package itself.
 
 The Hub lists 90 of the 96 firmwares in the catalog, and this one is not on the Hub yet, so it goes in the own list.
 
