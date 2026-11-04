@@ -106,7 +106,19 @@ Works on the stock Puya flash and on the UC25HQ80 of the recent units.
 
 ---
 
-## 5. GitHub — de Discussions-tab
+## 6. Blogs en reviews
+
+Redacteuren pakken firmware op als die er is. Dit zijn de FM-1-pagina's die bestaan (2026-11-04):
+
+- **pianoandsynth.com** — "M-VAVE FM-1: custom firmware collection": https://pianoandsynth.com/m-vave-fm-1-custom-firmware-collection/
+- **dreyandersson.com** — "M-VAVE FM-1 Firmware: 7 Custom Firmwares Ranked": https://dreyandersson.com/blog/m-vave-fm-1-custom-firmware/
+- **thesynthsource.com** — install-gids: https://thesynthsource.com/fm1-custom-firmware-install-guide/
+- **timetohouse.com** — "Four custom firmwares turn the M-VAVE FM-1 into a groovebox"
+
+Een mailtje naar deze redacties werkt: "Ik heb CHOPPAH gemaakt, een Amen-chopper voor de FM-1 —
+mag ik er iets over schrijven?" Met de emulator-link en de repo.
+
+## 7. GitHub — de Discussions-tab
 
 De Hub toont een "talk"-tabblad op elke kaart (135 van de 151 entries hebben 'm). Die volgt uit je repo. **Discussions staan nu aan** — zet er een eerste bericht in:
 
@@ -133,13 +145,15 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 - [x] `fmhub.json` correct — 8 breaks, auteur, kaart, manual-link
 - [x] `fmhub.json` tekst binnen 300 tekens (297), geen links, geen code
 - [x] GitHub-topics gezet: m-vave, fm1, firmware, breakbeat, chopper, dj, midi, open-source, chiptune
-- [x] GitHub Discussions aangezet (→ de Hub-"talk"-tab)
+- [x] GitHub Discussions aangezet + openingspost geplaatst (discussion #1)
 - [x] README: "Where to find CHOPPAH" met de vier catalogi + issues/discussions
-- [x] Release notes ingevuld (v0.69) — die waren leeg
-- [x] Flash-fix UC25HQ80 in main, v0.69 gebouwd en geverifieerd
+- [x] Release notes ingevuld (v0.69, v0.70, v0.71) — die waren leeg
+- [x] Flash-fix UC25HQ80 in main, v0.71 gebouwd en geverifieerd
+- [x] PR #24 in aroum/fm1-custom-fw (366 stars, 90 entries) — rij 91
 - [ ] **Jij**: de Hub-mail sturen → `docs/hub/SUBMIT.md`
 - [ ] **Jij**: de echte FM-1-test (6 punten in `docs/hub/SUBMIT.md`)
 - [ ] **Jij**: Reddit-post(s) + Discord-bericht plaatsen
+- [ ] **Jij**: mailtjes naar de blogs (pianoandsynth, dreyandersson)
 - [ ] Merges van de PR's (of je stuurt er een ping)
 
 ---
@@ -148,6 +162,7 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 
 | Wat | Link |
 |---|---|
+| aroum/fm1-custom-fw: rij 91 | https://github.com/aroum/fm1-custom-fw/pull/24 |
 | fm1-base: de flash-fix | https://github.com/charlesvestal/fm1-base/pull/35 |
 | awesome-fm-1: 8 breaks i.p.v. 17 | https://github.com/cicloid/awesome-fm-1/pull/15 |
 | fm1-editor: versie + foto | https://github.com/benny-sparra/fm1-dx7-patch-importer/pull/451 |
@@ -156,8 +171,19 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 
 ## Waar CHOPPAH nu wel/niet staat (stand 2026-11-04)
 
-- Firmware Hub: **niet** in de live catalogus (151 entries, `FM-1_86` is vrij) — wacht op je mail
-- Mooring: **niet** — issue #16 open bij Gustavo Barron
-- awesome-fm-1: **wel**, maar met de verkeerde "17 breaks" → PR #15
-- Atlas: **niet** → PR #3
-- fm1-editor: **wel**, maar op versie 0.40 en zonder foto → PR #451
+| Catalogus | Status |
+|---|---|
+| Firmware Hub | **niet** — 151 entries, `FM-1_86` is vrij → wacht op je mail |
+| aroum/fm1-custom-fw | **niet** → PR #24 |
+| Mooring | **niet** → issue #16 bij Gustavo Barron |
+| Atlas | **niet** → PR #3 |
+| awesome-fm-1 | **wel**, maar "17 breaks" → PR #15 |
+| fm1-editor | **wel**, maar v0.40 zonder foto → PR #451 |
+| 2bbb/fm1-firmware-collection | **wel** (auto) |
+| altstrument | **wel** (auto, staat op v0.54) |
+
+## Belangrijk: de Hub stuurt zelf mail
+
+Sven (zvenson, de Hub) mailt alle firmware-makers over de UC25HQ80-flash — dat staat in de release notes van
+SLOOP 2.8.5. Firmwares die de fix niet hebben, kunnen op die units niets installeren. CHOPPAH heeft 'm wél.
+Dat is het sterkste verkooppunt in de aankondigingen.
