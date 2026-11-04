@@ -1,7 +1,10 @@
 {
-  "what": "Amen break chopper. 17 breaks cut into 16 slices on the white keys, hold a key to loop it. Black keys are momentary pads: rolls, reverse, freeze, tape stop, gate, filter and dub throws. A generator rearranges the break live; ring mod, hi-pass, flanger, degrader and DJ filter on the output.",
+  "what": "An Amen break chopper: eight classic breaks cut into 16 slices on the white keys, hold a key to loop it. Black keys are momentary pads: rolls, reverse, freeze, tape stop, gate, filter and dub throws. A generator rearranges the break live; a four-slot FX chain and a DJ filter sit on the output.",
+  "author": "Laurens Profittlich",
   "kinds": [
     "drums"
   ],
-  "play": "https://profikid.github.io/fm1-break-choppah/emu/"
+  "play": "https://profikid.github.io/fm1-break-choppah/emu/",
+  "cheat": "https://profikid.github.io/fm1-break-choppah/manual/",
+  "image": "docs/img/card.png"
 }
