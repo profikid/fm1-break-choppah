@@ -19,7 +19,7 @@ The hub's own rules (`fmhub.md`, section 5, and the submit page) are explicit ab
 and you can leave it again.** What it does, the picture, the cheat sheet and the browser version do **not** go in
 the mail — they come from `fmhub.json`, and the maker can change them there at any time without mailing again.
 
-The mail as it stands (v0.79):
+The mail as it stands (v0.81):
 
 > **Subject:** The Firmware Hub: my firmware
 >
@@ -31,8 +31,8 @@ The mail as it stands (v0.79):
 > Maker: Laurens Profittlich
 >
 > Repository: https://github.com/profikid/fm1-break-choppah
-> Release: v0.79
-> Package: choppah-0.79.fwsc
+> Release: v0.81
+> Package: choppah-0.81.fwsc
 > Identity: FM-1_86
 > Licence: MPL-2.0, the complete source is in the repository
 >
@@ -64,9 +64,9 @@ The mail as it stands (v0.79):
 
 ## The package
 
-- **File:** CHOPPAH 0.79, the installer's `choppah-0.79.fwsc`; the release v0.79 attaches the same file.
+- **File:** CHOPPAH 0.81, the installer's `choppah-0.81.fwsc`; the release v0.81 attaches the same file.
 - **Release:** GitHub releases, one per merge. The hub takes every later release by itself, within three hours.
-- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86007900` for 0.79. The hub's own list of identities
+- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86008100` for 0.81. The hub's own list of identities
   has no `FM-1_86*`, so the prefix is free and the hub can tell exactly which firmware is on a connected FM-1.
 - **Update loader:** felucca-bsp's, the platform's loader (fm1-base's `base/bsp/loader/`), shipped in the package.
 - **USB:** a MIDI device named "CHOPPAH FM-1".
@@ -81,7 +81,7 @@ The hub lists a firmware only when all six are met (`fmhub.md`, section 1). Five
 |---|---|---|
 | 1 | Open source, the complete source in the repository | MPL-2.0, `LICENSE` in the root, the source at every tag |
 | 2 | A GitHub release with the `.fwsc` attached | every release attaches it; the hub takes each one by itself |
-| 3 | Its own `FM-1_` identity, free on the hub | `FM-1_86` (`FM-1_86007900` in 0.79); no `FM-1_86*` on the hub |
+| 3 | Its own `FM-1_` identity, free on the hub | `FM-1_86` (`FM-1_86008100` in 0.81); no `FM-1_86*` on the hub |
 | 4 | The update loader in the package | felucca-bsp's loader, shipped in every package |
 | 5 | Tested on a real FM-1, leaving it again works | **the test below: yours to run** |
 | 6 | An `fmhub.json` in the repository root | `fmhub.json`, on `main`; the hub reads it every three hours |
@@ -107,7 +107,7 @@ To see what the hub will make of the file: <https://thefirmwarehub.com/kb/#fmhub
 
 ## Then
 
-1. The release on GitHub with the file (done: v0.79).
+1. The release on GitHub with the file (done: v0.81).
 2. The mail above, from your own address.
 3. The hub puts it on its test site, then live; later releases appear by themselves.
 4. Optional: "Built from source on GitHub" (the hub's shared workflow `zvenson/fm1-build`), once the build runs on
