@@ -1,0 +1,58 @@
+Controleer of CHOPPAH (de M-VAVE FM-1 break chopper van Laurens Profittlich, repo `profikid/fm1-break-choppah`) is toegevoegd aan de FM-1-catalogi. Werk alleen in `/opt/data/work/fm1-break-choppah` (git) en `/tmp`. Gebruik `gh` via `/home/hermes/.hermes/home/.local/bin/gh`.
+
+## STAP 1 — de catalogi (leef-bronnen, niet scrapen vanuit README's)
+
+1. **The Firmware Hub** (de grootste, 151 firmwares): `curl -sL https://thefirmwarehub.com/catalog.json` → dict met `firmwares`. Zoek op `repo == "profikid/fm1-break-choppah"` of `ident` begint met `FM-1_86`. **LET OP: `/fmhub.json` bestaat NIET — 404.**
+2. **mutant.cloud** (353 entries, zelfbediening): `curl -sL 'https://mutant.cloud/firmware.json?q=choppah'` → hoort `count >= 1` te geven, id `choppah`. Ook `https://mutant.cloud/catalog.json?q=choppah`.
+3. **fm1-editor.com**: `curl -sL https://fm1-editor.com/firmware/` → zoek `choppah` in de HTML.
+4. **awesome-fm-1**: `gh api repos/cicloid/awesome-fm-1/contents/README.md --jq .content | base64 -d` → zoek `choppah`; controleer of het nog "17 breaks" zegt (PR #15 repareert dat).
+5. **FM-1 Firmware Atlas**: `gh api repos/wero1414/atlas-fm-1/contents/data/firmwares.json --jq .content | base64 -d` → zoek `choppah`.
+6. **altstrument.org**: `curl -sL https://altstrument.org/devices/m-vave-fm-1/` → zoek `choppah` en welke versie er staat (staat nu op v0.54, verouderd).
+7. **2bbb/fm1-firmware-collection**: `gh api repos/2bbb/fm1-firmware-collection/contents/CATALOG.md --jq .content | base64 -d` → zoek `choppah`.
+8. **aroum/fm1-custom-fw** (90 entries, ★366): `gh api repos/aroum/fm1-custom-fw/contents/README.md --jq .content | base64 -d` → zoek `choppah` in sectie 1.1.4.
+9. **Lapin/awesome-music-gear-firmware** (★213): `gh api repos/Lapin/awesome-music-gear-firmware/contents/README.md --jq .content | base64 -d` → zoek `choppah`.
+10. **fm1-emu** (emulator, ★148): `curl -sL https://raw.githubusercontent.com/joakimeriksson/fm1-emu/master/web/firmwares.json` → zoek `choppah`.
+11. **fm1firmwarehub.online** (vergelijkingsmatrix, 30 firmwares): `curl -sL https://fm1firmwarehub.online/` → zoek `choppah`.
+12. **FM-SWITCH / FM-1-Swap / FM1 Manager**: deze scrapen de Hub + fm1-editor, dus indirect. `curl -sL https://store.grandtree.art/FM1_Manager/cache/discovered.json` → zoek `choppah`.
+13. **De signed Mooring-catalogus**: `curl -sL https://raw.githubusercontent.com/cicloid/awesome-fm-1/main/mooring/catalog.json` → zoek `FM-1_86`.
+
+## STAP 2 — de PR's/issues
+
+Check deze, alle van `profikid`, en meld status + mergeable:
+- `aroum/fm1-custom-fw` PR #24
+- `charlesvestal/fm1-base` PR #35 (de UC25HQ80-flash-fix; zonder merge bouwt niemand meer met 'm)
+- `cicloid/awesome-fm-1` PR #15 en issue #16 (Mooring)
+- `benny-sparra/fm1-dx7-patch-importer` PR #451
+- `wero1414/atlas-fm-1` PR #3
+- `Lapin/awesome-music-gear-firmware` PR #32
+- `joakimeriksson/fm1-emu` PR #141
+
+Gebruik `gh pr list --repo X --state open --json number,title,mergeable,author` en filter op author.login == "profikid". Meld welke merged zijn, welke nog open staan, en of er comments/reviews zijn die een reactie verdienen.
+
+**LET OP — check `mergedAt`, niet alleen `state`.** Op 2026-11-04 stond `charlesvestal/fm1-base` PR #35 CLOSED terwijl hij nog geen merge had (`mergedAt: null`) — de `--state open`-filter ziet zo'n PR niet, dus hij leek "gewoon weg". Om dat te voorkomen, check elke PR op `mergedAt`:
+`gh pr view <n> --repo <repo> --json number,state,mergedAt,mergeable,mergeStateStatus`
+- `state == "OPEN"` én `mergedAt == null` → nog niet geland
+- `state == "CLOSED"` én `mergedAt == null` → **gesloten zonder merge** → dit is een probleem: heropen 'm met `gh pr reopen <n> --repo <repo>` (werkt zonder extra rechten) en meld het.
+- `mergedAt != null` → geland.
+
+Voor PR #35 (de UC25HQ80-flash-fix) geldt extra: die fix ZIT nog niet in upstream-main en moet wel. Controleer ook of het bestand bestaat:
+`gh api repos/charlesvestal/fm1-base/contents/device/fm1_flash_ok.h` → 404 = nog niet upstream. En check issue #36 (zelfde onderwerp).
+Let op: fm1-base heeft géén CI, dus `mergeable: MERGEABLE` is géén groene-CI-bewijs.
+
+## STAP 3 — de repo zelf
+
+- Laatste release: `gh release list --repo profikid/fm1-break-choppah --limit 3`
+- Heeft de laatste release **release notes** (een body)? Zonder body leest de community niks. `gh release view vX.Y --repo profikid/fm1-break-choppah --json body`
+- CI op main: `gh run list --repo profikid/fm1-break-choppah --limit 5 --json status,conclusion,name`
+- Is `FM-1_86` nog uniek? `curl -sL https://thefirmwarehub.com/catalog.json` → geen `ident` met `FM-1_86`-prefix. En `curl -sL 'https://mutant.cloud/api/ids?check=FM-1_86007600'` → `taken` moet false zijn.
+- Upstream-fix status: `gh api repos/charlesvestal/fm1-base/contents/device/fm1_flash_ok.h --jq .sha` → 404 betekent dat de flash-fix nog NIET in upstream-main zit. Dat is de standaardsituatie tot Charles merged; meld het als een openstaand punt.
+- De Hub-mail: die verstuurt Laurens zelf. Controleer alleen of `docs/hub/MAIL.txt` nog klopt met de laatste release (`gh release list --repo profikid/fm1-break-choppah --limit 1`) — als de versie in de mail achterloopt, meld dat.
+
+## RAPPORTEREN
+
+- **Alleen sturen als er iets veranderd is** sinds de vorige run, of als er iets fout is (een CI-fail, een PR die niet meer mergeable is, een identiteit die ingenomen is). Geen nieuws = geen bericht. Dat is de hele zin van deze job.
+- Schrijf een kort overzicht in het Nederlands: wat is live, wat staat nog open, wat is er fout.
+- Gebruik `SESSION_STATE`/het vorige bericht als referentie voor wat er veranderd is.
+- Als alles draait en er niets veranderd is: gewoon niets sturen.
+
+Techniek: `export PATH=$PATH:/home/hermes/.hermes/home/.local/bin` voor `gh`. De repo staat in `/opt/data/work/fm1-break-choppah`. De procedures staan in de skill `choppah-fm1-promotie` — lees die als je iets niet weet.
