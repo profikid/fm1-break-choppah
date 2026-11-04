@@ -37,6 +37,9 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
   the tests'). No loading of samples of your own (dropped from scope), and the breaks stay 2 bars (32 steps).
 - Releases are automatic: every push to main is the last `vX.Y` tag + 1 minor (`scripts/next_version.sh`, floor
   `VERSION`). Don't tag by hand or bump `VERSION` for a minor; raise `VERSION` only for a new major.
+- **Always push to GitHub after changes** (Laurens' standing rule, 4 Nov 2026): commit and push as soon as a change is
+  done, before moving on. Finished, tested work goes to main (a release); work in progress that doesn't build or fit
+  yet goes to a branch of its own and is pushed there.
 
 ## The update screen
 
