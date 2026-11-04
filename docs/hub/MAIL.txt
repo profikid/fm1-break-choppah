@@ -8,8 +8,8 @@ Firmware name: CHOPPAH
 Maker: Laurens Profittlich
 
 Repository: https://github.com/profikid/fm1-break-choppah
-Release: v0.85
-Package: choppah-0.85.fwsc
+Release: v0.86
+Package: choppah-0.86.fwsc
 Identity: FM-1_86
 Licence: MPL-2.0, the complete source is in the repository
 
