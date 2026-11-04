@@ -29,9 +29,13 @@ on the device. The looper and song mode are next: see the [PRD](docs/PRD.md) for
 | Where | What it is |
 | --- | --- |
 | [The Firmware Hub](https://thefirmwarehub.com) | The FM-1's firmware catalogue: install and update from one place |
+| [mutant.cloud](https://mutant.cloud/#/p/choppah) | Self-serve catalogue: install over USB-MIDI in the browser, no account needed |
 | [fm1-editor.com](https://fm1-editor.com/firmware/) | The community's firmware list with pictures |
 | [awesome-fm-1](https://github.com/cicloid/awesome-fm-1) | The community's list of firmwares, tools and open-source work for the FM-1 |
+| [awesome-music-gear-firmware](https://github.com/Lapin/awesome-music-gear-firmware) | Custom firmware for music gear, by maker |
 | [FM-1 Firmware Atlas](https://github.com/wero1414/atlas-fm-1) | Every firmware with its features, compared |
+| [aroum's FM-1 Resource Hub](https://github.com/aroum/fm1-custom-fw) | A directory of 40+ custom firmwares, plus SysEx docs and a flasher |
+| [The FM-1 emulator](https://joakimeriksson.github.io/fm1-emu/) | Runs FM-1 firmwares in your browser: try CHOPPAH before you flash it |
 
 **Questions, bugs or ideas:** [the repository's issues](https://github.com/profikid/fm1-break-choppah/issues) and
 [discussions](https://github.com/profikid/fm1-break-choppah/discussions). The community's own places are
