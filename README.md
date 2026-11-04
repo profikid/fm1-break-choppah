@@ -24,6 +24,19 @@ M-VAVE's original firmware first ([docs/FLASHING.md](docs/FLASHING.md)).
 **Status: early (0.x).** The engine, the slicer, the pads, the generator, the effects, the patterns and the drums work
 on the device. The looper and song mode are next: see the [PRD](docs/PRD.md) for the whole plan.
 
+## Where to find CHOPPAH
+
+| Where | What it is |
+| --- | --- |
+| [The Firmware Hub](https://thefirmwarehub.com) | The FM-1's firmware catalogue: install and update from one place |
+| [fm1-editor.com](https://fm1-editor.com/firmware/) | The community's firmware list with pictures |
+| [awesome-fm-1](https://github.com/cicloid/awesome-fm-1) | The community's list of firmwares, tools and open-source work for the FM-1 |
+| [FM-1 Firmware Atlas](https://github.com/wero1414/atlas-fm-1) | Every firmware with its features, compared |
+
+**Questions, bugs or ideas:** [the repository's issues](https://github.com/profikid/fm1-break-choppah/issues) and
+[discussions](https://github.com/profikid/fm1-break-choppah/discussions). The community's own places are
+[r/MVaveFM1](https://www.reddit.com/r/MVaveFM1/) and the FM-1 Discord.
+
 ## Panel
 
 | Control | Does |
