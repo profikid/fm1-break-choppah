@@ -17,7 +17,7 @@ Links only, no attachments. Send it after the tests below have passed and the re
 >
 > Name of the firmware: CHOPPAH
 > Your name (as it should appear): Laurens Profittlich
-> Repository: https://github.com/profikid/fm1-break-choppah (release v0.66, choppah-0.66.fwsc attached)
+> Repository: https://github.com/profikid/fm1-break-choppah (release v0.69, choppah-0.69.fwsc attached)
 > Identity (FM-1_...): FM-1_86
 > Licence: MPL-2.0, the complete source in the repository
 > What it does (two or three sentences): An Amen break chopper: eight classic breaks cut into 16 slices on the
@@ -50,9 +50,9 @@ in the file either way.
 
 ## The package
 
-- **File:** CHOPPAH 0.66, the installer's `choppah-0.66.fwsc`; the release v0.66 attaches the same file.
+- **File:** CHOPPAH 0.69, the installer's `choppah-0.69.fwsc`; the release v0.69 attaches the same file.
 - **Release:** GitHub releases, one per merge. The hub takes every later release by itself, within three hours.
-- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86006600` for 0.66. The hub's own list of identities
+- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86006900` for 0.69. The hub's own list of identities
   has no `FM-1_86*`, so the prefix is free and the hub can tell exactly which firmware is on a connected FM-1.
 - **Update loader:** felucca-bsp's, the platform's loader (fm1-base's `base/bsp/loader/`), shipped in the package.
 - **USB:** a MIDI device named "CHOPPAH FM-1".
@@ -67,7 +67,7 @@ The hub lists a firmware only when all six are met (`fmhub.md`, section 1). Five
 |---|---|---|
 | 1 | Open source, the complete source in the repository | MPL-2.0, `LICENSE` in the root, the source at every tag |
 | 2 | A GitHub release with the `.fwsc` attached | every release attaches it; the hub takes each one by itself |
-| 3 | Its own `FM-1_` identity, free on the hub | `FM-1_86` (`FM-1_86006600` in 0.66); no `FM-1_86*` on the hub |
+| 3 | Its own `FM-1_` identity, free on the hub | `FM-1_86` (`FM-1_86006900` in 0.69); no `FM-1_86*` on the hub |
 | 4 | The update loader in the package | felucca-bsp's loader, shipped in every package |
 | 5 | Tested on a real FM-1, leaving it again works | **the test below: yours to run** |
 | 6 | An `fmhub.json` in the repository root | `fmhub.json`, on `main`; the hub reads it every three hours |
@@ -93,7 +93,7 @@ To see what the hub will make of the file: <https://thefirmwarehub.com/kb/#fmhub
 
 ## Then
 
-1. The release on GitHub with the file (done: v0.65).
+1. The release on GitHub with the file (done: v0.69).
 2. The mail above, from your own address.
 3. The hub puts it on its test site, then live; later releases appear by themselves.
 4. Optional: "Built from source on GitHub" (the hub's shared workflow `zvenson/fm1-build`), once the build runs on
@@ -109,8 +109,13 @@ save returns -9), the data area could not be written and the update loader was n
 be installed from them**.
 
 Fixed in <https://github.com/charlesvestal/fm1-base/pull/35>: the parts the storage may use are one macro,
-`FM1B_FLASH_JEDEC_OK` (both ids). **Merge that, or pin fm1-base to the commit with it, before the hub lists CHOPPAH:
-a player on a UC25HQ80 must be able to install it and leave it again.**
+`FM1B_FLASH_JEDEC_OK` (both ids). CHOPPAH's `base/` is pinned to that commit
+(`e75b072`), so the released packages already accept both parts: **a player on a UC25HQ80 can install CHOPPAH and
+leave it again.**
+
+The fix is still an open pull request upstream (fm1-base #35), so it is not yet in fm1-base's own `main`. CHOPPAH
+pins the commit directly, which is the same thing the pin always does; when upstream merges it, the pin needs no
+change.
 
 The loader itself (felucca-bsp's) has no flash-id check and writes the package on either part.
 
@@ -121,7 +126,7 @@ The loader itself (felucca-bsp's) has no flash-id check and writes the package o
 - **awesome-fm-1** (<https://github.com/cicloid/awesome-fm-1>): the CHOPPAH entry is in it
   (<https://github.com/cicloid/awesome-fm-1/pull/15> fixed the break count).
 - **fm1-editor.com/firmware/**: CHOPPAH's card is there
-  (<https://github.com/benny-sparra/fm1-dx7-patch-importer/pull/451> brought it to 0.65 and gave it a picture).
+  (<https://github.com/benny-sparra/fm1-dx7-patch-importer/pull/451> brought it up to date and gave it a picture).
 - **Mooring** (the signed firmware list in `cicloid/awesome-fm-1`, `mooring/catalog.json`): published by Gustavo
   Barron from the same repository, revision by revision. A release with a `.fwsc` and a known loader is what it
   indexes, so it follows.
