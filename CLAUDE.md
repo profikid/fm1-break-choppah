@@ -28,8 +28,8 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - Bluetooth MIDI is on (`ble = true`, `ble_stack = "own"`: fm1-base's own stack, nothing of JieLi's); the GLOBAL
   page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash. Bluetooth audio out
   (`bt_audio = true`, A2DP) is on too: ~37 KB of flash, its packet queue in the pool (`BP_MQ_ATTR` in app.h).
-- Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); 581,044 B used on
-  4 Nov 2026: **~0.5 KB left, the flash is full**. Anything new needs something taken out first (ask Laurens what).
+- Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); 580,928 B used on
+  4 Nov 2026: **~0.6 KB left, the flash is full**. Anything new needs something taken out first (ask Laurens what).
   Block-rate engine code is `BRK_COLD` (built for size); the FX chain's per-sample loop (`fx_samples`) is `BRK_RAM`:
   .ram_text on the FM-1 (fast, packed in flash), so nothing it reaches may be a call (`BRK_INL` in brk_fx.c forces
   inlining; the build fails on "ram_text contains calls"; flash code reaches it through a pointer). CPU: the render

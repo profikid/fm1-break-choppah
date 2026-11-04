@@ -300,10 +300,11 @@ static void draw_lobotomy(void)
 /* the start screen's lights: a comet runs through the buttons as the break drops in (OCT- and OCT+, the top row left
  * to right, the bottom row back), a tail of mid-lit buttons behind it and the ones it passed glowing; then all flash
  * as the mark completes, and PLAY blinks green with PRESS PLAY. Returns 0 once the start screen is over */
+/* the buttons' comet's way round: OCT- and OCT+, the top row left to right, the bottom row back (the demo's too) */
+static const uint8_t PATH[NB] = {B_OCTDN, B_OCTUP, B_FX, B_SEL, B_ENV, B_LFO, B_EDIT, B_GLO,
+                                 B_REC, B_PLAY, B_SEQ, B_ARP, B_SAVE, B_HOME};
 static int intro_leds(uint32_t now)
 {
-    static const uint8_t PATH[NB] = {B_OCTDN, B_OCTUP, B_FX, B_SEL, B_ENV, B_LFO, B_EDIT, B_GLO,
-                                     B_REC, B_PLAY, B_SEQ, B_ARP, B_SAVE, B_HOME};
     uint32_t t = now - ui.intro_t0, run = 16u * INTRO_STEP, b = 0u, mid = 0u, dim = 0u, i;
     if (!ui.intro)
         return 0;
