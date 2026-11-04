@@ -75,7 +75,7 @@ https://github.com/profikid/fm1-break-choppah
 Kort, geen link-spam.
 
 ```
-CHOPPAH 0.69 — an Amen break chopper for the FM-1, just published
+CHOPPAH — an Amen break chopper for the FM-1, just published
 
 8 breaks cut into 16 slices on the white keys (hold to loop), black keys are momentary pads (roll / reverse / freeze / tape stop / gate / filter / dub), a live break generator, a 4-slot FX chain, 16 patterns with a step sequencer, a synthesised kick/snare/hat, MIDI and a DJ filter.
 
@@ -103,6 +103,78 @@ Works on the stock Puya flash and on the UC25HQ80 of the recent units.
 
 #mwave #fm1 #fm1firmware #breakbeat #chopper #fm1community
 ```
+
+---
+
+## 5b. Dogs on Acid (DOA) — het drum & bass forum
+
+DOA (dogsonacid.com) draait sinds 2001 en is hét forum voor de D&B-scene. CHOPPAH past daar
+precies: een Amen-chopper met een DJ-filter, een master-FX-keten met tape saturation, ring mod
+en multiband compressie, en een vierlaags gabber-kick. Dat is hun taalgebied.
+
+**De plek:** de **"Deals/free/opensource CENTRAL!!! Post here and we won't miss any!"** thread
+(<https://www.dogsonacid.com/threads/deals-free-opensource-central-post-here-and-we-wont-miss-any.803907/>).
+Die thread is precies gemaakt voor dit: gratis en open-source dingen die de community kan
+gebruiken. De "Hardware Toys" thread is het alternatief, maar die is meer "gear praat" dan
+aankondigingen.
+
+**Let op:** DOA zit achter Cloudflare, dus je moet zelf inloggen en posten. Ik kan de thread
+niet voor je openen — wel de tekst klaarzetten.
+
+**Titel:**
+```
+[Open Source] CHOPPAH - an Amen break chopper for the M-VAVE FM-1 (runs in your browser)
+```
+
+**Body:**
+```
+Made this for my M-VAVE FM-1 and thought some of you might want it. It's an Amen break
+chopper, open source (MPL-2.0), and it runs in your browser if you want to try it first.
+
+The breaks are the real ones - Amen, Funky Drummer, Cold Sweat, The Worm, Think, Hot Pants,
+Apache and Sport, 2 bars each. 16 slices on the white keys, hold a key to loop it and
+K1-K4 set that key's loop (length, pitch, start, mode - loop, ping-pong, reverse, one shot).
+
+Black keys are momentary pads: roll, reverse, freeze, tape stop, gate, random, filter throw,
+dub throw.
+
+There's a DJ filter on the break (low-pass left, high-pass right) and a 4-slot master FX
+chain - filter, crunch, drive, punch, flanger, ring mod, tremolo, reverb, delay, EQ, tape
+saturation, multiband comp, clipper - in any order. 16 patterns with a step sequencer, and a
+synthesised 4-layer gabber kick, snare and hat on the drum lanes (the kick has SUB / PUNCH /
+GRIT / CLICK layers you can design yourself).
+
+Try it in a browser, no FM-1 needed:
+https://profikid.github.io/fm1-break-choppah/emu/
+
+Install (Chrome or Edge, FM-1 on USB):
+https://profikid.github.io/fm1-break-choppah/install/
+
+Source and manual:
+https://github.com/profikid/fm1-break-choppah
+
+Still early (0.x) - looper and song mode are next. Feedback welcome.
+```
+
+**Waarom deze tekst en niet de "marketing"-versie uit de Reddit-sectie:**
+DOA is een oud, streng forum. Ze haten promo-gesprek. De tekst doet dus:
+- geen "I made a great firmware", maar "made this for my FM-1 and thought some of you might
+  want it" — bescheiden, community-stijl;
+- de muziektechnische details eerst (breaks, slices, pads, DJ filter, FX, kick-lagen), want dat
+  is waar de D&B-mensen op af komen;
+- de browser-emulator vóór de install-link, zodat niemand iets hoeft te riskeren om het te horen;
+- geen "buy", geen prijs, geen hype.
+
+**Twee dingen die je hier wél kunt zeggen** (anders dan op Reddit):
+- de UC25HQ80-flash: "units sold since autumn 2026 have a UC25HQ80 instead of the stock Puya,
+  and firmwares that only know the Puya can't save or install anything on those. CHOPPAH takes
+  both." Dat is een praktisch punt voor kopers in 2026.
+- "the kick is a four-layer gabber kick (SUB / PUNCH / GRIT / CLICK) you can design yourself" —
+  dat is precies wat D&B-producers zoeken.
+
+**Niet doen:** geen link naar een YouTube-video die nog niet bestaat, geen Discord-link, geen
+Reddit-link. Eén plek, één verhaal. En post hem **één keer** — een herhaling in de
+"Hardware Toys"-thread of op de homepage telt als spam op DOA.
 
 ---
 
@@ -163,10 +235,12 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 - [x] PR #24 in aroum/fm1-custom-fw (366 stars, 90 entries) — rij 91
 - [x] PR #32 in Lapin/awesome-music-gear-firmware (213 stars)
 - [x] PR #141 in joakimeriksson/fm1-emu (148 stars) — de emulator
-- [ ] **Jij**: de Hub-mail sturen → `docs/hub/SUBMIT.md`
-- [ ] **Jij**: de echte FM-1-test (6 punten in `docs/hub/SUBMIT.md`)
+- [x] PR #451 in benny-sparra/fm1-dx7-patch-importer (fm1-editor) — **gemerged** 4 nov 09:30
+- [x] **Jij**: de echte FM-1-test (6 punten in `docs/hub/SUBMIT.md`) — gedaan 4 nov
+- [x] **Jij**: de Hub-mail verstuurd (4 nov 2026) — `docs/hub/SENT.md`
 - [ ] **Jij**: het formulier op fm1firmwarehub.online/submit/ invullen
 - [ ] **Jij**: Reddit-post(s) + Discord-bericht plaatsen
+- [ ] **Jij**: de DOA-post (Dogs on Acid, D&B-forum) in de "Deals/free/opensource CENTRAL" thread — tekst in `docs/promo/POSTS.md` §5b
 - [ ] **Jij**: mailtjes naar de blogs (pianoandsynth, dreyandersson)
 - [ ] Merges van de PR's (of je stuurt er een ping)
 
@@ -190,8 +264,8 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 
 | Catalogus | Status |
 |---|---|
-| Firmware Hub | **niet** — 151 entries, `FM-1_86` is vrij → wacht op je mail |
-| **mutant.cloud** | **wel** ✅ — https://mutant.cloud/#/p/choppah (listing `choppah`, 73+ versies) |
+| Firmware Hub | **nog niet** — 152 entries, `FM-1_86` is vrij → **mail is verstuurd (4 nov)**, wacht op Sven (leest elke 3 uur) |
+| **mutant.cloud** | **wel** ✅ — https://mutant.cloud/#/p/choppah (listing `choppah`, v0.90) |
 | aroum/fm1-custom-fw | **niet** → PR #24 |
 | **awesome-music-gear-firmware** | **niet** → PR #32 |
 | **fm1-emu (emulator)** | **niet** → PR #141 |
@@ -199,7 +273,7 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 | Mooring | **niet** → issue #16 bij Gustavo Barron |
 | Atlas | **niet** → PR #3 |
 | awesome-fm-1 | **wel**, maar "17 breaks" → PR #15 |
-| fm1-editor | **wel**, maar v0.40 zonder foto → PR #451 |
+| fm1-editor | **wel** ✅ — v0.90 met foto (PR #451 gemerged) |
 | 2bbb/fm1-firmware-collection | **wel** (auto) |
 | altstrument | **wel** (auto, staat op v0.54) |
 | **FM1 Manager / FM-SWITCH / FM-1-Swap** | **wel** (auto — ze scrapen de Hub en fm1-editor) |
