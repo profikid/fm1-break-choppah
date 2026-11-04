@@ -2,6 +2,10 @@
 /* CHOPPAH: the UI's state, its text helpers, messages, tap tempo, the screen's colours and big text. (Part of
  * app.c's unity: included there in order.) */
 
+/* the screen's maths: the engine's shared copies (brk_math.c), not an inline copy at every call (the flash is full) */
+#define brk_exp2f brk_exp2f_c
+#define brk_log2f brk_log2f_c
+
 enum { PG_HOME, PG_GEN, PG_FX, PG_GLOBAL, PG_KICK, PG_MIX, PG_SEQ, PG_PERC, PG_TAP, PG_OVL, NPAGES };
 static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
                                                 "FLT", "DUB"};

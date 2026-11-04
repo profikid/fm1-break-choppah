@@ -634,13 +634,12 @@ static int32_t tab(int32_t x, const char *s, int on)
     cv_text(x + 4, 1, &FONT_T, s, on ? C_BLACK : C_GRAY);
     return x + w + 3;
 }
+/* the pages' buttons as printed, GLOBAL's parts, SEQ's lanes: for the tabs and the header (page_say) */
+static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP"};
+static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
+static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
 static void draw_tabs(void)
 {
-    static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP"};
-    static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
-    static const char *const SLOT[4] = {"1", "2", "3", "4"};
-    static const char *const DRUM[3] = {"KICK", "SNARE", "HAT"};
-    static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
     uint32_t i;
     int32_t x;
     char part[20];
@@ -666,7 +665,7 @@ static void draw_tabs(void)
             x = tab(x, SEQL[i], i == ui.seq_lane);
     else if (ui.page == PG_FX) {
         for (i = 0; i < BRK_FX_SLOTS; i++)
-            x = tab(x, SLOT[i], i == (ui.fx_focus & 3u));
+            x = tab(x, SLOT_NUM[i], i == (ui.fx_focus & 3u));
         text_cat(part, BRK_FXT_NAME[set.fx.slot[ui.fx_focus & 3u].type]);
         if (ui.fx_page) {                /* "< MB COMP X-OVER >", "< FILTER MOD >" */
             text_cat(part, " ");
@@ -674,7 +673,7 @@ static void draw_tabs(void)
         }
     } else {                             /* EDIT: the drum, and its part */
         for (i = 0; i < 3u; i++)
-            x = tab(x, DRUM[i], i == ui.einst);
+            x = tab(x, LANE_NAME[i], i == ui.einst);   /* (KICK SNARE HAT) */
         if (ui.page == PG_KICK)
             kick_part_name(kick_part(), part);
         else
@@ -693,9 +692,6 @@ static void draw_tabs(void)
  * ("GLO PITCH", "EDIT KICK SUB FX", "FX SLOT 2 TREMOLO", "SEQ HAT", "ENV TAP TEMPO") */
 static void page_say(void)
 {
-    static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP"};
-    static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
-    static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
     char t[24];
     t[0] = 0;
     switch (ui.page) {

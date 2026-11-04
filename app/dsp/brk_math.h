@@ -78,6 +78,11 @@ BRK_INL float brk_tan_pi(float f_over_sr)
     return brk_sin_turns(t) / (c < 1e-4f ? 1e-4f : c);
 }
 
+/* the same, one copy each (brk_math.c), for the block-rate code: smaller than an inline copy in every unit */
+float brk_exp2f_c(float x);
+float brk_log2f_c(float x);
+float brk_tan_pi_c(float f_over_sr);
+
 /* xorshift32: the generator's dice (deterministic per seed) */
 BRK_INL uint32_t brk_rand(uint32_t *s)
 {

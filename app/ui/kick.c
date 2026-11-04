@@ -187,7 +187,6 @@ static uint32_t sig_of(const void *p, uint32_t n)
 }
 static void draw_drums(const brk_status_t *st)
 {
-    static const char *const NAME[3] = {"KICK", "SNARE", "HAT"};
     uint32_t i, c;
     for (i = 0; i < 3u; i++) {
         uint32_t sig = i ? sig_of(&set.perc.v[i - 1u], sizeof set.perc.v[0]) : sig_of(&set.kick, sizeof set.kick);
@@ -212,7 +211,7 @@ static void draw_drums(const brk_status_t *st)
         uint16_t ink = hit ? C_BLACK : sel ? C_HI : C_GRAY;
         cv_rect(x, 2, 76, 48, sel ? C_WHITE : C_LINE);
         cv_rect(x + 1, 3, 74, 46, hit ? C_BLOCK_HI : C_BLACK);
-        cv_text(x + 5, 4, &FONT_T, NAME[i], hit ? C_BLACK : sel ? C_HI : C_GRAY);
+        cv_text(x + 5, 4, &FONT_T, LANE_NAME[i], hit ? C_BLACK : sel ? C_HI : C_GRAY);   /* (seq.c: KICK SNARE HAT) */
         cv_rect(x + 5, 33, DW, 1, hit ? C_BLACK : C_LINE);   /* the centre line, the hit mirrored about it */
         for (c = 0; c < DW; c++)
             if (drum_px[i][c])

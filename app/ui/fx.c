@@ -148,32 +148,59 @@ static void mb_knob_turn(int i, int32_t d)
 enum { XP_MAIN, XP_MORE, XP_MOD, NXP };
 static const char *const XP_NAME[NXP] = {"MAIN", "MORE", "MOD"};
 enum { XU_PCT, XU_HZ, XU_DB, XU_CH, XU_MS, XU_DEG, XU_Q, XU_HZF };
-typedef struct { const char *name; uint8_t unit, n, off; float lo, hi; const char *const *ch; } xk_t;   /* off: 1 OFF at 0,
-                                                                                                         * 2 OFF at 1 */
+/* each effect's MORE knobs, one after another (XK_AT: where each effect's start; the next one's start ends it): a
+ * name, its unit, the choices' count, OFF at an end (1: at 0, 2: at 1), then its range (lo, hi) or its choices */
+typedef struct {
+    const char *name;
+    uint8_t unit, n, off;
+    union { float r[2]; const char *const *ch; } u;
+} xk_t;
 static const char *const CH_SLOPE[2] = {"12 DB", "24 DB"}, *const CH_DSHAPE[4] = {"SOFT", "TUBE", "HARD", "FOLD"};
 static const char *const CH_RATIO[8] = {"1.5:1", "2:1", "3:1", "4:1", "6:1", "8:1", "12:1", "20:1"};
 static const char *const CH_WAVE[3] = {"SINE", "TRI", "SQUARE"}, *const CH_RMODE[2] = {"RING", "AM"};
 static const char *const CH_TSHAPE[4] = {"SINE", "TRI", "SQUARE", "SAW"};
-static const xk_t XK[BRK_NFXT][4] = {
-    {{0}},
-    {{"DRIVE", XU_PCT, 0, 0, 0, 0, 0}, {"SLOPE", XU_CH, 2, 0, 0, 0, CH_SLOPE}, {"SPREAD", XU_PCT, 0, 0, 0, 0, 0}},
-    {{"TONE", XU_HZ, 0, 2, 1000.0f, 20000.0f, 0}, {"DITHER", XU_PCT, 0, 0, 0, 0, 0}},
-    {{"SHAPE", XU_CH, 4, 0, 0, 0, CH_DSHAPE}, {"BIAS", XU_PCT, 0, 0, 0, 0, 0},
-     {"LOW CUT", XU_HZ, 0, 1, 20.0f, 800.0f, 0}},
-    {{"RATIO", XU_CH, 8, 0, 0, 0, CH_RATIO}, {"MAKE-UP", XU_DB, 0, 0, 0.0f, 12.0f, 0},
-     {"SC HPF", XU_HZ, 0, 1, 20.0f, 300.0f, 0}},
-    {{"DELAY", XU_MS, 0, 0, 0.2f, 2.7f, 0}, {"SPREAD", XU_DEG, 0, 0, 0.0f, 180.0f, 0},
-     {"SYNC", XU_CH, BRK_FLSYNCS, 0, 0, 0, BRK_FLSYNC_NAME}},
-    {{"WAVE", XU_CH, 3, 0, 0, 0, CH_WAVE}, {"MODE", XU_CH, 2, 0, 0, 0, CH_RMODE}},
-    {{"SHAPE", XU_CH, 4, 0, 0, 0, CH_TSHAPE}, {"SMOOTH", XU_PCT, 0, 0, 0, 0, 0}},
-    {{"WIDTH", XU_PCT, 0, 0, 0, 0, 0}, {"LOW CUT", XU_HZ, 0, 1, 20.0f, 600.0f, 0}, {"MOD", XU_PCT, 0, 0, 0, 0, 0},
-     {"DIFFUSE", XU_PCT, 0, 0, 0, 0, 0}},
-    {{"WIDTH", XU_PCT, 0, 0, 0, 0, 0}, {"LOW CUT", XU_HZ, 0, 1, 20.0f, 1000.0f, 0}, {"DUCK", XU_PCT, 0, 0, 0, 0, 0}},
-    {{"LOW F", XU_HZ, 0, 0, 40.0f, 400.0f, 0}, {"MID Q", XU_Q, 0, 0, 0.3f, 4.0f, 0},
-     {"HIGH F", XU_HZ, 0, 0, 2000.0f, 16000.0f, 0}, {"LEVEL", XU_DB, 0, 0, -12.0f, 12.0f, 0}},
-    {{"FLUTTER", XU_PCT, 0, 0, 0, 0, 0}, {"WOW RATE", XU_HZF, 0, 0, 0.1f, 3.0f, 0}, {"HISS", XU_PCT, 0, 0, 0, 0, 0}},
-    {{0}},
-    {{"BIAS", XU_PCT, 0, 0, 0, 0, 0}, {"OUTPUT", XU_DB, 0, 0, -12.0f, 0.0f, 0}}};
+static const xk_t XK[] = {
+    {"DRIVE", XU_PCT, 0, 0, {{0}}},
+    {"SLOPE", XU_CH, 2, 0, {.ch = CH_SLOPE}},
+    {"SPREAD", XU_PCT, 0, 0, {{0}}},
+    {"TONE", XU_HZ, 0, 2, {.r = {1000.0f, 20000.0f}}},
+    {"DITHER", XU_PCT, 0, 0, {{0}}},
+    {"SHAPE", XU_CH, 4, 0, {.ch = CH_DSHAPE}},
+    {"BIAS", XU_PCT, 0, 0, {{0}}},
+    {"LOW CUT", XU_HZ, 0, 1, {.r = {20.0f, 800.0f}}},
+    {"RATIO", XU_CH, 8, 0, {.ch = CH_RATIO}},
+    {"MAKE-UP", XU_DB, 0, 0, {.r = {0.0f, 12.0f}}},
+    {"SC HPF", XU_HZ, 0, 1, {.r = {20.0f, 300.0f}}},
+    {"DELAY", XU_MS, 0, 0, {.r = {0.2f, 2.7f}}},
+    {"SPREAD", XU_DEG, 0, 0, {.r = {0.0f, 180.0f}}},
+    {"SYNC", XU_CH, BRK_FLSYNCS, 0, {.ch = BRK_FLSYNC_NAME}},
+    {"WAVE", XU_CH, 3, 0, {.ch = CH_WAVE}},
+    {"MODE", XU_CH, 2, 0, {.ch = CH_RMODE}},
+    {"SHAPE", XU_CH, 4, 0, {.ch = CH_TSHAPE}},
+    {"SMOOTH", XU_PCT, 0, 0, {{0}}},
+    {"WIDTH", XU_PCT, 0, 0, {{0}}},
+    {"LOW CUT", XU_HZ, 0, 1, {.r = {20.0f, 600.0f}}},
+    {"MOD", XU_PCT, 0, 0, {{0}}},
+    {"DIFFUSE", XU_PCT, 0, 0, {{0}}},
+    {"WIDTH", XU_PCT, 0, 0, {{0}}},
+    {"LOW CUT", XU_HZ, 0, 1, {.r = {20.0f, 1000.0f}}},
+    {"DUCK", XU_PCT, 0, 0, {{0}}},
+    {"LOW F", XU_HZ, 0, 0, {.r = {40.0f, 400.0f}}},
+    {"MID Q", XU_Q, 0, 0, {.r = {0.3f, 4.0f}}},
+    {"HIGH F", XU_HZ, 0, 0, {.r = {2000.0f, 16000.0f}}},
+    {"LEVEL", XU_DB, 0, 0, {.r = {-12.0f, 12.0f}}},
+    {"FLUTTER", XU_PCT, 0, 0, {{0}}},
+    {"WOW RATE", XU_HZF, 0, 0, {.r = {0.1f, 3.0f}}},
+    {"HISS", XU_PCT, 0, 0, {{0}}},
+    {"BIAS", XU_PCT, 0, 0, {{0}}},
+    {"OUTPUT", XU_DB, 0, 0, {.r = {-12.0f, 0.0f}}},
+};
+static const uint8_t XK_AT[BRK_NFXT + 1] = {0, 0, 3, 5, 8, 11, 14, 16, 18, 22, 25, 29, 32, 32, 34};
+static const xk_t *xk(uint32_t ty, int i)   /* effect ty's MORE knob i, 0 for none */
+{
+    uint32_t a = XK_AT[ty % BRK_NFXT] + (uint32_t)(i & 3);
+    return a < XK_AT[ty % BRK_NFXT + 1u] ? &XK[a] : 0;
+}
 static const char *const MODK[4] = {"RATE", "DEPTH", "SHAPE", "TARGET"};
 
 static uint32_t fx_npages(uint32_t t) { return t == FXT_EMPTY ? 1u : t == FXT_MBCOMP ? NMBP : NXP; }
@@ -197,15 +224,15 @@ static const char *fx_part_name(void)    /* the focused slot's part past its fir
 static const char *base_param_name(uint32_t slot, int i);
 static const char *x_name(int i)
 {
-    const xk_t *k = &XK[set.fx.slot[ui.fx_focus & 3u].type % BRK_NFXT][i & 3];
-    return ui.fx_page == XP_MOD ? MODK[i & 3] : k->name ? k->name : "";
+    const xk_t *k = xk(set.fx.slot[ui.fx_focus & 3u].type, i);
+    return ui.fx_page == XP_MOD ? MODK[i & 3] : k ? k->name : "";
 }
 static void x_value(int i, char *t)
 {
     uint32_t ty = set.fx.slot[ui.fx_focus & 3u].type % BRK_NFXT;
     const brk_fxx_t *x = fxx_of(ui.fx_focus);
-    const xk_t *k = &XK[ty][i & 3];
-    float v = x->x[(i & 3) + (ui.fx_page == XP_MOD ? 4 : 0)], f;
+    const xk_t *k = xk(ty, i);
+    float v = x->x[(i & 3) + (ui.fx_page == XP_MOD ? 4 : 0)], f, lo, hi;
     t[0] = 0;
     if (ui.fx_page == XP_MOD) {
         i &= 3;
@@ -224,19 +251,21 @@ static void x_value(int i, char *t)
         }
         return;
     }
-    if (!k->name)
+    if (!k)
         return;
     if ((k->off == 1u && v < 0.005f) || (k->off == 2u && v > 0.99f)) {
         text_cat(t, "OFF");
         return;
     }
-    f = k->lo + (k->hi - k->lo) * v;     /* (linear; the log ones below) */
+    lo = k->u.r[0];
+    hi = k->u.r[1];
+    f = lo + (hi - lo) * v;              /* (linear; the log ones below) */
     switch (k->unit) {
-    case XU_HZ: hz_text(k->lo * brk_exp2f(v * brk_log2f(k->hi / k->lo)), t); break;
-    case XU_HZF: hundredths_text(k->lo * brk_exp2f(v * brk_log2f(k->hi / k->lo)), t); text_cat(t, "HZ"); break;
-    case XU_Q: text_cat(t, "Q "); hundredths_text(k->lo * brk_exp2f(v * brk_log2f(k->hi / k->lo)), t + 2); break;
+    case XU_HZ: hz_text(lo * brk_exp2f(v * brk_log2f(hi / lo)), t); break;
+    case XU_HZF: hundredths_text(lo * brk_exp2f(v * brk_log2f(hi / lo)), t); text_cat(t, "HZ"); break;
+    case XU_Q: text_cat(t, "Q "); hundredths_text(lo * brk_exp2f(v * brk_log2f(hi / lo)), t + 2); break;
     case XU_DB: db_text(f, t); break;
-    case XU_CH: text_cat(t, k->ch[brk_idx(v, k->n)]); break;
+    case XU_CH: text_cat(t, k->u.ch[brk_idx(v, k->n)]); break;
     case XU_MS: ms_text(f, t); break;
     case XU_DEG: int_text((int32_t)(f + 0.5f), t); text_cat(t, " DEG"); break;
     default: pct_text(v, t); break;
@@ -246,11 +275,11 @@ static void x_knob_turn(int i, int32_t d)
 {
     uint32_t ty = set.fx.slot[ui.fx_focus & 3u].type % BRK_NFXT, j = (uint32_t)(i & 3) + (ui.fx_page == XP_MOD ? 4u : 0u);
     brk_fxx_t *x = fxx_of(ui.fx_focus);
-    const xk_t *k = &XK[ty][i & 3];
+    const xk_t *k = xk(ty, i);
     static const uint8_t MODN[4] = {BRK_MOD_DIVS, 0, BRK_MOD_SHAPES, 4};
-    uint32_t n = ui.fx_page == XP_MOD ? MODN[i & 3] : k->unit == XU_CH ? k->n : 0u;
+    uint32_t n = ui.fx_page == XP_MOD ? MODN[i & 3] : k && k->unit == XU_CH ? k->n : 0u;
     char t[16];
-    if (ui.fx_page == XP_MORE && !k->name)
+    if (ui.fx_page == XP_MORE && !k)
         return;
     x->x[j] = knob_f(x->x[j], d, n ? 1.0f / (float)(n - 1u) : 0.02f, 0.0f, 1.0f);
     x_value(i, t);
@@ -546,6 +575,8 @@ static void fx_chips(const char *const *nm, uint32_t n, uint32_t sel, int32_t w,
         cv_text(237 - text_w(&FONT_T, st), 0, &FONT_T, st, stc);
 }
 
+static const char *const SLOT_NUM[4] = {"1", "2", "3", "4"};   /* (the FX page's chain, the tabs: main.c) */
+
 static void cv_frame(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)
 {
     cv_rect(x, y, w, 1, c);
@@ -797,7 +828,6 @@ static float x_plot(uint32_t t, int32_t x, const float *p, const float *xx, uint
  * cycle (where it is now, what it moves) and its level in and out */
 static void draw_xview(uint32_t now)
 {
-    static const char *const SLN[4] = {"1", "2", "3", "4"};
     uint32_t k = ui.fx_focus & 3u, t = set.fx.slot[k].type, i, shape;
     const brk_fxslot_t *sl = &set.fx.slot[k];
     const float *xx = fxx_of(k)->x;
@@ -831,7 +861,7 @@ static void draw_xview(uint32_t now)
     for (i = 0; i < 4u; i++) {           /* the chain: each slot's effect, this one lit */
         const brk_fxslot_t *o = &set.fx.slot[i];
         nm[0] = 0;
-        text_cat(nm, SLN[i]);
+        text_cat(nm, SLOT_NUM[i]);
         text_cat(nm, " ");
         text_cat(nm, o->type ? BRK_FXT_NAME[o->type % BRK_NFXT] : "-");
         cv_rect(2 + (int32_t)i * 60, 0, 56, 11, i == k ? C_HI : C_BLOCK);

@@ -40,29 +40,29 @@ static uint32_t hits_seen;
 static kv_t kv;
 
 /* the factor a sample that falls 40 dB (to where a kick is heard as gone) in ms milliseconds */
-static float decay_factor(float ms) { return brk_exp2f(-6.644f / (ms * 0.001f * (float)BRK_SR)); }
+static float decay_factor(float ms) { return brk_exp2f_c(-6.644f / (ms * 0.001f * (float)BRK_SR)); }
 
 /* the knobs' 0..1 as each layer's frequency and its decay (to -40 dB) */
 static const float P_LO[KICK_LAYERS] = {30.0f, 50.0f, 40.0f, 1000.0f};
 static const float P_OCT[KICK_LAYERS] = {1.585f, 2.0f, 3.32f, 3.585f};
 static const float D_LO[KICK_LAYERS] = {60.0f, 20.0f, 20.0f, 1.0f};
 static const float D_HI[KICK_LAYERS] = {1500.0f, 400.0f, 800.0f, 40.0f};
-float kick_pitch_hz(uint32_t layer, float p)
+BRK_COLD float kick_pitch_hz(uint32_t layer, float p)
 {
     layer %= KICK_LAYERS;
-    return P_LO[layer] * brk_exp2f(brk_clampf(p, 0.0f, 1.0f) * P_OCT[layer]);
+    return P_LO[layer] * brk_exp2f_c(brk_clampf(p, 0.0f, 1.0f) * P_OCT[layer]);
 }
-float kick_decay_ms(uint32_t layer, float d)
+BRK_COLD float kick_decay_ms(uint32_t layer, float d)
 {
     layer %= KICK_LAYERS;
     d = brk_clampf(d, 0.0f, 1.0f);
     return D_LO[layer] + (D_HI[layer] - D_LO[layer]) * d * d;
 }
 
-float kick_fx_hz(uint32_t fx, float a)
+BRK_COLD float kick_fx_hz(uint32_t fx, float a)
 {
     a = brk_clampf(a, 0.0f, 1.0f);
-    return fx == KFX_FILTER ? 60.0f * brk_exp2f(a * 7.6f) : 30.0f * brk_exp2f(a * 6.0f);   /* 60..11.6k; 30..1.9k */
+    return fx == KFX_FILTER ? 60.0f * brk_exp2f_c(a * 7.6f) : 30.0f * brk_exp2f_c(a * 6.0f);   /* 60..11.6k; 30..1.9k */
 }
 uint32_t kick_fx_bits(float a) { return 15u - (uint32_t)(brk_clampf(a, 0.0f, 1.0f) * 12.0f + 0.5f); }   /* 15..3 */
 
@@ -85,11 +85,11 @@ BRK_COLD static void kc_make(const kick_t *k, kc_t *c)
             c->gb[i] = 0.05f + 0.95f * fb * fb;
             break;
         case KFX_CRUNCH:                 /* ga: levels, gb: the rate's step */
-            c->ga[i] = brk_exp2f((float)kick_fx_bits(fa) - 1.0f);
-            c->gb[i] = brk_exp2f(-fb * 4.5f);
+            c->ga[i] = brk_exp2f_c((float)kick_fx_bits(fa) - 1.0f);
+            c->gb[i] = brk_exp2f_c(-fb * 4.5f);
             break;
         case KFX_FILTER: {               /* a 2-pole low-pass: ga g, gb k (resonance), gc a1 */
-            float g = brk_tan_pi(kick_fx_hz(KFX_FILTER, fa) / (float)BRK_SR);
+            float g = brk_tan_pi_c(kick_fx_hz(KFX_FILTER, fa) / (float)BRK_SR);
             c->gb[i] = 2.0f - 1.9f * fb;
             c->gc[i] = 1.0f / (1.0f + g * (g + c->gb[i]));
             c->ga[i] = g;
@@ -107,7 +107,7 @@ BRK_COLD static void kc_make(const kick_t *k, kc_t *c)
     c->grit_index = 0.5f + 7.0f * brk_clampf(k->l[KL_GRIT].tone, 0.0f, 1.0f);
     c->grit_noise = 0.5f * brk_clampf(k->l[KL_GRIT].tone, 0.0f, 1.0f);
     c->click_noise = brk_clampf(k->l[KL_CLICK].tone, 0.0f, 1.0f);
-    c->click_k = brk_clampf(brk_tan_pi(c->f[KL_CLICK]) * 2.0f, 0.02f, 0.98f);
+    c->click_k = brk_clampf(brk_tan_pi_c(c->f[KL_CLICK]) * 2.0f, 0.02f, 0.98f);
     c->pe_dec = decay_factor(120.0f);     /* SUB's drop and GRIT's */
     c->pe2_dec = decay_factor(40.0f);     /* PUNCH's fast sweep */
     {
@@ -218,7 +218,7 @@ static inline float kv_tick(kv_t *v, const kc_t *c)
     return out;
 }
 
-void kick_init(void)
+BRK_COLD void kick_init(void)
 {
     uint32_t i;
     for (i = 0; i < KICK_LAYERS; i++)
@@ -228,7 +228,7 @@ void kick_init(void)
     hits_seen = p_hits;
 }
 
-void kick_set(const kick_t *k) { *(kick_t *)&p_k = *k; }
+BRK_COLD void kick_set(const kick_t *k) { *(kick_t *)&p_k = *k; }
 void kick_hit(void) { p_hits++; }
 
 void kick_render(float *out, uint32_t n, const uint16_t *at, uint32_t nat)

@@ -5,10 +5,10 @@
 #include "brk.h"
 #include "brk_math.h"
 
-/* the block-rate code's maths: one copy each, called (the per-sample code has them inlined: BRK_INL) */
-BRK_COLD static float c_exp2(float x) { return brk_exp2f(x); }
-BRK_COLD static float c_log2(float x) { return brk_log2f(x); }
-BRK_COLD static float c_tan_pi(float x) { return brk_tan_pi(x); }
+/* the block-rate code's maths: the shared copies (brk_math.c); the per-sample code has them inlined (BRK_INL) */
+#define c_exp2 brk_exp2f_c
+#define c_log2 brk_log2f_c
+#define c_tan_pi brk_tan_pi_c
 #define FL_LEN 256u
 /* the block-rate code (settings mapped once a block, defaults): small, not fast; the per-sample code stays -O2 */
 #if defined(__clang__)

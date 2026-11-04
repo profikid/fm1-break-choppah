@@ -9,18 +9,18 @@ const char *const PERC_PRESET_NAME[PERC_VOICES][PERC_PRESETS] = {{"909", "TIGHT"
                                                                  {"CLOSED", "808", "OPEN", "TRASH"}};
 
 static inline float soft(float x) { return x / (1.0f + brk_absf(x)); }
-static float decay_factor(float ms) { return brk_exp2f(-6.644f / (ms * 0.001f * (float)BRK_SR)); }   /* -40 dB */
+static float decay_factor(float ms) { return brk_exp2f_c(-6.644f / (ms * 0.001f * (float)BRK_SR)); }   /* -40 dB */
 
-static float onepole(float hz) { return 1.0f - brk_exp2f(-9.0647f * hz / (float)BRK_SR); }   /* 1 - e^(-2 pi f / fs) */
+static float onepole(float hz) { return 1.0f - brk_exp2f_c(-9.0647f * hz / (float)BRK_SR); }   /* 1 - e^(-2 pi f / fs) */
 
 static const float HAT_RATIO[6] = {1.0f, 1.4827f, 1.8003f, 2.5460f, 2.6303f, 3.8967f};   /* 808: 205.3 .. 800 Hz */
 
-float perc_tune_hz(uint32_t voice, float t)
+BRK_COLD float perc_tune_hz(uint32_t voice, float t)
 {
     t = brk_clampf(t, 0.0f, 1.0f);
-    return voice == PV_SNARE ? 120.0f * brk_exp2f(t * 1.737f) : 100.0f * brk_exp2f(t * 3.0f);
+    return voice == PV_SNARE ? 120.0f * brk_exp2f_c(t * 1.737f) : 100.0f * brk_exp2f_c(t * 3.0f);
 }
-float perc_decay_ms(uint32_t voice, float d)
+BRK_COLD float perc_decay_ms(uint32_t voice, float d)
 {
     d = brk_clampf(d, 0.0f, 1.0f);
     return voice == PV_SNARE ? 60.0f + 640.0f * d * d : 15.0f + 885.0f * d * d;
@@ -57,14 +57,14 @@ BRK_COLD static void pc_make(uint32_t voice, const perc_voice_t *s, float volume
     if (voice == PV_SNARE) {
         c->dec = decay_factor(ms * 0.55f);           /* the body: shorter than the noise */
         c->dec2 = decay_factor(ms);
-        c->hpk = onepole(700.0f * brk_exp2f(tone * 2.2f));
-        c->lpk = onepole(3500.0f * brk_exp2f(tone * 1.5f));
+        c->hpk = onepole(700.0f * brk_exp2f_c(tone * 2.2f));
+        c->lpk = onepole(3500.0f * brk_exp2f_c(tone * 1.5f));
         c->body = 1.0f - 0.6f * snap;
         c->noise = 0.35f + 0.85f * snap;
         c->crack = snap;
     } else {
         c->dec = c->dec2 = decay_factor(ms);
-        c->hpk = onepole(3000.0f * brk_exp2f(snap * 1.74f));
+        c->hpk = onepole(3000.0f * brk_exp2f_c(snap * 1.74f));
         c->lpk = 0.0f;
         c->body = 1.0f - tone;           /* metal against noise */
         c->noise = tone;
@@ -119,7 +119,7 @@ static inline float hat_tick(pv_t *v, const pc_t *c)
     return x;
 }
 
-void perc_init(void)
+BRK_COLD void perc_init(void)
 {
     uint32_t k;
     for (k = 0; k < PERC_VOICES; k++) {
@@ -128,7 +128,7 @@ void perc_init(void)
         hits_seen[k] = p_hits[k];
     }
 }
-void perc_set(const perc_t *p) { *(perc_t *)&p_p = *p; }
+BRK_COLD void perc_set(const perc_t *p) { *(perc_t *)&p_p = *p; }
 void perc_hit(uint32_t voice) { p_hits[voice % PERC_VOICES]++; }
 
 void perc_render(float *out, uint32_t n, const uint16_t *at, const uint8_t *who, uint32_t nat)

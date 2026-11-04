@@ -852,7 +852,7 @@ void brk_render(float *out, uint32_t n)
 }
 
 /* -------------------------------------------------------------- main loop --- */
-static void pattern_defaults(void)
+BRK_COLD static void pattern_defaults(void)
 {
     uint32_t i;
     for (i = 0; i < BRK_MAX_STEPS; i++) {
@@ -915,7 +915,7 @@ BRK_COLD void brk_init(void)
     brk_padset_defaults(&p_ps);
 }
 
-void brk_padset_defaults(brk_padset_t *p)
+BRK_COLD void brk_padset_defaults(brk_padset_t *p)
 {
     p->roll_div[0] = 1u;                 /* the three roll pads: 1/8, 1/16, 1/32 */
     p->roll_div[1] = 2u;
@@ -936,9 +936,9 @@ void brk_padset_defaults(brk_padset_t *p)
     p->rnd_pitch = 0.0f;
 }
 
-void brk_padset(const brk_padset_t *p) { p_ps = *p; }
+BRK_COLD void brk_padset(const brk_padset_t *p) { p_ps = *p; }
 
-void brk_slicefx_defaults(brk_slicefx_t *f)
+BRK_COLD void brk_slicefx_defaults(brk_slicefx_t *f)
 {
     f->type = SLX_OFF;
     f->amount = 50u;
@@ -946,7 +946,7 @@ void brk_slicefx_defaults(brk_slicefx_t *f)
     f->level = 100u;
 }
 
-void brk_slicefx(uint32_t slice, const brk_slicefx_t *f)
+BRK_COLD void brk_slicefx(uint32_t slice, const brk_slicefx_t *f)
 {
     slxword_t u;
     if (slice >= BRK_KEYS)
@@ -961,7 +961,7 @@ void brk_sends(float *echo, float *verb)
     send_verb = verb;
 }
 
-void brk_keyset_defaults(brk_keyset_t *k)
+BRK_COLD void brk_keyset_defaults(brk_keyset_t *k)
 {
     k->len = 3u;                         /* one slice */
     k->pitch = 0;
@@ -969,7 +969,7 @@ void brk_keyset_defaults(brk_keyset_t *k)
     k->mode = KEY_LOOP;
 }
 
-void brk_keyset(uint32_t key, const brk_keyset_t *k)
+BRK_COLD void brk_keyset(uint32_t key, const brk_keyset_t *k)
 {
     keyword_t u;
     if (key >= BRK_KEYS)
@@ -978,9 +978,9 @@ void brk_keyset(uint32_t key, const brk_keyset_t *k)
     p_keys[key] = u.w;                   /* one word: the render never sees half of it */
 }
 
-void brk_set_break(const brk_break_t *b) { brk_now = b; }
-void brk_mute(int on) { p_mute = on; }
-void brk_swap_break(const brk_break_t *b) { p_swap = b; }
+BRK_COLD void brk_set_break(const brk_break_t *b) { brk_now = b; }
+BRK_COLD void brk_mute(int on) { p_mute = on; }
+BRK_COLD void brk_swap_break(const brk_break_t *b) { p_swap = b; }
 /* the render: the break waiting takes over, its voices start clean and it sounds again */
 static const brk_break_t *swap_now(void)
 {
@@ -992,38 +992,38 @@ static const brk_break_t *swap_now(void)
     return brk_now;
 }
 const brk_break_t *brk_get_break(void) { return brk_now; }
-void brk_play(int on)
+BRK_COLD void brk_play(int on)
 {
     if (on && !p_playing)
         p_reset++;                       /* play starts at the pattern's first step */
     p_playing = on ? 1 : 0;
 }
-void brk_reset(void) { p_reset++; }
-void brk_tempo(float bpm) { p_tempo = brk_clampf(bpm, 40.0f, 300.0f); }
+BRK_COLD void brk_reset(void) { p_reset++; }
+BRK_COLD void brk_tempo(float bpm) { p_tempo = brk_clampf(bpm, 40.0f, 300.0f); }
 float brk_get_tempo(void) { return p_tempo; }
-void brk_pitch(float st) { p_pitch = brk_clampf(st, -24.0f, 24.0f); }
-void brk_pitch_mode(int keep_length, float grain_ms)
+BRK_COLD void brk_pitch(float st) { p_pitch = brk_clampf(st, -24.0f, 24.0f); }
+BRK_COLD void brk_pitch_mode(int keep_length, float grain_ms)
 {
     p_grain = brk_clampf(grain_ms, 10.0f, 80.0f) * ((float)BRK_SR / 1000.0f);
     p_keep = keep_length != 0;
 }
-void brk_swing(float s) { p_swing = brk_clampf(s, 0.5f, 0.75f); }
-void brk_gate(float g) { p_gate = brk_clampf(g, 0.05f, 1.0f); }
-void brk_snap(float slices) { p_snap = brk_clampf(slices, 0.0f, 16.0f); }
-void brk_gen(const brk_gen_t *g) { p_gen = *g; }
-void brk_seed(uint32_t seed) { rng = seed ? seed : 1u; }
-void brk_step_set(uint32_t i, const brk_step_t *s)
+BRK_COLD void brk_swing(float s) { p_swing = brk_clampf(s, 0.5f, 0.75f); }
+BRK_COLD void brk_gate(float g) { p_gate = brk_clampf(g, 0.05f, 1.0f); }
+BRK_COLD void brk_snap(float slices) { p_snap = brk_clampf(slices, 0.0f, 16.0f); }
+BRK_COLD void brk_gen(const brk_gen_t *g) { p_gen = *g; }
+BRK_COLD void brk_seed(uint32_t seed) { rng = seed ? seed : 1u; }
+BRK_COLD void brk_step_set(uint32_t i, const brk_step_t *s)
 {
     if (i < BRK_MAX_STEPS)
         pat[i] = *s;
 }
-void brk_step_get(uint32_t i, brk_step_t *s)
+BRK_COLD void brk_step_get(uint32_t i, brk_step_t *s)
 {
     if (i < BRK_MAX_STEPS)
         *s = pat[i];
 }
 
-void brk_key(int slice, int down)
+BRK_COLD void brk_key(int slice, int down)
 {
     if (q_w - q_r >= QLEN)
         return;                          /* full: the press is dropped rather than a queue overrun */
@@ -1033,7 +1033,7 @@ void brk_key(int slice, int down)
     q_w++;
 }
 
-void brk_pad(int pad, int down)
+BRK_COLD void brk_pad(int pad, int down)
 {
     if (pad < 0 || pad >= BRK_NPADS)
         return;
@@ -1043,7 +1043,7 @@ void brk_pad(int pad, int down)
         p_pads &= ~(1u << pad);
 }
 
-void brk_randomize(void)
+BRK_COLD void brk_randomize(void)
 {
     const brk_break_t *b = brk_now;
     uint32_t i, n;
