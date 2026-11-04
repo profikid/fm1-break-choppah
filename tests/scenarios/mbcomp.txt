@@ -8,7 +8,7 @@ tap FX
 wait 200
 turn PRESET 10 10
 wait 200
-expect mb_page 0
+expect fx_page 0
 # AMOUNT: the low pressed hard, the mid and high a little
 turn K1 25 10
 turn K2 15 10
@@ -18,7 +18,7 @@ shot c_mb_amount.png
 # FX again: the LOW band's part; threshold down, ratio up, a quick attack
 tap FX
 wait 100
-expect mb_page 1
+expect fx_page 1
 expect fx_focus 0
 turn K1 -6 10
 expect mb_thr_low -36
@@ -32,7 +32,7 @@ tap FX
 wait 100
 tap FX
 wait 100
-expect mb_page 4
+expect fx_page 4
 # GAIN: the high up 3 dB; SOLO the low
 turn K3 6 10
 turn K4 1 10
@@ -43,7 +43,7 @@ turn K4 -1 10
 expect mb_solo 0
 tap FX
 wait 100
-expect mb_page 5
+expect fx_page 5
 # X-OVER: the low split up, a soft knee
 turn K1 8 10
 turn K3 12 10
@@ -53,7 +53,7 @@ shot c_mb_xover.png
 tap FX
 wait 100
 expect fx_focus 1
-expect mb_page 0
+expect fx_page 0
 # back with ALGORITHM, then FX held + ALGORITHM moves it: its detail goes along
 turn ALGO -1 10
 wait 100
@@ -64,7 +64,7 @@ release FX
 wait 100
 expect fx_focus 1
 expect mb_slot2_thr_low -36
-expect mb_page 0
+expect fx_page 0
 wav mbcomp.wav
 peakreset
 wait 2000

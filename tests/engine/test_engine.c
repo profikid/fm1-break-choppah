@@ -1149,7 +1149,7 @@ static void test_dj_break(void)
  * clean below its edge, held at its ceiling above */
 static void test_mb_clip(void)
 {
-    float gr[3];
+    float gr[3], lv[3];
     float f60 = tone_peak(60.0f, FXT_MBCOMP, 0.0f, 0.0f, 0.0f, 1.0f, 8000u);
     float f1k = tone_peak(1000.0f, FXT_MBCOMP, 0.0f, 0.0f, 0.0f, 1.0f, 4000u);
     float f8k = tone_peak(8000.0f, FXT_MBCOMP, 0.0f, 0.0f, 0.0f, 1.0f, 4000u);
@@ -1158,7 +1158,7 @@ static void test_mb_clip(void)
           "MULTIBAND at 0: the bands sum back (60 Hz %.3f, 1 kHz %.3f, 8 kHz %.3f of 0.25)", f60, f1k, f8k);
     lo_q = tone_peak_a(60.0f, 0.05f, FXT_MBCOMP, 1.0f, 0.0f, 0.0f, 1.0f, 30000u);
     lo_l = tone_peak_a(60.0f, 0.25f, FXT_MBCOMP, 1.0f, 0.0f, 0.0f, 1.0f, 30000u);
-    brk_fx_gr(gr);
+    brk_fx_mb_meter(0u, gr, lv);
     CHECK(lo_l / lo_q < 1.5f && lo_l / lo_q > 1.0f, "MULTIBAND LOW: 14 dB more in, %.1f dB more out", 
           20.0f * log10f(lo_l / lo_q));
     CHECK(gr[0] < 0.4f && gr[1] > 0.95f && gr[2] > 0.95f, "MULTIBAND LOW: its reduction shown (%.2f %.2f %.2f)",
@@ -1307,7 +1307,7 @@ static void test_mb_detail(void)
 }
 
 
-/* the extras (PRD A-50): slot 0 holds `type` at p[], mix, with the extras x (0: the effect's defaults); buf (n samples)
+/* the extras (PRD A-49b): slot 0 holds `type` at p[], mix, with the extras x (0: the effect's defaults); buf (n samples)
  * through it into bl, br */
 static void fx1(int type, float p0, float p1, float p2, float mix, const brk_fxx_t *x, uint32_t n)
 {

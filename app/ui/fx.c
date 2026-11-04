@@ -143,7 +143,7 @@ static void mb_knob_turn(int i, int32_t d)
     changed();
 }
 /* ------------------------------------------- the other effects' MORE and MOD --- */
-/* (PRD A-50) every other effect has three parts: MAIN (its settings, as always), MORE (brk_fxx_t x[0..3]: XK) and
+/* (PRD A-49b) every other effect has three parts: MAIN (its settings, as always), MORE (brk_fxx_t x[0..3]: XK) and
  * MOD (x[4..7]: a modulator on one of its settings). FX again steps them, then on to the next slot */
 enum { XP_MAIN, XP_MORE, XP_MOD, NXP };
 static const char *const XP_NAME[NXP] = {"MAIN", "MORE", "MOD"};
@@ -702,10 +702,11 @@ static void draw_mbcomp(uint32_t now)
     cv_blit(0, 140);
 }
 
-/* the focused effect's picture (PRD A-50), column x of 240: what comes out (-1..1, up), *in what went in (a test tone,
+/* the focused effect's picture (PRD A-49b), column x of 240: what comes out (-1..1, up), *in what went in (a test tone,
  * dim; below -1.5: none), *base where the fill starts. p: its settings as modulated now, xx its extras. The shapers
- * (DRIVE CLIP TAPE CRUNCH PUNCH) and RING / TREMOLO show a tone through them; FILTER EQ FLANGER their response, 20 Hz ..
- * 20 kHz, +12 .. -36 dB; REVERB its decay over 3 s; DELAY its echoes (left up, right down) */
+ * (DRIVE CLIP TAPE CRUNCH PUNCH) and RING / TREMOLO show a tone through them; FILTER FLANGER their response, 20 Hz ..
+ * 20 kHz, +12 .. -36 dB (EQ +-12 dB about the middle); REVERB its decay over 3 s; DELAY its echoes (left up, right
+ * down, each its feedback quieter) */
 static float x_plot(uint32_t t, int32_t x, const float *p, const float *xx, uint32_t now, float *in, float *base)
 {
     float u = (float)x * (1.0f / 240.0f), w = brk_sin_turns(2.0f * u), f = 20.0f * brk_exp2f(u * 9.9658f), g, r, db;
@@ -726,7 +727,8 @@ static float x_plot(uint32_t t, int32_t x, const float *p, const float *xx, uint
         float fm = 200.0f * brk_exp2f(p[3] * 4.64f), q = 0.3f * brk_exp2f(xx[1] * 3.737f), b = f / fm - fm / f;
         db = (p[0] - 0.5f) * 24.0f / (1.0f + f * f / (fl * fl)) + (p[2] - 0.5f) * 24.0f / (1.0f + fh * fh / (f * f)) +
              (p[1] - 0.5f) * 24.0f / (1.0f + q * q * b * b) + (xx[3] - 0.5f) * 24.0f;
-        break;
+        *in = -2.0f;
+        return db * (1.0f / 12.0f);      /* (+-12 dB about the middle) */
     }
     case FXT_FLANGER: {                  /* 0.5 (1 + its comb) at the delay now (the sweep: its rate, on the clock) */
         float d = 9.0f + 111.0f * xx[0] + (0.2f + 4.8f * p[1]) * 44.1f * (0.5f + 0.5f *
@@ -737,18 +739,19 @@ static float x_plot(uint32_t t, int32_t x, const float *p, const float *xx, uint
         db = 3.0103f * brk_log2f(re * re + im * im + 1e-9f);
         break;
     }
-    case FXT_REVERB: {                   /* silence for the pre-delay, then the tank's loop (~0.52 s) by its decay */
+    case FXT_REVERB: {                   /* silence for the pre-delay, then the tank's loop (~0.52 s) by its decay:
+                                          * 0 .. -60 dB, top to bottom */
         float tt = u * 3.0f - p[2] * 0.06f;
         *in = -2.0f;
         *base = -1.0f;
-        return tt < 0.0f ? -1.0f : 2.0f * p[3] * brk_exp2f(brk_log2f(0.25f + 0.72f * p[0]) * tt * 1.923f) - 1.0f;
+        return tt < 0.0f ? -1.0f : 1.0f + 6.0206f * brk_log2f(0.25f + 0.72f * p[0]) * tt * 1.923f * (1.0f / 30.0f);
     }
     case FXT_DELAY: {                    /* eight echoes, each its feedback quieter: left, right, left ... */
         int32_t n = x / 26;
         *in = -2.0f;
-        if (x % 26 > 2 || n < 1)
+        if (x % 26 > 3 || n < 1)
             return 0.0f;
-        r = p[3] * brk_exp2f(brk_log2f(p[1] * 0.95f + 0.001f) * (float)(n - 1));
+        r = 0.95f * brk_exp2f(brk_log2f(p[1] * 0.95f + 0.001f) * (float)(n - 1));
         return n & 1 ? r : -r * xx[0];
     }
     case FXT_RING:                       /* the tone times the carrier (its wave; AM lifted) */
@@ -857,6 +860,7 @@ static void draw_xview(uint32_t now)
     for (i = 0; i < 2u; i++) {           /* its level in and out (-48 .. 0 dB) */
         float lv = i ? m.out : m.in;
         int32_t h = lv > 0.0039f ? (int32_t)((6.0206f * brk_log2f(lv) + 48.0f) * (26.0f / 48.0f)) : 0;
+        h = h > 26 ? 26 : h;             /* (over 0 dB: full) */
         cv_rect(186 + (int32_t)i * 28, 14, 12, 26, C_BLOCK);
         cv_rect(186 + (int32_t)i * 28, 40 - h, 12, h, i ? col : C_GRAY);
         cv_text(184 + (int32_t)i * 26, 40, &FONT_T, i ? "OUT" : "IN", C_GRAY);

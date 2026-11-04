@@ -507,8 +507,6 @@ typedef struct {
     float q[4];
 } slot_c_t;
 static slot_c_t sc[BRK_FX_SLOTS];
-static volatile float mb_gr[3] = {1.0f, 1.0f, 1.0f};   /* the first MULTIBAND's gains, for the screen */
-static int mb_shown;                     /* a MULTIBAND has given them this block */
 
 /* MB COMP's detail: per slot, set from the main loop */
 const float BRK_MB_RATIO[BRK_MB_RATIOS] = {1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f, 5.0f, 6.0f, 8.0f, 10.0f, 12.0f,
@@ -1026,12 +1024,6 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
     *xr += (yr - *xr) * c->mix;
 }
 
-void brk_fx_gr(float *gr)
-{
-    gr[0] = mb_gr[0];
-    gr[1] = mb_gr[1];
-    gr[2] = mb_gr[2];
-}
 
 BRK_COLD void brk_fx_mb_meter(uint32_t slot, float *gr, float *lvl)
 {
@@ -1069,16 +1061,6 @@ void brk_fx_process(const float *in, const float *thru, const float *echo, const
         mod_block(k, n, xx.x);
         slot_block(k, xx.x);
     }
-    mb_shown = 0;
-    for (k = 0; k < BRK_FX_SLOTS && !mb_shown; k++)   /* the first MULTIBAND on: its gains, for the screen */
-        if (sc[k].on && sc[k].type == FXT_MBCOMP) {
-            uint32_t b;
-            for (b = 0; b < 3u; b++)
-                mb_gr[b] = st[k].mb_g[b];
-            mb_shown = 1;
-        }
-    if (!mb_shown)
-        mb_gr[0] = mb_gr[1] = mb_gr[2] = 1.0f;
     for (i = 0; i < n; i++) {
         float x = in[i], xl, xr, lp, ec = echo ? echo[i] : 0.0f, vb = verb ? verb[i] : 0.0f;
         if (dj_s < -0.01f || dj_s > 0.01f) {   /* the DJ filter: the break's alone (and its throws) */

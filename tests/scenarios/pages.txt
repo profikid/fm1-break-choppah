@@ -17,7 +17,8 @@ expect page 2
 shot n_fx.png
 tap FX
 wait 120
-expect fx_focus 1
+expect fx_focus 0
+expect fx_page 1
 shot n_fx2.png
 tap GLO
 wait 120

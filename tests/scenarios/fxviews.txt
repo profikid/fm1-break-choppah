@@ -1,0 +1,98 @@
+# CHOPPAH: every effect's own view and its MORE and MOD parts (PRD A-49b)
+#   app/build/host/choppah_host tests/scenarios/fxviews.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 400
+tap FX
+wait 200
+# slot 1 CRUNCH: on, its view
+press SEL
+tap FX
+release SEL
+expect fx_on 1
+turn K1 10 10
+wait 600
+shot v_crunch.png
+# FILTER (slot 2): on, resonant, then its MOD: depth up on the cutoff at 1/4
+turn ALGO 1 10
+wait 100
+expect fx_focus 1
+expect fx_page 0
+press SEL
+tap FX
+release SEL
+turn K2 25 10
+tap FX
+wait 100
+expect fx_page 1
+turn K2 1 10
+tap FX
+wait 100
+expect fx_page 2
+turn K1 2 10
+turn K2 20 10
+wait 700
+shot v_filter_mod.png
+tap FX
+wait 100
+expect fx_focus 2
+expect fx_page 0
+# FLANGER (slot 3) on
+press SEL
+tap FX
+release SEL
+turn K3 6 10
+wait 600
+shot v_flanger.png
+# slot 4: through the library, a shot of each
+turn ALGO 1 10
+wait 100
+expect fx_focus 3
+press SEL
+tap FX
+release SEL
+turn PRESET -3 10
+wait 600
+shot v_drive.png
+turn PRESET 1 10
+turn K1 10 10
+wait 600
+shot v_punch.png
+turn PRESET 2 10
+wait 500
+shot v_ring.png
+turn PRESET 1 10
+wait 600
+shot v_tremolo.png
+turn PRESET 1 10
+turn K1 -5 10
+wait 600
+shot v_reverb.png
+turn PRESET 1 10
+wait 600
+shot v_delay.png
+turn PRESET 1 10
+turn K1 8 10
+turn K2 -8 10
+wait 500
+shot v_eq.png
+tap FX
+wait 100
+expect fx_page 1
+turn K1 10 10
+turn K2 15 10
+wait 400
+shot v_eq_more.png
+turn PRESET 1 10
+turn K1 20 10
+wait 500
+shot v_tape.png
+turn PRESET 2 10
+turn K1 15 10
+wait 500
+shot v_clip.png
+wav fxviews.wav
+peakreset
+wait 1500
+expect peak_db_min -40
+wavstop

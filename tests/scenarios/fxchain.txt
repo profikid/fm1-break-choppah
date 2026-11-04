@@ -1,4 +1,4 @@
-# CHOPPAH: the FX chain. FX opens it; ALGORITHM picks a slot (so does FX again), PRESETS its effect, K1-K4 its
+# CHOPPAH: the FX chain. FX opens it; ALGORITHM picks a slot (FX again its parts, then the next), PRESETS its effect, K1-K4 its
 # settings and mix, SEL + FX bypasses it, FX held + ALGORITHM moves it along; the MIXER's K4 FX fades the whole chain
 #   app/build/host/choppah_host tests/scenarios/fxchain.txt app/build/scenarios
 wait 2600
@@ -33,12 +33,17 @@ release FX
 wait 300
 expect fx_focus 1
 shot c_moved.png
+# FX again: the slot's parts (MAIN, MORE, MOD), then the next slot
+tap FX
+wait 100
+expect fx_focus 1
+expect fx_page 1
+tap FX
 tap FX
 wait 100
 expect fx_focus 2
-tap FX
-tap FX
-tap FX
+expect fx_page 0
+turn ALGO 3 10
 wait 100
 expect fx_focus 1
 peakreset

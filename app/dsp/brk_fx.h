@@ -106,7 +106,7 @@ static inline float brk_mb_reduce(float over, float slope, float w)
     t = over + 0.5f * w;
     return slope * t * t / (2.0f * w);
 }
-/* Every slot's extra knobs (PRD A-50), one per slot as brk_mbc_t (the settings only grow at the end). x[0..3]: its
+/* Every slot's extra knobs (PRD A-49b), one per slot as brk_mbc_t (the settings only grow at the end). x[0..3]: its
  * effect's MORE page (0..1 each; unused ones stay put), the defaults what the effect always did:
  *   FILTER   drive (1..8x into it), slope (12 / 24 dB), spread (the right's cutoff up to 2 octaves higher)
  *   CRUNCH   tone (a low-pass after it, 1 kHz .. off), dither (noise under the steps)
@@ -169,8 +169,6 @@ void brk_fx_set(const brk_fx_t *p);
 void brk_fx_delay_buffer(int16_t *buf, uint32_t n);
 void brk_fx_tempo(float bpm);
 float brk_fx_dj_now(void);               /* where the DJ filter is right now, -1..1 (for the screen) */
-/* the first MB COMP slot's gain now, per band (low, mid, high; 1 = no reduction), for the screen; 1s for none */
-void brk_fx_gr(float *gr);
 /* in: the break, through the DJ filter, then the chain; thru: joins it after the DJ filter, into the chain (the drums
  * through the chain; 0 for none); echo, verb: the slices' throws into the delay and the reverb (brk_sends, the DJ
  * filter on them too; 0 for none); post: joined after the chain, into the limiter, thrown nowhere (the drums around

@@ -70,7 +70,7 @@ typedef struct {
     uint8_t ovl_rsv;
     /* (appended 4 Nov 2026: MB COMP's detail per FX slot, PRD A-49a; it moves with its slot) */
     brk_mbc_t mbc[BRK_FX_SLOTS];
-    /* (appended 4 Nov 2026: every slot's extras, its MORE and MOD pages, PRD A-50; they move with their slot) */
+    /* (appended 4 Nov 2026: every slot's extras, its MORE and MOD pages, PRD A-49b; they move with their slot) */
     brk_fxx_t fxx[BRK_FX_SLOTS];
 } settings_t;
 #define SET_SIZE_MIN offsetof(settings_t, rsv2)   /* the shortest save that loads: CHP7's first size */
