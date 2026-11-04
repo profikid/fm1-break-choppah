@@ -113,10 +113,19 @@ Redacteuren pakken firmware op als die er is. Dit zijn de FM-1-pagina's die best
 - **pianoandsynth.com** — "M-VAVE FM-1: custom firmware collection": https://pianoandsynth.com/m-vave-fm-1-custom-firmware-collection/
 - **dreyandersson.com** — "M-VAVE FM-1 Firmware: 7 Custom Firmwares Ranked": https://dreyandersson.com/blog/m-vave-fm-1-custom-firmware/
 - **thesynthsource.com** — install-gids: https://thesynthsource.com/fm1-custom-firmware-install-guide/
+- **synthanatomy.com** — "FM-1 Open: the green light for custom firmware and community hacks": https://synthanatomy.com/2026/10/m-vave-fm-1-open-the-green-light-for-custom-firmware-and-community-hacks.html
+- **arstechnica.com** — "From impulse purchase to pocket studio": https://arstechnica.com/gadgets/2026/10/from-impulse-purchase-to-pocket-studio-the-m-vave-fm-1/
+- **bedroomproducersblog.com** — over de emulator: https://bedroomproducersblog.com/2026/10/17/m-wave-browser/
 - **timetohouse.com** — "Four custom firmwares turn the M-VAVE FM-1 into a groovebox"
+
+Nee, CHOPPAH staat in **geen** van deze blogposts. Ze zijn allemaal geschreven vóór CHOPPAH bestond.
 
 Een mailtje naar deze redacties werkt: "Ik heb CHOPPAH gemaakt, een Amen-chopper voor de FM-1 —
 mag ik er iets over schrijven?" Met de emulator-link en de repo.
+
+De redacteuren pikken firmware op als die er is, dus de volgorde is: **eerst de Hub-mail** (dan staat
+CHOPPAH in de catalogus die al deze blogs gebruiken), **dan** deze mailtjes.
+
 
 ## 7. GitHub — de Discussions-tab
 
@@ -146,15 +155,21 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 - [x] `fmhub.json` tekst binnen 300 tekens (297), geen links, geen code
 - [x] GitHub-topics gezet: m-vave, fm1, firmware, breakbeat, chopper, dj, midi, open-source, chiptune
 - [x] GitHub Discussions aangezet + openingspost geplaatst (discussion #1)
-- [x] README: "Where to find CHOPPAH" met de vier catalogi + issues/discussions
-- [x] Release notes ingevuld (v0.69, v0.70, v0.71) — die waren leeg
+- [x] README: "Where to find CHOPPAH" met de catalogi + issues/discussions
+- [x] Release notes ingevuld (v0.69 t/m v0.75) — die waren leeg
 - [x] Flash-fix UC25HQ80 in main, v0.71 gebouwd en geverifieerd
+- [x] **mutant.cloud**: listing live via `.github/workflows/mutant.yml` → https://mutant.cloud/#/p/choppah
+- [x] Repo-beschrijving herschreven (die voedt mutant.cloud, FM1 Manager en de emu-lijst)
 - [x] PR #24 in aroum/fm1-custom-fw (366 stars, 90 entries) — rij 91
+- [x] PR #32 in Lapin/awesome-music-gear-firmware (213 stars)
+- [x] PR #141 in joakimeriksson/fm1-emu (148 stars) — de emulator
 - [ ] **Jij**: de Hub-mail sturen → `docs/hub/SUBMIT.md`
 - [ ] **Jij**: de echte FM-1-test (6 punten in `docs/hub/SUBMIT.md`)
+- [ ] **Jij**: het formulier op fm1firmwarehub.online/submit/ invullen
 - [ ] **Jij**: Reddit-post(s) + Discord-bericht plaatsen
 - [ ] **Jij**: mailtjes naar de blogs (pianoandsynth, dreyandersson)
 - [ ] Merges van de PR's (of je stuurt er een ping)
+
 
 ---
 
@@ -167,6 +182,8 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 | awesome-fm-1: 8 breaks i.p.v. 17 | https://github.com/cicloid/awesome-fm-1/pull/15 |
 | fm1-editor: versie + foto | https://github.com/benny-sparra/fm1-dx7-patch-importer/pull/451 |
 | Atlas: nieuwe entry | https://github.com/wero1414/atlas-fm-1/pull/3 |
+| **awesome-music-gear-firmware: nieuwe entry** | https://github.com/Lapin/awesome-music-gear-firmware/pull/32 |
+| **fm1-emu: de emulator-lijst** | https://github.com/joakimeriksson/fm1-emu/pull/141 |
 | Mooring: signed catalogus | https://github.com/cicloid/awesome-fm-1/issues/16 |
 
 ## Waar CHOPPAH nu wel/niet staat (stand 2026-11-04)
@@ -174,13 +191,54 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 | Catalogus | Status |
 |---|---|
 | Firmware Hub | **niet** — 151 entries, `FM-1_86` is vrij → wacht op je mail |
+| **mutant.cloud** | **wel** ✅ — https://mutant.cloud/#/p/choppah (listing `choppah`, 73+ versies) |
 | aroum/fm1-custom-fw | **niet** → PR #24 |
+| **awesome-music-gear-firmware** | **niet** → PR #32 |
+| **fm1-emu (emulator)** | **niet** → PR #141 |
+| **fm1firmwarehub.online** | **niet** → formulier op /submit/ (hieronder) |
 | Mooring | **niet** → issue #16 bij Gustavo Barron |
 | Atlas | **niet** → PR #3 |
 | awesome-fm-1 | **wel**, maar "17 breaks" → PR #15 |
 | fm1-editor | **wel**, maar v0.40 zonder foto → PR #451 |
 | 2bbb/fm1-firmware-collection | **wel** (auto) |
 | altstrument | **wel** (auto, staat op v0.54) |
+| **FM1 Manager / FM-SWITCH / FM-1-Swap** | **wel** (auto — ze scrapen de Hub en fm1-editor) |
+
+## mutant.cloud — de makkelijkste route, al gelopen
+
+[mutant.cloud](https://mutant.cloud/#/p/choppah) is een zelfbedienende catalogus: makers loggen in met GitHub en
+beheren hun eigen listing, niemand hoeft een mail te sturen. Het pakket wordt geverifieerd (sha256, device-ID
+in de pakketheader) en vanaf de site over USB-MIDI geïnstalleerd.
+
+De listing is aangemaakt door `.github/workflows/mutant.yml` in de repo. **Dat is er nu in**, dus elke
+nieuwe release is er automatisch. Handmatig draaien kan ook:
+
+```
+gh workflow run mutant.yml --repo profikid/fm1-break-choppah -f tag=v0.75
+```
+
+> Let op: de `release: published`-trigger vuurt nooit, omdat de release door de build-workflow met de
+> standaard `GITHUB_TOKEN` gemaakt wordt en events uit `GITHUB_TOKEN` geen andere workflows triggeren.
+> Daarom draait de workflow met `workflow_dispatch` en een tag.
+
+## fm1firmwarehub.online — nog een catalogus, met een formulier
+
+De site heeft een vergelijkingsmatrix met 30 firmwares en een **Submit Firmware**-formulier:
+https://fm1firmwarehub.online/submit/
+
+Het is een Netlify-formulier met deze velden:
+
+| Veld | Invullen |
+|---|---|
+| Firmware name | `CHOPPAH` |
+| Developer name | `Laurens Profittlich` |
+| Link to the developer's release or source page | `https://github.com/profikid/fm1-break-choppah` |
+| Price & license | `Free, MPL-2.0` |
+| Short description | de `what` uit `fmhub.json` |
+| Contact email | **jouw e-mail** — het enige veld dat ik niet kan invullen |
+
+Dat is een van de twee plekken waar alleen jij iets kunt doen (naast de Hub-mail).
+
 
 ## Belangrijk: de Hub stuurt zelf mail
 
