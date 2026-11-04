@@ -261,7 +261,7 @@ its settings as bars over K1–K4.
 
 | Control | Does |
 | --- | --- |
-| ALGORITHM · FX again | The slot to tune (1–4) |
+| ALGORITHM · FX again | The slot to tune (1–4); on an MB COMP, FX again first steps through its six parts |
 | PRESETS | The effect in that slot, through the library (EMPTY first); a new effect comes in on, at its own starting settings |
 | K1–K3 · K4 | Its settings · its mix |
 | SEL + FX | That slot on / bypassed |
@@ -281,20 +281,15 @@ its settings as bars over K1–K4.
 | DELAY | Time on the tempo (1/16, 1/8, 3/16, 1/4, 3/8, 1/2, 1/8T, 1/4T) | Feedback | Tone (dark … bright repeats) |
 | EQ | Low (a shelf at 120 Hz) | Mid (a bell; K4 is its frequency, 200 Hz – 5 kHz) | High (a shelf at 8 kHz) |
 | TAPE | Drive (0 – 24 dB into a tape curve: denser, warmer, even harmonics; the peaks kept level) | Warmth (the low head bump, the top rolled off) | Wow (and flutter: the pitch wanders like a worn machine) |
-| MB COMP | Low (below 200 Hz) | Mid | High (above 2.5 kHz) |
+| MB COMP | Low amount | Mid amount | High amount (five more parts of its own: below) |
 | CLIP | Drive (0 – +24 dB into it) | Knee (soft … hard) | Ceiling (0 – −12 dB) |
 
 **EQ**'s bands go −12 … +12 dB, flat in the middle; its K4 is not a mix but the **mid's frequency**. **TAPE** is a
 saturator after a tape machine: put it last in the chain to glue the break, or before CRUNCH for a dusty sampler.
 
-**MB COMP** is a 3-band (multiband) compressor. Each knob is how hard its band is pressed, shown as the band's ratio
-(OFF … 8:1; the threshold drops with it, down to −30 dB, and half the reduction is made back up). The low band is
-slow, the high band fast; at OFF the bands add back up to the sound untouched. Its MIX is a parallel mix: the
-pressed sound against the dry. Amber bars under K1–K3 show each band's reduction as it happens. **CLIP** squares the
-peaks off at its ceiling: soft rounds them, hard cuts them; below the ceiling it only adds its drive. MB COMP then
+**MB COMP** is a 3-band (multiband) compressor, and the one effect with a page of its own (below). **CLIP** squares
+the peaks off at its ceiling: soft rounds them, hard cuts them; below the ceiling it only adds its drive. MB COMP then
 CLIP last in the chain is a loud master; CLIP before a FILTER is a fizzy one.
-
-![MB COMP in slot 1: the low band pressed 7.3:1, its reduction in amber under K1](img/screen-mbcomp.png "MB COMP")
 
 **DELAY** is a stereo ping-pong: the echoes bounce left, right, left, each darker. Its K4 is **SEND**, how much of the
 sound reaching it goes in (the echoes come back at full), so with SEND low only throws ring out: the DUB pad, the
@@ -309,6 +304,44 @@ The chain starts as CRUNCH → FILTER → FLANGER → RING MOD, all bypassed: SE
 CRUNCH used to be HOME's K4; it is slot 1 now.
 
 STOP fades the break out at once (a white key held keeps looping); the reverb's and the dub delay's tails ring on.
+
+### MB COMP
+
+The break is split into a low, a mid and a high band (by default at 200 Hz and 2.5 kHz), each pressed on its own and
+added back together; with nothing pressed the bands add back up to the sound untouched. Focus an MB COMP slot and the
+screen turns into the compressor:
+
+- **Above:** its six parts as tabs, then the spectrum from 20 Hz to 20 kHz in the three bands' colours (low red, mid
+  amber, high blue). The filled shape is what the sound goes through right now: a band being pressed **dips**, a band
+  turned up with GAIN stands above the 0 dB line, and the dotted line shows where it would be with nothing pressed.
+  The splits are marked with their frequencies.
+- **Below:** each band's curve, input across and output up (−48 … 0 dB): flat at 1:1, bending at the threshold, the
+  knee rounding the bend. The white dot is the band's level, riding the curve as the break plays. Beside it, the
+  band's level in (the threshold marked white) and its reduction hanging from the top in amber, its peak held for a
+  second. On the right, the ratio, the threshold and any gain as they act now; at the top, the reduction in dB.
+
+![MB COMP on AMOUNT: the low pressed 8:1, its reduction a dip in the spectrum](img/screen-mbcomp.png "MB COMP")
+
+**FX again** steps through the six parts, then on to the next slot; ALGORITHM still jumps straight to another slot
+(and an MB COMP there opens on AMOUNT). The tab bar names the part: `< MB COMP LOW >`.
+
+| Part | K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- | --- |
+| AMOUNT | Low amount | Mid amount | High amount | Mix (parallel: the pressed sound against the dry) |
+| LOW · MID · HIGH | Threshold (−48 … 0 dB) | Ratio (1:1 … 20:1, LIMIT) | Attack (0.1 – 100 ms) | Release (10 – 1000 ms) |
+| GAIN | Low gain | Mid gain | High gain (each −12 … +12 dB) | Solo: OFF, LOW, MID, HIGH |
+| X-OVER | Low split (40 – 800 Hz) | High split (1 – 12 kHz) | Knee (hard … 12 dB soft) | Output (−12 … +12 dB) |
+
+The **amounts** are the knobs to ride while playing: each takes its band from untouched (OFF) to its own threshold and
+ratio, and the foot shows the ratio it reaches. The band parts set where full amount lands: by default −30 dB and
+8:1, the low slow (10 ms in, 150 ms out), the mid at 5 / 100 ms, the high fast (2 / 60 ms). Half of a band's
+reduction at full scale is made back up by itself; GAIN adds or takes away more after it. **Solo** plays the one band
+alone, with no dry sound under it, to hear exactly what it holds while you move the splits. The page outlines the band
+whose part you are on.
+
+![MB COMP's LOW part: threshold −36 dB, 16:1, a 3.3 ms attack](img/screen-mbcomp-band.png "MB COMP LOW")
+
+![MB COMP's GAIN part with the low soloed: the rest of the spectrum falls away](img/screen-mbcomp-solo.png "MB COMP solo")
 
 ## 7. GLOBAL: MIDI, Bluetooth, pitch, Bluetooth audio, reset
 
@@ -455,7 +488,7 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | LFO (mixer) | Break level | Kick level | Snare and hat level | FX (the chain, dry to wet) |
 | LFO again (groove) | Swing | Drums: through the chain or around it | | |
 | HOME again (generator) | Complexity | Anchor | Roll | Fill |
-| FX (the chain) | the focused slot's effect: its three settings | | | Its mix |
+| FX (the chain) | the focused slot's effect: its three settings (an MB COMP: six parts on FX again, see §6) | | | Its mix |
 | SEQ (patterns) | Slice | Pitch | Hits | Reverse |
 | SEQ, a drum lane | Fill | Rotate | Clear / 4x4 | Copy |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |

@@ -329,8 +329,13 @@ void brk_fx_init(void)
 {
     rv_clear();
     brk_fx_t d;
+    brk_mbc_t m;
+    uint32_t k;
     brk_fx_defaults(&d);
     brk_fx_set(&d);
+    brk_mbc_defaults(&m);
+    for (k = 0; k < BRK_FX_SLOTS; k++)
+        brk_fx_set_mbc(k, &m);
 }
 
 void brk_fx_set(const brk_fx_t *p)
@@ -384,12 +389,44 @@ typedef struct {
     float a, b, g;                       /* the effect's own: see slot_block */
     svf_c e[3];                          /* EQ's bands (TAPE: e[0] the bump) */
     float m[3][3];                       /* and their mixes: out = v0 * m0 + v1 * m1 + v2 * m2 */
+    float mb_att[3], mb_rel[3], mb_w;    /* MB COMP: each band's attack and release (per sample), the knee (octaves) */
+    uint8_t mb_solo;                     /* and its solo (0 none, 1 + the band) */
 } slot_c_t;
 static slot_c_t sc[BRK_FX_SLOTS];
 static volatile float mb_gr[3] = {1.0f, 1.0f, 1.0f};   /* the first MULTIBAND's gains, for the screen */
 static int mb_shown;                     /* a MULTIBAND has given them this block */
-static const float MB_ATT[3] = {0.0023f, 0.0045f, 0.011f};   /* its bands' attack: 10, 5, 2 ms */
-static const float MB_REL[3] = {0.00015f, 0.00023f, 0.00038f};   /* release: 150, 100, 60 ms */
+
+/* MB COMP's detail: per slot, set from the main loop */
+const float BRK_MB_RATIO[BRK_MB_RATIOS] = {1.0f, 1.2f, 1.5f, 2.0f, 2.5f, 3.0f, 4.0f, 5.0f, 6.0f, 8.0f, 10.0f, 12.0f,
+                                           16.0f, 20.0f, 1000.0f};
+static volatile brk_mbc_t p_mbc[BRK_FX_SLOTS];   /* (read once a block by slot_block, as fx is copied) */
+
+void brk_mbc_defaults(brk_mbc_t *m)
+{
+    /* what MB COMP always was: -30 dB and 8:1 at full amount, the low slow (10 ms in, 150 out), the mid 5 / 100, the
+     * high fast (2 / 60), split at 200 Hz and 2.5 kHz, a hard knee, nothing added after */
+    static const float ATT[3] = {0.6667f, 0.5661f, 0.4337f}, REL[3] = {0.5878f, 0.5f, 0.3890f};
+    uint32_t b;
+    for (b = 0; b < MB_BANDS; b++) {
+        m->thr[b] = 0.375f;
+        m->ratio[b] = 9.0f / (float)(BRK_MB_RATIOS - 1u);
+        m->att[b] = ATT[b];
+        m->rel[b] = REL[b];
+        m->gain[b] = 0.5f;
+    }
+    m->xlo = 0.5372f;
+    m->xhi = 0.3686f;
+    m->knee = 0.0f;
+    m->out = 0.5f;
+    m->solo = 0u;
+    m->rsv[0] = m->rsv[1] = m->rsv[2] = 0u;
+}
+
+void brk_fx_set_mbc(uint32_t slot, const brk_mbc_t *m)
+{
+    if (slot < BRK_FX_SLOTS)
+        *(brk_mbc_t *)&p_mbc[slot] = *m;   /* (whole, as brk_fx_set: the render copies it per block) */
+}
 static int rv_taken;                     /* a slot has the reverb this block (the first REVERB in the chain) */
 static int dl_taken;                     /* and the delay (the first DELAY, when the line is there) */
 static dl_c_t dl_slot_c;                 /* the DELAY slot's settings this block */
@@ -481,16 +518,26 @@ static void slot_block(uint32_t k)
         break;
     }
     case FXT_MBCOMP: {                   /* c: the low's split, e[0] the high's; per band m[b]: log2 of the threshold,
-                                          * the slope (1 - 1/ratio), the make-up */
+                                          * the slope (1 - 1/ratio), the level after (the make-up, its gain, the
+                                          * output); each the band's amount of brk_mbc_t's threshold and ratio */
         const float amt[3] = {p0, p1, p2};
+        const brk_mbc_t *m = (const brk_mbc_t *)&p_mbc[k];
+        float out = brk_exp2f(brk_mb_db24(m->out) * 0.16610f);
         uint32_t b;
-        c->c = svf_coef(200.0f, 0.0f);
-        c->e[0] = svf_coef(2500.0f, 0.0f);
-        for (b = 0; b < 3u; b++) {
-            float th = -5.0f * amt[b], slope = 1.0f - 1.0f / (1.0f + 7.0f * amt[b]);
+        c->c = svf_coef(brk_mb_xlo_hz(m->xlo), 0.0f);
+        c->e[0] = svf_coef(brk_mb_xhi_hz(m->xhi), 0.0f);
+        c->mb_w = brk_mb_knee_db(m->knee) * 0.16610f;   /* (dB to octaves of level: / 6.02) */
+        c->mb_solo = (uint8_t)(m->solo <= MB_BANDS ? m->solo : 0u);
+        for (b = 0; b < MB_BANDS; b++) {
+            float th = brk_mb_thr_db(m->thr[b]) * 0.16610f * amt[b];
+            float ratio = 1.0f + (brk_mb_ratio(m->ratio[b]) - 1.0f) * amt[b], slope = 1.0f - 1.0f / ratio;
             c->m[b][0] = th;
             c->m[b][1] = slope;
-            c->m[b][2] = brk_exp2f(-0.5f * th * slope);   /* half the reduction a full-scale band gets */
+            /* half the reduction a full-scale band gets, the band's gain, the output */
+            c->m[b][2] = brk_exp2f(0.5f * brk_mb_reduce(-th, slope, c->mb_w) +
+                                   brk_mb_db24(m->gain[b]) * 0.16610f) * out;
+            c->mb_att[b] = 1.0f / (1.0f + brk_mb_att_ms(m->att[b]) * 44.1f);
+            c->mb_rel[b] = 1.0f / (1.0f + brk_mb_rel_ms(m->rel[b]) * 44.1f);
         }
         break;
     }
@@ -630,15 +677,23 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
         yl = yr = 0.0f;
         for (b = 0; b < 3u; b++) {
             float pk = brk_absf(bl[b]) > brk_absf(br[b]) ? brk_absf(bl[b]) : brk_absf(br[b]);
-            s->mb_env[b] += (pk - s->mb_env[b]) * (pk > s->mb_env[b] ? MB_ATT[b] : MB_REL[b]);
-            if (!(s->mb_n & 3u)) {       /* the gain: (env / threshold)^-slope above it, in octaves */
-                float over = s->mb_env[b] > 1e-6f ? brk_log2f(s->mb_env[b]) - c->m[b][0] : -1.0f;
-                s->mb_g[b] = over > 0.0f ? brk_exp2f(-over * c->m[b][1]) : 1.0f;
+            s->mb_env[b] += (pk - s->mb_env[b]) * (pk > s->mb_env[b] ? c->mb_att[b] : c->mb_rel[b]);
+            if (!(s->mb_n & 3u)) {       /* the gain: the reduction over the threshold through the knee, in octaves */
+                float over = s->mb_env[b] > 1e-6f ? brk_log2f(s->mb_env[b]) - c->m[b][0] : -20.0f;
+                float red = c->m[b][1] > 0.0f ? brk_mb_reduce(over, c->m[b][1], c->mb_w) : 0.0f;
+                s->mb_g[b] = red > 0.0f ? brk_exp2f(-red) : 1.0f;
             }
+            if (c->mb_solo && c->mb_solo != b + 1u)
+                continue;                /* (soloed: that band alone) */
             yl += bl[b] * s->mb_g[b] * c->m[b][2];
             yr += br[b] * s->mb_g[b] * c->m[b][2];
         }
         s->mb_n++;
+        if (c->mb_solo) {                /* a band alone: heard as it is, no dry under it */
+            *xl = yl;
+            *xr = yr;
+            return;
+        }
         break;
     }
     case FXT_CLIP: {                     /* a cubic's soft curve (flat at 1.5) and a hard edge at 1, blended by the
@@ -704,6 +759,15 @@ void brk_fx_gr(float *gr)
     gr[0] = mb_gr[0];
     gr[1] = mb_gr[1];
     gr[2] = mb_gr[2];
+}
+
+void brk_fx_mb_meter(uint32_t slot, float *gr, float *lvl)
+{
+    uint32_t b, live = slot < BRK_FX_SLOTS && sc[slot].on && sc[slot].type == FXT_MBCOMP && st[slot].type == FXT_MBCOMP;
+    for (b = 0; b < MB_BANDS; b++) {     /* (single words, read from the main loop) */
+        gr[b] = live ? st[slot].mb_g[b] : 1.0f;
+        lvl[b] = live ? st[slot].mb_env[b] : 0.0f;
+    }
 }
 
 void brk_fx_process(const float *in, const float *thru, const float *echo, const float *verb, const float *post,

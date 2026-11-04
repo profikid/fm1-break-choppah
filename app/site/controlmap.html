@@ -174,7 +174,9 @@
     { id: "fx", btn: "FX", name: "FX CHAIN", sub: "Four slots in series", again: "next slot (4)", part: true, subs: [1, 2, 3, 4].map(n =>
       ({ n: "SLOT " + n, k: ["PARAM 1", "PARAM 2", "PARAM 3", "MIX"], strip: "THE CHAIN: 4 SLOTS", note: n === 1 ? "the focused slot outlined" : "" })),
       algo: "Slot", presets: "Effect", keys: "slices",
-      notes: [["SEL + FX", "Bypass the focused slot"], ["FX held + ALGO", "Move the slot along the chain"], ["Key held + FX", "That key's slice effect on K1–K4"]] },
+      notes: [["SEL + FX", "Bypass the focused slot"], ["FX held + ALGO", "Move the slot along the chain"], ["Key held + FX", "That key's slice effect on K1–K4"],
+              ["MB COMP focused", "FX again steps AMOUNT · LOW · MID · HIGH · GAIN · X-OVER, then the next slot"],
+              ["MB COMP · band", "THRESH · RATIO · ATTACK · RELEASE"], ["MB COMP · GAIN / X-OVER", "LOW MID HIGH SOLO · LOW X HIGH X KNEE OUTPUT"]] },
     { id: "glo", btn: "GLO", name: "GLOBAL", sub: "MIDI, pitch, Bluetooth audio", again: "next part (3)", subs: [
       { n: "MIDI", k: ["CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"], strip: "BLUETOOTH · CLOCK IN · CLOCK OUT · PORTS", note: "status" },
       { n: "PITCH", k: ["PITCH", "GRAIN", "SNAP", "RESET ALL"], strip: "PITCH MODE · GRAIN · SNAP", note: "what the snap is in this break" },

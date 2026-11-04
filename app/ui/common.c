@@ -44,6 +44,9 @@ static struct {
     uint32_t lobo_t;                     /* RESET ALL done: the lobotomy screen, since then (0: not showing) */
     uint8_t home_hold, home_combo;       /* HOME held on its page (up alone: its other part); PLAY pressed meanwhile */
     uint8_t fx_hold, fx_turned;          /* FX held on the FX page (up alone: the next slot); a knob turned meanwhile */
+    uint8_t mb_page;                     /* an MB COMP focused: its part (MBP_*: AMOUNT, LOW, MID, HIGH, GAIN, X-OVER) */
+    float mb_hold[3];                    /* its bands' reduction peaks held (dB), and since when */
+    uint32_t mb_hold_t[3];
     uint32_t reset_t;                    /* GLOBAL's RESET ALL: when it was first turned (it asks twice) */
     uint32_t mix_drawn;                  /* its faders' meters: when last drawn */
     int16_t meter_x;                     /* the header's level meter: where (0: not shown now, a message is) */

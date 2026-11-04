@@ -1173,6 +1173,139 @@ static void test_mb_clip(void)
     CHECK(k1 > 0.48f && k1 < 0.51f, "CLIP hard: held at the ceiling too (%.3f)", k1);
 }
 
+/* slot 0 emptied for a block: its state (the levels followed) from nothing for the next run */
+static void mb_fresh(void)
+{
+    static float z[BLOCK], zl[BLOCK], zr[BLOCK];
+    brk_fx_t e;
+    brk_fx_defaults(&e);
+    brk_fx_slot_defaults(&e.slot[0], FXT_EMPTY);
+    brk_fx_init();
+    brk_fx_set(&e);
+    brk_fx_process(z, 0, 0, 0, 0, zl, zr, BLOCK, 0u);
+}
+
+/* MB COMP's detail (PRD A-49a): a tone through slot 0's MB COMP with the band amounts a[] and the detail m; the peak
+ * from `from` on (from < to), its meter afterwards */
+static float mb_peak(float hz, float amp, const float *a, const brk_mbc_t *m, uint32_t from, uint32_t to,
+                     float *gr, float *lvl)
+{
+    brk_fx_t p;
+    uint32_t i, n = BRK_SR;
+    float pk = 0.0f;
+    for (i = 0; i < n; i++)
+        buf[i] = amp * sinf(6.2831853f * hz * (float)i / (float)BRK_SR);
+    brk_fx_defaults(&p);
+    brk_fx_slot_defaults(&p.slot[0], FXT_MBCOMP);
+    p.slot[0].on = 1u;
+    p.slot[0].p[0] = a[0];
+    p.slot[0].p[1] = a[1];
+    p.slot[0].p[2] = a[2];
+    p.slot[0].mix = 1.0f;
+    mb_fresh();
+    brk_fx_set(&p);
+    brk_fx_set_mbc(0u, m);
+    for (i = 0; i < n; i += BLOCK)
+        brk_fx_process(buf + i, 0, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
+    for (i = from; i < to && i < n; i++)
+        if (fabsf(bl[i]) > pk)
+            pk = fabsf(bl[i]);
+    if (gr && lvl)
+        brk_fx_mb_meter(0u, gr, lvl);
+    return pk;
+}
+
+static void test_mb_detail(void)
+{
+    static const float none[3] = {0.0f, 0.0f, 0.0f}, low[3] = {1.0f, 0.0f, 0.0f}, all[3] = {1.0f, 1.0f, 1.0f};
+    brk_mbc_t m, d;
+    float gr[3], lvl[3], a, b, q, l;
+    brk_mbc_defaults(&d);
+    /* the defaults are what MB COMP was: the old test's numbers through the new path */
+    q = mb_peak(60.0f, 0.05f, low, &d, 30000u, BRK_SR, 0, 0);
+    l = mb_peak(60.0f, 0.25f, low, &d, 30000u, BRK_SR, gr, lvl);
+    CHECK(l / q < 1.5f && l / q > 1.0f && gr[0] < 0.4f && lvl[0] > 0.2f && lvl[2] < 0.01f,
+          "MB detail defaults: 14 dB more in, %.1f dB out; low reduced to %.2f, its level %.2f, the high's %.3f",
+          20.0f * log10f(l / q), gr[0], lvl[0], lvl[2]);
+    m = d;                               /* the ratio at 1:1: nothing pressed whatever the amount */
+    m.ratio[MB_LOW] = 0.0f;
+    l = mb_peak(60.0f, 0.25f, low, &m, 30000u, BRK_SR, gr, lvl);
+    CHECK(fabsf(l - 0.25f) < 0.015f && gr[0] > 0.999f, "MB 1:1: the low untouched at full amount (%.3f, gain %.3f)",
+          l, gr[0]);
+    mb_peak(60.0f, 0.25f, low, &d, 30000u, BRK_SR, gr, lvl);
+    q = gr[0];                           /* LIMIT: pressed harder than 8:1 */
+    m = d;
+    m.ratio[MB_LOW] = 1.0f;
+    mb_peak(60.0f, 0.25f, low, &m, 30000u, BRK_SR, gr, lvl);
+    CHECK(gr[0] < q * 0.8f, "MB LIMIT: the low pressed harder than at 8:1 (gain %.3f, %.3f)", gr[0], q);
+    m = d;                               /* a band's gain: +12 dB on the low, nothing pressed */
+    m.gain[MB_LOW] = 1.0f;
+    a = mb_peak(60.0f, 0.05f, none, &m, 8000u, BRK_SR, 0, 0);
+    CHECK(a > 0.18f && a < 0.22f, "MB LOW GAIN +12 dB: 60 Hz four times (%.3f from 0.05)", a);
+    m = d;                               /* the output: -12 dB */
+    m.out = 0.0f;
+    a = mb_peak(1000.0f, 0.2f, none, &m, 4000u, BRK_SR, 0, 0);
+    CHECK(a > 0.045f && a < 0.055f, "MB OUTPUT -12 dB: a quarter (%.3f from 0.2)", a);
+    m = d;                               /* the solo: the low alone takes 60 Hz, leaves 8 kHz out */
+    m.solo = 1u + MB_LOW;
+    a = mb_peak(60.0f, 0.25f, none, &m, 8000u, BRK_SR, 0, 0);
+    b = mb_peak(8000.0f, 0.25f, none, &m, 4000u, BRK_SR, 0, 0);
+    CHECK(a > 0.2f && b < 0.01f, "MB SOLO LOW: 60 Hz through (%.3f), 8 kHz gone (%.4f)", a, b);
+    m.solo = 1u + MB_HIGH;
+    a = mb_peak(60.0f, 0.25f, none, &m, 8000u, BRK_SR, 0, 0);
+    b = mb_peak(8000.0f, 0.25f, none, &m, 4000u, BRK_SR, 0, 0);
+    CHECK(a < 0.01f && b > 0.2f, "MB SOLO HIGH: 60 Hz gone (%.4f), 8 kHz through (%.3f)", a, b);
+    m = d;                               /* the low split moved up to 800 Hz: the low band takes 500 Hz */
+    m.solo = 1u + MB_LOW;
+    a = mb_peak(500.0f, 0.25f, none, &m, 4000u, BRK_SR, 0, 0);
+    m.xlo = 1.0f;
+    b = mb_peak(500.0f, 0.25f, none, &m, 4000u, BRK_SR, 0, 0);
+    CHECK(a < 0.08f && b > 0.15f, "MB LOW X 200 Hz -> 800 Hz: 500 Hz in the low band %.3f -> %.3f", a, b);
+    m = d;                               /* the attack: slow lets the onset through, fast holds it */
+    m.att[MB_LOW] = 1.0f;
+    a = mb_peak(60.0f, 0.25f, low, &m, 0u, 1500u, 0, 0);
+    m.att[MB_LOW] = 0.0f;
+    b = mb_peak(60.0f, 0.25f, low, &m, 0u, 1500u, 0, 0);
+    CHECK(a > b * 1.5f, "MB ATTACK 100 ms lets the first 34 ms through (%.3f), 0.1 ms holds it (%.3f)", a, b);
+    m = d;                               /* the release: after the tone stops, a fast one lets go sooner */
+    {
+        brk_fx_t p;
+        uint32_t i, r;
+        float g_fast = 0.0f, g_slow = 0.0f;
+        for (r = 0; r < 2u; r++) {
+            m.rel[MB_LOW] = r ? 1.0f : 0.0f;
+            for (i = 0; i < BRK_SR; i++)
+                buf[i] = i < BRK_SR / 2u ? 0.25f * sinf(6.2831853f * 60.0f * (float)i / (float)BRK_SR) : 0.0f;
+            brk_fx_defaults(&p);
+            brk_fx_slot_defaults(&p.slot[0], FXT_MBCOMP);
+            p.slot[0].on = 1u;
+            p.slot[0].p[0] = 1.0f;
+            mb_fresh();
+            brk_fx_set(&p);
+            brk_fx_set_mbc(0u, &m);
+            for (i = 0; i < BRK_SR / 2u + 4410u; i += BLOCK)   /* the tone, then 100 ms of nothing */
+                brk_fx_process(buf + i, 0, 0, 0, 0, bl + i, br + i, BLOCK, 0u);
+            brk_fx_mb_meter(0u, gr, lvl);
+            if (r)
+                g_slow = gr[0];
+            else
+                g_fast = gr[0];
+        }
+        CHECK(g_fast > 0.9f && g_slow < 0.6f, "MB RELEASE: 100 ms after, 10 ms has let go (%.2f), 1 s not (%.2f)",
+              g_fast, g_slow);
+    }
+    m = d;                               /* the knee: 4 dB under the threshold, hard does nothing, soft starts */
+    a = 0.0316f * 0.63f / 0.85f;         /* (-30 dB, -4 dB, the mid band's share of 1 kHz) */
+    mb_peak(1000.0f, a, all, &m, 4000u, BRK_SR, gr, lvl);
+    q = gr[1];
+    m.knee = 1.0f;
+    mb_peak(1000.0f, a, all, &m, 4000u, BRK_SR, gr, lvl);
+    CHECK(q > 0.999f && gr[1] < 0.995f, "MB KNEE: under the threshold, hard %.3f, soft 12 dB %.3f", q, gr[1]);
+    CHECK(brk_mb_reduce(-1.0f, 0.5f, 0.0f) == 0.0f && fabsf(brk_mb_reduce(2.0f, 0.5f, 0.0f) - 1.0f) < 1e-6f &&
+          fabsf(brk_mb_reduce(3.0f, 0.5f, 4.0f) - 1.5f) < 1e-6f && brk_mb_reduce(0.0f, 0.5f, 4.0f) > 0.0f,
+          "MB curve: none under, slope above, the knee between");
+}
+
 /* the snare and the hat (PRD K-10): each sounds on its own, in range, and dies away; the presets differ; a hit lands
  * on its sample; the snare's body is near its TUNE */
 static void test_perc(void)
@@ -1493,6 +1626,7 @@ int main(int argc, char **argv)
     test_delay_slices();
     test_eq_tape();
     test_mb_clip();
+    test_mb_detail();
     test_dj_break();
     test_kick();
     test_perc();

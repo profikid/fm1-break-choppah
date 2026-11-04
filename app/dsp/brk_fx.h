@@ -5,6 +5,7 @@
  * the main loop, read once a block. */
 #pragma once
 #include <stdint.h>
+#include "brk_math.h"
 
 #define BRK_FX_SLOTS 4u
 /* the library. Each effect's three settings are 0..1 (p[0..2]; brk_fx.c maps them), then its mix:
@@ -25,11 +26,12 @@
  *            the mid's frequency (200 Hz..5 kHz)
  *   TAPE     drive (0..24 dB into a tape curve, even harmonics, made up), warmth (the head bump and the top rolled
  *            off), wow (and flutter: the pitch wanders)
- *   MB COMP  a 3-band (multiband) compressor: low (below 200 Hz), mid, high (above 2.5 kHz), each band's amount
- *            (its threshold 0..-30 dB and its ratio 1..8:1 together, made up by half its reduction at full scale);
- *            its own attack and release per band (low slow, high fast); the bands sum back to the input when nothing
- *            is pressed. Its mix is the parallel mix (the pressed sound against the dry). brk_fx_gr: its reduction
- *            per band
+ *   MB COMP  a 3-band (multiband) compressor: low, mid, high (split at 200 Hz and 2.5 kHz by default), each band's
+ *            amount (a macro: its threshold and its ratio from untouched to brk_mbc_t's, by default -30 dB and 8:1,
+ *            made up by half its reduction at full scale); per band its own attack, release and gain, the splits, a
+ *            knee, an output and a solo in brk_mbc_t (brk_fx_set_mbc); the bands sum back to the input when nothing
+ *            is pressed. Its mix is the parallel mix (the pressed sound against the dry). brk_fx_mb_meter: its
+ *            reduction and level per band
  *   CLIP     drive (0..+24 dB into it), knee (soft .. hard), ceiling (0..-12 dB): a clipper, the level held at the
  *            ceiling */
 enum { FXT_EMPTY, FXT_FILTER, FXT_CRUNCH, FXT_DRIVE, FXT_PUNCH, FXT_FLANGER, FXT_RING, FXT_TREMOLO, FXT_REVERB,
@@ -61,6 +63,54 @@ typedef struct {
 } brk_fx_t;
 #define BRK_DUB_DIVS 4u
 extern const char *const BRK_DUB_DIV_NAME[BRK_DUB_DIVS];
+
+/* MB COMP's detail (PRD A-49a), one per slot (kept apart from brk_fxslot_t: the settings only grow at the end).
+ * The slot's p[0..2] stay each band's AMOUNT, a macro scaling the band's threshold and ratio from untouched (0) to as
+ * set here (1); its mix stays the parallel mix. Everything 0..1 as the slots' settings, mapped by brk_mb_*() below */
+enum { MB_LOW, MB_MID, MB_HIGH, MB_BANDS };
+typedef struct {
+    float thr[MB_BANDS];                 /* threshold at full amount: -48 .. 0 dB */
+    float ratio[MB_BANDS];               /* at full amount: BRK_MB_RATIO's steps, 1:1 .. 20:1, LIMIT */
+    float att[MB_BANDS];                 /* attack 0.1 .. 100 ms */
+    float rel[MB_BANDS];                 /* release 10 .. 1000 ms */
+    float gain[MB_BANDS];                /* the band's level after it: -12 .. +12 dB (0.5: none) */
+    float xlo, xhi;                      /* the splits: low / mid 40 .. 800 Hz, mid / high 1 .. 12 kHz */
+    float knee;                          /* hard .. 12 dB soft */
+    float out;                           /* the output: -12 .. +12 dB (0.5: none) */
+    uint8_t solo;                        /* 0 every band, 1 + MB_*: that band alone (no dry) */
+    uint8_t rsv[3];
+} brk_mbc_t;
+#define BRK_MB_RATIOS 15u
+extern const float BRK_MB_RATIO[BRK_MB_RATIOS];   /* the last is LIMIT (1000:1) */
+static inline float brk_mb_thr_db(float v) { return 48.0f * v - 48.0f; }
+static inline float brk_mb_ratio(float v)
+{
+    uint32_t i = (uint32_t)((v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v) * (float)(BRK_MB_RATIOS - 1u) + 0.5f);
+    return BRK_MB_RATIO[i];
+}
+static inline float brk_mb_att_ms(float v) { return 0.1f * brk_exp2f(v * 9.9658f); }   /* 0.1 .. 100 */
+static inline float brk_mb_rel_ms(float v) { return 10.0f * brk_exp2f(v * 6.6439f); }  /* 10 .. 1000 */
+static inline float brk_mb_db24(float v) { return (v - 0.5f) * 24.0f; }                /* gain, out: -12 .. +12 */
+static inline float brk_mb_xlo_hz(float v) { return 40.0f * brk_exp2f(v * 4.3219f); }  /* 40 .. 800 */
+static inline float brk_mb_xhi_hz(float v) { return 1000.0f * brk_exp2f(v * 3.585f); } /* 1k .. 12k */
+static inline float brk_mb_knee_db(float v) { return 12.0f * v; }
+/* the reduction for a level `over` its threshold (any unit, dB or octaves), slope 1 - 1/ratio, knee width w (the same
+ * unit; 0 hard): none below the knee, a quadratic through it, then over * slope */
+static inline float brk_mb_reduce(float over, float slope, float w)
+{
+    float t;
+    if (2.0f * over <= -w)
+        return 0.0f;
+    if (2.0f * over >= w)
+        return over * slope;
+    t = over + 0.5f * w;
+    return slope * t * t / (2.0f * w);
+}
+void brk_mbc_defaults(brk_mbc_t *m);
+void brk_fx_set_mbc(uint32_t slot, const brk_mbc_t *m);   /* from the main loop, as brk_fx_set */
+/* slot's MB COMP now, per band (low, mid, high): its gain (1 = no reduction) and its level in (the band's peak
+ * followed, 1 = full scale); 1s and 0s when that slot is not an MB COMP that is on */
+void brk_fx_mb_meter(uint32_t slot, float *gr, float *lvl);
 
 void brk_fx_init(void);
 void brk_fx_defaults(brk_fx_t *p);

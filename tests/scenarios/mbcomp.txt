@@ -1,0 +1,72 @@
+# CHOPPAH: MB COMP's detail (PRD A-49a): its six parts on FX again, their knobs, the spectrum and the bands' curves,
+# its detail moving with its slot
+#   app/build/host/choppah_host tests/scenarios/mbcomp.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 400
+tap FX
+wait 200
+turn PRESET 10 10
+wait 200
+expect mb_page 0
+# AMOUNT: the low pressed hard, the mid and high a little
+turn K1 25 10
+turn K2 15 10
+turn K3 12 10
+wait 900
+shot c_mb_amount.png
+# FX again: the LOW band's part; threshold down, ratio up, a quick attack
+tap FX
+wait 100
+expect mb_page 1
+expect fx_focus 0
+turn K1 -6 10
+expect mb_thr_low -36
+turn K2 3 10
+turn K3 -8 10
+wait 900
+shot c_mb_low.png
+tap FX
+wait 100
+tap FX
+wait 100
+tap FX
+wait 100
+expect mb_page 4
+# GAIN: the high up 3 dB; SOLO the low
+turn K3 6 10
+turn K4 1 10
+expect mb_solo 1
+wait 900
+shot c_mb_solo.png
+turn K4 -1 10
+expect mb_solo 0
+tap FX
+wait 100
+expect mb_page 5
+# X-OVER: the low split up, a soft knee
+turn K1 8 10
+turn K3 12 10
+wait 900
+shot c_mb_xover.png
+# past the last part: the next slot, its AMOUNT
+tap FX
+wait 100
+expect fx_focus 1
+expect mb_page 0
+# back with ALGORITHM, then FX held + ALGORITHM moves it: its detail goes along
+turn ALGO -1 10
+wait 100
+expect fx_focus 0
+press FX
+turn ALGO 1 10
+release FX
+wait 100
+expect fx_focus 1
+expect mb_slot2_thr_low -36
+expect mb_page 0
+wav mbcomp.wav
+peakreset
+wait 2000
+expect peak_db_min -30
+wavstop

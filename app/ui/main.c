@@ -381,7 +381,7 @@ static void input(void)
     if (ui.fx_hold && !(btn & 1u << B_FX)) {   /* FX let go: alone, the next slot; with ALGORITHM turned, a move */
         ui.fx_hold = 0u;
         if (!ui.fx_turned && ui.page == PG_FX)
-            fx_algo(1, 0u);
+            fx_next_part();              /* (an MB COMP: its next part first) */
     }
     if (bdn & 1u << B_SEL && key_tuned() >= 0) {   /* SEL while a key is held: its loop back to the defaults */
         if (ui.key_layer)
@@ -668,6 +668,10 @@ static void draw_tabs(void)
         for (i = 0; i < BRK_FX_SLOTS; i++)
             x = tab(x, SLOT[i], i == (ui.fx_focus & 3u));
         text_cat(part, BRK_FXT_NAME[set.fx.slot[ui.fx_focus & 3u].type]);
+        if (set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP && ui.mb_page) {   /* "< MB COMP X-OVER >" */
+            text_cat(part, " ");
+            text_cat(part, MBP_NAME[ui.mb_page % NMBP]);
+        }
     } else {                             /* EDIT: the drum, and its part */
         for (i = 0; i < 3u; i++)
             x = tab(x, DRUM[i], i == ui.einst);
@@ -707,6 +711,10 @@ static void page_say(void)
         int_text((int32_t)(ui.fx_focus & 3u) + 1, t + 5);
         text_cat(t, " ");
         text_cat(t, BRK_FXT_NAME[set.fx.slot[ui.fx_focus & 3u].type]);
+        if (set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP && ui.mb_page) {
+            text_cat(t, " ");
+            text_cat(t, MBP_NAME[ui.mb_page % NMBP]);
+        }
         break;
     case PG_KICK:
         text_cat(t, "KICK ");
@@ -912,8 +920,8 @@ void app_frame(void)
         ui.redraw |= RG_BLOCKS;
     if (ui.page == PG_MIX && now - ui.mix_drawn >= 33u)   /* the MIXER's meters: about 30 times a second */
         ui.redraw |= RG_BLOCKS;
-    if (ui.page == PG_FX && set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP && now - ui.panel_drawn >= 50u)
-        ui.redraw |= RG_BLOCKS;          /* MULTIBAND focused: its reduction, twenty times a second */
+    if (ui.page == PG_FX && set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP && now - ui.panel_drawn >= 33u)
+        ui.redraw |= RG_BLOCKS;          /* MB COMP focused: its curves and meters, about 30 times a second */
     if (foot_dirty) {
         foot_dirty = 0u;
         ui.redraw |= RG_FOOT;
@@ -1034,8 +1042,9 @@ int app_expect(const char *what, int *got)
 {
     static const char *const W[] = {"page", "gpage", "kpage", "seq_lane", "fx_focus", "fx_on", "lane_kick",
                                     "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo",
-                                    "ovl_on", "ovl_last", "ovl_latch", "roll_pitch_x10", "demo"};
-    int v[19];
+                                    "ovl_on", "ovl_last", "ovl_latch", "roll_pitch_x10", "demo", "mb_page",
+                                    "mb_solo", "mb_thr_low", "mb_slot2_thr_low"};
+    int v[23];
     uint32_t i;
     v[0] = ui.page;
     v[1] = ui.gpage;
@@ -1056,7 +1065,11 @@ int app_expect(const char *what, int *got)
     v[16] = set.ovl_latch;
     v[17] = (int)(set.pads.roll_pitch * 10.0f + (set.pads.roll_pitch < 0.0f ? -0.5f : 0.5f));
     v[18] = demo.on;
-    for (i = 0; i < 19u; i++)
+    v[19] = ui.mb_page;
+    v[20] = set.mbc[ui.fx_focus & 3u].solo;
+    v[21] = (int)(brk_mb_thr_db(set.mbc[ui.fx_focus & 3u].thr[MB_LOW]) - 0.5f);   /* whole dB */
+    v[22] = (int)(brk_mb_thr_db(set.mbc[1].thr[MB_LOW]) - 0.5f);
+    for (i = 0; i < 23u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;
