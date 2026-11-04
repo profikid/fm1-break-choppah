@@ -42,11 +42,6 @@ The mail as it stands (v0.76):
 > installs again afterwards. It keeps its own store (the settings, the panel, the Bluetooth keys and its 16
 > patterns) and does not read other firmwares' projects or samples. The USB port shows up as "CHOPPAH FM-1".
 >
-> One thing worth knowing, since you wrote about it on the submit page: the firmware works on the units with the
-> UC25HQ80 flash. It accepts both flash parts (the Puya P25Q80 and the UC25HQ80), in the app and in the update
-> loader, so those units can install CHOPPAH and leave it again. The fix is also an open pull request on fm1-base:
-> https://github.com/charlesvestal/fm1-base/pull/35
->
 > The browser version, the manual and the picture are in the fmhub.json too, and the card's text can be changed
 > there at any time.
 >
