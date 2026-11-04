@@ -45,7 +45,7 @@ static inline float noise(void)
     return (float)(int32_t)rng * (1.0f / 2147483648.0f);
 }
 
-static void pc_make(uint32_t voice, const perc_voice_t *s, float volume, pc_t *c)
+BRK_COLD static void pc_make(uint32_t voice, const perc_voice_t *s, float volume, pc_t *c)
 {
     float snap = brk_clampf(s->snap, 0.0f, 1.0f), tone = brk_clampf(s->tone, 0.0f, 1.0f);
     float dr = brk_clampf(s->drive, 0.0f, 1.0f);
@@ -171,7 +171,7 @@ void perc_render(float *out, uint32_t n, const uint16_t *at, const uint8_t *who,
     }
 }
 
-void perc_shape(uint32_t voice, const perc_voice_t *s, uint8_t *px, uint32_t n, uint32_t ms, uint32_t height)
+BRK_COLD void perc_shape(uint32_t voice, const perc_voice_t *s, uint8_t *px, uint32_t n, uint32_t ms, uint32_t height)
 {
     pc_t c;
     pv_t v;
@@ -208,7 +208,7 @@ static const float PRESET[PERC_VOICES][PERC_PRESETS][6] = {
      {0.65f, 0.80f, 0.15f, 0.85f, 0.70f, 0.80f}},   /* TRASH */
 };
 
-void perc_preset(perc_voice_t *v, uint32_t voice, uint32_t i)
+BRK_COLD void perc_preset(perc_voice_t *v, uint32_t voice, uint32_t i)
 {
     const float *p = PRESET[voice % PERC_VOICES][i % PERC_PRESETS];
     v->level = p[0];
@@ -219,7 +219,7 @@ void perc_preset(perc_voice_t *v, uint32_t voice, uint32_t i)
     v->drive = p[5];
 }
 
-void perc_defaults(perc_t *p)
+BRK_COLD void perc_defaults(perc_t *p)
 {
     uint32_t k;
     for (k = 0; k < PERC_VOICES; k++)

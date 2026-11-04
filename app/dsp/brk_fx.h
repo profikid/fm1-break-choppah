@@ -106,6 +106,55 @@ static inline float brk_mb_reduce(float over, float slope, float w)
     t = over + 0.5f * w;
     return slope * t * t / (2.0f * w);
 }
+/* Every slot's extra knobs (PRD A-50), one per slot as brk_mbc_t (the settings only grow at the end). x[0..3]: its
+ * effect's MORE page (0..1 each; unused ones stay put), the defaults what the effect always did:
+ *   FILTER   drive (1..8x into it), slope (12 / 24 dB), spread (the right's cutoff up to 2 octaves higher)
+ *   CRUNCH   tone (a low-pass after it, 1 kHz .. off), dither (noise under the steps)
+ *   DRIVE    shape (SOFT TUBE HARD FOLD), bias (even harmonics), low cut (20 Hz .. 800 Hz before it)
+ *   PUNCH    ratio (BRK_PUNCH_RATIO), make-up (+0..+12 dB), side-chain high-pass (off .. 300 Hz: the lows don't pump)
+ *   FLANGER  delay (0.2..2.7 ms the sweep starts from), spread (the right's phase 0..180 degrees), sync (off, or the
+ *            sweep on the tempo: BRK_FLSYNC_NAME)
+ *   RING MOD wave (SINE TRI SQUARE), mode (RING / AM)
+ *   TREMOLO  shape (SINE TRI SQUARE SAW), smooth (the edges rounded)
+ *   REVERB   width (mono .. wide), low cut (off .. 600 Hz into it), mod (the tank's wobble), diffusion
+ *   DELAY    width (mono .. full ping-pong), low cut (off .. 1 kHz in its loop), duck (the echoes under the playing)
+ *   EQ       low's frequency (40..400 Hz), mid's Q (0.3..4), high's frequency (2..16 kHz), level (-12..+12 dB)
+ *   TAPE     flutter, wow's rate (0.1..3 Hz), hiss
+ *   CLIP     bias (lopsided: even harmonics), output (-12..0 dB)
+ * x[4..7]: its MOD page, a modulator on one of its settings: RATE on the tempo (BRK_MOD_DIV_NAME), DEPTH (0.5 none;
+ * below, the other way), SHAPE (BRK_MOD_SHAPE_NAME: ENV follows the slot's own input), TARGET (its K1, K2, K3, MIX) */
+#define BRK_FXX 8u
+enum { FXX_RATE = 4, FXX_DEPTH, FXX_SHAPE, FXX_TARGET };
+typedef struct {
+    float x[BRK_FXX];
+    uint8_t type;                        /* the effect they are for: another effect's are not used (its defaults are) */
+    uint8_t rsv[3];
+} brk_fxx_t;
+#define BRK_MOD_DIVS 9u
+#define BRK_MOD_SHAPES 7u
+enum { MOD_SINE, MOD_TRI, MOD_SAW, MOD_RAMP, MOD_SQUARE, MOD_SH, MOD_ENV };
+extern const char *const BRK_MOD_DIV_NAME[BRK_MOD_DIVS];
+extern const char *const BRK_MOD_SHAPE_NAME[BRK_MOD_SHAPES];
+#define BRK_FLSYNCS 6u
+extern const char *const BRK_FLSYNC_NAME[BRK_FLSYNCS];
+#define BRK_PUNCH_RATIOS 8u
+extern const float BRK_PUNCH_RATIO[BRK_PUNCH_RATIOS];
+static inline uint32_t brk_idx(float v, uint32_t n)   /* a 0..1 setting as one of n choices */
+{
+    return (uint32_t)((v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v) * (float)(n - 1u) + 0.5f);
+}
+/* a modulator's shape at phase ph (turns): -1..1 (S&H and ENV are the engine's: 0 here) */
+float brk_mod_wave(uint32_t shape, float ph);
+void brk_fxx_defaults(brk_fxx_t *x, int type);
+/* DRIVE's curve (shape 0..3, a bias) and CLIP's (its knee 0 soft .. 1 hard): the engine's, for the screen too */
+float brk_drive_curve(uint32_t shape, float u, float bias);
+float brk_clip_curve(float u, float hard_k);
+void brk_fx_set_fxx(uint32_t slot, const brk_fxx_t *x);
+/* a slot now, for the screen: its level in and out (peaks, falling back), its modulator (-1..1; ENV 0..1), the phase
+ * of its cycle, and its four settings as the modulator leaves them (0..1); zeros for a slot that is off */
+typedef struct { float in, out, mod, ph, p[4]; } brk_fx_meter_t;
+void brk_fx_meter(uint32_t slot, brk_fx_meter_t *m);
+
 void brk_mbc_defaults(brk_mbc_t *m);
 void brk_fx_set_mbc(uint32_t slot, const brk_mbc_t *m);   /* from the main loop, as brk_fx_set */
 /* slot's MB COMP now, per band (low, mid, high): its gain (1 = no reduction) and its level in (the band's peak

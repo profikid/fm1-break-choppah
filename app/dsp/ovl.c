@@ -46,7 +46,7 @@ static inline void svf(svf_t *s, const svc_t *c, float x, float *lp, float *bp, 
 static inline float soft(float x) { return x / (1.0f + brk_absf(x)); }
 static inline float frac(float x) { return x - (float)(int32_t)x; }
 
-void ovl_init(int16_t *buf)
+BRK_COLD void ovl_init(int16_t *buf)
 {
     uint32_t i;
     line = buf;
@@ -60,7 +60,7 @@ void ovl_init(int16_t *buf)
     p_on = 0u;
 }
 
-void ovl_set(uint32_t on, const uint8_t *amount, uint32_t rate, uint32_t sweep)
+BRK_COLD void ovl_set(uint32_t on, const uint8_t *amount, uint32_t rate, uint32_t sweep)
 {
     uint32_t i;
     for (i = 0; i < OVL_N; i++)

@@ -668,9 +668,9 @@ static void draw_tabs(void)
         for (i = 0; i < BRK_FX_SLOTS; i++)
             x = tab(x, SLOT[i], i == (ui.fx_focus & 3u));
         text_cat(part, BRK_FXT_NAME[set.fx.slot[ui.fx_focus & 3u].type]);
-        if (set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP && ui.mb_page) {   /* "< MB COMP X-OVER >" */
+        if (ui.fx_page) {                /* "< MB COMP X-OVER >", "< FILTER MOD >" */
             text_cat(part, " ");
-            text_cat(part, MBP_NAME[ui.mb_page % NMBP]);
+            text_cat(part, fx_part_name());
         }
     } else {                             /* EDIT: the drum, and its part */
         for (i = 0; i < 3u; i++)
@@ -711,9 +711,9 @@ static void page_say(void)
         int_text((int32_t)(ui.fx_focus & 3u) + 1, t + 5);
         text_cat(t, " ");
         text_cat(t, BRK_FXT_NAME[set.fx.slot[ui.fx_focus & 3u].type]);
-        if (set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP && ui.mb_page) {
+        if (ui.fx_page) {
             text_cat(t, " ");
-            text_cat(t, MBP_NAME[ui.mb_page % NMBP]);
+            text_cat(t, fx_part_name());
         }
         break;
     case PG_KICK:
@@ -920,8 +920,8 @@ void app_frame(void)
         ui.redraw |= RG_BLOCKS;
     if (ui.page == PG_MIX && now - ui.mix_drawn >= 33u)   /* the MIXER's meters: about 30 times a second */
         ui.redraw |= RG_BLOCKS;
-    if (ui.page == PG_FX && set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP && now - ui.panel_drawn >= 33u)
-        ui.redraw |= RG_BLOCKS;          /* MB COMP focused: its curves and meters, about 30 times a second */
+    if (ui.page == PG_FX && set.fx.slot[ui.fx_focus & 3u].type != FXT_EMPTY && now - ui.panel_drawn >= 33u)
+        ui.redraw |= RG_BLOCKS;          /* an effect focused: its picture and meters, about 30 times a second */
     if (foot_dirty) {
         foot_dirty = 0u;
         ui.redraw |= RG_FOOT;
@@ -1042,7 +1042,7 @@ int app_expect(const char *what, int *got)
 {
     static const char *const W[] = {"page", "gpage", "kpage", "seq_lane", "fx_focus", "fx_on", "lane_kick",
                                     "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo",
-                                    "ovl_on", "ovl_last", "ovl_latch", "roll_pitch_x10", "demo", "mb_page",
+                                    "ovl_on", "ovl_last", "ovl_latch", "roll_pitch_x10", "demo", "fx_page",
                                     "mb_solo", "mb_thr_low", "mb_slot2_thr_low"};
     int v[23];
     uint32_t i;
@@ -1065,7 +1065,7 @@ int app_expect(const char *what, int *got)
     v[16] = set.ovl_latch;
     v[17] = (int)(set.pads.roll_pitch * 10.0f + (set.pads.roll_pitch < 0.0f ? -0.5f : 0.5f));
     v[18] = demo.on;
-    v[19] = ui.mb_page;
+    v[19] = ui.fx_page;
     v[20] = set.mbc[ui.fx_focus & 3u].solo;
     v[21] = (int)(brk_mb_thr_db(set.mbc[ui.fx_focus & 3u].thr[MB_LOW]) - 0.5f);   /* whole dB */
     v[22] = (int)(brk_mb_thr_db(set.mbc[1].thr[MB_LOW]) - 0.5f);

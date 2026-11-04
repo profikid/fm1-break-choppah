@@ -4,8 +4,16 @@
 #pragma once
 #include <stdint.h>
 
+/* block-rate code (settings mapped, defaults, offline shapes): built for size, the per-sample code at -O2 */
+#if defined(__clang__)
+#define BRK_COLD __attribute__((noinline, minsize))
+#else
+#define BRK_COLD __attribute__((noinline, cold))
+#endif
+
 static inline float brk_clampf(float v, float lo, float hi) { return v < lo ? lo : v > hi ? hi : v; }
 static inline float brk_absf(float v) { return v < 0.0f ? -v : v; }
+static inline float brk_soft(float x) { return x / (1.0f + brk_absf(x)); }   /* a soft clip, never past 1 */
 
 /* sin(2*pi*t) for t in turns (any value): a 5th-order odd polynomial on a quarter wave, error < 2e-4 */
 static inline float brk_sin_turns(float t)

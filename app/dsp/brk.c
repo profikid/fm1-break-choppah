@@ -866,7 +866,7 @@ static void pattern_defaults(void)
 }
 
 /* boot (and the tests): everything back to the start, the render's state too (call it with no render running) */
-void brk_init(void)
+BRK_COLD void brk_init(void)
 {
     pattern_defaults();
     v[0].active = v[1].active = 0u;

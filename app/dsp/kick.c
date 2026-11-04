@@ -66,7 +66,7 @@ float kick_fx_hz(uint32_t fx, float a)
 }
 uint32_t kick_fx_bits(float a) { return 15u - (uint32_t)(brk_clampf(a, 0.0f, 1.0f) * 12.0f + 0.5f); }   /* 15..3 */
 
-static void kc_make(const kick_t *k, kc_t *c)
+BRK_COLD static void kc_make(const kick_t *k, kc_t *c)
 {
     uint32_t i;
     for (i = 0; i < KICK_LAYERS; i++) {
@@ -256,7 +256,7 @@ void kick_render(float *out, uint32_t n, const uint16_t *at, uint32_t nat)
     }
 }
 
-void kick_shape(const kick_t *k, uint8_t *px, uint32_t n, uint32_t ms, uint32_t height)
+BRK_COLD void kick_shape(const kick_t *k, uint8_t *px, uint32_t n, uint32_t ms, uint32_t height)
 {
     kc_t c;
     kv_t v;
@@ -294,7 +294,7 @@ static const float PRESET[KICK_PRESETS][KICK_LAYERS * 4 + 1] = {
      1.00f},                             /* DISTORTO: everything into the clip */
 };
 
-void kick_preset(kick_t *k, uint32_t i)
+BRK_COLD void kick_preset(kick_t *k, uint32_t i)
 {
     const float *p = PRESET[i % KICK_PRESETS];
     uint32_t l;
@@ -312,7 +312,7 @@ void kick_preset(kick_t *k, uint32_t i)
     k->intensity = p[KICK_LAYERS * 4u];
 }
 
-void kick_defaults(kick_t *k)
+BRK_COLD void kick_defaults(kick_t *k)
 {
     kick_preset(k, 3u);                  /* ROTTERDAM: CHOPPAH is for the hard stuff */
     k->volume = 0.8f;

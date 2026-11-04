@@ -1306,6 +1306,184 @@ static void test_mb_detail(void)
           "MB curve: none under, slope above, the knee between");
 }
 
+
+/* the extras (PRD A-50): slot 0 holds `type` at p[], mix, with the extras x (0: the effect's defaults); buf (n samples)
+ * through it into bl, br */
+static void fx1(int type, float p0, float p1, float p2, float mix, const brk_fxx_t *x, uint32_t n)
+{
+    brk_fx_t p;
+    brk_fxx_t d;
+    uint32_t i;
+    brk_fx_defaults(&p);
+    brk_fx_slot_defaults(&p.slot[0], type);
+    p.slot[0].on = 1u;
+    p.slot[0].p[0] = p0;
+    p.slot[0].p[1] = p1;
+    p.slot[0].p[2] = p2;
+    p.slot[0].mix = mix;
+    mb_fresh();
+    brk_fx_set(&p);
+    brk_fxx_defaults(&d, type);
+    brk_fx_set_fxx(0u, x ? x : &d);
+    for (i = 0; i < n; i += BLOCK)
+        brk_fx_process(buf + i, 0, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
+}
+static void tone_in(float hz, float amp, uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < n; i++)
+        buf[i] = amp * sinf(6.2831853f * hz * (float)i / (float)BRK_SR);
+}
+static float peak_of(const float *b, uint32_t from, uint32_t to)
+{
+    float pk = 0.0f;
+    uint32_t i;
+    for (i = from; i < to; i++)
+        if (fabsf(b[i]) > pk)
+            pk = fabsf(b[i]);
+    return pk;
+}
+
+static void test_fx_extras(void)
+{
+    uint32_t n = BRK_SR / 2u, t, j, v, i, ok = 1, bad_t = 0, bad_j = 0;
+    brk_fxx_t x;
+    brk_fx_meter_t m;
+    float a, b;
+    /* every effect, every extra at both ends, and every modulator shape at full depth: bounded, no NaN */
+    for (i = 0; i < n; i++)              /* a loud, busy input: two tones and a click each beat */
+        buf[i] = 0.5f * sinf(6.2831853f * 70.0f * (float)i / (float)BRK_SR) +
+                 0.4f * sinf(6.2831853f * 3100.0f * (float)i / (float)BRK_SR) + (i % 11025u < 40u ? 0.6f : 0.0f);
+    {
+        static int16_t line[32768];      /* (the DELAY needs its line) */
+        brk_fx_delay_buffer(line, 32768u);
+    }
+    for (t = 1; t < BRK_NFXT && ok; t++)
+        for (j = 0; j < 4u + BRK_MOD_SHAPES && ok; j++)
+            for (v = 0; v < 2u && ok; v++) {
+                brk_fxx_defaults(&x, (int)t);
+                if (j < 4u)
+                    x.x[j] = (float)v;
+                else {
+                    x.x[FXX_SHAPE] = (float)(j - 4u) / (float)(BRK_MOD_SHAPES - 1u);
+                    x.x[FXX_DEPTH] = (float)v;
+                    x.x[FXX_RATE] = 1.0f;
+                    x.x[FXX_TARGET] = (float)(j % 4u) / 3.0f;
+                }
+                fx1((int)t, 0.8f, 0.8f, 0.8f, 1.0f, &x, n);
+                for (i = 0; i < n; i++)
+                    if (!(fabsf(bl[i]) <= 1.0f) || !(fabsf(br[i]) <= 1.0f)) {
+                        ok = 0;
+                        bad_t = t;
+                        bad_j = j;
+                        break;
+                    }
+            }
+    brk_fx_delay_buffer(0, 0u);
+    CHECK(ok, "FX extras: every effect, every extra at both ends, every modulator: bounded (first bad: %s, %u)",
+          ok ? "-" : BRK_FXT_NAME[bad_t], bad_j);
+    /* FILTER 24 dB: a low-pass at 1 kHz takes more off 8 kHz than at 12 dB; SPREAD: the right brighter */
+    tone_in(8000.0f, 0.25f, n);
+    fx1(FXT_FILTER, 0.55f, 0.0f, 0.0f, 1.0f, 0, n);
+    a = peak_of(bl, 8000u, n);
+    brk_fxx_defaults(&x, FXT_FILTER);
+    x.x[1] = 1.0f;
+    fx1(FXT_FILTER, 0.55f, 0.0f, 0.0f, 1.0f, &x, n);
+    b = peak_of(bl, 8000u, n);
+    CHECK(b < a * 0.3f, "FILTER 24 dB: 8 kHz through a 1 kHz low-pass %.4f (12 dB %.4f)", b, a);
+    brk_fxx_defaults(&x, FXT_FILTER);
+    x.x[2] = 1.0f;
+    tone_in(3000.0f, 0.25f, n);
+    fx1(FXT_FILTER, 0.55f, 0.0f, 0.0f, 1.0f, &x, n);
+    CHECK(peak_of(br, 8000u, n) > 2.0f * peak_of(bl, 8000u, n), "FILTER SPREAD: the right brighter (%.3f, left %.3f)",
+          peak_of(br, 8000u, n), peak_of(bl, 8000u, n));
+    /* EQ: the low shelf moved up to 400 Hz takes 300 Hz with it; LEVEL -12 dB a quarter */
+    tone_in(300.0f, 0.05f, n);
+    fx1(FXT_EQ, 1.0f, 0.5f, 0.5f, 0.5f, 0, n);
+    a = peak_of(bl, 8000u, n);
+    brk_fxx_defaults(&x, FXT_EQ);
+    x.x[0] = 1.0f;
+    fx1(FXT_EQ, 1.0f, 0.5f, 0.5f, 0.5f, &x, n);
+    b = peak_of(bl, 8000u, n);
+    CHECK(b > 1.6f * a, "EQ LOW FREQ 400 Hz: 300 Hz lifted %.3f (at 120 Hz %.3f)", b, a);
+    brk_fxx_defaults(&x, FXT_EQ);
+    x.x[3] = 0.0f;
+    tone_in(1000.0f, 0.2f, n);
+    fx1(FXT_EQ, 0.5f, 0.5f, 0.5f, 0.5f, &x, n);
+    a = peak_of(bl, 4000u, n);
+    CHECK(a > 0.045f && a < 0.055f, "EQ LEVEL -12 dB: a quarter (%.3f from 0.2)", a);
+    /* CLIP OUTPUT -12 dB: the ceiling a quarter down */
+    brk_fxx_defaults(&x, FXT_CLIP);
+    x.x[1] = 0.0f;
+    fx1(FXT_CLIP, 1.0f, 1.0f, 0.0f, 1.0f, &x, n);
+    a = peak_of(bl, 4000u, n);
+    CHECK(a > 0.24f && a < 0.26f, "CLIP OUTPUT -12 dB: held at a quarter (%.3f)", a);
+    /* REVERB and DELAY WIDTH 0: the same both sides */
+    for (i = 0; i < n; i++)
+        buf[i] = i < 2000u ? 0.5f * sinf(6.2831853f * 440.0f * (float)i / (float)BRK_SR) : 0.0f;
+    brk_fxx_defaults(&x, FXT_REVERB);
+    x.x[0] = 0.0f;
+    fx1(FXT_REVERB, 0.6f, 0.4f, 0.0f, 1.0f, &x, n);
+    for (a = 0.0f, i = 3000u; i < n; i++)
+        a += fabsf(bl[i] - br[i]);
+    b = peak_of(bl, 3000u, n);
+    CHECK(a < 1e-3f && b > 0.001f, "REVERB WIDTH 0: the tail rings (%.3f) the same left and right (%.5f apart)", b, a);
+    brk_fxx_defaults(&x, FXT_DELAY);
+    x.x[0] = 0.0f;
+    {
+        static int16_t line[32768];
+        brk_fx_delay_buffer(line, 32768u);
+        fx1(FXT_DELAY, 2.0f / 7.0f, 0.6f, 0.5f, 1.0f, &x, n);
+        brk_fx_delay_buffer(0, 0u);
+    }
+    for (a = 0.0f, i = 3000u; i < n; i++)
+        a += fabsf(bl[i] - br[i]);
+    b = peak_of(bl, 3000u, n);
+    CHECK(a < 1e-3f && b > 0.01f, "DELAY WIDTH 0: echoes (%.3f) the same left and right (%.5f apart)", b, a);
+    /* PUNCH: 20:1 holds a loud tone nearer a quiet one than 1.5:1 */
+    {
+        float q[2], l[2];
+        for (j = 0; j < 2u; j++) {
+            brk_fxx_defaults(&x, FXT_PUNCH);
+            x.x[0] = (float)j;
+            tone_in(200.0f, 0.03f, n);
+            fx1(FXT_PUNCH, 1.0f, 0.1f, 0.3f, 1.0f, &x, n);
+            q[j] = peak_of(bl, 8000u, n);
+            tone_in(200.0f, 0.3f, n);
+            fx1(FXT_PUNCH, 1.0f, 0.1f, 0.3f, 1.0f, &x, n);
+            l[j] = peak_of(bl, 8000u, n);
+        }
+        CHECK(l[1] / q[1] < 0.6f * l[0] / q[0], "PUNCH RATIO: 20 dB more in comes out %.1f dB louder at 20:1, %.1f at 1.5:1",
+              20.0f * log10f(l[1] / q[1]), 20.0f * log10f(l[0] / q[0]));
+    }
+    /* MOD: a low-pass's cutoff swept by a sine at 1/16 makes a 2 kHz tone come and go; ENV follows the input */
+    tone_in(2000.0f, 0.25f, BRK_SR);
+    brk_fxx_defaults(&x, FXT_FILTER);
+    x.x[FXX_DEPTH] = 1.0f;
+    x.x[FXX_RATE] = 6.0f / 8.0f;
+    fx1(FXT_FILTER, 0.5f, 0.0f, 0.0f, 1.0f, &x, BRK_SR);
+    for (a = 1.0f, b = 0.0f, i = 0; i + 441u < BRK_SR; i += 441u) {   /* 10 ms windows: the quietest, the loudest */
+        float w = i > 8000u ? peak_of(bl, i, i + 441u) : 0.5f;
+        if (w < a) a = w;
+        if (w > b) b = w;
+    }
+    CHECK(b > 0.15f && a < 0.03f, "MOD on FILTER's cutoff: 2 kHz comes and goes (%.3f .. %.3f)", a, b);
+    brk_fxx_defaults(&x, FXT_DRIVE);
+    x.x[FXX_SHAPE] = 1.0f;
+    x.x[FXX_DEPTH] = 1.0f;
+    tone_in(200.0f, 0.5f, n);
+    fx1(FXT_DRIVE, 0.2f, 0.5f, 0.5f, 1.0f, &x, n);
+    brk_fx_meter(0u, &m);
+    a = m.mod;
+    b = m.in;
+    for (i = 0; i < n; i++)
+        buf[i] = 0.0f;
+    fx1(FXT_DRIVE, 0.2f, 0.5f, 0.5f, 1.0f, &x, n);
+    brk_fx_meter(0u, &m);
+    CHECK(a > 0.8f && b > 0.4f && m.mod < 0.05f && m.p[0] < 0.21f,
+          "MOD ENV: loud %.2f (level in %.2f), silent %.2f; the drive back at %.2f", a, b, m.mod, m.p[0]);
+}
+
 /* the snare and the hat (PRD K-10): each sounds on its own, in range, and dies away; the presets differ; a hit lands
  * on its sample; the snare's body is near its TUNE */
 static void test_perc(void)
@@ -1627,6 +1805,7 @@ int main(int argc, char **argv)
     test_eq_tape();
     test_mb_clip();
     test_mb_detail();
+    test_fx_extras();
     test_dj_break();
     test_kick();
     test_perc();

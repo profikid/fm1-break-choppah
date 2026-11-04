@@ -28,7 +28,8 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - Bluetooth MIDI is on (`ble = true`, `ble_stack = "own"`: fm1-base's own stack, nothing of JieLi's); the GLOBAL
   page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash. Bluetooth audio out
   (`bt_audio = true`, A2DP) is on too: ~37 KB of flash, its packet queue in the pool (`BP_MQ_ATTR` in app.h).
-- Flash: ~577 KB of the 581 KB app slot (4 Nov 2026: ~18 KB left) (`APP_SYS_TEXT` in app.h draws the platform's screens in CHOPPAH's faces,
+- Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); ~577 KB used on
+  4 Nov 2026, ~4.6 KB left: block-rate engine code is `BRK_COLD` (built for size) (`APP_SYS_TEXT` in app.h draws the platform's screens in CHOPPAH's faces,
   saving fm1-base's fonts): check `./build.sh`'s image line;
   the canvas is 240×60 (`APP_CANVAS_PX`), so draw in strips of ≤ 60 rows (draw_fx / draw_key draw two bands).
 - Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;
