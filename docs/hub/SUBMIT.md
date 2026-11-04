@@ -11,37 +11,56 @@ send it from your own address.
 
 ## The mail
 
-Links only, no attachments. Send it after the tests below have passed and the release is on GitHub.
+**The ready-to-send text is in [`MAIL.txt`](MAIL.txt).** Copy it, or use the button on the submit page
+(<https://thefirmwarehub.com/submit/>), which fills in the same questions.
+
+The hub's own rules (`fmhub.md`, section 5, and the submit page) are explicit about what goes in the mail:
+**the names, the repository with its release, the identity, the licence, and that it was tested on a real FM-1
+and you can leave it again.** What it does, the picture, the cheat sheet and the browser version do **not** go in
+the mail — they come from `fmhub.json`, and the maker can change them there at any time without mailing again.
+
+The mail as it stands (v0.76):
 
 > **Subject:** The Firmware Hub: my firmware
 >
-> Name of the firmware: CHOPPAH
-> Your name (as it should appear): Laurens Profittlich
-> Repository: https://github.com/profikid/fm1-break-choppah (release v0.69, choppah-0.69.fwsc attached)
-> Identity (FM-1_...): FM-1_86
-> Licence: MPL-2.0, the complete source in the repository
-> What it does (two or three sentences): An Amen break chopper: eight classic breaks cut into 16 slices on the
-> white keys, hold a key to loop it. Black keys are momentary pads: rolls, reverse, freeze, tape stop, gate,
-> filter and dub throws. A generator rearranges the break live; a four-slot master FX chain and a DJ filter sit on
-> the output. A step sequencer with 16 patterns, a synthesised kick, snare and hat on the patterns' drum lanes, and
-> MIDI in and out.
-> Picture (link or attached): https://raw.githubusercontent.com/profikid/fm1-break-choppah/main/docs/img/card.png
-> Play in the browser / editor / video (optional): https://profikid.github.io/fm1-break-choppah/emu/ · the manual:
-> https://profikid.github.io/fm1-break-choppah/manual/
-> Tested on a real FM-1, leaving it again works: yes
+> Hi Sven,
 >
-> It keeps its own store and does not read other firmwares' projects or samples. USB port name: CHOPPAH FM-1.
+> Here is CHOPPAH, a firmware for the M-VAVE FM-1.
+>
+> Firmware name: CHOPPAH
+> Maker: Laurens Profittlich
+>
+> Repository: https://github.com/profikid/fm1-break-choppah
+> Release: v0.76
+> Package: choppah-0.76.fwsc
+> Identity: FM-1_86
+> Licence: MPL-2.0, the complete source is in the repository
+>
+> What it does: it is in the fmhub.json in the repository root, as the hub prefers.
+>
+> Tested on a real FM-1: yes. Installed from the official V15 and from another firmware, and another firmware
+> installs again afterwards. It keeps its own store (the settings, the panel, the Bluetooth keys and its 16
+> patterns) and does not read other firmwares' projects or samples. The USB port shows up as "CHOPPAH FM-1".
+>
+> One thing worth knowing, since you wrote about it on the submit page: the firmware works on the units with the
+> UC25HQ80 flash. It accepts both flash parts (the Puya P25Q80 and the UC25HQ80), in the app and in the update
+> loader, so those units can install CHOPPAH and leave it again. The fix is also an open pull request on fm1-base:
+> https://github.com/charlesvestal/fm1-base/pull/35
+>
+> The browser version, the manual and the picture are in the fmhub.json too, and the card's text can be changed
+> there at any time.
+>
+> Thanks,
+> Laurens Profittlich
 
-The hub's own rules say the text, the picture, the cheat sheet and the links come from `fmhub.json` and do **not**
-go in the mail. The mail repeats the text so nothing is missing when the hub reads it; the picture and the links are
-in the file either way.
+**Send it after the tests below have passed.** Links only, no attachments: big mails do not always arrive.
 
 ## The card
 
 - **Name:** CHOPPAH
 - **By:** Laurens Profittlich
 - **Kind:** `drums`
-- **Text** (`fmhub.json`, 294 characters): An Amen break chopper: eight classic breaks cut into 16 slices on the
+- **Text** (`fmhub.json`, 297 characters): An Amen break chopper: eight classic breaks cut into 16 slices on the
   white keys, hold a key to loop it. Black keys are momentary pads: rolls, reverse, freeze, tape stop, gate, filter
   and dub throws. A generator rearranges the break live; a four-slot FX chain and a DJ filter sit on the output.
 - **Picture:** `docs/img/card.png` (240 × 240 PNG, 9 KB): CHOPPAH's own card picture, the FM-1's screen in its face.
@@ -50,9 +69,9 @@ in the file either way.
 
 ## The package
 
-- **File:** CHOPPAH 0.69, the installer's `choppah-0.69.fwsc`; the release v0.69 attaches the same file.
+- **File:** CHOPPAH 0.76, the installer's `choppah-0.76.fwsc`; the release v0.76 attaches the same file.
 - **Release:** GitHub releases, one per merge. The hub takes every later release by itself, within three hours.
-- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86006900` for 0.69. The hub's own list of identities
+- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86007600` for 0.76. The hub's own list of identities
   has no `FM-1_86*`, so the prefix is free and the hub can tell exactly which firmware is on a connected FM-1.
 - **Update loader:** felucca-bsp's, the platform's loader (fm1-base's `base/bsp/loader/`), shipped in the package.
 - **USB:** a MIDI device named "CHOPPAH FM-1".
@@ -67,7 +86,7 @@ The hub lists a firmware only when all six are met (`fmhub.md`, section 1). Five
 |---|---|---|
 | 1 | Open source, the complete source in the repository | MPL-2.0, `LICENSE` in the root, the source at every tag |
 | 2 | A GitHub release with the `.fwsc` attached | every release attaches it; the hub takes each one by itself |
-| 3 | Its own `FM-1_` identity, free on the hub | `FM-1_86` (`FM-1_86006900` in 0.69); no `FM-1_86*` on the hub |
+| 3 | Its own `FM-1_` identity, free on the hub | `FM-1_86` (`FM-1_86007600` in 0.76); no `FM-1_86*` on the hub |
 | 4 | The update loader in the package | felucca-bsp's loader, shipped in every package |
 | 5 | Tested on a real FM-1, leaving it again works | **the test below: yours to run** |
 | 6 | An `fmhub.json` in the repository root | `fmhub.json`, on `main`; the hub reads it every three hours |
@@ -93,7 +112,7 @@ To see what the hub will make of the file: <https://thefirmwarehub.com/kb/#fmhub
 
 ## Then
 
-1. The release on GitHub with the file (done: v0.69).
+1. The release on GitHub with the file (done: v0.76).
 2. The mail above, from your own address.
 3. The hub puts it on its test site, then live; later releases appear by themselves.
 4. Optional: "Built from source on GitHub" (the hub's shared workflow `zvenson/fm1-build`), once the build runs on
