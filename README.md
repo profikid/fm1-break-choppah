@@ -84,7 +84,7 @@ Clone with `--recursive` (fm1-base is a submodule in `base/`).
 | `tests/scenarios/` | Host-simulator scripts: keys in, audio and screenshots out |
 | `breaks/` | The recorded breaks (WAV) and `breaks.txt`, which of them go into the firmware |
 | `tools/prep_breaks.py` | WAV → slices → IMA ADPCM bank (`--list breaks/breaks.txt`, as `./build.sh` runs it) |
-| `docs/` | [PRD](docs/PRD.md), [flashing and recovery](docs/FLASHING.md) |
+| `docs/` | [PRD](docs/PRD.md), [flashing and recovery](docs/FLASHING.md), [the FM-1 Firmware Hub's submission](docs/hub/SUBMIT.md) |
 
 ## Publishing
 
