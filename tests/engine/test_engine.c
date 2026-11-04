@@ -1325,6 +1325,7 @@ static void fx1(int type, float p0, float p1, float p2, float mix, const brk_fxx
     brk_fx_set(&p);
     brk_fxx_defaults(&d, type);
     brk_fx_set_fxx(0u, x ? x : &d);
+    brk_fx_watch(0u);                    /* (slot 0's meters followed) */
     for (i = 0; i < n; i += BLOCK)
         brk_fx_process(buf + i, 0, 0, 0, 0, bl + i, br + i, n - i < BLOCK ? n - i : BLOCK, 0u);
 }
@@ -1482,6 +1483,35 @@ static void test_fx_extras(void)
     brk_fx_meter(0u, &m);
     CHECK(a > 0.8f && b > 0.4f && m.mod < 0.05f && m.p[0] < 0.21f,
           "MOD ENV: loud %.2f (level in %.2f), silent %.2f; the drive back at %.2f", a, b, m.mod, m.p[0]);
+}
+
+/* the overload guard (PRD E-7): a render over 90 % bypasses the chain's last slot on; 2 s clear, it comes back */
+static void test_overload(void)
+{
+    brk_fx_t p;
+    uint32_t i, b;
+    float during, after, before;
+    tone_in(8000.0f, 0.25f, BLOCK);
+    brk_fx_defaults(&p);
+    brk_fx_slot_defaults(&p.slot[0], FXT_FILTER);   /* a low-pass at 100 Hz: 8 kHz gone while it is on */
+    p.slot[0].on = 1u;
+    p.slot[0].p[0] = 0.2f;
+    mb_fresh();
+    brk_fx_set(&p);
+    for (b = 0; b < 40u; b++)
+        brk_fx_process(buf, 0, 0, 0, 0, bl, br, BLOCK, 0u);
+    before = peak_of(bl, 0u, BLOCK);
+    brk_fx_overload();
+    for (b = 0; b < 10u; b++)
+        brk_fx_process(buf, 0, 0, 0, 0, bl, br, BLOCK, 0u);
+    during = peak_of(bl, 0u, BLOCK);
+    i = brk_fx_shed();
+    for (b = 0; b < 400u; b++)           /* 2.3 s */
+        brk_fx_process(buf, 0, 0, 0, 0, bl, br, BLOCK, 0u);
+    after = peak_of(bl, 0u, BLOCK);
+    CHECK(before < 0.01f && during > 0.2f && i == 1u && brk_fx_shed() == 0u && after < 0.01f,
+          "OVERLOAD: the slot shed (8 kHz %.3f -> %.3f, %u shed), back after 2 s (%.3f, %u)", before, during, i, after,
+          brk_fx_shed());
 }
 
 /* the snare and the hat (PRD K-10): each sounds on its own, in range, and dies away; the presets differ; a hit lands
@@ -1806,6 +1836,7 @@ int main(int argc, char **argv)
     test_mb_clip();
     test_mb_detail();
     test_fx_extras();
+    test_overload();
     test_dj_break();
     test_kick();
     test_perc();

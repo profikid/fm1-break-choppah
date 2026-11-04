@@ -96,7 +96,7 @@ static inline float brk_mb_xhi_hz(float v) { return 1000.0f * brk_exp2f(v * 3.58
 static inline float brk_mb_knee_db(float v) { return 12.0f * v; }
 /* the reduction for a level `over` its threshold (any unit, dB or octaves), slope 1 - 1/ratio, knee width w (the same
  * unit; 0 hard): none below the knee, a quadratic through it, then over * slope */
-static inline float brk_mb_reduce(float over, float slope, float w)
+BRK_INL float brk_mb_reduce(float over, float slope, float w)
 {
     float t;
     if (2.0f * over <= -w)
@@ -139,21 +139,64 @@ extern const char *const BRK_MOD_SHAPE_NAME[BRK_MOD_SHAPES];
 extern const char *const BRK_FLSYNC_NAME[BRK_FLSYNCS];
 #define BRK_PUNCH_RATIOS 8u
 extern const float BRK_PUNCH_RATIO[BRK_PUNCH_RATIOS];
-static inline uint32_t brk_idx(float v, uint32_t n)   /* a 0..1 setting as one of n choices */
+BRK_INL uint32_t brk_idx(float v, uint32_t n)   /* a 0..1 setting as one of n choices */
 {
     return (uint32_t)((v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v) * (float)(n - 1u) + 0.5f);
 }
-/* a modulator's shape at phase ph (turns): -1..1 (S&H and ENV are the engine's: 0 here) */
-float brk_mod_wave(uint32_t shape, float ph);
+/* a modulator's shape at phase ph (turns): -1..1 (S&H and ENV are the engine's: 0 here). Inline: the engine runs
+ * it per sample (TREMOLO, RING MOD) */
+BRK_INL float brk_mod_wave(uint32_t shape, float ph)
+{
+    ph -= (float)(int32_t)ph;
+    if (ph < 0.0f)
+        ph += 1.0f;
+    switch (shape) {
+    case MOD_SINE: return brk_sin_turns(ph);
+    case MOD_TRI: return ph < 0.5f ? 4.0f * ph - 1.0f : 3.0f - 4.0f * ph;
+    case MOD_SAW: return 1.0f - 2.0f * ph;
+    case MOD_RAMP: return 2.0f * ph - 1.0f;
+    case MOD_SQUARE: return ph < 0.5f ? 1.0f : -1.0f;
+    default: return 0.0f;
+    }
+}
 void brk_fxx_defaults(brk_fxx_t *x, int type);
-/* DRIVE's curve (shape 0..3, a bias) and CLIP's (its knee 0 soft .. 1 hard): the engine's, for the screen too */
-float brk_drive_curve(uint32_t shape, float u, float bias);
-float brk_clip_curve(float u, float hard_k);
+/* DRIVE's curves (shape 0..3): SOFT, TUBE (the negative side softer: lopsided), HARD, FOLD (past the top it folds
+ * back down), with a bias (its offset taken back off); CLIP's: a cubic's soft curve (flat at 1.5) and a hard edge at
+ * 1, blended by the knee (0 soft .. 1 hard), both starting at a slope of 1. Inline: per sample in the engine, and the
+ * screen draws the same */
+BRK_INL float brk_drive_curve(uint32_t shape, float u, float bias)
+{
+    float v, z;
+    u += bias;
+    switch (shape) {
+    case 1u: v = u >= 0.0f ? brk_soft(u) : brk_soft(1.8f * u) * 0.5556f; z = brk_soft(bias); break;
+    case 2u: v = brk_clampf(u, -0.8f, 0.8f); z = brk_clampf(bias, -0.8f, 0.8f); break;
+    case 3u: v = 0.8f * brk_sin_turns(0.25f * u); z = 0.8f * brk_sin_turns(0.25f * bias); break;
+    default: v = brk_soft(u); z = brk_soft(bias); break;
+    }
+    return v - z;
+}
+BRK_INL float brk_clip_curve(float u, float hard_k)
+{
+    float soft3, hard;
+    u = brk_clampf(u, -1.5f, 1.5f);
+    soft3 = u - 0.14814815f * u * u * u;
+    hard = brk_clampf(u, -1.0f, 1.0f);
+    return soft3 + (hard - soft3) * hard_k;
+}
 void brk_fx_set_fxx(uint32_t slot, const brk_fxx_t *x);
 /* a slot now, for the screen: its level in and out (peaks, falling back), its modulator (-1..1; ENV 0..1), the phase
  * of its cycle, and its four settings as the modulator leaves them (0..1); zeros for a slot that is off */
 typedef struct { float in, out, mod, ph, p[4]; } brk_fx_meter_t;
 void brk_fx_meter(uint32_t slot, brk_fx_meter_t *m);
+/* the slot whose level in and out the engine follows (brk_fx_meter's in, out; the others' stay 0): the one the
+ * screen shows, BRK_FX_SLOTS for none. Following costs the render a little on every sample */
+void brk_fx_watch(uint32_t slot);
+/* the overload guard (PRD E-7): brk_fx_overload from the audio interrupt when a render ran over 90 % of its time;
+ * the chain then bypasses its last slot on (another every ~0.2 s while it keeps happening), each back after 2 s
+ * clear. brk_fx_shed: how many are shed now */
+void brk_fx_overload(void);
+uint32_t brk_fx_shed(void);
 
 void brk_mbc_defaults(brk_mbc_t *m);
 void brk_fx_set_mbc(uint32_t slot, const brk_mbc_t *m);   /* from the main loop, as brk_fx_set */

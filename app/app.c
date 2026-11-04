@@ -653,6 +653,9 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     }
 }
 
+/* (the audio interrupt, right after a render that took over 90 % of its time: PRD E-7) */
+void app_overload(void) { brk_fx_overload(); }
+
 void app_panic(void)
 {
     muted = 1u;

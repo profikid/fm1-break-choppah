@@ -1,9 +1,14 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 /* CHOPPAH's effects (brk_fx.h). */
+#define BRK_ENGINE 1                     /* (slot_run runs from RAM on the FM-1: what it uses inlined, brk_math.h) */
 #include "brk_fx.h"
 #include "brk.h"
 #include "brk_math.h"
 
+/* the block-rate code's maths: one copy each, called (the per-sample code has them inlined: BRK_INL) */
+BRK_COLD static float c_exp2(float x) { return brk_exp2f(x); }
+BRK_COLD static float c_log2(float x) { return brk_log2f(x); }
+BRK_COLD static float c_tan_pi(float x) { return brk_tan_pi(x); }
 #define FL_LEN 256u
 /* the block-rate code (settings mapped once a block, defaults): small, not fast; the per-sample code stays -O2 */
 #if defined(__clang__)
@@ -12,7 +17,7 @@
 #define BRK_COLD __attribute__((noinline, cold))
 #endif                      /* a flanger's line: 5.8 ms (it reaches 230 samples back) */
 
-static inline float soft(float x) { return x / (1.0f + brk_absf(x)); }
+BRK_INL float soft(float x) { return x / (1.0f + brk_absf(x)); }
 static volatile float p_bpm = 170.0f;
 typedef struct { float ic1, ic2; } svf_t;  /* a TPT state-variable filter (Simper) */
 typedef struct { float a1, a2, a3, k; } svf_c;
@@ -49,11 +54,19 @@ typedef struct {
 static slot_st_t st[BRK_FX_SLOTS];
 /* each slot's extras (brk_fxx_t) as set, its modulator and its meters (kept across effect changes) */
 static volatile brk_fxx_t p_fxx[BRK_FX_SLOTS];
+#define SHED_BLOCKS 344u                 /* 2 s of blocks: a shed slot comes back after that, clear */
+static volatile uint32_t shed_hit;       /* the platform: a render ran over 90 % */
+static uint32_t shed_lv, shed_n;         /* slots shed now (from the chain's end), blocks till one comes back */
+void brk_fx_overload(void) { shed_hit = 1u; }
+uint32_t brk_fx_shed(void) { return shed_lv; }
+static volatile uint32_t watch = BRK_FX_SLOTS;   /* the slot the screen meters (BRK_FX_SLOTS: none) */
+void brk_fx_watch(uint32_t slot) { watch = slot; }
 static struct {
     float ph, sh, env, mod;              /* the modulator: its phase, S&H's held value, the input followed, now */
     float in, out, pk_in, pk_out;        /* the meters (peaks falling back) and this block's peaks */
     float p[4];                          /* the settings as modulated this block */
     uint32_t rng;
+    uint32_t track;                      /* its peaks followed this block: the screen's slot, or its ENV needs them */
 } md[BRK_FX_SLOTS];
 static const float MOD_STEPS[BRK_MOD_DIVS] = {64.0f, 32.0f, 16.0f, 8.0f, 4.0f, 2.0f, 1.0f, 8.0f / 3.0f, 4.0f / 3.0f};
 const char *const BRK_MOD_DIV_NAME[BRK_MOD_DIVS] = {"4 BARS", "2 BARS", "1 BAR", "1/2", "1/4", "1/8", "1/16",
@@ -63,20 +76,6 @@ static const float FLSYNC_STEPS[BRK_FLSYNCS] = {0.0f, 64.0f, 32.0f, 16.0f, 8.0f,
 const char *const BRK_FLSYNC_NAME[BRK_FLSYNCS] = {"OFF", "4 BARS", "2 BARS", "1 BAR", "1/2", "1/4"};
 const float BRK_PUNCH_RATIO[BRK_PUNCH_RATIOS] = {1.5f, 2.0f, 3.0f, 4.0f, 6.0f, 8.0f, 12.0f, 20.0f};
 
-float brk_mod_wave(uint32_t shape, float ph)
-{
-    ph -= (float)(int32_t)ph;
-    if (ph < 0.0f)
-        ph += 1.0f;
-    switch (shape) {
-    case MOD_SINE: return brk_sin_turns(ph);
-    case MOD_TRI: return ph < 0.5f ? 4.0f * ph - 1.0f : 3.0f - 4.0f * ph;
-    case MOD_SAW: return 1.0f - 2.0f * ph;
-    case MOD_RAMP: return 2.0f * ph - 1.0f;
-    case MOD_SQUARE: return ph < 0.5f ? 1.0f : -1.0f;
-    default: return 0.0f;
-    }
-}
 
 BRK_COLD void brk_fxx_defaults(brk_fxx_t *x, int type)
 {
@@ -170,7 +169,7 @@ static void rv_clear(void)
     rv.odd = 0u;
 }
 
-static inline void rv_put(uint32_t l, float x)
+BRK_INL void rv_put(uint32_t l, float x)
 {
     float v = x * RV_Q;
     rv_mem[rv.base[l] + rv.w[l]] = (int16_t)(v > 32767.0f ? 32767.0f : v < -32767.0f ? -32767.0f : v);
@@ -178,7 +177,7 @@ static inline void rv_put(uint32_t l, float x)
         rv.w[l] = 0u;
 }
 
-static inline float rv_tap(uint32_t l, uint32_t d)   /* d samples back (1 .. its length) */
+BRK_INL float rv_tap(uint32_t l, uint32_t d)   /* d samples back (1 .. its length) */
 {
     int32_t i = (int32_t)rv.w[l] - (int32_t)d;
     if (i < 0)
@@ -186,7 +185,7 @@ static inline float rv_tap(uint32_t l, uint32_t d)   /* d samples back (1 .. its
     return (float)rv_mem[rv.base[l] + (uint32_t)i] * (1.0f / RV_Q);
 }
 
-static inline float rv_tapf(uint32_t l, float d)  /* (linear between two: the modulated allpasses) */
+BRK_INL float rv_tapf(uint32_t l, float d)  /* (linear between two: the modulated allpasses) */
 {
     uint32_t i = (uint32_t)d;
     float t = d - (float)i;
@@ -194,7 +193,7 @@ static inline float rv_tapf(uint32_t l, float d)  /* (linear between two: the mo
 }
 
 /* an allpass on line l, d samples long, coefficient g */
-static inline float rv_ap(uint32_t l, float x, float d, float g)
+BRK_INL float rv_ap(uint32_t l, float x, float d, float g)
 {
     float z = d == (float)(uint32_t)d ? rv_tap(l, (uint32_t)d) : rv_tapf(l, d), v = x - g * z;
     rv_put(l, v);
@@ -203,24 +202,25 @@ static inline float rv_ap(uint32_t l, float x, float d, float g)
 
 /* one 22.05 kHz sample: in mono, out the plate's left and right */
 static struct { float g1, g2, exc, lc, lcz, width; } rvp = {0.75f, 0.625f, (float)RV_EXC, 0.0f, 0.0f, 1.0f};
-static void rv_tick(float x, float decay, float damp, uint32_t pre, float *yl, float *yr)
+BRK_INL void rv_tick(float x, float decay, float damp, uint32_t pre, float *yl, float *yr)
 {
     float a, m1, m2;
+    const float g1 = rvp.g1, g2 = rvp.g2, exc = rvp.exc;   /* (in registers: the lines' stores don't reload them) */
     if (rvp.lc > 0.0f) {                 /* the low cut into it: what a one-pole low-pass keeps, taken away */
         rvp.lcz += (x - rvp.lcz) * rvp.lc;
         x -= rvp.lcz;
     }
     rv_put(RV_LPRE, x);
     a = pre ? rv_tap(RV_LPRE, pre) : x;
-    a = rv_ap(RV_LAP1, a, (float)RV(142), rvp.g1);
-    a = rv_ap(RV_LAP2, a, (float)RV(107), rvp.g1);
-    a = rv_ap(RV_LAP3, a, (float)RV(379), rvp.g2);
-    a = rv_ap(RV_LAP4, a, (float)RV(277), rvp.g2);
+    a = rv_ap(RV_LAP1, a, (float)RV(142), g1);
+    a = rv_ap(RV_LAP2, a, (float)RV(107), g1);
+    a = rv_ap(RV_LAP3, a, (float)RV(379), g2);
+    a = rv_ap(RV_LAP4, a, (float)RV(277), g2);
     rv.ph += 0.9f / 22050.0f;            /* the tank's slow wobble: no metallic ring */
     if (rv.ph >= 1.0f)
         rv.ph -= 1.0f;
-    m1 = (float)RV(672) + 1.0f + rvp.exc * (0.5f + 0.5f * brk_sin_turns(rv.ph));
-    m2 = (float)RV(908) + 1.0f + rvp.exc * (0.5f + 0.5f * brk_sin_turns(rv.ph + 0.5f));
+    m1 = (float)RV(672) + 1.0f + exc * (0.5f + 0.5f * brk_sin_turns(rv.ph));
+    m2 = (float)RV(908) + 1.0f + exc * (0.5f + 0.5f * brk_sin_turns(rv.ph + 0.5f));
     {                                    /* the left half, fed by the right's end */
         float t = rv_ap(RV_LMAP1, a + decay * rv.last_r, m1, -0.7f), u;
         rv_put(RV_LDL1, t);
@@ -261,7 +261,7 @@ static struct {
  * coefficient, 0 none), width, ducking */
 typedef struct { float time, fb, tone, ret, lc, width, duck; } dl_c_t;
 
-static inline float dl_read(uint32_t ch, float d)   /* d frames back, linear */
+BRK_INL float dl_read(uint32_t ch, float d)   /* d frames back, linear */
 {
     float r = (float)dub_w - d, t;
     uint32_t i;
@@ -275,7 +275,7 @@ static inline float dl_read(uint32_t ch, float d)   /* d frames back, linear */
 
 /* one 22.05 kHz frame: x in (mono), the echoes out. Left takes the input and right's echo fed back, right takes
  * left's echo: the repeats bounce between the sides, darker each time */
-static void dl_tick(const dl_c_t *c, float x, float *yl, float *yr)
+BRK_INL void dl_tick(const dl_c_t *c, float x, float *yl, float *yr)
 {
     float ol, or_;
     dl.time_s += (c->time - dl.time_s) * 0.0005f;   /* a new time glides there (a tape's bend) */
@@ -296,7 +296,7 @@ static void dl_tick(const dl_c_t *c, float x, float *yl, float *yr)
 }
 
 /* the delay at the full rate: a frame every other sample, linear between */
-static void dl_run(const dl_c_t *c, float x, float *yl, float *yr)
+BRK_INL void dl_run(const dl_c_t *c, float x, float *yl, float *yr)
 {
     if (dl.odd) {
         dl.yo_l = dl.y_l;
@@ -330,7 +330,7 @@ BRK_COLD static void dl_settings(dl_c_t *c, uint32_t div, float fb, float tone, 
 BRK_COLD static svf_c svf_coef(float hz, float res)
 {
     svf_c c;
-    float g = brk_tan_pi(hz / (float)BRK_SR);
+    float g = c_tan_pi(hz / (float)BRK_SR);
     c.k = 2.0f - 2.0f * brk_clampf(res, 0.0f, 0.95f);
     c.a1 = 1.0f / (1.0f + g * (g + c.k));
     c.a2 = g * c.a1;
@@ -339,7 +339,7 @@ BRK_COLD static svf_c svf_coef(float hz, float res)
 }
 
 /* one sample; *lp gets the low-pass, the return is the high-pass */
-static inline float svf_run(svf_t *s, const svf_c *c, float x, float *lp)
+BRK_INL float svf_run(svf_t *s, const svf_c *c, float x, float *lp)
 {
     float v3 = x - s->ic2;
     float v1 = c->a1 * s->ic1 + c->a2 * v3;
@@ -350,7 +350,7 @@ static inline float svf_run(svf_t *s, const svf_c *c, float x, float *lp)
     return x - c->k * v1 - v2;
 }
 
-static inline float fl_read(const float *buf, uint32_t w, float d)   /* d samples back from w, linear */
+BRK_INL float fl_read(const float *buf, uint32_t w, float d)   /* d samples back from w, linear */
 {
     float r = (float)w - d;
     int32_t i;
@@ -363,7 +363,7 @@ static inline float fl_read(const float *buf, uint32_t w, float d)   /* d sample
 }
 
 /* clean below 0.8, then a soft knee that never passes 1 */
-static inline float knee(float x)
+BRK_INL float knee(float x)
 {
     float a = brk_absf(x);
     if (a <= 0.8f)
@@ -460,7 +460,7 @@ void brk_fx_set(const brk_fx_t *p)
 enum { BAND_LOWSHELF, BAND_BELL, BAND_HIGHSHELF };
 BRK_COLD static void eq_band(svf_c *c, float *m, int kind, float hz, float q, float db)
 {
-    float A = brk_exp2f(db * 0.08304f), sA = brk_exp2f(db * 0.04152f), g = brk_tan_pi(hz / (float)BRK_SR);
+    float A = c_exp2(db * 0.08304f), sA = c_exp2(db * 0.04152f), g = c_tan_pi(hz / (float)BRK_SR);
     if (kind == BAND_LOWSHELF)
         g /= sA;
     else if (kind == BAND_HIGHSHELF)
@@ -484,7 +484,7 @@ BRK_COLD static void eq_band(svf_c *c, float *m, int kind, float hz, float q, fl
     }
 }
 
-static inline float eq_run(svf_t *s, const svf_c *c, const float *m, float x)
+BRK_INL float eq_run(svf_t *s, const svf_c *c, const float *m, float x)
 {
     float v3 = x - s->ic2, v1 = c->a1 * s->ic1 + c->a2 * v3, v2 = s->ic2 + c->a2 * s->ic1 + c->a3 * v3;
     s->ic1 = 2.0f * v1 - s->ic1;
@@ -544,30 +544,6 @@ static int dl_taken;                     /* and the delay (the first DELAY, when
 static dl_c_t dl_slot_c;                 /* the DELAY slot's settings this block */
 static float cur_throw, cur_verb;        /* this sample's throws into the delay and the reverb */
 
-/* DRIVE's curves (its shape): SOFT, TUBE (the negative side softer: lopsided), HARD, FOLD (past the top it folds back
- * down), with a bias (its offset taken back off) */
-float brk_drive_curve(uint32_t shape, float u, float bias)
-{
-    float v, z;
-    u += bias;
-    switch (shape) {
-    case 1u: v = u >= 0.0f ? soft(u) : soft(1.8f * u) * 0.5556f; z = soft(bias); break;
-    case 2u: v = brk_clampf(u, -0.8f, 0.8f); z = brk_clampf(bias, -0.8f, 0.8f); break;
-    case 3u: v = 0.8f * brk_sin_turns(0.25f * u); z = 0.8f * brk_sin_turns(0.25f * bias); break;
-    default: v = soft(u); z = soft(bias); break;
-    }
-    return v - z;
-}
-/* CLIP's curve: a cubic's soft curve (flat at 1.5) and a hard edge at 1, blended by the knee; both start at a slope of
- * 1: below the edge the drive is the gain */
-float brk_clip_curve(float u, float hard_k)
-{
-    float soft3, hard;
-    u = brk_clampf(u, -1.5f, 1.5f);
-    soft3 = u - 0.14814815f * u * u * u;
-    hard = brk_clampf(u, -1.0f, 1.0f);
-    return soft3 + (hard - soft3) * hard_k;
-}
 
 /* a slot's modulator, once a block: its phase on the tempo, S&H's new value each cycle, ENV the slot's input followed
  * (-36 .. 0 dB as 0..1); the setting it targets moved by it (the render's copy of the slot: fresh each block); the
@@ -585,13 +561,14 @@ BRK_COLD static void mod_block(uint32_t k, uint32_t n, const float *x)
     }
     md[k].env += (md[k].pk_in - md[k].env) * (md[k].pk_in > md[k].env ? 0.6f : 0.08f);
     if (shape == MOD_ENV)
-        m = md[k].env > 0.0001f ? brk_clampf((6.0206f * brk_log2f(md[k].env) + 36.0f) * (1.0f / 36.0f), 0.0f, 1.0f) : 0.0f;
+        m = md[k].env > 0.0001f ? brk_clampf((6.0206f * c_log2(md[k].env) + 36.0f) * (1.0f / 36.0f), 0.0f, 1.0f) : 0.0f;
     else
         m = shape == MOD_SH ? md[k].sh : brk_mod_wave(shape, md[k].ph);
     md[k].mod = m;
     md[k].in = md[k].pk_in > md[k].in * 0.94f ? md[k].pk_in : md[k].in * 0.94f;
     md[k].out = md[k].pk_out > md[k].out * 0.94f ? md[k].pk_out : md[k].out * 0.94f;
     md[k].pk_in = md[k].pk_out = 0.0f;
+    md[k].track = k == watch || (shape == MOD_ENV && (depth < -0.01f || depth > 0.01f));
     if (depth < -0.01f || depth > 0.01f) {
         i = brk_idx(x[FXX_TARGET], 4u);
         t = i < 3u ? &f->p[i] : &f->mix;
@@ -617,7 +594,7 @@ BRK_COLD static void slot_block(uint32_t k, const float *x)
         for (i = 0; i < sizeof *s; i++)
             z[i] = 0u;
         s->type = (uint8_t)t;
-        s->hz_s = 30.0f * brk_exp2f(p0 * 9.06f);
+        s->hz_s = 30.0f * c_exp2(p0 * 9.06f);
         s->gr = 1.0f;
         if (t == FXT_REVERB)
             rv_clear();                  /* a reverb put in: its tail from silence */
@@ -627,44 +604,44 @@ BRK_COLD static void slot_block(uint32_t k, const float *x)
     c->mix = brk_clampf(f->mix, 0.0f, 1.0f);
     switch (t) {
     case FXT_FILTER:                     /* the cutoff glides (no zipper noise, PRD A-41) */
-        s->hz_s += (30.0f * brk_exp2f(p0 * 9.06f) - s->hz_s) * 0.3f;
+        s->hz_s += (30.0f * c_exp2(p0 * 9.06f) - s->hz_s) * 0.3f;
         c->c = svf_coef(brk_clampf(s->hz_s, 20.0f, 18000.0f), p1 * 0.95f);
         c->mode = (uint8_t)(p2 < 0.33f ? 0u : p2 < 0.67f ? 1u : 2u);
         /* extras: q[0] the drive (1: none), q[1] its make-up (a 0.7 peak stays 0.7), qi 24 dB; e[0] the right's */
         c->q[0] = 1.0f + 7.0f * x0 * x0;
         c->q[1] = 0.7f / soft(0.7f * c->q[0]);
         c->qi = (uint8_t)(x1 >= 0.5f);
-        c->e[0] = x2 > 0.005f ? svf_coef(brk_clampf(s->hz_s * brk_exp2f(2.0f * x2), 20.0f, 18000.0f), p1 * 0.95f) : c->c;
+        c->e[0] = x2 > 0.005f ? svf_coef(brk_clampf(s->hz_s * c_exp2(2.0f * x2), 20.0f, 18000.0f), p1 * 0.95f) : c->c;
         break;
     case FXT_CRUNCH:                     /* a: the levels (2^(bits-1)), b: the rate's step, g: the drive */
-        c->a = brk_exp2f(16.0f - 14.0f * p0 - 1.0f);
-        c->b = brk_exp2f(-p1 * 5.46f);
+        c->a = c_exp2(16.0f - 14.0f * p0 - 1.0f);
+        c->b = c_exp2(-p1 * 5.46f);
         c->g = 1.0f + 8.0f * p2;
         /* extras: q[0] the tone's coefficient (1: off), q[1] the dither (in steps) */
         c->q[0] = x0 > 0.99f ? 1.0f
-                  : brk_clampf(brk_tan_pi((1000.0f * brk_exp2f(x0 * 4.32f)) / (float)BRK_SR) * 2.0f, 0.02f, 1.0f);
+                  : brk_clampf(c_tan_pi((1000.0f * c_exp2(x0 * 4.32f)) / (float)BRK_SR) * 2.0f, 0.02f, 1.0f);
         c->q[1] = x1;
         break;
     case FXT_DRIVE:                      /* g: the gain, b: the tone's coefficient, a: the level after */
         c->g = 1.0f + 29.0f * p0 * p0;
-        c->b = brk_clampf(brk_tan_pi((800.0f * brk_exp2f(p1 * 4.3f)) / (float)BRK_SR) * 2.0f, 0.02f, 1.0f);
+        c->b = brk_clampf(c_tan_pi((800.0f * c_exp2(p1 * 4.3f)) / (float)BRK_SR) * 2.0f, 0.02f, 1.0f);
         c->a = (0.25f + 0.75f * p2) * (1.0f + 0.3f * p0);
         /* extras: qi the shape, q[0] the bias, q[1] the low cut's coefficient (0: off) */
         c->qi = (uint8_t)brk_idx(x0, 4u);
         c->q[0] = 0.6f * x1;
-        c->q[1] = x2 > 0.005f ? brk_clampf(6.2832f * 20.0f * brk_exp2f(x2 * 5.32f) / (float)BRK_SR, 0.0f, 0.5f) : 0.0f;
+        c->q[1] = x2 > 0.005f ? brk_clampf(6.2832f * 20.0f * c_exp2(x2 * 5.32f) / (float)BRK_SR, 0.0f, 0.5f) : 0.0f;
         break;
     case FXT_PUNCH:                      /* a: the threshold, b: attack, g: release (per-sample coefficients) */
-        c->a = brk_exp2f(-p0 * 5.0f);    /* 1 .. 1/32: the more, the lower */
+        c->a = c_exp2(-p0 * 5.0f);    /* 1 .. 1/32: the more, the lower */
         c->b = 1.0f / (1.0f + (0.1f + 29.9f * p1 * p1) * 44.1f);
         c->g = 1.0f / (1.0f + (20.0f + 480.0f * p2) * 44.1f);
         /* extras: q[0] 1/ratio, q[1] the make-up (to full scale, and more), q[2] the side-chain's high-pass */
         c->q[0] = 1.0f / BRK_PUNCH_RATIO[brk_idx(x0, BRK_PUNCH_RATIOS)];
-        c->q[1] = brk_exp2f(x1 * 12.0f * 0.16610f) / (c->a + (1.0f - c->a) * c->q[0]);
-        c->q[2] = x2 > 0.005f ? 6.2832f * 20.0f * brk_exp2f(x2 * 3.907f) / (float)BRK_SR : 0.0f;
+        c->q[1] = c_exp2(x1 * 12.0f * 0.16610f) / (c->a + (1.0f - c->a) * c->q[0]);
+        c->q[2] = x2 > 0.005f ? 6.2832f * 20.0f * c_exp2(x2 * 3.907f) / (float)BRK_SR : 0.0f;
         break;
     case FXT_FLANGER:                    /* a: the rate's step, b: the depth's span (samples), g: feedback */
-        c->a = 0.02f * brk_exp2f(p0 * 9.0f) / (float)BRK_SR;
+        c->a = 0.02f * c_exp2(p0 * 9.0f) / (float)BRK_SR;
         c->b = (0.2f + 4.8f * p1) * 44.1f;
         c->g = (2.0f * p2 - 1.0f) * 0.9f;
         /* extras: q[0] where the sweep starts (samples), q[1] the right's phase behind, the rate on the tempo */
@@ -676,7 +653,7 @@ BRK_COLD static void slot_block(uint32_t k, const float *x)
             c->a = 1.0f / (FLSYNC_STEPS[brk_idx(x2, BRK_FLSYNCS)] * (float)BRK_SR * 60.0f / (p_bpm * 4.0f));
         break;
     case FXT_RING:                       /* a: left's step, b: right's */
-        c->a = 20.0f * brk_exp2f(p0 * 6.64f) / (float)BRK_SR;
+        c->a = 20.0f * c_exp2(p0 * 6.64f) / (float)BRK_SR;
         c->b = c->a * (1.0f + p1);
         c->qi = (uint8_t)(brk_idx(x0, 3u) | (x1 >= 0.5f ? 4u : 0u));   /* the wave (SINE TRI SQUARE), 4: AM */
         break;
@@ -690,7 +667,7 @@ BRK_COLD static void slot_block(uint32_t k, const float *x)
         c->b = 0.0005f + 0.7f * p1;
         c->g = (float)(uint32_t)(p2 * (float)(RV_PRE - 2u));
         rvp.width = x0;                  /* the extras straight into the plate (there is one) */
-        rvp.lc = x1 > 0.005f ? brk_clampf(6.2832f * 20.0f * brk_exp2f(x1 * 4.907f) / 22050.0f, 0.0f, 0.5f) : 0.0f;
+        rvp.lc = x1 > 0.005f ? brk_clampf(6.2832f * 20.0f * c_exp2(x1 * 4.907f) / 22050.0f, 0.0f, 0.5f) : 0.0f;
         rvp.exc = (float)RV_EXC * x2;
         rvp.g1 = 0.75f * (0.4f + 0.6f * x3);
         rvp.g2 = 0.625f * (0.4f + 0.6f * x3);
@@ -703,27 +680,27 @@ BRK_COLD static void slot_block(uint32_t k, const float *x)
         dl_taken = 1;
         dl_settings(&dl_slot_c, (uint32_t)(p0 * (float)(BRK_DLY_DIVS - 1u) + 0.5f), p1 * 0.95f, p2, 1.0f);
         dl_slot_c.width = x0;
-        dl_slot_c.lc = x1 > 0.005f ? brk_clampf(6.2832f * 20.0f * brk_exp2f(x1 * 5.644f) / 22050.0f, 0.0f, 0.5f) : 0.0f;
+        dl_slot_c.lc = x1 > 0.005f ? brk_clampf(6.2832f * 20.0f * c_exp2(x1 * 5.644f) / 22050.0f, 0.0f, 0.5f) : 0.0f;
         dl_slot_c.duck = x2;
         break;
     case FXT_EQ:                         /* three bands; mix is the mid's frequency */
-        eq_band(&c->e[0], c->m[0], BAND_LOWSHELF, 40.0f * brk_exp2f(x0 * 3.3219f), 0.707f, (p0 - 0.5f) * 24.0f);
-        eq_band(&c->e[1], c->m[1], BAND_BELL, 200.0f * brk_exp2f(c->mix * 4.64f), 0.3f * brk_exp2f(x1 * 3.737f),
+        eq_band(&c->e[0], c->m[0], BAND_LOWSHELF, 40.0f * c_exp2(x0 * 3.3219f), 0.707f, (p0 - 0.5f) * 24.0f);
+        eq_band(&c->e[1], c->m[1], BAND_BELL, 200.0f * c_exp2(c->mix * 4.64f), 0.3f * c_exp2(x1 * 3.737f),
                 (p1 - 0.5f) * 24.0f);
-        eq_band(&c->e[2], c->m[2], BAND_HIGHSHELF, 2000.0f * brk_exp2f(x2 * 3.0f), 0.707f, (p2 - 0.5f) * 24.0f);
-        c->q[0] = brk_exp2f((x3 - 0.5f) * 24.0f * 0.16610f);   /* the level */
+        eq_band(&c->e[2], c->m[2], BAND_HIGHSHELF, 2000.0f * c_exp2(x2 * 3.0f), 0.707f, (p2 - 0.5f) * 24.0f);
+        c->q[0] = c_exp2((x3 - 0.5f) * 24.0f * 0.16610f);   /* the level */
         break;
     case FXT_TAPE: {                     /* g: the drive, a: its make-up, b: the top's roll-off, e[0]: the bump;
                                           * the wow's depth in samples in m[1][0] */
         float d = p0 * 24.0f;            /* 0 dB: barely bent (0.3 into the curve); 24 dB: deep into it. The make-up
                                           * keeps a peak of 0.9 at 0.9, so the drive packs the quiet parts in */
-        c->g = 0.3f * brk_exp2f(d * 0.1661f);
+        c->g = 0.3f * c_exp2(d * 0.1661f);
         c->a = 0.9f / (soft(c->g * 0.9f + 0.12f) - soft(0.12f));
-        c->b = brk_clampf(brk_tan_pi((18000.0f * brk_exp2f(-p1 * 1.85f)) / (float)BRK_SR) * 2.0f, 0.05f, 1.0f);
+        c->b = brk_clampf(c_tan_pi((18000.0f * c_exp2(-p1 * 1.85f)) / (float)BRK_SR) * 2.0f, 0.05f, 1.0f);
         eq_band(&c->e[0], c->m[0], BAND_BELL, 90.0f, 1.2f, p1 * 4.0f);
         c->m[1][0] = p2 * 66.0f * 0.8f;  /* the wow's depth; the flutter's (both in samples), the wow's step, hiss */
         c->m[1][1] = x0 * 66.0f * 0.3f;
-        c->m[1][2] = 0.1f * brk_exp2f(x1 * 4.907f) / (float)BRK_SR;
+        c->m[1][2] = 0.1f * c_exp2(x1 * 4.907f) / (float)BRK_SR;
         c->q[0] = x2 * x2 * 0.02f;
         break;
     }
@@ -732,7 +709,7 @@ BRK_COLD static void slot_block(uint32_t k, const float *x)
                                           * output); each the band's amount of brk_mbc_t's threshold and ratio */
         const float amt[3] = {p0, p1, p2};
         const brk_mbc_t *m = (const brk_mbc_t *)&p_mbc[k];
-        float out = brk_exp2f(brk_mb_db24(m->out) * 0.16610f);
+        float out = c_exp2(brk_mb_db24(m->out) * 0.16610f);
         uint32_t b;
         c->c = svf_coef(brk_mb_xlo_hz(m->xlo), 0.0f);
         c->e[0] = svf_coef(brk_mb_xhi_hz(m->xhi), 0.0f);
@@ -744,7 +721,7 @@ BRK_COLD static void slot_block(uint32_t k, const float *x)
             c->m[b][0] = th;
             c->m[b][1] = slope;
             /* half the reduction a full-scale band gets, the band's gain, the output */
-            c->m[b][2] = brk_exp2f(0.5f * brk_mb_reduce(-th, slope, c->mb_w) +
+            c->m[b][2] = c_exp2(0.5f * brk_mb_reduce(-th, slope, c->mb_w) +
                                    brk_mb_db24(m->gain[b]) * 0.16610f) * out;
             c->mb_att[b] = 1.0f / (1.0f + brk_mb_att_ms(m->att[b]) * 44.1f);
             c->mb_rel[b] = 1.0f / (1.0f + brk_mb_rel_ms(m->rel[b]) * 44.1f);
@@ -752,11 +729,12 @@ BRK_COLD static void slot_block(uint32_t k, const float *x)
         break;
     }
     case FXT_CLIP:                       /* g: the drive (over the ceiling), a: the ceiling, b: how hard */
-        c->a = brk_exp2f(-p2 * 12.0f * 0.1661f);
-        c->g = brk_exp2f(p0 * 24.0f * 0.1661f) / c->a;
+        c->a = c_exp2(-p2 * 12.0f * 0.1661f);
+        c->g = c_exp2(p0 * 24.0f * 0.1661f) / c->a;
         c->b = p1;
-        c->q[0] = 0.5f * x0;             /* the bias; the output */
-        c->q[1] = brk_exp2f((x1 - 1.0f) * 12.0f * 0.16610f);
+        c->q[0] = 0.5f * x0;             /* the bias; the output; the bias's own place on the curve (taken off) */
+        c->q[1] = c_exp2((x1 - 1.0f) * 12.0f * 0.16610f);
+        c->q[2] = brk_clip_curve(c->q[0], c->b);
         break;
     case FXT_TREMOLO: {                  /* a: the cycle's step (on the tempo), b: depth, g: pan */
         uint32_t d = (uint32_t)(p0 * (float)(BRK_TREM_DIVS - 1u) + 0.5f);
@@ -772,7 +750,7 @@ BRK_COLD static void slot_block(uint32_t k, const float *x)
     }
 }
 
-static inline void slot_run(uint32_t k, float *xl, float *xr)
+BRK_INL void slot_run(uint32_t k, float *xl, float *xr)
 {
     slot_st_t *s = &st[k];
     const slot_c_t *c = &sc[k];
@@ -956,7 +934,7 @@ static inline void slot_run(uint32_t k, float *xl, float *xr)
         u[0] = yl * c->g + c->q[0];
         u[1] = yr * c->g + c->q[0];
         for (j = 0; j < 2u; j++)         /* (the bias taken back off: no offset left) */
-            u[j] = (brk_clip_curve(u[j], c->b) - brk_clip_curve(c->q[0], c->b)) * c->a * c->q[1];
+            u[j] = (brk_clip_curve(u[j], c->b) - c->q[2]) * c->a * c->q[1];
         yl = u[0];
         yr = u[1];
         break;
@@ -1034,10 +1012,76 @@ BRK_COLD void brk_fx_mb_meter(uint32_t slot, float *gr, float *lvl)
     }
 }
 
+/* the block's samples, all four slots: from RAM on the FM-1 (BRK_RAM, one call a block: nothing in it calls out) */
+typedef struct { svf_c djc; dl_c_t dub_c; float wet; int dj_hp, dub_on; } fx_q_t;
+BRK_RAM static void fx_samples(const fx_q_t *q, const float *in, const float *thru, const float *echo, const float *verb,
+                               const float *post, float *l, float *r, uint32_t n)
+{
+    uint32_t i, k;
+    for (i = 0; i < n; i++) {
+        float x = in[i], xl, xr, lp, ec = echo ? echo[i] : 0.0f, vb = verb ? verb[i] : 0.0f;
+        if (dj_s < -0.01f || dj_s > 0.01f) {   /* the DJ filter: the break's alone (and its throws) */
+            float h = svf_run(&dj_b, &q->djc, x, &lp);
+            x = q->dj_hp ? h : lp;
+            h = svf_run(&dj_e, &q->djc, ec, &lp);
+            ec = q->dj_hp ? h : lp;
+            h = svf_run(&dj_v, &q->djc, vb, &lp);
+            vb = q->dj_hp ? h : lp;
+        }
+        if (thru)
+            x += thru[i];
+        xl = xr = x;
+        dub_send += ((q->dub_on ? 1.0f : 0.0f) - dub_send) * 0.002f;
+        cur_throw = x * dub_send + ec;
+        cur_verb = vb;
+        for (k = 0; k < BRK_FX_SLOTS; k++)   /* the chain, slot by slot */
+            if (sc[k].on) {
+                uint32_t tr = md[k].track && !(i & 3u);   /* (its peaks: the screen's slot, every 4th sample) */
+                float a;
+                if (tr) {
+                    a = brk_absf(xl) > brk_absf(xr) ? brk_absf(xl) : brk_absf(xr);
+                    if (a > md[k].pk_in)
+                        md[k].pk_in = a;
+                }
+                slot_run(k, &xl, &xr);
+                if (tr) {
+                    a = brk_absf(xl) > brk_absf(xr) ? brk_absf(xl) : brk_absf(xr);
+                    if (a > md[k].pk_out)
+                        md[k].pk_out = a;
+                }
+            }
+        if (q->wet < 0.999f) {              /* the MIXER's FX: the chain against the dry sound */
+            xl = x + (xl - x) * q->wet;
+            xr = x + (xr - x) * q->wet;
+        }
+        if (post) {                      /* the drums around the chain join here, clean */
+            xl += post[i];
+            xr += post[i];
+        }
+        if (dub_n && !dl_taken) {        /* the delay after the chain: the throws in, the echoes at the pad's mix */
+            float el, er;
+            dl_run(&q->dub_c, cur_throw, &el, &er);
+            xl += el * q->dub_c.ret;
+            xr += er * q->dub_c.ret;
+        }
+        {   /* the limiter: a fast attack, a slow release, then a soft clip for what gets past */
+            float pk = brk_absf(xl) > brk_absf(xr) ? brk_absf(xl) : brk_absf(xr);
+            float want = pk * lim_gain > 0.95f ? 0.95f / pk : 1.0f;
+            lim_gain += (want - lim_gain) * (want < lim_gain ? 0.5f : 0.0002f);
+            l[i] = knee(xl * lim_gain);
+            r[i] = knee(xr * lim_gain);
+        }
+    }
+}
+/* (called through a pointer: the flash's code is out of a direct call's reach of the RAM's) */
+static void (*volatile fx_samples_p)(const fx_q_t *, const float *, const float *, const float *, const float *,
+                                     const float *, float *, float *, uint32_t) = fx_samples;
+
+
 void brk_fx_process(const float *in, const float *thru, const float *echo, const float *verb, const float *post,
                     float *l, float *r, uint32_t n, uint32_t pads)
 {
-    uint32_t i, k;
+    uint32_t k, i;
     svf_c djc;
     float dj, dj_hz, wet;
     dl_c_t dub_c;
@@ -1061,52 +1105,27 @@ void brk_fx_process(const float *in, const float *thru, const float *echo, const
         mod_block(k, n, xx.x);
         slot_block(k, xx.x);
     }
-    for (i = 0; i < n; i++) {
-        float x = in[i], xl, xr, lp, ec = echo ? echo[i] : 0.0f, vb = verb ? verb[i] : 0.0f;
-        if (dj_s < -0.01f || dj_s > 0.01f) {   /* the DJ filter: the break's alone (and its throws) */
-            float h = svf_run(&dj_b, &djc, x, &lp);
-            x = dj_hp ? h : lp;
-            h = svf_run(&dj_e, &djc, ec, &lp);
-            ec = dj_hp ? h : lp;
-            h = svf_run(&dj_v, &djc, vb, &lp);
-            vb = dj_hp ? h : lp;
+    if (shed_hit && (!shed_lv || shed_n < SHED_BLOCKS - 32u)) {   /* over: one more slot off (not twice in 0.2 s) */
+        if (shed_lv < BRK_FX_SLOTS)
+            shed_lv++;
+        shed_n = SHED_BLOCKS;
+    } else if (shed_lv && !--shed_n) {   /* 2 s clear: one back */
+        shed_lv--;
+        shed_n = SHED_BLOCKS;
+    }
+    shed_hit = 0u;
+    for (k = BRK_FX_SLOTS, i = shed_lv; k-- > 0u && i;)   /* the last ones on, bypassed */
+        if (sc[k].on) {
+            sc[k].on = 0u;
+            i--;
         }
-        if (thru)
-            x += thru[i];
-        xl = xr = x;
-        dub_send += ((dub_on ? 1.0f : 0.0f) - dub_send) * 0.002f;
-        cur_throw = x * dub_send + ec;
-        cur_verb = vb;
-        for (k = 0; k < BRK_FX_SLOTS; k++)   /* the chain, slot by slot (its peaks in and out, for the screen) */
-            if (sc[k].on) {
-                float a = brk_absf(xl) > brk_absf(xr) ? brk_absf(xl) : brk_absf(xr);
-                if (a > md[k].pk_in)
-                    md[k].pk_in = a;
-                slot_run(k, &xl, &xr);
-                a = brk_absf(xl) > brk_absf(xr) ? brk_absf(xl) : brk_absf(xr);
-                if (a > md[k].pk_out)
-                    md[k].pk_out = a;
-            }
-        if (wet < 0.999f) {              /* the MIXER's FX: the chain against the dry sound */
-            xl = x + (xl - x) * wet;
-            xr = x + (xr - x) * wet;
-        }
-        if (post) {                      /* the drums around the chain join here, clean */
-            xl += post[i];
-            xr += post[i];
-        }
-        if (dub_n && !dl_taken) {        /* the delay after the chain: the throws in, the echoes at the pad's mix */
-            float el, er;
-            dl_run(&dub_c, cur_throw, &el, &er);
-            xl += el * dub_c.ret;
-            xr += er * dub_c.ret;
-        }
-        {   /* the limiter: a fast attack, a slow release, then a soft clip for what gets past */
-            float pk = brk_absf(xl) > brk_absf(xr) ? brk_absf(xl) : brk_absf(xr);
-            float want = pk * lim_gain > 0.95f ? 0.95f / pk : 1.0f;
-            lim_gain += (want - lim_gain) * (want < lim_gain ? 0.5f : 0.0002f);
-            l[i] = knee(xl * lim_gain);
-            r[i] = knee(xr * lim_gain);
-        }
+    {
+        fx_q_t q;
+        q.djc = djc;
+        q.dub_c = dub_c;
+        q.wet = wet;
+        q.dj_hp = dj_hp;
+        q.dub_on = dub_on;
+        fx_samples_p(&q, in, thru, echo, verb, post, l, r, n);
     }
 }

@@ -28,6 +28,7 @@ void app_splash(void);
  * app_loop every pass of the main loop (MIDI in), app_tick at 1 kHz (clock out on time); Bluetooth starts at
  * power-on as the saved setting says, advertising as "CHOPPAH XXXX" */
 #define APP_LOOP
+#define APP_OVERLOAD                     /* the render over 90 % of its time: the FX chain sheds slots (PRD E-7) */
 void app_loop(void);
 #define APP_TICK
 void app_tick(void);

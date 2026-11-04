@@ -920,8 +920,16 @@ void app_frame(void)
         ui.redraw |= RG_BLOCKS;
     if (ui.page == PG_MIX && now - ui.mix_drawn >= 33u)   /* the MIXER's meters: about 30 times a second */
         ui.redraw |= RG_BLOCKS;
-    if (ui.page == PG_FX && set.fx.slot[ui.fx_focus & 3u].type != FXT_EMPTY && now - ui.panel_drawn >= 33u)
-        ui.redraw |= RG_BLOCKS;          /* an effect focused: its picture and meters, about 30 times a second */
+    brk_fx_watch(ui.page == PG_FX ? ui.fx_focus & 3u : BRK_FX_SLOTS);   /* (the engine meters that slot alone) */
+    {                                    /* the overload guard shed a slot: say so */
+        static uint32_t shed_seen;
+        uint32_t sh = brk_fx_shed();
+        if (sh > shed_seen)
+            app_say("OVERLOAD", "FX SLOT BYPASSED");
+        shed_seen = sh;
+    }
+    if (ui.page == PG_FX && set.fx.slot[ui.fx_focus & 3u].type != FXT_EMPTY && now - ui.panel_drawn >= 66u)
+        ui.redraw |= RG_BLOCKS;          /* an effect focused: its picture and meters, about 15 times a second */
     if (foot_dirty) {
         foot_dirty = 0u;
         ui.redraw |= RG_FOOT;
