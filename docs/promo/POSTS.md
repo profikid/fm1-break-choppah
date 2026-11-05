@@ -232,51 +232,73 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 - [x] Flash-fix UC25HQ80 in main, v0.71 gebouwd en geverifieerd
 - [x] **mutant.cloud**: listing live via `.github/workflows/mutant.yml` → https://mutant.cloud/#/p/choppah
 - [x] Repo-beschrijving herschreven (die voedt mutant.cloud, FM1 Manager en de emu-lijst)
-- [x] PR #24 in aroum/fm1-custom-fw (366 stars, 90 entries) — rij 91
+- [x] PR #24 in aroum/fm1-custom-fw (366 stars, 90 entries) — rij 91 — **gemerged** 4 nov 16:48
 - [x] PR #32 in Lapin/awesome-music-gear-firmware (213 stars)
-- [x] PR #141 in joakimeriksson/fm1-emu (148 stars) — de emulator
+- [x] PR #141 in joakimeriksson/fm1-emu (148 stars) — de emulator — **gemerged** 4 nov 23:07
 - [x] PR #451 in benny-sparra/fm1-dx7-patch-importer (fm1-editor) — **gemerged** 4 nov 09:30
 - [x] **Jij**: de echte FM-1-test (6 punten in `docs/hub/SUBMIT.md`) — gedaan 4 nov
 - [x] **Jij**: de Hub-mail verstuurd (4 nov 2026) — `docs/hub/SENT.md`
+- [x] **De Firmware Hub heeft 'm opgenomen** — live sinds 4 nov 2026 (v0.93), 154 entries
 - [ ] **Jij**: het formulier op fm1firmwarehub.online/submit/ invullen
 - [ ] **Jij**: Reddit-post(s) + Discord-bericht plaatsen
 - [ ] **Jij**: de DOA-post (Dogs on Acid, D&B-forum) in de "Deals/free/opensource CENTRAL" thread — tekst in `docs/promo/POSTS.md` §5b
 - [ ] **Jij**: mailtjes naar de blogs (pianoandsynth, dreyandersson)
-- [ ] Merges van de PR's (of je stuurt er een ping)
+- [ ] Merges van de PR's (of je stuurt er een ping) — of wachten op de maintainers
 
 
 ---
 
-## Openstaande PR's (alle OPEN, mergeable)
+## Openstaande PR's (stand 2026-11-05, live geverifieerd)
 
-| Wat | Link |
-|---|---|
-| aroum/fm1-custom-fw: rij 91 | https://github.com/aroum/fm1-custom-fw/pull/24 |
-| fm1-base: de flash-fix | https://github.com/charlesvestal/fm1-base/pull/35 |
-| awesome-fm-1: 8 breaks i.p.v. 17 | https://github.com/cicloid/awesome-fm-1/pull/15 |
-| fm1-editor: versie + foto | https://github.com/benny-sparra/fm1-dx7-patch-importer/pull/451 |
-| Atlas: nieuwe entry | https://github.com/wero1414/atlas-fm-1/pull/3 |
-| **awesome-music-gear-firmware: nieuwe entry** | https://github.com/Lapin/awesome-music-gear-firmware/pull/32 |
-| **fm1-emu: de emulator-lijst** | https://github.com/joakimeriksson/fm1-emu/pull/141 |
-| Mooring: signed catalogus | https://github.com/cicloid/awesome-fm-1/issues/16 |
+**GEMERGED (3):**
+| Wat | Link | Gemerged |
+|---|---|---|
+| aroum/fm1-custom-fw: rij 91 | https://github.com/aroum/fm1-custom-fw/pull/24 | 4 nov 16:48 |
+| fm1-editor: versie + foto | https://github.com/benny-sparra/fm1-dx7-patch-importer/pull/451 | 4 nov 09:30 |
+| fm1-emu: de emulator-lijst | https://github.com/joakimeriksson/fm1-emu/pull/141 | 4 nov 23:07 |
 
-## Waar CHOPPAH nu wel/niet staat (stand 2026-11-04)
+**OPEN, mergeable (4 PR's + 2 issues):**
+| Wat | Link | Status |
+|---|---|---|
+| fm1-base: de flash-fix (UC25HQ80) | https://github.com/charlesvestal/fm1-base/pull/35 | OPEN, `mergeable: true`, 0 reviews — Charles moet 'm zelf mergen |
+| fm1-base: het issue bij dezelfde chip | https://github.com/charlesvestal/fm1-base/issues/36 | OPEN, 0 comments |
+| awesome-fm-1: 8 breaks i.p.v. 17 | https://github.com/cicloid/awesome-fm-1/pull/15 | OPEN, mergeable |
+| Atlas: nieuwe entry | https://github.com/wero1414/atlas-fm-1/pull/3 | OPEN, mergeable (entry is goed, staat alleen nog niet in `main`) |
+| **awesome-music-gear-firmware: nieuwe entry** | https://github.com/Lapin/awesome-music-gear-firmware/pull/32 | OPEN, mergeable |
+| Mooring: signed catalogus | https://github.com/cicloid/awesome-fm-1/issues/16 | OPEN, 3 comments (allemaal van ons), 0 van Gustavo |
+| fm1-emu: CHOPPAH op de pagina | https://github.com/joakimeriksson/fm1-emu/pull/145 | OPEN, mergeable — de maintainer wacht op de laatste audio-checks |
+| fm1-emu: Hub-nieuwekomers live | https://github.com/joakimeriksson/fm1-emu/pull/146 | OPEN, mergeable — bevat óók de CHOPPAH-entry |
+
+**Let op:** joakimeriksson heeft op #141 wél geantwoord (22:18) — de alias `choppah-latest.fwsc`
+is goed bevonden. Hij zegt dat de entry ná de catalogus-refresh (#143, gemerged) in de lijst
+komt; dat is PR #145, en #146 doet hetzelfde plus de live Hub-nieuwekomers.
+
+## Waar CHOPPAH nu wel/niet staat (stand 2026-11-05 06:17 UTC, live geverifieerd)
 
 | Catalogus | Status |
 |---|---|
-| Firmware Hub | **nog niet** — 152 entries, `FM-1_86` is vrij → **mail is verstuurd (4 nov)**, wacht op Sven (leest elke 3 uur) |
-| **mutant.cloud** | **wel** ✅ — https://mutant.cloud/#/p/choppah (listing `choppah`, v0.90) |
-| aroum/fm1-custom-fw | **niet** → PR #24 |
-| **awesome-music-gear-firmware** | **niet** → PR #32 |
-| **fm1-emu (emulator)** | **niet** → PR #141 |
-| **fm1firmwarehub.online** | **niet** → formulier op /submit/ (hieronder) |
-| Mooring | **niet** → issue #16 bij Gustavo Barron |
-| Atlas | **niet** → PR #3 |
-| awesome-fm-1 | **wel**, maar "17 breaks" → PR #15 |
-| fm1-editor | **wel** ✅ — v0.90 met foto (PR #451 gemerged) |
-| 2bbb/fm1-firmware-collection | **wel** (auto) |
-| altstrument | **wel** (auto, staat op v0.54) |
-| **FM1 Manager / FM-SWITCH / FM-1-Swap** | **wel** (auto — ze scrapen de Hub en fm1-editor) |
+| **Firmware Hub** | **wel** ✅ — `id: choppah`, v0.93, `added 2026-11-04`, ★5, 3 installs, kaart + pakket live. Catalogus: 154 entries, `updated 2026-11-05 06:00 UTC` |
+| **mutant.cloud** | **wel** ✅ — https://mutant.cloud/#/p/choppah, v0.93, `FM-1_86009300`, sha256 aanwezig, `listedBy: action:profikid` |
+| **fm1-editor** | **wel** ✅ — v0.90 + slicer-foto. De release-link wijst nog naar v0.88 → upstream-patroon (25 entries hebben dezelfde afwijking), niet onze fout |
+| **aroum/fm1-custom-fw** | **wel** ✅ — rij 91 (PR #24 gemerged) |
+| **altstrument.org** | **wel** ✅ — `data-fw="choppah"`, release-link v0.93 |
+| **FM1 Manager / FM-SWITCH / FM-1-Swap** | **wel** ✅ — `discovered.json`, id `fm1breakchoppah`, staat op v0.23 (oud, maar het pakket is er) |
+| **fm1-emu (emulator)** | **eigen lijst** ✅ — `web/firmwares-own.json` in `master` staat `choppah` met de alias-URL. De **gegenereerde** `web/firmwares.json` (155) heeft 'm nog niet → PR #145/#146 |
+| awesome-fm-1 | **wel**, maar zegt nog "17 breaks" → PR #15 (OPEN) |
+| **awesome-music-gear-firmware** | **niet** → PR #32 (OPEN) |
+| Atlas | **niet** → PR #3 (OPEN) |
+| Mooring | **niet** → issue #16 (0 antwoord van Gustavo) |
+| **2bbb/fm1-firmware-collection** | **niet** (nog) — de Hub staat er sinds 4 nov in, 2bbb draait dagelijks om 03:17 en pakt 'm dan op; de laatste run was 4 nov 10:56, vóór de Hub-listing |
+| **fm1firmwarehub.online** | **niet** → Netlify-formulier op /submit/ (hieronder) |
+
+### De Hub-listing is binnen — dat haalt de hele keten op
+
+De Hub staat sinds **4 november 2026** live (v0.93). De afhankelijke catalogi volgen de Hub
+zelf: mutant.cloud, FM1 Manager, FM-SWITCH, FM-1-Swap, altstrument, 2bbb en de emulator. Eén
+Hub-listing zet CHOPPAH overal neer — dat is de reden dat de mail belangrijker was dan de PR's.
+
+**Nog te doen zonder dat iemand iets hoeft te mergen:** niets. De openstaande PR's zijn
+schoonheidsklachten (een stale "17 breaks", een ontbrekende tabel-regel), geen blokkades.
 
 ## mutant.cloud — de makkelijkste route, al gelopen
 
