@@ -25,8 +25,10 @@ if ! printf '%s' "$V" | grep -Eq '^[0-9]{1,2}\.[0-9]{1,2}(\.[0-9]{1,2})?(-[A-Za-
 fi
 
 # the notes, when they are written: docs/hub/notes_v096.md for v0.96
+# (the version's numbers without their leading zeros, so 08 is eight and not an octal error)
+dec() { v=$(printf '%s' "$1" | sed 's/^0*//'); if [ -n "$v" ]; then echo "$v"; else echo 0; fi; }
 MAJOR="${V%%.*}"; REST="${V#*.}"; MINOR="${REST%%.*}"; MINOR="${MINOR%%-*}"
-NOTES="docs/hub/notes_v$(printf '%03d' $(( 10#$MAJOR * 100 + 10#$MINOR ))).md"
+NOTES="docs/hub/notes_v$(printf '%03d' $(( $(dec "$MAJOR") * 100 + $(dec "$MINOR") ))).md"
 if printf '%s' "$V" | grep -q -- '-'; then
     echo "release.sh: $V is a prerelease: it keeps GitHub's changelog, not $NOTES"
 elif [ -f "$NOTES" ]; then
