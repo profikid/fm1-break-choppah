@@ -65,7 +65,13 @@ The mail as it stands (v0.89):
 ## The package
 
 - **File:** CHOPPAH 0.89, the installer's `choppah-0.89.fwsc`; the release v0.89 attaches the same file.
-- **Release:** GitHub releases, one per merge. The hub takes every later release by itself, within three hours.
+- **Release:** GitHub releases, one per tag (`scripts/release.sh` tags vX.Y). A merge to `main` builds and
+  tests but releases nothing; a tag makes the release. The hub takes every later release by itself, within
+  three hours.
+- **Built from source:** since v0.97 the package is built on GitHub by the hub's shared builder
+  (`zvenson/fm1-build@v1`) and signed with build provenance, so the card gets the "Built from source on
+  GitHub" key. Anyone can check it:
+  `gh attestation verify choppah-0.97.fwsc --repo profikid/fm1-break-choppah --signer-workflow zvenson/fm1-build/.github/workflows/build.yml`
 - **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86008900` for 0.89. The hub's own list of identities
   has no `FM-1_86*`, so the prefix is free and the hub can tell exactly which firmware is on a connected FM-1.
 - **Update loader:** felucca-bsp's, the platform's loader (fm1-base's `base/bsp/loader/`), shipped in the package.
@@ -112,10 +118,10 @@ To see what the hub will make of the file: <https://thefirmwarehub.com/kb/#fmhub
 1. The release on GitHub with the file (done: v0.89).
 2. The mail above, from your own address.
 3. The hub puts it on its test site, then live; later releases appear by themselves.
-4. Optional: "Built from source on GitHub" (the hub's shared workflow `zvenson/fm1-build`), once the build runs on
-   GitHub's Ubuntu runner. CHOPPAH's own workflow (`pages.yml`) already builds the firmware, the emulator and the
-   site on every push, so the release is built from the tagged source; the hub's shared workflow would additionally
-   sign it.
+4. **Built from source on GitHub**: done since v0.97. The release is built by the hub's shared workflow
+   (`zvenson/fm1-build@v1`), which signs the build provenance; the card gets the key. CHOPPAH's own
+   `pages.yml` no longer builds the firmware — it takes the attested package from the release, so the site
+   and the hub serve the same bytes.
 
 ## The flash part, and the units from autumn 2026
 
