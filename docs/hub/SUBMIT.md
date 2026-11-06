@@ -70,8 +70,8 @@ The mail as it stands (v0.89):
   three hours.
 - **Built from source:** since v0.97 the package is built on GitHub by the hub's shared builder
   (`zvenson/fm1-build@v1`) and signed with build provenance, so the card gets the "Built from source on
-  GitHub" key. Anyone can check it:
-  `gh attestation verify choppah-0.97.fwsc --repo profikid/fm1-break-choppah --signer-workflow zvenson/fm1-build/.github/workflows/build.yml`
+  GitHub" key. Anyone can check it (use the current version's file):
+  `gh attestation verify choppah-0.99.fwsc --repo profikid/fm1-break-choppah --signer-workflow zvenson/fm1-build/.github/workflows/build.yml`
 - **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86008900` for 0.89. The hub's own list of identities
   has no `FM-1_86*`, so the prefix is free and the hub can tell exactly which firmware is on a connected FM-1.
 - **Update loader:** felucca-bsp's, the platform's loader (fm1-base's `base/bsp/loader/`), shipped in the package.
