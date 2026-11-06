@@ -202,8 +202,6 @@ static void ch_bta_value(int i, char *t)
     }
     if (i == 0)
         text_cat(t, st == PLAT_BTA_OFF ? "OFF" : "ON");
-    else if (i == 1 && st == PLAT_BTA_STREAMING)
-        text_cat(t, set.bta_codec == 1u ? "STEREO" : set.bta_codec == 2u ? "JOINT" : "AUTO");
     else if (i == 1) {
         if (ch_bta_entry(ui.bta_sel, n, &k, &f)) {
             n[9] = 0;                    /* (the foot's width) */
@@ -211,8 +209,7 @@ static void ch_bta_value(int i, char *t)
         } else
             text_cat(t, "-");
     } else if (i == 2)
-        text_cat(t, st == PLAT_BTA_STREAMING ? (lr_test ? "PLAYING" : "TURN") : st == PLAT_BTA_SCANNING ? "SCANNING"
-                    : st == PLAT_BTA_OFF ? "-" : "TURN");
+        text_cat(t, st == PLAT_BTA_SCANNING ? "SCANNING" : st == PLAT_BTA_OFF ? "-" : "TURN");
     else
         text_cat(t, st == PLAT_BTA_STREAMING || st == PLAT_BTA_SETUP || st == PLAT_BTA_LINKED ||
                     st == PLAT_BTA_PAGING ? "< HANG UP" : st == PLAT_BTA_OFF ? "-" : "CONNECT >");
@@ -235,18 +232,11 @@ static void ch_bta_turn(int i, int32_t d)
         app_say("BT AUDIO", on ? "ON" : "OFF");
     } else if (st == PLAT_BTA_OFF)
         app_say("BT AUDIO", "TURN K1 ON");
-    else if (i == 1 && st == PLAT_BTA_STREAMING) {   /* streaming: K2 the SBC coding, asked for at the next connection */
-        set.bta_codec = (uint8_t)((set.bta_codec + (d > 0 ? 1u : 2u)) % 3u);   /* AUTO, plain stereo, joint stereo */
-        set_dirty = 1u;
-        app_say("BT CODEC", set.bta_codec == 1u ? "STEREO" : set.bta_codec == 2u ? "JOINT STEREO" : "AUTO");
-    } else if (i == 1) {
+    else if (i == 1) {
         uint32_t c = ch_bta_count();
         ui.bta_sel = (uint8_t)(c ? (uint32_t)clamp((int32_t)ui.bta_sel + (d > 0 ? 1 : -1), 0, (int32_t)c - 1) : 0u);
         if (ch_bta_entry(ui.bta_sel, n, &k, &f))
             app_say(k >= 0 ? "KNOWN" : "FOUND", n);
-    } else if (i == 2 && st == PLAT_BTA_STREAMING) {   /* streaming: K3 tests left and right */
-        lr_test = LR_TEST_LEN;
-        app_say("TEST", "LOW: LEFT, HIGH: RIGHT");
     } else if (i == 2) {
         ch_bta_scan();
         app_say("BT AUDIO", "SCANNING");
@@ -273,19 +263,7 @@ static void ch_bta_turn(int i, int32_t d)
 static void ch_bta_poll(uint32_t now)
 {
     static int last_st = -1;
-#if FM1B_BT_AUDIO
-    {   /* The SBC coding chosen (K2 while streaming): what we ask the speaker for at the NEXT connection
-         * (fm1-base's bt/br/bt_acl.c ba_sbc_prefer, in this unit with this, so its state is in reach). The mode is
-         * negotiated with the speaker, so a change takes effect at the next connection, not while streaming.
-         *
-         * The app does not set the encoder itself any more: the base keeps it on the mode that was agreed
-         * (ba_sbc_agreed_mode). A speaker that was told "stereo" and receives joint-stereo frames reads the wrong
-         * channel layout and one of the two channels falls silent (the user, 2026-11-06: only the right channel of the
-         * speaker sounded, on Polly, LOOM-8 and Optimist alike). The agreement decides, never the app. */
-        ba_sbc_prefer = set.bta_codec == 2u ? 1u : set.bta_codec == 1u ? 2u : 0u;   /* joint, plain, else the base's */
-    }
-#endif
-    if (ch_bta_state() != last_st) {     /* (the foot's K3 is SCAN or TEST L/R by the state) */
+    if (ch_bta_state() != last_st) {     /* (the foot's K3 is SCAN by the state) */
         last_st = ch_bta_state();
         foot_dirty = 1u;
     }
@@ -337,8 +315,7 @@ static void draw_bta(void)
     else if (!c)
         text_cat(t, "K3: SCAN");
     cv_text(96, 15, &FONT_XS, t, st == PLAT_BTA_STREAMING ? C_HI : C_DIM);
-    cv_text(6, 30, &FONT_XS, st == PLAT_BTA_STREAMING ? (lr_test ? "TEST: LOW BEEP LEFT, HIGH BEEP RIGHT" :
-            "K2: CODEC   K3: TEST LEFT / RIGHT") :
+    cv_text(6, 30, &FONT_XS, st == PLAT_BTA_STREAMING ? "FM-1 SPEAKER MUTED; 150-300 MS LATE" :
             "FOR LISTENING: 150-300 MS LATE", C_DIM);
     cv_blit(0, 88);
     cv_begin(240, 52, C_BLACK);

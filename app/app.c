@@ -52,9 +52,8 @@ typedef struct {
     uint8_t pattern;                     /* the pattern playing, 0..NPAT-1 (patterns: their own store object) */
     uint8_t bta_on;                      /* Bluetooth audio out (GLOBAL, third part): on at power-on, the last device
                                           * connected again */
-    uint8_t bta_codec;                   /* its SBC coding, what we ask the speaker for: 0 automatic (fm1-base's
-                                          * choice: plain stereo when the speaker has it), 1 plain stereo, 2 joint
-                                          * stereo */
+    uint8_t bta_rsv;                     /* (the SBC coding's byte: it was a knob once, but the knob is gone; the byte
+                                          * stays, so older saves keep their size) */
     uint8_t click;                       /* the metronome's click (TAP K4): its level, 0 (off) .. 100 %, on each beat
                                           * while playing (was a spare byte: older saves have it off) */
     uint8_t rsv;
@@ -262,8 +261,6 @@ static volatile float meter_brk, meter_kick, meter_perc;   /* the MIXER's channe
                                                            * and hat, before the chain */
 static volatile float meter_l, meter_r;  /* the output's peaks as it leaves (after MASTER: 1 = full scale), falling
                                           * ~20 dB a second: the render writes, the header's meter reads */
-#define LR_TEST_LEN (4u * BRK_SR)
-static volatile uint32_t lr_test;        /* the left / right test (BT AUDIO K3 while streaming): samples left of it */
 static uint16_t click_at[4];             /* the render: this block's metronome clicks (their samples, the bar's first) */
 static uint8_t click_hi[4];
 static uint32_t nclick;
@@ -622,24 +619,6 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             }
             if (click_env < 1e-3f)
                 click_env = 0.0f;
-        }
-        if (lr_test) {                   /* the left / right test: a low beep on the left, then a high one on the
-                                          * right, twice (4 s), over everything else */
-            static float ph;
-            uint32_t left = lr_test;
-            for (i = 0; i < m; i++) {
-                uint32_t t = LR_TEST_LEN - left, seg = t / (LR_TEST_LEN / 4u);   /* 0 L, 1 R, 2 L, 3 R */
-                float on = (t % (LR_TEST_LEN / 4u)) < (LR_TEST_LEN / 4u) * 3u / 4u ? 0.5f : 0.0f;
-                float x = on * brk_sin_turns(ph);
-                ph += (seg & 1u ? 880.0f : 440.0f) / (float)BRK_SR;
-                if (ph >= 1.0f)
-                    ph -= 1.0f;
-                l[i] = seg & 1u ? 0.0f : x;
-                r[i] = seg & 1u ? x : 0.0f;
-                if (left > 1u)
-                    left--;
-            }
-            lr_test = left > 1u ? left : 0u;
         }
         {                                /* the header's meter: as it leaves, after MASTER */
             float out = gain * (1.0f / 8388608.0f), a = meter(l, m, 0.0f) * out, b = meter(r, m, 0.0f) * out;

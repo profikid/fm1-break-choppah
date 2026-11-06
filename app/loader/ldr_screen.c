@@ -4,8 +4,10 @@
  * while the firmware builds), in CHOPPAH's colours: black, the slice mark (sixteen bars, two chopped out of line)
  * filling in amber as the app area is written, "UPDATING" in cream, "DO NOT UNPLUG" in amber, a bar of amber
  * segments, CHOPPAH small under it. Only the drawing differs from the original: the panel's start (reset, sleep
- * out, RGB565, IPS inversion), ldr_screen_init and ldr_screen_progress are the same, and every buffer is in RAM (the
- * SPI DMA reads RAM only). Part of loader.c's single unit. */
+ * out, RGB565, IPS inversion) and the mark and the bar, ldr_screen_init and ldr_screen_progress do their own thing,
+ * and every buffer is in RAM (the SPI DMA reads RAM only). A host that goes quiet for 2 s mid-install turns the lines
+ * to "USB LOST" and "RECONNECT THE CABLE" (the host's next frame turns them back), and at the end "DONE" and
+ * "RESTARTING". Part of loader.c's single unit. */
 #include "../boards/fm1/fm1_lcd_hw.h"
 
 #define SCR_BG 0x0000u                              /* black */
@@ -21,18 +23,27 @@
 #define SCR_BAR_H 12u
 #define SCR_SEG 12u                                 /* a segment of the bar: 10 lit, 2 gap */
 #define SCR_ROWS 21u                                /* the tallest line: 5x7 glyphs at 3x */
+#define SCR_LOST_POLLS 4000u                        /* 2 s of loader.c's 0.5 ms USB polls without a frame */
+#define SCR_SWEEP_POLLS 200u                        /* a sweep step every 100 ms of polls, before the install */
+#define SCR_SWEEP_W 24u
+#define SCR_SWEEP_STEP 6u
 
 static uint16_t scr_strip[240u * SCR_ROWS];         /* one line of text, byte-swapped (the panel takes MSB first) */
 static uint8_t scr_small[8];
 static uint32_t scr_shown;                          /* bar pixels drawn */
 static uint32_t scr_marks;                          /* the mark's bars lit */
-static uint8_t scr_on;
+static uint32_t scr_quiet;                          /* polls since the host's last frame */
+static uint32_t scr_wait, scr_sweep;                /* polls waiting; the sweep's x in the bar + 1 (0: none) */
+static uint8_t scr_on, scr_armed;                   /* armed: an install has started */
+static uint8_t scr_state;                           /* 0 updating, 1 USB lost, 2 done */
 
 /* 5x7 glyphs, a row a byte (bit 4 = left) */
 static const struct { char c; uint8_t rows[7]; } SCR_FONT[] = {
     { 'A', { 0x0E, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 } },
+    { 'B', { 0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E } },
     { 'C', { 0x0E, 0x11, 0x10, 0x10, 0x10, 0x11, 0x0E } },
     { 'D', { 0x1E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x1E } },
+    { 'E', { 0x1F, 0x10, 0x10, 0x1E, 0x10, 0x10, 0x1F } },
     { 'G', { 0x0E, 0x11, 0x10, 0x17, 0x11, 0x11, 0x0F } },
     { 'H', { 0x11, 0x11, 0x11, 0x1F, 0x11, 0x11, 0x11 } },
     { 'I', { 0x0E, 0x04, 0x04, 0x04, 0x04, 0x04, 0x0E } },
@@ -40,6 +51,8 @@ static const struct { char c; uint8_t rows[7]; } SCR_FONT[] = {
     { 'N', { 0x11, 0x19, 0x15, 0x13, 0x11, 0x11, 0x11 } },
     { 'O', { 0x0E, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E } },
     { 'P', { 0x1E, 0x11, 0x11, 0x1E, 0x10, 0x10, 0x10 } },
+    { 'R', { 0x1E, 0x11, 0x11, 0x1E, 0x14, 0x12, 0x11 } },
+    { 'S', { 0x0F, 0x10, 0x10, 0x0E, 0x01, 0x01, 0x1E } },
     { 'T', { 0x1F, 0x04, 0x04, 0x04, 0x04, 0x04, 0x04 } },
     { 'U', { 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x0E } },
 };
@@ -161,6 +174,9 @@ static void ldr_screen_progress(uint32_t done, uint32_t total)
     uint32_t px, marks;
     if (!scr_on || !total)
         return;
+    if (!scr_armed && scr_sweep)                    /* the install starts: the sweep goes */
+        scr_fill(SCR_BAR_X + scr_sweep - 1u, SCR_BAR_Y, SCR_SWEEP_W, SCR_BAR_H, SCR_DIM);
+    scr_armed = 1;
     px = done >= total ? SCR_BAR_W : done * SCR_BAR_W / total;     /* < 2^32: total <= 2 MiB */
     marks = done >= total ? 16u : done * 16u / total;
     while (scr_marks < marks)                       /* the mark fills in, a bar a sixteenth */
@@ -175,4 +191,55 @@ static void ldr_screen_progress(uint32_t done, uint32_t total)
         if (scr_shown > px)
             scr_shown = px;
     }
+}
+
+/* the waiting sweep: a piece of the empty bar, one step on (before the install only) */
+static void scr_sweep_step(void)
+{
+    if (scr_sweep)
+        scr_fill(SCR_BAR_X + scr_sweep - 1u, SCR_BAR_Y, SCR_SWEEP_W, SCR_BAR_H, SCR_DIM);
+    scr_sweep = scr_sweep && scr_sweep + SCR_SWEEP_STEP <= SCR_BAR_W - SCR_SWEEP_W + 1u ? scr_sweep + SCR_SWEEP_STEP : 1u;
+    scr_fill(SCR_BAR_X + scr_sweep - 1u, SCR_BAR_Y, SCR_SWEEP_W, SCR_BAR_H, SCR_AMB);
+}
+
+/* a frame from the host (cheap: called for each one): it is there, the lines go back to updating */
+static void ldr_screen_heard(void)
+{
+    scr_quiet = 0;
+    if (scr_state == 1u) {
+        scr_state = 0;
+        scr_text(100, "UPDATING", 3, SCR_FG);
+        scr_text(134, "DO NOT UNPLUG", 2, SCR_AMB);
+    }
+}
+
+/* one USB poll (0.5 ms) without a frame: before the install the sweep steps; an install whose host stays silent 2 s is
+ * shown lost, once */
+static void ldr_screen_tick(void)
+{
+    if (!scr_on)
+        return;
+    if (!scr_armed) {
+        if (++scr_wait >= SCR_SWEEP_POLLS) {
+            scr_wait = 0;
+            scr_sweep_step();
+        }
+        return;
+    }
+    if (scr_state || ++scr_quiet < SCR_LOST_POLLS)
+        return;
+    scr_state = 1;
+    scr_text(100, "USB LOST", 3, SCR_FG);
+    scr_text(134, "RECONNECT THE CABLE", 2, SCR_AMB);
+}
+
+/* written and verified: the app starts next */
+static void ldr_screen_done(void)
+{
+    if (!scr_on)
+        return;
+    ldr_screen_progress(1, 1);
+    scr_state = 2;
+    scr_text(100, "DONE", 3, SCR_FG);
+    scr_text(134, "RESTARTING", 2, SCR_AMB);
 }

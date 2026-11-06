@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "id": "choppah",
+  "name": "CHOPPAH",
+  "author": "Laurens Profittlich",
+  "license": "MPL-2.0",
+  "tagline": "An Amen chopper for the FM-1",
+  "description": "CHOPPAH turns the M-VAVE FM-1 into an Amen break chopper. Eight classic Amen-family breaks are cut into sixteen slices on the white keys; hold a key to loop it. The black keys are momentary pads for rolls, reverse, freeze, tape stop, gate, filter and dub throws. A live generator rearranges the break, and a four-slot FX chain and a DJ filter sit behind it. Bluetooth audio sends the whole mix to a speaker or headphones.",
+  "tags": ["drum-machine", "sampler"],
+  "install": "https://profikid.github.io/fm1-break-choppah/install/",
+  "site": "https://profikid.github.io/fm1-break-choppah/",
+  "source": "https://github.com/profikid/fm1-break-choppah",
+  "screenshot": "docs/img/card.png",
+  "hardware": {
+    "models": ["FM-1"],
+    "flash": ["856014", "B36014"],
+    "features": ["bluetooth-midi", "bluetooth-audio", "usb-audio-in", "screen-reader"]
+  },
+  "credits": "Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita (Hügelton Instruments)."
+}

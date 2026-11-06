@@ -776,9 +776,7 @@ static void draw_foot(const brk_status_t *st)
         static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
         static const char *const KN_GROOVE[4] = {"SWING", "DRUMS", "", ""};
         static const char *const KN_BTA[4] = {"BT AUDIO", "DEVICE", "SCAN", "CONNECT"};
-        int bst = ui.page == PG_GLOBAL && ui.gpage == 2u && ch_bta_state() == PLAT_BTA_STREAMING;
-        const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? (bst && i == 2 ? "TEST L/R" : bst && i == 1
-                           ? "CODEC" : KN_BTA[i]) : ui.page == PG_GLOBAL && ui.gpage
+        const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_BTA[i] : ui.page == PG_GLOBAL && ui.gpage
                            ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
                            ? KN_GROOVE[i] : KN[ui.page][i];
         if (ui.shown >= 100) {           /* a white key held: its loop, or its slice's effect */
