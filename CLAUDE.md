@@ -42,10 +42,18 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
   `./build.sh` regenerates `app/bank_data.h` (never commit it, never edit it). The bank has 400 KB (`IMAGE_CAPACITY`
   in `tools/prep_breaks.py`) and 16 slots, a break at most `CH_PCM_MAX` 106,496 samples (pool ~326 of 344 KB). The breaks are the bank's only: brk_synth is the no-bank fallback (and
   the tests'). No loading of samples of your own (dropped from scope), and the breaks stay 2 bars (32 steps).
-- Releases are automatic: every push to main is the last `vX.Y` tag + 1 minor (`scripts/next_version.sh`, floor
-  `VERSION`). Don't tag by hand or bump `VERSION` for a minor; raise `VERSION` only for a new major.
+- **Releases are tags, not merges** (since 6 Nov 2026): `scripts/release.sh` tags vX.Y and pushes it; the shared
+  builder (`zvenson/fm1-build@v1`, via `.github/workflows/release.yml`) builds it on GitHub, signs the build
+  provenance, publishes the release and rebuilds the site. The Firmware Hub only shows "Built from source" for
+  packages built that way. A push to main builds and tests (`.github/workflows/ci.yml`) but releases nothing.
+  The version is the last `vX.Y` tag + 1 minor (`scripts/next_version.sh`, floor `VERSION`); don't tag by hand or
+  bump `VERSION` for a minor; raise `VERSION` only for a new major.
+  Release notes live in `docs/hub/notes_vXY.md` (v0.96 → `notes_v096.md`); without that file the release keeps
+  GitHub's auto-changelog. Write the notes **before** the tag, so the release has them.
+- **The build is bit-reproduceerbaar**: the same commit gives the same `.fwsc` (v0.96 built locally = the published
+  `85fabff9…`, 611,743 B). The site therefore serves the *attested* package of the release, not a second build.
 - **Always push to GitHub after changes** (Laurens' standing rule, 4 Nov 2026): commit and push as soon as a change is
-  done, before moving on. Finished, tested work goes to main (a release); work in progress that doesn't build or fit
+  done, before moving on. Finished, tested work goes to main; work in progress that doesn't build or fit
   yet goes to a branch of its own and is pushed there.
 
 ## The update screen
@@ -71,7 +79,19 @@ come from the host scenarios (`app/build/scenarios/*.png`, copied into `app/docs
 ./build.sh             # firmware (needs scripts/bootstrap.sh, Docker/OrbStack on macOS)
 ./build.sh --host      # host simulator
 ./build.sh flash       # macOS Terminal only: the sandboxed shell has no USB access
+scripts/release.sh     # release: tag vX.Y (the next version) and push it; the workflow builds and attests it
+scripts/release.sh 0.97  # release this version
 ```
+
+## The workflows
+
+- `ci.yml` — every push to main: the engine's tests, the firmware build, the emulator's build. Releases nothing.
+- `release.yml` — a tag vX.Y: the shared builder (`zvenson/fm1-build@v1`) builds the package, signs the build
+  provenance (an attestation), and the release is published with it; the site is rebuilt from the same package.
+  This is what makes the Firmware Hub show "Built from source on GitHub" — a build in another workflow does not.
+  The release's notes are `docs/hub/notes_vXY.md`; write them before the tag.
+- `pages.yml` — the site, called by `release.yml` with the version. It takes the *attested* package from the
+  release's artifact, so the site and the Hub serve the same bytes.
 
 ## Platform facts (fm1-base 2d8ed74, Nov 2026)
 
