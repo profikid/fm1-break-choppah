@@ -440,9 +440,11 @@ tempo's own repitch, HALF, REVERSE's speed and the tape stop stay speed effects.
 While it streams, the FM-1's own speaker and headphone output go quiet and MASTER still sets the level. It is stereo,
 as the FM-1's own output: the ping-pong delay, the reverb and the flanger spread left and right. **K3 while streaming
 is TEST L/R:** a low beep on the left, then a high beep on the right, twice; if you hear both beeps on one side, the
-headphones or speaker are playing one channel. **K2 while streaming is CODEC:** JOINT (joint stereo, the default) or
-STEREO (plain stereo). If only one side plays, switch it and run the test again: some speakers decode one better than
-the other. Bluetooth
+headphones or speaker are playing one channel. **K2 while streaming is CODEC:** AUTO (the default: the FM-1 asks the
+speaker for plain stereo when it has it, the mode every speaker decodes), STEREO (plain stereo) or JOINT (joint
+stereo). The mode is agreed with the speaker, so a change takes effect at the next connection, not while streaming.
+The FM-1 always sends the mode it agreed: a speaker that was told "stereo" and receives joint-stereo frames reads the
+wrong channel layout and one of the two channels falls silent. Bluetooth
 audio runs late: 150–300 ms between a key and your ear, so it is for listening and showing, not for playing in time
 (use the FM-1's own output or USB for that). Bluetooth MIDI keeps working beside it on the same radio. Turning
 Bluetooth audio on starts the radio even when Bluetooth MIDI is off.

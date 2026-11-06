@@ -203,7 +203,7 @@ static void ch_bta_value(int i, char *t)
     if (i == 0)
         text_cat(t, st == PLAT_BTA_OFF ? "OFF" : "ON");
     else if (i == 1 && st == PLAT_BTA_STREAMING)
-        text_cat(t, set.bta_codec ? "STEREO" : "JOINT");
+        text_cat(t, set.bta_codec == 1u ? "STEREO" : set.bta_codec == 2u ? "JOINT" : "AUTO");
     else if (i == 1) {
         if (ch_bta_entry(ui.bta_sel, n, &k, &f)) {
             n[9] = 0;                    /* (the foot's width) */
@@ -235,10 +235,10 @@ static void ch_bta_turn(int i, int32_t d)
         app_say("BT AUDIO", on ? "ON" : "OFF");
     } else if (st == PLAT_BTA_OFF)
         app_say("BT AUDIO", "TURN K1 ON");
-    else if (i == 1 && st == PLAT_BTA_STREAMING) {   /* streaming: K2 the SBC coding, joint or plain stereo */
-        set.bta_codec = d > 0;
+    else if (i == 1 && st == PLAT_BTA_STREAMING) {   /* streaming: K2 the SBC coding, asked for at the next connection */
+        set.bta_codec = (uint8_t)((set.bta_codec + (d > 0 ? 1u : 2u)) % 3u);   /* AUTO, plain stereo, joint stereo */
         set_dirty = 1u;
-        app_say("BT CODEC", set.bta_codec ? "STEREO" : "JOINT STEREO");
+        app_say("BT CODEC", set.bta_codec == 1u ? "STEREO" : set.bta_codec == 2u ? "JOINT STEREO" : "AUTO");
     } else if (i == 1) {
         uint32_t c = ch_bta_count();
         ui.bta_sel = (uint8_t)(c ? (uint32_t)clamp((int32_t)ui.bta_sel + (d > 0 ? 1 : -1), 0, (int32_t)c - 1) : 0u);
@@ -274,16 +274,15 @@ static void ch_bta_poll(uint32_t now)
 {
     static int last_st = -1;
 #if FM1B_BT_AUDIO
-    {   /* the SBC coding chosen (K2 while streaming), into fm1-base's encoder (bt/br/bt_acl.c: one translation unit
-         * with this, so its state is in reach). Its own set-up is joint stereo, once a boot at the first stream; this
-         * sets it again as chosen, its bitpool kept, with the interrupts off (the audio interrupt encodes) */
-        static int8_t applied = -1;
-        if (ba_sbc_init_done && applied != (int8_t)set.bta_codec) {
-            uint32_t f = irq_save();
-            bt_sbc_init(&ba_sbc, 44100, (uint8_t)ba_sbc.p.s16BitPool, set.bta_codec ? 0u : 1u);
-            irq_restore(f);
-            applied = (int8_t)set.bta_codec;
-        }
+    {   /* The SBC coding chosen (K2 while streaming): what we ask the speaker for at the NEXT connection
+         * (fm1-base's bt/br/bt_acl.c ba_sbc_prefer, in this unit with this, so its state is in reach). The mode is
+         * negotiated with the speaker, so a change takes effect at the next connection, not while streaming.
+         *
+         * The app does not set the encoder itself any more: the base keeps it on the mode that was agreed
+         * (ba_sbc_agreed_mode). A speaker that was told "stereo" and receives joint-stereo frames reads the wrong
+         * channel layout and one of the two channels falls silent (the user, 2026-11-06: only the right channel of the
+         * speaker sounded, on Polly, LOOM-8 and Optimist alike). The agreement decides, never the app. */
+        ba_sbc_prefer = set.bta_codec == 2u ? 1u : set.bta_codec == 1u ? 2u : 0u;   /* joint, plain, else the base's */
     }
 #endif
     if (ch_bta_state() != last_st) {     /* (the foot's K3 is SCAN or TEST L/R by the state) */

@@ -52,7 +52,9 @@ typedef struct {
     uint8_t pattern;                     /* the pattern playing, 0..NPAT-1 (patterns: their own store object) */
     uint8_t bta_on;                      /* Bluetooth audio out (GLOBAL, third part): on at power-on, the last device
                                           * connected again */
-    uint8_t bta_codec;                   /* its SBC coding: 0 joint stereo (fm1-base's), 1 plain stereo */
+    uint8_t bta_codec;                   /* its SBC coding, what we ask the speaker for: 0 automatic (fm1-base's
+                                          * choice: plain stereo when the speaker has it), 1 plain stereo, 2 joint
+                                          * stereo */
     uint8_t click;                       /* the metronome's click (TAP K4): its level, 0 (off) .. 100 %, on each beat
                                           * while playing (was a spare byte: older saves have it off) */
     uint8_t rsv;
