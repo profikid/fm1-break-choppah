@@ -105,19 +105,21 @@ Clone with `--recursive` (fm1-base is a submodule in `base/`).
 
 ## Publishing
 
-Every merge (push) to `main` is a release. GitHub Actions ([.github/workflows/pages.yml](.github/workflows/pages.yml))
-takes the last `vX.Y` tag up one minor (`v0.4` → `0.5`), builds the firmware, the emulator and the site with that
-version, tags the commit, attaches `choppah-X.Y.fwsc` to a GitHub release with notes from the commits, and publishes
-the site to GitHub Pages. No tags or version edits by hand:
+**A release is a tag, not a merge.** A push to `main` builds and tests
+([.github/workflows/ci.yml](.github/workflows/ci.yml)) and releases nothing; a tag `vX.Y` makes the release
+([.github/workflows/release.yml](.github/workflows/release.yml)): the shared builder
+(`zvenson/fm1-build@v1`) builds the firmware, signs the build provenance, publishes the release with
+`choppah-X.Y.fwsc` attached and rebuilds the site from that same package. That signed build is what lets the
+Firmware Hub show CHOPPAH as "Built from source on GitHub". No version edits by hand:
 
-- `VERSION` is the floor, not the current release: set it to `1.0` to start 1.x (the next merge releases 1.0, then
-  1.1, …). The first release, with no tags yet, is `VERSION` itself. After 0.99 comes 1.0 (two digits each, the
-  package identity `FM-1_86XXYYZZ`).
-- Re-running a build keeps its commit's version. A manual run (*Run workflow*) of an unreleased commit builds
-  `X.Y-dev` and releases nothing.
-- `scripts/next_version.sh` prints the version the next merge gets.
-
-`scripts/publish_site.sh VERSION DEST` builds and publishes the same site to any folder or server.
+- `scripts/release.sh` tags the next version (the last tag plus one minor) and pushes it; `scripts/release.sh 1.0`
+  tags that version. `scripts/next_version.sh` prints what the next release would be.
+- `VERSION` is the floor, not the current release: raise it only to start a new major. The first release, with no
+  tags yet, is `VERSION` itself. The versions are `X.Y` (two digits each), the package identity `FM-1_86XXYYZZ`:
+  1.0 is `FM-1_86010000`.
+- The release's notes are `docs/hub/notes_vXY.md` (1.0 → `notes_v100.md`); without that file the release keeps
+  GitHub's auto-changelog. Write them **before** the tag.
+- `scripts/publish_site.sh VERSION DEST` builds and publishes the same site to any folder or server.
 
 ## Licence and credits
 
