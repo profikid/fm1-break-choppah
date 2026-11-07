@@ -239,7 +239,7 @@
       (p.part ? "<em>&lt; " + (p.id === "edit" ? s.n.split(" · ")[1] : "TREMOLO" + (sub ? " " + s.n : "")) + " &gt;</em>" : "");
     $("strip").innerHTML = s.strip + (s.note ? "<em>" + s.note + "</em>" : "");
     $("knobs").innerHTML = s.k.map((k, i) => k ? "<div>" + k + "<b>·····</b></div>" : '<div class="empty">K' + (i + 1) + "<b>&nbsp;</b></div>").join("");
-    $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter", 1], ["TABS", p.btn + " › " + tabs.join(" · "), 0], ["WAVEFORM", "The break, the slice lit, the playhead", 1],
+    $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter, battery", 1], ["TABS", p.btn + " › " + tabs.join(" · "), 0], ["WAVEFORM", "The break, the slice lit, the playhead", 1],
       ["STRIP", s.strip.toLowerCase(), 0], ["PADS", "11 pads, lit while held", 1], ["KNOBS", s.k.map(k => k || "—").join(" · "), 0]]
       .map(([a, b, same]) => "<div><dt>" + a + '</dt><dd class="' + (same ? "same" : "") + '">' + b + "</dd></div>").join("");
     const encs = [["SELECT", "Tempo (SEL: 0.1)", "on"], ["ALGORITHM", p.algo, "on"], ["PRESETS", p.presets, "on"]]
