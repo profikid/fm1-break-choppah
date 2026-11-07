@@ -64,16 +64,16 @@ The mail as it stands (v0.89):
 
 ## The package
 
-- **File:** CHOPPAH 0.89, the installer's `choppah-0.89.fwsc`; the release v0.89 attaches the same file.
+- **File:** CHOPPAH 1.0, the installer's `choppah-1.0.fwsc`; the release v1.0 attaches the same file.
 - **Release:** GitHub releases, one per tag (`scripts/release.sh` tags vX.Y). A merge to `main` builds and
   tests but releases nothing; a tag makes the release. The hub takes every later release by itself, within
   three hours.
 - **Built from source:** since v0.97 the package is built on GitHub by the hub's shared builder
   (`zvenson/fm1-build@v1`) and signed with build provenance, so the card gets the "Built from source on
   GitHub" key. Anyone can check it (use the current version's file):
-  `gh attestation verify choppah-0.99.fwsc --repo profikid/fm1-break-choppah --signer-workflow zvenson/fm1-build/.github/workflows/build.yml`
-- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86008900` for 0.89. The hub's own list of identities
-  has no `FM-1_86*`, so the prefix is free and the hub can tell exactly which firmware is on a connected FM-1.
+  `gh attestation verify choppah-1.0.fwsc --repo profikid/fm1-break-choppah --signer-workflow zvenson/fm1-build/.github/workflows/build.yml`
+- **Identity:** `FM-1_86`. Every release keeps the prefix: `FM-1_86010000` for 1.0. The hub's own list of identities
+  has no `FM-1_86*` besides CHOPPAH's own, so the prefix is free and the hub can tell exactly which firmware is on a connected FM-1.
 - **Update loader:** felucca-bsp's, the platform's loader (fm1-base's `base/bsp/loader/`), shipped in the package.
 - **USB:** a MIDI device named "CHOPPAH FM-1".
 - **What it keeps:** its own store in the data area (`APP_STORE_MAP`: the settings, the panel, the Bluetooth keys and
@@ -87,7 +87,7 @@ The hub lists a firmware only when all six are met (`fmhub.md`, section 1). All 
 |---|---|---|
 | 1 | Open source, the complete source in the repository | MPL-2.0, `LICENSE` in the root, the source at every tag |
 | 2 | A GitHub release with the `.fwsc` attached | every release attaches it; the hub takes each one by itself |
-| 3 | Its own `FM-1_` identity, free on the hub | `FM-1_86` (`FM-1_86008900` in 0.89); no `FM-1_86*` on the hub |
+| 3 | Its own `FM-1_` identity, free on the hub | `FM-1_86` (`FM-1_86010000` in 1.0); no other `FM-1_86*` on the hub |
 | 4 | The update loader in the package | felucca-bsp's loader, shipped in every package |
 | 5 | Tested on a real FM-1, leaving it again works | **done** — tested on a real FM-1: installed over the official V15 and over another firmware, and another firmware installs again afterwards |
 | 6 | An `fmhub.json` in the repository root | `fmhub.json`, on `main`; the hub reads it every three hours |
