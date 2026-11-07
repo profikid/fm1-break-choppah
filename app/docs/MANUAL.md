@@ -48,7 +48,8 @@ The slicer view, top to bottom:
 
 - **Header:** play or stop, the break's name, the pattern (P1–P16; "P2>" while P2 waits for the loop's end), REC
   while recording, a level meter (left and right, what leaves after MASTER: amber from
-  −8 dB, white near full scale), the tempo.
+  −8 dB, white near full scale), the battery (three bars, red at one or none; a bolt
+  while a USB host powers the FM-1), the tempo.
 - **Tabs:** the button you pressed (as printed on the panel), then the page's parts as tabs, the one you are on lit:
   the button again (or ALGORITHM) goes to the next. On EDIT and FX the part edited shows at the right, "< SUB FX >".
   Opening a page, or turning to another part, says the same in the header for a moment: the button, then the part

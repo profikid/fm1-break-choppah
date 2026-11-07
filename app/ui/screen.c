@@ -336,6 +336,29 @@ static void intro_end(void)
     ui.redraw = RG_ALL;
 }
 
+/* the battery, next to the header's level meter (plat_battery): three bars from the foot, red at one or none, a USB
+ * host powering the FM-1 shows a bolt instead. 9 wide, rows 4..20 (the header's canvas); -1 (not read yet): nothing */
+#define BATT_W 9                         /* the body's width (the nub 3 wide on top of it) */
+#define BATT_LOW RGB(255, 104, 72)       /* one bar or none: red */
+static void draw_batt(int32_t x, int b)
+{
+    uint16_t c = b >= 0 && b <= 1 ? BATT_LOW : C_DIM;
+    int32_t i;
+    if (b < 0)
+        return;                          /* not read yet (the keys own the converter: APP_KEY_SENSE) */
+    cv_rect(x + 3, 4, 3, 2, c);           /* the nub */
+    cv_rect(x, 6, BATT_W, 14, c);         /* the body's frame */
+    cv_rect(x + 1, 7, BATT_W - 2, 12, C_BLACK);
+    if (b == 4) {                        /* a USB host powers the FM-1: a bolt */
+        cv_line(x + 5, 7, x + 2, 12, C_HI);
+        cv_line(x + 2, 12, x + 6, 12, C_HI);
+        cv_line(x + 6, 12, x + 3, 18, C_HI);
+        return;
+    }
+    for (i = 0; i < b && i < 3; i++)      /* the bars from the foot up */
+        cv_rect(x + 2, 15 - i * 4, BATT_W - 4, 3, b <= 1 ? BATT_LOW : C_HI);
+}
+
 /* the header's level meter: what leaves, left and right, -48..0 dBFS in 18 steps of 2.7 dB; amber from -8 dB, the
  * top white near full scale */
 static void draw_meter(void)
@@ -389,6 +412,7 @@ static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now
         ui.meter_x = (int16_t)(228 - text_w(&FONT_B, t) - text_w(&FONT_T, "BPM") - 12);   /* left of BPM */
         cv_text(228 - text_w(&FONT_B, t) - text_w(&FONT_T, ext_active() ? "EXT" : "BPM"), 10, &FONT_T,
                 ext_active() ? "EXT" : "BPM", ext_active() ? C_AMB : C_GRAY);
+        draw_batt(ui.meter_x - 12, plat_battery());        /* the battery, left of the level meter */
     }
     cv_rect(0, 27, 240, 1, C_LINE);
     cv_blit(0, 0);

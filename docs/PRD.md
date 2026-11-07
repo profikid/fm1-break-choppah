@@ -206,6 +206,7 @@ ABG's four, plus the master section a live unit needs.
 | A-80 | Hold-for-help cards on every button | P1 | |
 | A-81 | Manual (docs/MANUAL.md → site) | P1 | |
 | A-82 | Screen-reader words (fm1-reader) | P2 | |
+| A-83 | **Battery in the header** (7 Nov 2026): the level next to the header's level meter (fm1-base's `plat_battery`: 0..3 bars, 4 a USB host powers the FM-1, -1 not read yet): a small battery outline with its bars from the foot, red at one bar or none (a bolt while USB powers it), nothing before the first reading. It redraws when the level changes, not every frame | P1 | *Done; host scenario: the icon beside the meter at 3 bars; 0 and 1 red, 4 the bolt. Not yet seen on an FM-1* |
 
 ---
 

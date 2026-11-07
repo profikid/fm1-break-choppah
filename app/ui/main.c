@@ -963,6 +963,13 @@ void app_frame(void)
     hdr = (uint32_t)st.playing | (uint32_t)set.tempo_x10 << 1 | (uint32_t)set.brk << 13 | (b ? 1u : 0u) << 20 |
           (uint32_t)ext_active() << 21 | (uint32_t)set.pattern << 22 | (uint32_t)ui.rec << 26 |
           (uint32_t)(pat_next >= 0) << 27;
+    {                                    /* the battery's level: its own bit, so a change redraws the header */
+        int32_t batt = plat_battery();
+        if (batt != ui.last_batt) {
+            ui.last_batt = (int8_t)batt;
+            ui.redraw |= RG_HEAD;
+        }
+    }
     if (hdr != ui.last_hdr) {
         ui.last_hdr = hdr;
         ui.redraw |= RG_HEAD | (ui.page == PG_TAP ? RG_BLOCKS : 0);

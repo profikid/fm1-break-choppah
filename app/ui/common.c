@@ -54,6 +54,7 @@ static struct {
     uint32_t reset_t;                    /* GLOBAL's RESET ALL: when it was first turned (it asks twice) */
     uint32_t mix_drawn;                  /* its faders' meters: when last drawn */
     int16_t meter_x;                     /* the header's level meter: where (0: not shown now, a message is) */
+    int8_t last_batt;                    /* the battery's level as drawn (-1: not read yet) */
     uint32_t meter_drawn;
     uint32_t pad_since, fx_drawn;        /* when it was pressed; the animation's last frame */
     float reel;                          /* the tape stop's reels, turns */
