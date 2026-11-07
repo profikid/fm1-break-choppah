@@ -273,27 +273,27 @@ Useful things to say: what you play, what breaks you want, what the pads are mis
 is goed bevonden. Hij zegt dat de entry ná de catalogus-refresh (#143, gemerged) in de lijst
 komt; dat is PR #145, en #146 doet hetzelfde plus de live Hub-nieuwekomers.
 
-## Waar CHOPPAH nu wel/niet staat (stand 2026-11-05 06:17 UTC, live geverifieerd)
+## Waar CHOPPAH nu wel/niet staat (stand 2026-11-07 02:30 UTC, live geverifieerd)
 
 | Catalogus | Status |
 |---|---|
-| **Firmware Hub** | **wel** ✅ — `id: choppah`, v0.93, `added 2026-11-04`, ★5, 3 installs, kaart + pakket live. Catalogus: 154 entries, `updated 2026-11-05 06:00 UTC` |
-| **mutant.cloud** | **wel** ✅ — https://mutant.cloud/#/p/choppah, v0.93, `FM-1_86009300`, sha256 aanwezig, `listedBy: action:profikid` |
-| **fm1-editor** | **wel** ✅ — v0.90 + slicer-foto. De release-link wijst nog naar v0.88 → upstream-patroon (25 entries hebben dezelfde afwijking), niet onze fout |
+| **Firmware Hub** | **wel** ✅ — `id: choppah`, v0.99, `added 2026-11-04`, ★8, 48 installs, `provenance.verified: true`. Catalogus: 161 entries, `updated 2026-11-07 02:03 UTC`. **De sync loopt drie uur achter: v1.0 (met de batterij in de header) wordt binnenkort opgepakt** en dan verdwijnt het `beta: true` (dat hangt aan de 0.x-versie) |
+| **mutant.cloud** | **wel** ✅ — https://mutant.cloud/#/p/choppah, **v1.0**, `FM-1_86010000`, sha256 `05eb16c4…`, `listedBy: action:profikid` |
+| **fm1-editor** | **wel** ✅ — kaart + slicer-foto (PR #451 gemerged); de release-link loopt soms achter → upstream-patroon (25 entries hebben dezelfde afwijking), niet onze fout |
 | **aroum/fm1-custom-fw** | **wel** ✅ — rij 91 (PR #24 gemerged) |
-| **altstrument.org** | **wel** ✅ — `data-fw="choppah"`, release-link v0.93 |
-| **FM1 Manager / FM-SWITCH / FM-1-Swap** | **wel** ✅ — `discovered.json`, id `fm1breakchoppah`, staat op v0.23 (oud, maar het pakket is er) |
-| **fm1-emu (emulator)** | **eigen lijst** ✅ — `web/firmwares-own.json` in `master` staat `choppah` met de alias-URL. De **gegenereerde** `web/firmwares.json` (155) heeft 'm nog niet → PR #145/#146 |
-| awesome-fm-1 | **wel**, maar zegt nog "17 breaks" → PR #15 (OPEN) |
-| **awesome-music-gear-firmware** | **niet** → PR #32 (OPEN) |
-| Atlas | **niet** → PR #3 (OPEN) |
-| Mooring | **niet** → issue #16 (0 antwoord van Gustavo) |
-| **2bbb/fm1-firmware-collection** | **niet** (nog) — de Hub staat er sinds 4 nov in, 2bbb draait dagelijks om 03:17 en pakt 'm dan op; de laatste run was 4 nov 10:56, vóór de Hub-listing |
+| **Lapin/awesome-music-gear-firmware** | **wel** ✅ — PR #32 gemerged 6 nov 08:17 |
+| **altstrument.org** | **wel** ✅ — `data-fw="choppah"`, release-link volgt de Hub |
+| **FM1 Manager / FM-SWITCH / FM-1-Swap** | **wel** ✅ — `discovered.json`, id `fm1breakchoppah` (de versie loopt daar traag mee, maar het pakket is er) |
+| **fm1-emu (emulator)** | **wel** ✅ — PR #145/#146 gemerged: 'm staat in de **gegenereerde** `web/firmwares.json` met de alias-URL |
+| awesome-fm-1 | **wel**, maar zegt nog "17 breaks" → PR #15 (OPEN, schoonheidsklacht) |
+| Atlas | **nee** → PR #3 (OPEN, schoonheidsklacht) |
+| Mooring | **nee** → issue #16 (3 comments, 0 antwoord van Gustavo) |
+| **2bbb/fm1-firmware-collection** | **wel** ✅ — `profikid__fm1-break-choppah` met de hub-versie; draait dagelijks om 03:17 |
 | **fm1firmwarehub.online** | **niet** → Netlify-formulier op /submit/ (hieronder) |
 
 ### De Hub-listing is binnen — dat haalt de hele keten op
 
-De Hub staat sinds **4 november 2026** live (v0.93). De afhankelijke catalogi volgen de Hub
+De Hub staat sinds **4 november 2026** live. De afhankelijke catalogi volgen de Hub
 zelf: mutant.cloud, FM1 Manager, FM-SWITCH, FM-1-Swap, altstrument, 2bbb en de emulator. Eén
 Hub-listing zet CHOPPAH overal neer — dat is de reden dat de mail belangrijker was dan de PR's.
 
@@ -310,7 +310,7 @@ De listing is aangemaakt door `.github/workflows/mutant.yml` in de repo. **Dat i
 nieuwe release is er automatisch. Handmatig draaien kan ook:
 
 ```
-gh workflow run mutant.yml --repo profikid/fm1-break-choppah -f tag=v0.75
+gh workflow run mutant.yml --repo profikid/fm1-break-choppah -f tag=v1.0
 ```
 
 > Let op: de `release: published`-trigger vuurt nooit, omdat de release door de build-workflow met de
