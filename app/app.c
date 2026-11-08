@@ -258,7 +258,7 @@ static void pat_read_back(void)          /* the engine's steps into the pattern 
 static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 #define CH_DUB_LEN 30720u                /* the dub delay's line: 0.70 s a side, 3/8 down to 97 BPM, 1/2 to 172 */
 static int16_t dub_line[CH_DUB_LEN] PLAT_POOL;
-static uint32_t pfx_mem[BRK_PAD_V * BRK_PAD_ST_BYTES / 4u] PLAT_POOL;   /* the ARP keys' voices (9.4 KB) */
+static uint32_t pfx_mem[BRK_PAD_V * BRK_PAD_ST_BYTES / 4u] PLAT_POOL;   /* the ARP keys' voices (8.6 KB) */
 static brk_break_t brk0;
 static brk_break_t brk_cur[2];           /* the bank's break playing (pcm_a holds it), and the next one's: the render
                                           * keeps its own while the next is written */

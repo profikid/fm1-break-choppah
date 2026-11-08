@@ -16,7 +16,7 @@
  * first. One REVERB and one DELAY in all: a pad's passes the sound on when the chain has its own */
 #define BRK_PAD_V 4u
 #define BRK_FX_ALL (BRK_FX_SLOTS + BRK_PAD_V)
-#define BRK_PAD_ST_BYTES 2400u           /* a voice's state: brk_fx_pad_buffer wants BRK_PAD_V of these */
+#define BRK_PAD_ST_BYTES 2200u           /* a voice's state (sizeof slot_st_t, a multiple of 8): brk_fx_pad_buffer wants BRK_PAD_V of these */
 /* the library. Each effect's three settings are 0..1 (p[0..2]; brk_fx.c maps them), then its mix:
  *   FILTER   cutoff (30 Hz..16 kHz), resonance, mode (low-pass / band-pass / high-pass)
  *   CRUNCH   bits (16..2), rate (44.1 kHz..1 kHz), drive
