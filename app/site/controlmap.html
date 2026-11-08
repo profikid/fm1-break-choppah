@@ -166,11 +166,13 @@
       { n: "PERFORM", k: ["GATE", "DJ FILTER", "FX", "COMPLEXITY"], strip: "16 SLICE BLOCKS", note: "the slice playing lit; a held key outlined" },
       { n: "GENERATOR", k: ["COMPLEXITY", "ANCHOR", "ROLL", "FILL"], strip: "16 SLICE BLOCKS", note: "HOME again" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
-      notes: [["SEL", "Pressed alone: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["ARP", "The overlays"]] },
-    { id: "arp", btn: "ARP", name: "OVERLAY", sub: "Sixteen effects to hold", again: "nothing", subs: [
-      { n: "OVERLAY", k: ["AMOUNT", "RATE", "SWEEP", "LATCH"], strip: "16 EFFECT CARDS, 4 × 4 · LIT WHILE ON · EACH ITS AMOUNT", note: "Hold a key: its effect, over everything" } ],
-      algo: "Break", presets: "Pattern P1–P16", keys: "overlays",
-      notes: [["Keys 1-8", "DIVE RISE RADIO WAH CRUSH LO-FI DIST RING"], ["Keys 9-16", "CHOP GATE DUCK PAN BOOM WOBBLE JET CUT"], ["K4 LATCH", "A press on, a press off (stays on other pages)"], ["SEL + ARP", "A random pattern (SEL + SAVE undoes)"]] },
+      notes: [["SEL", "Pressed alone: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["ARP", "Effects on the black keys"]] },
+    { id: "arp", btn: "ARP", name: "EFFECT PADS", sub: "An effect on each black key", again: "the shown key's next part (MAIN, MORE, MOD)", part: true, subs: [
+      { n: "MAIN", k: ["PARAM 1", "PARAM 2", "PARAM 3", "MIX"], strip: "THE SHOWN KEY'S EFFECT LIVE · ITS MODULATOR · IN / OUT", note: "the key pressed last, or ALGORITHM" },
+      { n: "MORE", k: ["EXTRA 1", "EXTRA 2", "EXTRA 3", "EXTRA 4"], strip: "THE SHOWN KEY'S EFFECT LIVE · ITS MODULATOR · IN / OUT", note: "as the FX page's MORE" },
+      { n: "MOD", k: ["RATE", "DEPTH", "SHAPE", "TARGET"], strip: "THE SHOWN KEY'S EFFECT LIVE · ITS MODULATOR · IN / OUT", note: "as the FX page's MOD" } ],
+      algo: "The key shown", presets: "Its effect", keys: "slices", black: "fx",
+      notes: [["Black key held", "Its effect over everything, while held (four at once)"], ["SEL + black key", "Hold it on (any page); again: let go"], ["Pads", "Each key's effect named, lit while on"], ["SEL + ARP", "A random pattern (SEL + SAVE undoes)"]] },
     { id: "fx", btn: "FX", name: "FX CHAIN", sub: "Four slots in series", again: "next part (MAIN, MORE, MOD), then the next slot", part: true, subs: [
       { n: "MAIN", k: ["PARAM 1", "PARAM 2", "PARAM 3", "MIX"], strip: "THE EFFECT LIVE · THE CHAIN · ITS MODULATOR · IN / OUT", note: "ALGORITHM: the slot (1–4)" },
       { n: "MORE", k: ["EXTRA 1", "EXTRA 2", "EXTRA 3", "EXTRA 4"], strip: "THE EFFECT LIVE · THE CHAIN · ITS MODULATOR · IN / OUT", note: "each effect its own: see §6" },
@@ -230,13 +232,13 @@
   $("subs").addEventListener("click", e => { const b = e.target.closest(".sub"); if (b) { sub = +b.dataset.i; render(); } });
 
   function render() {
-    const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps" || p.keys === "taps" || p.keys === "overlays";
+    const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps" || p.keys === "taps";
     root.querySelectorAll(".pbtn").forEach((b, i) => b.setAttribute("aria-pressed", String(i === cur)));
     $("subs").innerHTML = p.subs.map((x, i) => '<button type="button" class="sub" data-i="' + i + '" aria-pressed="' + (i === sub) + '">' + x.n + "</button>").join("");
-    const tabs = p.id === "edit" ? ["KICK", "SNARE", "HAT"] : p.id === "fx" ? ["1", "2", "3", "4"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
-    const on = p.id === "edit" ? (sub < 5 ? 0 : 1) : p.id === "fx" ? 0 : sub;
+    const tabs = p.id === "edit" ? ["KICK", "SNARE", "HAT"] : p.id === "fx" ? ["1", "2", "3", "4"] : p.id === "arp" ? ["PAD 1"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
+    const on = p.id === "edit" ? (sub < 5 ? 0 : 1) : p.id === "fx" || p.id === "arp" ? 0 : sub;
     $("tabs").innerHTML = "<b>" + p.btn + "</b>" + tabs.map((t, i) => '<span class="' + (i === on ? "on" : "") + '">' + t + "</span>").join("") +
-      (p.part ? "<em>&lt; " + (p.id === "edit" ? s.n.split(" · ")[1] : "TREMOLO" + (sub ? " " + s.n : "")) + " &gt;</em>" : "");
+      (p.part ? "<em>&lt; " + (p.id === "edit" ? s.n.split(" · ")[1] : (p.id === "arp" ? "FILTER" : "TREMOLO") + (sub ? " " + s.n : "")) + " &gt;</em>" : "");
     $("strip").innerHTML = s.strip + (s.note ? "<em>" + s.note + "</em>" : "");
     $("knobs").innerHTML = s.k.map((k, i) => k ? "<div>" + k + "<b>·····</b></div>" : '<div class="empty">K' + (i + 1) + "<b>&nbsp;</b></div>").join("");
     $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter, battery", 1], ["TABS", p.btn + " › " + tabs.join(" · "), 0], ["WAVEFORM", "The break, the slice lit, the playhead", 1],
@@ -252,8 +254,8 @@
     }
     [0, 1, 3, 4, 5, 7, 8, 10, 11, 12, 14].forEach((g, j) => { h += '<div class="bk" style="left:calc(' + (g + 1) + ' * 100% / 16 - 100% / 16 * .31)">' + PADS[j] + "</div>"; });
     $("kbd").innerHTML = h;
-    $("keyrole").innerHTML = "<span>White keys: <b>" + (p.keys === "overlays" ? "HOLD FOR AN EFFECT: 1 DIVE … 16 CUT (ANY TOGETHER)" : p.keys === "taps" ? "EVERY KEY TAPS THE TEMPO" : steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : "SLICES 1–16 (hold to loop)") +
-      "</b></span><span>Black keys: <b>PADS (momentary, any page)</b></span>";
+    $("keyrole").innerHTML = "<span>White keys: <b>" + (p.keys === "taps" ? "EVERY KEY TAPS THE TEMPO" : steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : "SLICES 1–16 (hold to loop)") +
+      "</b></span><span>Black keys: <b>" + (p.black === "fx" ? "EFFECTS (held; SEL + key: hold on)" : "PADS (momentary, any page)") + "</b></span>";
     $("notes").innerHTML = p.notes.map(([a, b]) => '<div class="note"><span>' + a + "</span>" + b + "</div>").join("") ||
       '<div class="note"><span>No combinations</span>Only the controls every page shares.</div>';
   }

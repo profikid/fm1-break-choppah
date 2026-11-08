@@ -64,7 +64,7 @@ The slicer view, top to bottom:
 **The rules.** ALGORITHM picks what you edit on the page (an FX slot, a drum's part, a SEQ lane, GLOBAL's part); on HOME (both its parts) and the MIXER, where there is nothing to pick, it is the break. PRESETS picks what goes
 in (an effect, a kick, a snare or hat sound); elsewhere it is the pattern. **SEQ is where everything is sequenced**
 (the break's steps and the kick, snare and hat lanes), **EDIT where the drums' sounds are made** (kick, snare, hat);
-the white keys play slices everywhere but SEQ, ENV (tap tempo) and ARP (overlays). **SEL + ALGORITHM is the break and SEL +
+the white keys play slices everywhere but SEQ and ENV (tap tempo). **SEL + ALGORITHM is the break and SEL +
 PRESETS the pattern on every page.** A page's button pressed again is its next part. **Press SEL** alone and the strip
 lists its combinations (SEL again, or any other button, key or knob, closes it). The control map (§11) shows all of it at once.
 
@@ -210,43 +210,34 @@ the keys play slices) is written into the pattern at the step it lands on, and s
 other page the whole pattern. SEL + ARP (a random pattern) writes into the pattern playing. **SEL + SAVE undoes**
 either (and FILL, CLR / 4X4 and COPY on a drum lane); press it again to redo. SAVE keeps all 16.
 
-### Overlays
+### ARP: effects on the black keys
 
-**ARP** opens OVERLAY: sixteen effects on the white keys, over everything that plays (the break, the drums, the FX
-chain's tails). Hold a key and its effect comes in (a 5 ms fade, no click), let go and it goes; hold several and
-they stack. With **LATCH** on (K4) a press switches an effect on and the next press off, and what is latched stays on
-when you go to another page, so you can play slices on HOME through it.
+**ARP** turns the eleven black keys into effect pads. The white keys keep playing slices, as on HOME, so one hand
+chops while the other throws effects. Each black key holds an effect of the FX library (FILTER, CRUNCH, DRIVE, PUNCH,
+FLANGER, RING MOD, TREMOLO, REVERB, DELAY, EQ, TAPE, CLIP; MB COMP stays the chain's), over everything that plays (the
+break, the drums, the FX chain and its tails) before the limiter. Hold a key and its effect comes in (a 5 ms fade,
+no click), let go and it goes; REVERB and DELAY stop taking sound in, so their tails ring out.
 
-![OVERLAY: DIVE and CHOP held (lit), CHOP touched last](img/screen-overlay.png "OVERLAY")
+**SEL + a black key holds it** (HOLD, an amber line under its pad): it stays on until SEL + the key again, also on
+the other pages, so you can play HOME's slices through it. Four effects sound at once: a fifth key takes the voice of
+the oldest (a held one let go first; a latched one taken over lets go).
 
-| White key | Effect | What it does | AMOUNT (K1) |
-| --- | --- | --- | --- |
-| 1 | DIVE | A low-pass sweeping down over the SWEEP | How far down (and its resonance) |
-| 2 | RISE | A high-pass sweeping up over the SWEEP | How far up |
-| 3 | RADIO | A narrow band at 1.3 kHz, a little driven: a telephone, a radio | Its mix and how narrow |
-| 4 | WAH | A resonant band rising and falling on the beat (half the RATE) | Its mix and resonance |
-| 5 | CRUSH | Fewer bits | 15 bits down to 3 |
-| 6 | LO-FI | A lower sample rate: each sample held | Held 2 to 24 times |
-| 7 | DIST | Overdrive | Its drive |
-| 8 | RING | A ring modulator | Its pitch, 90 Hz to 1.2 kHz |
-| 9 | CHOP | The sound cut off and on at the RATE | How deep the cut |
-| 10 | GATE | The same, twice as fast | How deep |
-| 11 | DUCK | A pump: down on each beat, swelling back over it | How deep |
-| 12 | PAN | Left to right and back, a cycle every four of the RATE | How wide |
-| 13 | BOOM | The low end up, soft-clipped | How much |
-| 14 | WOBBLE | Tape wow and flutter: the pitch wandering | How far |
-| 15 | JET | A flanger sweeping once a bar | Its mix |
-| 16 | CUT | Silence: a hole for a drop | How much quieter |
+![ARP: four pads held, DRIVE shown](img/screen-arp.png "ARP")
 
-The cards light while their effect sounds, a latched one is outlined amber, the one K1 tunes is outlined white, and
-the bar on each card is its amount (each keeps its own). The white keys light for the effects on.
+**The key pressed last is the one shown**, in the FX page's own view: its parts (MAIN, MORE, MOD), its picture live,
+its modulator and its level in and out. Turn **ALGORITHM** to show another key without playing it. **PRESETS** puts
+another effect on it, **K1–K4** set it (as on the FX page, K4 its mix), **ARP again** steps its parts: MORE's extra
+knobs and MOD's tempo-synced modulator work as on the FX page (§6). The pads under the strip name each key's effect
+(LP, HP, BP for the filters), lit while on.
 
-| Knob | Sets |
+| Black key | Effect at the start |
 | --- | --- |
-| K1 AMOUNT | The amount of the effect touched last, 0–100 % |
-| K2 RATE | CHOP's rate: 1/4 · 1/8 · 1/16 (the start) · 1/32; GATE twice it, WAH half, PAN a quarter |
-| K3 SWEEP | How long DIVE and RISE take to get there: 1/4 bar · 1/2 bar · 1 bar (the start) · 2 bars |
-| K4 LATCH | OFF (on while held) · ON (a press switches on and off; turning it off lets go of all) |
+| 1 · 2 · 3 | FILTER: a resonant low-pass · a high-pass · a band-pass |
+| 4 · 5 · 6 | CRUNCH · DRIVE · RING MOD |
+| 7 · 8 · 9 | FLANGER · TREMOLO (a 1/16 gate) · TAPE (wow) |
+| 10 · 11 | DELAY (a 3/16 throw) · REVERB |
+
+SAVE keeps each key's effect and settings.
 
 They follow the tempo playing (stopped, they keep time by themselves). SAVE keeps the amounts and the knobs.
 
@@ -541,7 +532,7 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | Reset all (twice) |
 | GLO a third time (BT audio) | On / off | Device | Scan | Connect / hang up |
-| ARP (overlay; white keys hold effects) | Amount (the effect touched last) | Rate | Sweep | Latch |
+| ARP (black keys hold effects; ARP again: MORE, MOD) | the shown key's effect: setting 1 | Setting 2 | Setting 3 | Mix |
 | ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | Click level (0: off) |
 | EDIT (kick; ALGORITHM its part) | see §8: MIX, SUB … CLICK FX, MACRO, OUT | | | |
 | EDIT again (snare, then hat) | Level · Snap / cut | Tune · Drive | Decay | Tone |
@@ -553,7 +544,7 @@ the slice lit in the waveform shrinks with it. It covers the loop's slices, ratc
 
 The generator rearranges the break as it plays: **complexity** is how often it jumps, **anchor** keeps the kick and
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
-of a phrase; it is HOME's second part (HOME again). SEL + ARP writes a random pattern (ARP alone opens the overlays).
+of a phrase; it is HOME's second part (HOME again). SEL + ARP writes a random pattern (ARP alone opens the black keys' effects).
 
 ## 11. The control map
 
