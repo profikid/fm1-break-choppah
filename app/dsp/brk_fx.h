@@ -8,6 +8,15 @@
 #include "brk_math.h"
 
 #define BRK_FX_SLOTS 4u
+/* the ARP page's black keys (PRD B-55): each its own effect of the library (not MB COMP), on while held or latched,
+ * over the whole mix after the chain (the drums around it too), before the limiter. BRK_PAD_V voices sound at once:
+ * the main loop gives each pad sounding one (brk_fx_set_pad); a voice let go fades out in ~5 ms, REVERB's and DELAY's
+ * send instead, so their tails ring on (brk_fx_pad_busy: until they are quiet). They are the engine's slots
+ * BRK_FX_SLOTS .. BRK_FX_ALL - 1 for brk_fx_set_fxx, brk_fx_meter and brk_fx_watch; the overload guard sheds them
+ * first. One REVERB and one DELAY in all: a pad's passes the sound on when the chain has its own */
+#define BRK_PAD_V 4u
+#define BRK_FX_ALL (BRK_FX_SLOTS + BRK_PAD_V)
+#define BRK_PAD_ST_BYTES 2400u           /* a voice's state: brk_fx_pad_buffer wants BRK_PAD_V of these */
 /* the library. Each effect's three settings are 0..1 (p[0..2]; brk_fx.c maps them), then its mix:
  *   FILTER   cutoff (30 Hz..16 kHz), resonance, mode (low-pass / band-pass / high-pass)
  *   CRUNCH   bits (16..2), rate (44.1 kHz..1 kHz), drive
@@ -190,7 +199,7 @@ void brk_fx_set_fxx(uint32_t slot, const brk_fxx_t *x);
 typedef struct { float in, out, mod, ph, p[4]; } brk_fx_meter_t;
 void brk_fx_meter(uint32_t slot, brk_fx_meter_t *m);
 /* the slot whose level in and out the engine follows (brk_fx_meter's in, out; the others' stay 0): the one the
- * screen shows, BRK_FX_SLOTS for none. Following costs the render a little on every sample */
+ * screen shows, BRK_FX_ALL for none. Following costs the render a little on every sample */
 void brk_fx_watch(uint32_t slot);
 /* the overload guard (PRD E-7): brk_fx_overload from the audio interrupt when a render ran over 90 % of its time;
  * the chain then bypasses its last slot on (another every ~0.2 s while it keeps happening), each back after 2 s
@@ -208,6 +217,11 @@ void brk_fx_init(void);
 void brk_fx_defaults(brk_fx_t *p);
 void brk_fx_slot_defaults(brk_fxslot_t *s, int type);   /* an effect put into a slot: its own starting settings */
 void brk_fx_set(const brk_fx_t *p);
+/* the pads' voices' state: BRK_PAD_V * BRK_PAD_ST_BYTES, 4-aligned, in the caller's RAM (the pool); 0: no pads */
+void brk_fx_pad_buffer(void *mem);
+/* voice v (0..BRK_PAD_V-1): its effect (on is ignored; MB COMP passes), on (held or latched) or let go */
+void brk_fx_set_pad(uint32_t v, const brk_fxslot_t *s, uint32_t on);
+uint32_t brk_fx_pad_busy(void);          /* bit v: voice v still sounds (on, fading or its tail ringing) */
 /* the dub delay's line: 16-bit mono in the caller's RAM (the app's pool), and the tempo it follows */
 void brk_fx_delay_buffer(int16_t *buf, uint32_t n);
 void brk_fx_tempo(float bpm);

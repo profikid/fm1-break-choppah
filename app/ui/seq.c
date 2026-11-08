@@ -245,8 +245,6 @@ static uint32_t keys_lit(const brk_status_t *st)   /* the white keys' lights on 
 {
     if (ui.page == PG_TAP)
         return st->playing && st->bar16 >= 0 && !(st->bar16 & 3) ? 0xFFFFu : 0u;
-    if (ui.page == PG_OVL)               /* ARP: the overlays on */
-        return ovl_held | ovl_latched;
     uint32_t m = 0u, l = ui.seq_lane >= SL_KICK ? ui.seq_lane - SL_KICK : NLANES, i;
     if (l < NLANES) {
         m = pat_now()->lane[l];

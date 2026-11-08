@@ -1,0 +1,113 @@
+# CHOPPAH: the ARP page (PRD B-55). The white keys play slices; each black key an effect slot over the whole mix,
+# on while held, shown in the FX page's view (K1-K4 its settings, PRESETS its effect, ALGORITHM the key, ARP again its
+# part); SEL + a black key latches it. Four voices: a fifth key takes over the oldest.
+#   app/build/host/choppah_host tests/scenarios/arp.txt app/build/scenarios
+wait 2600
+tap ARP
+wait 150
+expect page 9
+expect pfx_sel 0
+expect pfx_type 1
+shot a_page.png
+tap PLAY
+wait 600
+tapkey w3
+wait 200
+peakreset
+wait 500
+expect peak_db_min -24
+key b0 down
+wait 100
+expect pfx_on 1
+expect pfx_voices 1
+turn K1 -40 10
+wait 200
+peakreset
+wait 500
+expect peak_db_max -20
+shot a_held.png
+key b0 up
+wait 300
+expect pfx_on 0
+expect pfx_voices 0
+expect pfx_busy 0
+peakreset
+wait 500
+expect peak_db_min -24
+press SEL
+tapkey b10
+release SEL
+wait 200
+expect pfx_latched 1024
+expect pfx_on 1024
+expect pfx_sel 10
+expect pfx_type 8
+expect pfx_voices 1
+shot a_latched.png
+tap HOME
+wait 150
+expect page 0
+expect pfx_on 1024
+tap ARP
+wait 150
+key b1 down
+wait 50
+key b2 down
+wait 50
+key b3 down
+wait 50
+expect pfx_voices 4
+key b4 down
+wait 100
+expect pfx_voices 4
+expect pfx_latched 0
+expect pfx_on 30
+expect pfx_sel 4
+shot a_four.png
+key b1 up
+key b2 up
+key b3 up
+key b4 up
+wait 300
+turn ALGO 1
+wait 100
+expect pfx_sel 5
+expect pfx_type 6
+turn PRESET 1
+wait 100
+expect pfx_type 7
+expect pfx_on 0
+tap ARP
+wait 100
+expect fx_page 1
+shot a_more.png
+tap ARP
+wait 100
+expect fx_page 2
+tap ARP
+wait 100
+expect fx_page 0
+turn PRESET 4
+wait 100
+expect pfx_type 11
+turn PRESET 1
+wait 100
+expect pfx_type 13
+turn PRESET -1
+wait 100
+expect pfx_type 11
+press SEL
+tapkey b5
+release SEL
+wait 100
+expect pfx_latched 32
+press SEL
+tapkey b5
+release SEL
+wait 100
+expect pfx_latched 0
+expect help 0
+tap FX
+wait 150
+expect page 2
+expect fx_page 0

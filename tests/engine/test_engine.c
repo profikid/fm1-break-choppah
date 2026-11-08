@@ -10,7 +10,6 @@
 #include "brk_fx.h"
 #include "brk_synth.h"
 #include "kick.h"
-#include "ovl.h"
 #include "perc.h"
 
 #define RATE 22050u
@@ -1759,59 +1758,90 @@ static void test_kick(void)
 
 /* the overlay effects (ARP): nothing on passes the sound through as it is; each one changes it and stays bounded;
  * CUT silences, DIVE darkens over its sweep, RISE thins; let go, it fades back to the dry sound */
-static int16_t ovl_buf[2u * OVL_LINE];
-static float ovl_tone(uint32_t i, float hz) { return 0.4f * sinf(6.2831853f * hz * (float)i / (float)BRK_SR); }
-static void ovl_run(uint32_t on, uint32_t from, uint32_t n, float hz, float *peak, float *diff)
+/* the ARP page's black-key effects (PRD B-55): pad voices after the chain, on the whole mix */
+static uint32_t pad_mem[BRK_PAD_V * BRK_PAD_ST_BYTES / 4u];
+static float pad_zero[BLOCK];
+static void pad_run(uint32_t from, uint32_t n, int as_post)   /* buf[from..] through, into bl / br [from..] */
 {
-    static uint8_t amt[OVL_N];
-    uint32_t i, j;
-    float l[BLOCK], r[BLOCK], spb = (float)BRK_SR * 60.0f / 120.0f;
-    for (i = 0; i < OVL_N; i++)
-        amt[i] = 100u;
-    ovl_set(on, amt, 2u, 0u);
-    *peak = 0.0f;
-    *diff = 0.0f;
-    for (i = from; i < from + n; i += BLOCK) {
-        for (j = 0; j < BLOCK; j++)
-            l[j] = r[j] = ovl_tone(i + j, hz) + 0.2f * ovl_tone(i + j, 97.0f);
-        ovl_process(l, r, BLOCK, (float)i / spb, spb);
-        for (j = 0; j < BLOCK; j++) {
-            float d = ovl_tone(i + j, hz) + 0.2f * ovl_tone(i + j, 97.0f);
-            if (i + j >= from + n / 2u) {    /* the second half: past the fade and the sweep */
-                if (fabsf(l[j]) > *peak) *peak = fabsf(l[j]);
-                if (fabsf(r[j]) > *peak) *peak = fabsf(r[j]);
-                *diff += fabsf(l[j] - d) + fabsf(r[j] - d);
-            }
-            if (!(l[j] == l[j]) || !(r[j] == r[j]))
-                *peak = 99.0f;
-        }
+    uint32_t i, m;
+    for (i = from; i < from + n; i += m) {
+        m = from + n - i < BLOCK ? from + n - i : BLOCK;
+        if (as_post)                     /* (the drums around the chain: joined after it) */
+            brk_fx_process(pad_zero, 0, 0, 0, buf + i, bl + i, br + i, m, 0u);
+        else
+            brk_fx_process(buf + i, 0, 0, 0, 0, bl + i, br + i, m, 0u);
     }
-    *diff /= (float)n;
 }
-static void test_ovl(void)
+static void pad_put(uint32_t v, int type, float p0, float mix, uint32_t on)
 {
-    uint32_t k;
-    float pk, df, dry;
-    ovl_init(ovl_buf);
-    ovl_run(0u, 0u, 22050u, 2000.0f, &dry, &df);
-    CHECK(df < 1e-6f && ovl_sounding() == 0u, "OVERLAY: nothing on, the sound passes as it is (%.6f off)", df);
-    for (k = 0; k < OVL_N; k++) {
-        ovl_init(ovl_buf);
-        ovl_run(1u << k, 0u, 44100u, 2000.0f, &pk, &df);
-        CHECK(pk < 1.5f, "OVERLAY %s: bounded (peak %.2f)", OVL_NAME[k], pk);
-        CHECK(df > 0.01f, "OVERLAY %s: audible (%.4f off the dry sound)", OVL_NAME[k], df);
+    brk_fxslot_t s;
+    brk_fxx_t d;
+    brk_fx_slot_defaults(&s, type);
+    s.p[0] = p0;
+    s.mix = mix;
+    brk_fxx_defaults(&d, type);
+    brk_fx_set_fxx(BRK_FX_SLOTS + v, &d);
+    brk_fx_set_pad(v, &s, on);
+}
+static void test_pad_fx(void)
+{
+    brk_fx_t p;
+    uint32_t i, v, t, ok;
+    float dry, held, after, post, mb, tail, late;
+    brk_fx_defaults(&p);                 /* the chain: all bypassed */
+    mb_fresh();
+    brk_fx_set(&p);
+    brk_fx_pad_buffer(pad_mem);
+    tone_in(8000.0f, 0.25f, BRK_SR);
+    pad_run(0u, BRK_SR / 4u, 0);
+    dry = peak_of(bl, BRK_SR / 8u, BRK_SR / 4u);
+    pad_put(0u, FXT_FILTER, 0.2f, 1.0f, 1u);   /* a low-pass at ~100 Hz, held */
+    pad_run(0u, BRK_SR / 4u, 0);
+    held = peak_of(bl, BRK_SR / 8u, BRK_SR / 4u);
+    CHECK(dry > 0.2f && held < 0.01f && (brk_fx_pad_busy() & 1u),
+          "PAD FX: a low-pass pad held takes the 8 kHz away (%.3f -> %.4f)", dry, held);
+    pad_put(0u, FXT_FILTER, 0.2f, 1.0f, 0u);   /* let go: back to the dry sound in a few ms */
+    pad_run(0u, BRK_SR / 4u, 0);
+    after = peak_of(bl, BRK_SR / 20u, BRK_SR / 4u);
+    CHECK(after > dry * 0.97f && !(brk_fx_pad_busy() & 1u),
+          "PAD FX: let go, the dry sound back (%.3f) and the voice free", after);
+    tone_in(8000.0f, 0.25f, BRK_SR);
+    pad_put(1u, FXT_FILTER, 0.2f, 1.0f, 1u);   /* on the whole mix: the drums around the chain too */
+    pad_run(0u, BRK_SR / 4u, 1);
+    post = peak_of(bl, BRK_SR / 8u, BRK_SR / 4u);
+    pad_put(1u, FXT_FILTER, 0.2f, 1.0f, 0u);
+    pad_put(2u, FXT_MBCOMP, 1.0f, 1.0f, 1u);   /* MB COMP is the chain's: on a pad it passes */
+    pad_run(0u, BRK_SR / 4u, 0);
+    mb = peak_of(bl, BRK_SR / 8u, BRK_SR / 4u);
+    pad_put(2u, FXT_MBCOMP, 1.0f, 1.0f, 0u);
+    CHECK(post < 0.01f && fabsf(mb - dry) < 0.01f, "PAD FX: on the drums after the chain too (%.4f); MB COMP passes (%.3f)",
+          post, mb);
+    for (i = 0; i < BRK_SR; i++)         /* a burst of tone, then silence: a REVERB pad's tail rings on after it */
+        buf[i] = i < BRK_SR / 10u ? 0.4f * sinf(6.2831853f * 440.0f * (float)i / (float)BRK_SR) : 0.0f;
+    pad_put(3u, FXT_REVERB, 0.3f, 0.6f, 1u);
+    pad_run(0u, BRK_SR / 8u, 0);
+    pad_put(3u, FXT_REVERB, 0.3f, 0.6f, 0u);
+    pad_run(BRK_SR / 8u, BRK_SR / 2u - BRK_SR / 8u, 0);
+    tail = peak_of(bl, BRK_SR / 4u, BRK_SR / 2u);
+    t = brk_fx_pad_busy() >> 3 & 1u;
+    for (i = 0; i < 40u; i++)            /* 10 s more */
+        pad_run(BRK_SR / 2u, BRK_SR / 4u, 0);
+    late = peak_of(bl, BRK_SR / 2u, BRK_SR * 3u / 4u);
+    CHECK(tail > 0.002f && t && late < 0.001f && !(brk_fx_pad_busy() >> 3 & 1u),
+          "PAD FX: a REVERB pad let go rings on (%.4f, busy %u), then quiet and free (%.5f)", tail, t, late);
+    for (ok = 1u, t = FXT_FILTER; t < BRK_NFXT; t++) {   /* every effect, four voices at once, bounded */
+        tone_in(220.0f, 0.5f, BRK_SR);
+        for (v = 0; v < BRK_PAD_V; v++)
+            pad_put(v, (int)((t + v - 1u) % (BRK_NFXT - 1u) + 1u), 0.8f, 1.0f, 1u);
+        pad_run(0u, BRK_SR / 4u, 0);
+        held = peak_of(bl, 0u, BRK_SR / 4u);
+        if (!(held < 1.01f) || held != held)
+            ok = 0u;
     }
-    ovl_init(ovl_buf);
-    ovl_run(1u << OV_CUT, 0u, 22050u, 2000.0f, &pk, &df);
-    CHECK(pk < 0.001f, "OVERLAY CUT: silence (peak %.4f)", pk);
-    ovl_init(ovl_buf);
-    ovl_run(1u << OV_DIVE, 0u, 88200u, 8000.0f, &pk, &df);
-    CHECK(pk < 0.15f, "OVERLAY DIVE: an 8 kHz tone down past the sweep (peak %.3f of ~0.6)", pk);
-    ovl_init(ovl_buf);
-    ovl_run(1u << OV_RISE, 0u, 88200u, 97.0f, &pk, &df);
-    CHECK(pk < 0.1f, "OVERLAY RISE: the low end gone past the sweep (peak %.3f)", pk);
-    ovl_run(0u, 88200u, 22050u, 2000.0f, &pk, &df);   /* let go: back to dry (the filter's tail aside) */
-    CHECK(df < 0.002f && ovl_sounding() == 0u, "OVERLAY: let go, back to the dry sound (%.4f off)", df);
+    for (v = 0; v < BRK_PAD_V; v++)
+        pad_put(v, FXT_EMPTY, 0.0f, 0.0f, 0u);
+    CHECK(ok, "PAD FX: every effect on four pads at once stays in range");
+    brk_fx_pad_buffer(0);
 }
 
 int main(int argc, char **argv)
@@ -1847,7 +1877,7 @@ int main(int argc, char **argv)
     test_pad_settings();
     test_dub();
     test_styles();
-    test_ovl();
+    test_pad_fx();
     printf("%d of %d checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;
 }

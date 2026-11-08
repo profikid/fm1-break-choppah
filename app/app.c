@@ -13,7 +13,6 @@
 #include "brk_math.h"
 #include "brk_synth.h"
 #include "kick.h"
-#include "ovl.h"
 #include "perc.h"
 #if defined(__has_include)
 #if __has_include("bank_data.h")
@@ -26,6 +25,7 @@
 #endif
 
 /* ------------------------------------------------------------------ settings --- */
+#define NPFX 11u                         /* the ARP page's black keys: an effect slot each (PRD B-55) */
 #define SET_MAGIC 0x37504843u            /* "CHP7" (the soundboard gone, the drums and patterns in): another magic
                                           * loads defaults */
 /* From CHP7 on the settings only grow at the end: a shorter save (an older firmware's) loads into the front and the
@@ -63,16 +63,14 @@ typedef struct {
     kick_t kick;                         /* the kick (PRD K-*): its sound and level */
     perc_t perc;                         /* the snare and the hat (PRD K-10): their sounds and level */
     uint8_t rsv2[8];                     /* (v0.52's fills, gone; their bytes kept: older saves still load) */
-    /* (appended 3 Nov 2026: the overlay effects, ARP's page, PRD B-52) */
-    uint8_t ovl_amt[16];                 /* each white key's effect's amount, 0..100 (OV_*) */
-    uint8_t ovl_rate;                    /* CHOP's rate (GATE, WAH, PAN follow it): 0 1/4 .. 3 1/32 */
-    uint8_t ovl_sweep;                   /* DIVE's and RISE's sweep: 0 1/4 bar .. 3 2 bars */
-    uint8_t ovl_latch;                   /* 1: a white key switches its effect on and off (0: on while held) */
-    uint8_t ovl_rsv;
+    uint8_t rsv3[20];                    /* (3 Nov 2026's overlay effects, PRD B-52, gone 8 Nov 2026: their bytes kept) */
     /* (appended 4 Nov 2026: MB COMP's detail per FX slot, PRD A-49a; it moves with its slot) */
     brk_mbc_t mbc[BRK_FX_SLOTS];
     /* (appended 4 Nov 2026: every slot's extras, its MORE and MOD pages, PRD A-49b; they move with their slot) */
     brk_fxx_t fxx[BRK_FX_SLOTS];
+    /* (appended 8 Nov 2026: the ARP page's black keys, each an effect slot, PRD B-55) */
+    brk_fxslot_t pfx[NPFX];
+    brk_fxx_t pfxx[NPFX];
 } settings_t;
 #define SET_SIZE_MIN offsetof(settings_t, rsv2)   /* the shortest save that loads: CHP7's first size */
 _Static_assert(sizeof(settings_t) <= 3840u, "a store object holds 3840 bytes");
@@ -107,13 +105,29 @@ static void settings_defaults(void)
     }
     kick_defaults(&set.kick);
     perc_defaults(&set.perc);
-    for (k = 0; k < 16u; k++)            /* the overlays: full, the sweeps and the dirt a little less */
-        set.ovl_amt[k] = k == OV_DIVE || k == OV_RISE || k == OV_CRUSH || k == OV_DIST || k == OV_BOOM ? 70u : 100u;
-    set.ovl_rate = 2u;                   /* 1/16 */
-    set.ovl_sweep = 2u;                  /* a bar */
     for (k = 0; k < BRK_FX_SLOTS; k++) {
         brk_mbc_defaults(&set.mbc[k]);
         brk_fxx_defaults(&set.fxx[k], set.fx.slot[k].type);
+    }
+    {   /* the ARP page's keys: three filters (low, band, high), crunch, drive, ring mod, flanger, a gate, tape wow,
+         * a delay and a reverb throw */
+        static const uint8_t T[NPFX] = {FXT_FILTER, FXT_FILTER, FXT_FILTER, FXT_CRUNCH, FXT_DRIVE, FXT_RING,
+                                        FXT_FLANGER, FXT_TREMOLO, FXT_TAPE, FXT_DELAY, FXT_REVERB};
+        static const float P[NPFX][4] = {{0.40f, 0.55f, 0.0f, 1.0f}, {0.62f, 0.40f, 1.0f, 1.0f},
+                                         {0.60f, 0.70f, 0.5f, 1.0f}, {0.75f, 0.60f, 0.3f, 1.0f},
+                                         {0.60f, 0.50f, 0.6f, 1.0f}, {0.45f, 0.30f, 0.0f, 1.0f},
+                                         {0.45f, 0.80f, 0.85f, 1.0f}, {0.60f, 1.00f, 0.0f, 1.0f},
+                                         {0.50f, 0.50f, 0.70f, 1.0f}, {2.0f / 7.0f, 0.60f, 0.5f, 0.8f},
+                                         {0.75f, 0.40f, 0.25f, 0.6f}};
+        for (k = 0; k < NPFX; k++) {
+            brk_fx_slot_defaults(&set.pfx[k], T[k]);
+            set.pfx[k].on = 1u;
+            set.pfx[k].p[0] = P[k][0];
+            set.pfx[k].p[1] = P[k][1];
+            set.pfx[k].p[2] = P[k][2];
+            set.pfx[k].mix = P[k][3];
+            brk_fxx_defaults(&set.pfxx[k], T[k]);
+        }
     }
 }
 
@@ -244,7 +258,7 @@ static void pat_read_back(void)          /* the engine's steps into the pattern 
 static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 #define CH_DUB_LEN 30720u                /* the dub delay's line: 0.70 s a side, 3/8 down to 97 BPM, 1/2 to 172 */
 static int16_t dub_line[CH_DUB_LEN] PLAT_POOL;
-static int16_t ovl_line[2u * OVL_LINE] PLAT_POOL;   /* the overlays' WOBBLE and JET (4 KB) */
+static uint32_t pfx_mem[BRK_PAD_V * BRK_PAD_ST_BYTES / 4u] PLAT_POOL;   /* the ARP keys' voices (9.4 KB) */
 static brk_break_t brk0;
 static brk_break_t brk_cur[2];           /* the bank's break playing (pcm_a holds it), and the next one's: the render
                                           * keeps its own while the next is written */
@@ -370,7 +384,7 @@ void app_init(void)
     brk_fx_delay_buffer(dub_line, CH_DUB_LEN);
     kick_init();
     perc_init();
-    ovl_init(ovl_line);
+    brk_fx_pad_buffer(pfx_mem);
     n_synth = n_breaks = 0u;             /* the breaks are the bank's (breaks/breaks.txt) */
     while (n_breaks < BANK_SLOTS && bank_slot(n_breaks))
         n_breaks++;
@@ -586,19 +600,6 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         brk_status(&st);
         /* the break through the DJ filter, the drums joining it into the chain (or around it) */
         brk_fx_process(mono, set.drums_chain ? kick : 0, echo, verb, set.drums_chain ? 0 : kick, l, r, m, st.pads);
-        {                                /* the overlays (ARP's white keys), on the whole mix: on the engine's beat while
-                                          * playing, a clock of their own stopped */
-            static float beat;
-            float spb = (float)BRK_SR * 600.0f / (float)(set.tempo_x10 ? set.tempo_x10 : 1700u);
-            if (st.playing)
-                beat = (float)(st.bar % 64u) * 4.0f + ((float)(st.bar16 < 0 ? 0 : st.bar16) + st.phase) * 0.25f;
-            ovl_process(l, r, m, beat, spb);
-            if (!st.playing) {
-                beat += (float)m / spb;
-                if (beat >= 256.0f)
-                    beat -= 256.0f;
-            }
-        }
         if (nclick || click_env > 1e-3f) {   /* the metronome's click: dry, over everything, both sides */
             uint32_t j = 0u;
             for (i = 0; i < m; i++) {
@@ -650,7 +651,7 @@ void app_panic(void)
 #include "ui/keys.c"
 #include "ui/bta.c"
 #include "ui/global.c"
-#include "ui/ovl.c"
+#include "ui/arp.c"
 #include "ui/seq.c"
 #include "ui/kick.c"
 #include "ui/perc.c"

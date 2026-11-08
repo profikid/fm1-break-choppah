@@ -43,8 +43,8 @@ static void tap_knob(int k, int32_t d)   /* TAP: K1 the tempo, K2 finer, K3 half
 static void knob_turn(int k, int32_t d)
 {
     brk_fx_t *f = &set.fx;
-    if (ui.page == PG_OVL) {
-        ovl_turn(k - EN_K1, d);
+    if (ui.page == PG_ARP) {             /* the shown black key's effect (as the FX page's view) */
+        fx_knob_turn(fxk(), k - EN_K1, d);
         return;
     }
     if (ui.page == PG_TAP) {
@@ -117,7 +117,7 @@ static void knob_turn(int k, int32_t d)
         *p = knob_f(*p, d, 0.02f, 0.0f, 1.0f);
         say_int(N[k - EN_K1], (int32_t)(*p * 100.0f), "%");
     } else {                             /* FX: the focused slot's three settings and its mix */
-        fx_knob_turn(ui.fx_focus, k - EN_K1, d);
+        fx_knob_turn(fxk(), k - EN_K1, d);
         return;
     }
     changed();
@@ -223,10 +223,8 @@ static void input(void)
         ui.btn = btn;
         return;
     }
-    ovl_keys(keys, kdn);                 /* the OVERLAY page's white keys (and the latched ones, any page) */
+    arp_keys(kdn, kup, btn, now);        /* the ARP page's black keys (and the latched ones, any page) */
     for (i = 0; i < 16u; i++) {          /* white keys: slices, or a page's own */
-        if (ui.page == PG_OVL)
-            continue;
         if (ui.page == PG_TAP) {         /* the TAP page: every white key taps */
             if (kdn >> WK[i] & 1u)
                 tap_or_ext(now);
@@ -257,8 +255,8 @@ static void input(void)
                     ui.key_since = now;
                 }
     }
-    for (i = 0; i < 11u; i++) {          /* black keys: the pads, held; the last one pressed has the screen */
-        if (kdn >> BK[i] & 1u) {
+    for (i = 0; i < 11u; i++) {          /* black keys: the pads, held; the last one pressed has the screen (ARP: its own) */
+        if (kdn >> BK[i] & 1u && ui.page != PG_ARP) {
             brk_pad((int)i, 1);
             ui.pad_focus = (int8_t)i;
             ui.pad_since = now;
@@ -269,7 +267,7 @@ static void input(void)
     if (ui.pad_focus >= 0 && !(keys >> BK[ui.pad_focus] & 1u)) {   /* let go: another pad still held, or none */
         ui.pad_focus = -1;
         for (i = 0; i < 11u; i++)
-            if (keys >> BK[i] & 1u)
+            if (keys >> BK[i] & 1u && ui.page != PG_ARP)
                 ui.pad_focus = (int8_t)i;
     }
     if (bdn & 1u << B_PLAY) {
@@ -347,12 +345,14 @@ static void input(void)
         set_dirty = 1u;
         app_say("RANDOMIZE", "");
         ui.redraw |= RG_BLOCKS;
-    } else if (bdn & 1u << B_ARP) {      /* ARP: the OVERLAY page */
-        if (ui.page != PG_OVL)
-            slices_let_go(keys);
-        ui.page = PG_OVL;
+    } else if (bdn & 1u << B_ARP) {      /* ARP: the black keys' effects; again, the shown key's next part */
+        if (ui.page == PG_ARP)
+            arp_next_part();
+        else {
+            ui.page = PG_ARP;
+            page_say();
+        }
         ui.redraw |= RG_FOOT | RG_BLOCKS;
-        page_say();
     }
     if (bdn & 1u << B_FX && key_tuned() >= 0) {   /* FX with a key held: its knobs, loop <-> slice effect */
         ui.key_layer ^= 1u;
@@ -460,7 +460,7 @@ static void input(void)
                 tenths_text(set.tempo_x10, t);
                 app_say("BPM", t);
             }
-        } else if (k == EN_ALGO) {       /* what the page edits; on HOME, ARP, MIXER (and SEL held: anywhere) the break */
+        } else if (k == EN_ALGO) {       /* what the page edits; on HOME and the MIXER (and SEL held: anywhere) the break */
             if (ui.page == PG_FX && btn & 1u << B_FX)
                 fx_algo(d, 1u);          /* FX held: the slot moves along the chain */
             else if (btn & 1u << B_SEL)
@@ -480,13 +480,15 @@ static void input(void)
                 ui.redraw |= RG_BLOCKS | RG_FOOT;
             } else if (ui.page == PG_FX)
                 fx_algo(d, 0u);
+            else if (ui.page == PG_ARP)  /* ARP: the black key shown (and edited) */
+                arp_select(d);
             else {                     /* the next or previous break */
                 break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
             }
         } else if (k == EN_PRESET && btn & 1u << B_SEL)
             pattern_pick(d);             /* SEL held: the pattern, on any page */
-        else if (k == EN_PRESET && ui.page == PG_FX)
-            fx_type_turn(d);             /* the focused slot's effect */
+        else if (k == EN_PRESET && (ui.page == PG_FX || ui.page == PG_ARP))
+            fx_type_turn(d);             /* the focused slot's effect (ARP: the shown key's) */
         else if (k == EN_PRESET && ui.page == PG_PERC) {   /* a built-in snare or hat */
             uint8_t *pr = &ui.ppreset[ui.pvoice % PERC_VOICES];
             *pr = (uint8_t)((*pr + (d > 0 ? 1u : PERC_PRESETS - 1u)) % PERC_PRESETS);
@@ -550,8 +552,8 @@ static void leds(void)
                 k |= 1u << WK[i];
     } else if (st.slice >= 0 && st.slice < 16)
         k |= 1u << WK[st.slice];
-    for (i = 0; i < 11u; i++)
-        if (st.pads >> i & 1u)
+    for (i = 0; i < 11u; i++)            /* (ARP: the keys' effects on) */
+        if ((ui.page == PG_ARP ? pfx_on() : st.pads) >> i & 1u)
             k |= 1u << BK[i];
     plat_glow(1);
     plat_leds(b, k);
@@ -561,8 +563,8 @@ static void leds(void)
 static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown under its name */
 {
     t[0] = 0;
-    if (ui.page == PG_OVL) {
-        ovl_value(i, t);
+    if (ui.page == PG_ARP) {
+        fx_value(fxk(), i, t);
         return;
     }
     if (ui.page == PG_TAP) {
@@ -622,7 +624,7 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
         int_text((int32_t)(v * 100.0f), t);
         text_cat(t, "%");
     } else
-        fx_value(ui.fx_focus, i, t);
+        fx_value(fxk(), i, t);
 }
 
 /* the tab bar under the header: the button's name, then the page's parts as tabs (the one you are on lit: the
@@ -652,8 +654,16 @@ static void draw_tabs(void)
     }
     else if (ui.page == PG_TAP)
         tab(x, "TAP TEMPO", 1);
-    else if (ui.page == PG_OVL)
-        tab(x, "OVERLAY", 1);
+    else if (ui.page == PG_ARP) {        /* the key shown, "< FILTER MORE >" */
+        char pn[8] = "PAD ";
+        int_text((int32_t)pfx_sel + 1, pn + 4);
+        tab(x, pn, 1);
+        text_cat(part, BRK_FXT_NAME[usl(fxk())->type % BRK_NFXT]);
+        if (FXPG) {
+            text_cat(part, " ");
+            text_cat(part, fx_part_name());
+        }
+    }
     else if (ui.page == PG_GLOBAL)
         for (i = 0; i < 3u; i++)
             x = tab(x, GPART[i], i == ui.gpage);
@@ -667,7 +677,7 @@ static void draw_tabs(void)
         for (i = 0; i < BRK_FX_SLOTS; i++)
             x = tab(x, SLOT_NUM[i], i == (ui.fx_focus & 3u));
         text_cat(part, BRK_FXT_NAME[set.fx.slot[ui.fx_focus & 3u].type]);
-        if (ui.fx_page) {                /* "< MB COMP X-OVER >", "< FILTER MOD >" */
+        if (FXPG) {                /* "< MB COMP X-OVER >", "< FILTER MOD >" */
             text_cat(part, " ");
             text_cat(part, fx_part_name());
         }
@@ -701,13 +711,22 @@ static void page_say(void)
     case PG_MIX: text_cat(t, ui.mpage ? "GROOVE" : "LEVELS"); break;
     case PG_SEQ: text_cat(t, SEQL[ui.seq_lane % NSEQL]); break;
     case PG_TAP: text_cat(t, "TAP TEMPO"); break;
-    case PG_OVL: text_cat(t, "OVERLAY"); break;
+    case PG_ARP:
+        text_cat(t, "PAD ");
+        int_text((int32_t)pfx_sel + 1, t + 4);
+        text_cat(t, " ");
+        text_cat(t, BRK_FXT_NAME[usl(fxk())->type % BRK_NFXT]);
+        if (FXPG) {
+            text_cat(t, " ");
+            text_cat(t, fx_part_name());
+        }
+        break;
     case PG_FX:
         text_cat(t, "SLOT ");
         int_text((int32_t)(ui.fx_focus & 3u) + 1, t + 5);
         text_cat(t, " ");
         text_cat(t, BRK_FXT_NAME[set.fx.slot[ui.fx_focus & 3u].type]);
-        if (ui.fx_page) {
+        if (FXPG) {
             text_cat(t, " ");
             text_cat(t, fx_part_name());
         }
@@ -738,6 +757,10 @@ static void draw_help(void)
             const char *a = L[i][0], *b = L[i][1];
             if (i == 3u && ui.page == PG_SEQ)
                 b = "CLEAR LANE";
+            if (ui.page == PG_ARP && i == 7u) {
+                a = "+ BLACK KEY";
+                b = "HOLD ITS EFFECT";
+            }
             if (ui.page == PG_FX && i >= 6u) {
                 a = i == 6u ? "+ FX" : "FX + ALGO";
                 b = i == 6u ? "BYPASS SLOT" : "MOVE SLOT";
@@ -761,16 +784,21 @@ static void draw_foot(const brk_status_t *st)
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
                                               {"", "", "", ""},
                                               {"TEMPO", "FINE", "HALF / X2", "CLICK"},
-                                              {"AMOUNT", "RATE", "SWEEP", "LATCH"}};
+                                              {"P1", "P2", "P3", "MIX"}};
     uint32_t i;
     char t[16];
     draw_tabs();
     cv_begin(240, 48, C_BLACK);
-    for (i = 0; i < 11u; i++) {
-        int on = (st->pads >> i) & 1u;
+    for (i = 0; i < 11u; i++) {          /* the pads; on ARP the keys' effects (latched: amber below, shown: white) */
+        int arp = ui.page == PG_ARP, on = arp ? (int)(pfx_on() >> i & 1u) : (int)(st->pads >> i & 1u);
+        const char *nm = arp ? pfx_short(i) : PAD_NAME[i];
         int32_t x = 2 + (int32_t)i * 21;
         cv_rect(x, 0, 20, 14, on ? C_HI : C_BLOCK);
-        cv_text(x + (20 - text_w(&FONT_T, PAD_NAME[i])) / 2, 1, &FONT_T, PAD_NAME[i], on ? C_BLACK : C_GRAY);
+        cv_text(x + (20 - text_w(&FONT_T, nm)) / 2, 1, &FONT_T, nm, on ? C_BLACK : arp && i == pfx_sel ? C_WHITE : C_GRAY);
+        if (arp && pfx_latched >> i & 1u)
+            cv_rect(x, 12, 20, 2, C_AMB);
+        else if (arp && i == pfx_sel)
+            cv_rect(x, 12, 20, 2, C_WHITE);
     }
     for (i = 0; i < 4u; i++) {
         static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
@@ -799,8 +827,8 @@ static void draw_foot(const brk_status_t *st)
             cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
             continue;
         }
-        if (ui.page == PG_FX)            /* the focused slot's effect: its settings, then MIX */
-            name = fx_param_name(ui.fx_focus, (int)i);
+        if (ui.page == PG_FX || ui.page == PG_ARP)   /* the focused slot's effect: its settings, then MIX */
+            name = fx_param_name(fxk(), (int)i);
         else if (ui.page == PG_KICK)
             name = kick_knob_name((int)i);
         else if (ui.page == PG_PERC)
@@ -809,8 +837,8 @@ static void draw_foot(const brk_status_t *st)
             static const char *const KN_LANE[4] = {"FILL", "ROTATE", "CLR / 4X4", "COPY"};
             name = KN_LANE[i];
         }
-        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.page == PG_FX
-                ? (set.fx.slot[ui.fx_focus & 3u].on ? C_HI : C_DIM) : C_GRAY);
+        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.page == PG_FX || ui.page == PG_ARP
+                ? (usl(fxk())->on ? C_HI : C_DIM) : C_GRAY);
         knob_value((int)i, t);
         cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
     }
@@ -914,7 +942,14 @@ void app_frame(void)
         ui.redraw |= RG_BLOCKS;
     if (ui.page == PG_MIX && now - ui.mix_drawn >= 33u)   /* the MIXER's meters: about 30 times a second */
         ui.redraw |= RG_BLOCKS;
-    brk_fx_watch(ui.page == PG_FX ? ui.fx_focus & 3u : BRK_FX_SLOTS);   /* (the engine meters that slot alone) */
+    brk_fx_watch(ui.page == PG_FX || ui.page == PG_ARP ? eng_slot(fxk()) : BRK_FX_ALL);   /* (the engine meters it alone) */
+    {                                    /* ARP: a key on or let go, a voice quiet: its view and the foot */
+        static uint32_t pfx_seen;
+        uint32_t pv = pfx_on() | brk_fx_pad_busy() << 16 | (uint32_t)(eng_slot(fxk()) < BRK_FX_ALL) << 24;
+        if (pv != pfx_seen && ui.page == PG_ARP)
+            ui.redraw |= RG_BLOCKS | RG_FOOT;
+        pfx_seen = pv;
+    }
     {                                    /* the overload guard shed a slot: say so */
         static uint32_t shed_seen;
         uint32_t sh = brk_fx_shed();
@@ -922,7 +957,7 @@ void app_frame(void)
             app_say("OVERLOAD", "FX SLOT BYPASSED");
         shed_seen = sh;
     }
-    if (ui.page == PG_FX && set.fx.slot[ui.fx_focus & 3u].type != FXT_EMPTY && now - ui.panel_drawn >= 66u)
+    if ((ui.page == PG_FX || ui.page == PG_ARP) && usl(fxk())->type != FXT_EMPTY && now - ui.panel_drawn >= 66u)
         ui.redraw |= RG_BLOCKS;          /* an effect focused: its picture and meters, about 15 times a second */
     if (foot_dirty) {
         foot_dirty = 0u;
@@ -994,9 +1029,10 @@ void app_frame(void)
         ui.fx_drawn = now;
     }
     if (ui.redraw & RG_BLOCKS) {
-        if (ui.page == PG_OVL)
-            draw_ovl();
-        else if (ui.page == PG_TAP) {
+        if (ui.page == PG_ARP) {
+            draw_chain();                /* the shown key's effect, as the FX page draws a slot */
+            ui.panel_drawn = now;
+        } else if (ui.page == PG_TAP) {
             draw_tap(&st, now, (ui.redraw & RG_ALL) == RG_ALL);
             ui.panel_drawn = now;
         } else if (ui.page == PG_SEQ)
@@ -1051,9 +1087,10 @@ int app_expect(const char *what, int *got)
 {
     static const char *const W[] = {"page", "gpage", "kpage", "seq_lane", "fx_focus", "fx_on", "lane_kick",
                                     "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo",
-                                    "ovl_on", "ovl_last", "ovl_latch", "roll_pitch_x10", "demo", "fx_page",
-                                    "mb_solo", "mb_thr_low", "mb_slot2_thr_low"};
-    int v[23];
+                                    "pfx_on", "pfx_sel", "pfx_latched", "roll_pitch_x10", "demo", "fx_page",
+                                    "mb_solo", "mb_thr_low", "mb_slot2_thr_low", "pfx_type", "pfx_voices",
+                                    "pfx_busy"};
+    int v[26];
     uint32_t i;
     v[0] = ui.page;
     v[1] = ui.gpage;
@@ -1069,16 +1106,21 @@ int app_expect(const char *what, int *got)
     v[11] = ui.help;
     v[12] = set.drums_chain;
     v[13] = ui.lobo_t != 0u;
-    v[14] = (int)(ovl_held | ovl_latched);
-    v[15] = ovl_last;
-    v[16] = set.ovl_latch;
+    v[14] = (int)pfx_on();
+    v[15] = pfx_sel;
+    v[16] = pfx_latched;
     v[17] = (int)(set.pads.roll_pitch * 10.0f + (set.pads.roll_pitch < 0.0f ? -0.5f : 0.5f));
     v[18] = demo.on;
-    v[19] = ui.fx_page;
+    v[19] = FXPG;
     v[20] = set.mbc[ui.fx_focus & 3u].solo;
     v[21] = (int)(brk_mb_thr_db(set.mbc[ui.fx_focus & 3u].thr[MB_LOW]) - 0.5f);   /* whole dB */
     v[22] = (int)(brk_mb_thr_db(set.mbc[1].thr[MB_LOW]) - 0.5f);
-    for (i = 0; i < 23u; i++)
+    v[23] = set.pfx[pfx_sel % NPFX].type;
+    v[24] = 0;
+    for (i = 0; i < BRK_PAD_V; i++)      /* the voices given to keys */
+        v[24] += pfx_owner[i] != 0u;
+    v[25] = (int)brk_fx_pad_busy();
+    for (i = 0; i < 26u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

@@ -2,6 +2,29 @@
 /* CHOPPAH: the FX page: the master chain's slots, their settings and the chain drawn. (Part of app.c's unity:
  * included there in order.) */
 
+/* -------------------------------------------------- the slots the views edit --- */
+/* The FX views edit a slot of the chain (the FX page: 0..3) or a black key's effect on the ARP page (PRD B-55:
+ * BRK_FX_SLOTS + the key; its settings in set.pfx, set.pfxx). The ARP page's state lives here, for the views (arp.c
+ * plays it) */
+static uint16_t pfx_held, pfx_latched;   /* bit i: black key i held (pressed on ARP); latched (SEL + the key) */
+static uint8_t pfx_sel, pfx_part;        /* the key the ARP page shows (K1-K4 edit it), its part (MAIN MORE MOD) */
+static uint8_t pfx_vox[NPFX];            /* each key's voice in the engine + 1 (0: none) */
+static uint8_t pfx_owner[BRK_PAD_V];     /* each voice's key + 1 (0: free) */
+static uint32_t pfx_age[BRK_PAD_V];      /* when it was given (a fifth key takes the oldest) */
+static uint32_t pfx_on(void) { return (uint32_t)(pfx_held | pfx_latched); }
+static uint32_t fxk(void) { return ui.page == PG_ARP ? BRK_FX_SLOTS + pfx_sel % NPFX : ui.fx_focus & 3u; }
+static brk_fxslot_t *usl(uint32_t k) { return k < BRK_FX_SLOTS ? &set.fx.slot[k] : &set.pfx[(k - BRK_FX_SLOTS) % NPFX]; }
+static brk_fxx_t *uxx(uint32_t k) { return k < BRK_FX_SLOTS ? &set.fxx[k] : &set.pfxx[(k - BRK_FX_SLOTS) % NPFX]; }
+static uint32_t eng_slot(uint32_t k)     /* the engine's slot for k: the chain's own, a key's voice (BRK_FX_ALL: none) */
+{
+    if (k < BRK_FX_SLOTS)
+        return k;
+    k = pfx_vox[(k - BRK_FX_SLOTS) % NPFX];
+    return k ? BRK_FX_SLOTS + k - 1u : BRK_FX_ALL;
+}
+static uint8_t *fx_pg(void) { return ui.page == PG_ARP ? &pfx_part : &ui.fx_page; }
+#define FXPG (*fx_pg())                  /* the shown slot's part: the FX page's, or the ARP page's own */
+
 /* each effect's settings, as the foot names them (K1-K3; K4 is MIX) */
 static const char *const FXP_NAME[BRK_NFXT][3] = {
     {"", "", ""}, {"CUTOFF", "RESO", "MODE"}, {"BITS", "RATE", "DRIVE"}, {"GAIN", "TONE", "LEVEL"},
@@ -35,20 +58,20 @@ static const uint16_t MB_TINT_HI[MB_BANDS] = {RGB(58, 30, 26), RGB(52, 42, 22), 
 
 static int mb_detail(uint32_t slot)      /* the focused MB COMP past AMOUNT: K1-K4 edit its detail */
 {
-    return (slot & 3u) == (ui.fx_focus & 3u) && set.fx.slot[slot & 3u].type == FXT_MBCOMP &&
-           ui.fx_page != MBP_AMOUNT && ui.fx_page < NMBP;
+    return slot == fxk() && usl(slot)->type == FXT_MBCOMP &&
+           FXPG != MBP_AMOUNT && FXPG < NMBP;
 }
 static const char *mb_knob_name(int i)
 {
-    return ui.fx_page == MBP_GAIN ? MBK_GAIN[i & 3] : ui.fx_page == MBP_XOVER ? MBK_XOVER[i & 3] : MBK_BAND[i & 3];
+    return FXPG == MBP_GAIN ? MBK_GAIN[i & 3] : FXPG == MBP_XOVER ? MBK_XOVER[i & 3] : MBK_BAND[i & 3];
 }
 static float *mb_knob_val(brk_mbc_t *m, int i)   /* the setting knob i turns (0: SOLO, not a float) */
 {
-    uint32_t b = (uint32_t)(ui.fx_page - MBP_LOW) % MB_BANDS;
+    uint32_t b = (uint32_t)(FXPG - MBP_LOW) % MB_BANDS;
     i &= 3;
-    if (ui.fx_page == MBP_GAIN)
+    if (FXPG == MBP_GAIN)
         return i < 3 ? &m->gain[i] : 0;
-    if (ui.fx_page == MBP_XOVER)
+    if (FXPG == MBP_XOVER)
         return i == 0 ? &m->xlo : i == 1 ? &m->xhi : i == 2 ? &m->knee : &m->out;
     return i == 0 ? &m->thr[b] : i == 1 ? &m->ratio[b] : i == 2 ? &m->att[b] : &m->rel[b];
 }
@@ -91,14 +114,14 @@ static void mb_value(int i, char *t)
     float *v;
     i &= 3;
     t[0] = 0;
-    if (ui.fx_page == MBP_GAIN && i == 3) {
+    if (FXPG == MBP_GAIN && i == 3) {
         text_cat(t, m->solo && m->solo <= MB_BANDS ? MB_BAND_NAME[m->solo - 1u] : "OFF");
         return;
     }
     v = mb_knob_val(m, i);
-    if (ui.fx_page == MBP_GAIN)
+    if (FXPG == MBP_GAIN)
         db_text(brk_mb_db24(*v), t);
-    else if (ui.fx_page == MBP_XOVER) {
+    else if (FXPG == MBP_XOVER) {
         if (i == 0)
             hz_text(brk_mb_xlo_hz(*v), t);
         else if (i == 1)
@@ -124,18 +147,18 @@ static void mb_knob_turn(int i, int32_t d)
     brk_mbc_t *m = &set.mbc[ui.fx_focus & 3u];
     char t[16], n[24];
     i &= 3;
-    if (ui.fx_page == MBP_GAIN && i == 3)
+    if (FXPG == MBP_GAIN && i == 3)
         m->solo = (uint8_t)clamp((int32_t)m->solo + (d > 0 ? 1 : -1), 0, MB_BANDS);
     else {
         float *v = mb_knob_val(m, i);
-        *v = knob_f(*v, d, MB_STEP[ui.fx_page % NMBP][i], 0.0f, 1.0f);
+        *v = knob_f(*v, d, MB_STEP[FXPG % NMBP][i], 0.0f, 1.0f);
     }
     mb_value(i, t);
     n[0] = 0;
-    if (ui.fx_page >= MBP_LOW && ui.fx_page <= MBP_HIGH) {   /* "LOW RATIO" */
-        text_cat(n, MB_BAND_NAME[ui.fx_page - MBP_LOW]);
+    if (FXPG >= MBP_LOW && FXPG <= MBP_HIGH) {   /* "LOW RATIO" */
+        text_cat(n, MB_BAND_NAME[FXPG - MBP_LOW]);
         text_cat(n, " ");
-    } else if (ui.fx_page == MBP_GAIN && i < 3)
+    } else if (FXPG == MBP_GAIN && i < 3)
         text_cat(n, "GAIN ");
     text_cat(n, mb_knob_name(i));
     app_say(n, t);
@@ -206,42 +229,42 @@ static const char *const MODK[4] = {"RATE", "DEPTH", "SHAPE", "TARGET"};
 static uint32_t fx_npages(uint32_t t) { return t == FXT_EMPTY ? 1u : t == FXT_MBCOMP ? NMBP : NXP; }
 static brk_fxx_t *fxx_of(uint32_t k)     /* slot k's extras, its effect's defaults if they were another's */
 {
-    brk_fxx_t *x = &set.fxx[k & 3u];
-    if (x->type != set.fx.slot[k & 3u].type)
-        brk_fxx_defaults(x, set.fx.slot[k & 3u].type);
+    brk_fxx_t *x = uxx(k);
+    if (x->type != usl(k)->type)
+        brk_fxx_defaults(x, usl(k)->type);
     return x;
 }
 static int x_detail(uint32_t slot)       /* the focused slot (not an MB COMP) on MORE or MOD */
 {
-    uint32_t t = set.fx.slot[slot & 3u].type;
-    return (slot & 3u) == (ui.fx_focus & 3u) && t != FXT_MBCOMP && t != FXT_EMPTY && ui.fx_page && ui.fx_page < NXP;
+    uint32_t t = usl(slot)->type;
+    return slot == fxk() && t != FXT_MBCOMP && t != FXT_EMPTY && FXPG && FXPG < NXP;
 }
 static const char *fx_part_name(void)    /* the focused slot's part past its first, for the tabs ("" on the first) */
 {
-    uint32_t t = set.fx.slot[ui.fx_focus & 3u].type;
-    return !ui.fx_page ? "" : t == FXT_MBCOMP ? MBP_NAME[ui.fx_page % NMBP] : XP_NAME[ui.fx_page % NXP];
+    uint32_t t = usl(fxk())->type;
+    return !FXPG ? "" : t == FXT_MBCOMP ? MBP_NAME[FXPG % NMBP] : XP_NAME[FXPG % NXP];
 }
 static const char *base_param_name(uint32_t slot, int i);
 static const char *x_name(int i)
 {
-    const xk_t *k = xk(set.fx.slot[ui.fx_focus & 3u].type, i);
-    return ui.fx_page == XP_MOD ? MODK[i & 3] : k ? k->name : "";
+    const xk_t *k = xk(usl(fxk())->type, i);
+    return FXPG == XP_MOD ? MODK[i & 3] : k ? k->name : "";
 }
 static void x_value(int i, char *t)
 {
-    uint32_t ty = set.fx.slot[ui.fx_focus & 3u].type % BRK_NFXT;
-    const brk_fxx_t *x = fxx_of(ui.fx_focus);
+    uint32_t ty = usl(fxk())->type % BRK_NFXT;
+    const brk_fxx_t *x = fxx_of(fxk());
     const xk_t *k = xk(ty, i);
-    float v = x->x[(i & 3) + (ui.fx_page == XP_MOD ? 4 : 0)], f, lo, hi;
+    float v = x->x[(i & 3) + (FXPG == XP_MOD ? 4 : 0)], f, lo, hi;
     t[0] = 0;
-    if (ui.fx_page == XP_MOD) {
+    if (FXPG == XP_MOD) {
         i &= 3;
         if (i == 0)
             text_cat(t, BRK_MOD_DIV_NAME[brk_idx(v, BRK_MOD_DIVS)]);
         else if (i == 2)
             text_cat(t, BRK_MOD_SHAPE_NAME[brk_idx(v, BRK_MOD_SHAPES)]);
         else if (i == 3)
-            text_cat(t, base_param_name(ui.fx_focus, (int)brk_idx(v, 4u)));
+            text_cat(t, base_param_name(fxk(), (int)brk_idx(v, 4u)));
         else if (v > 0.49f && v < 0.51f)
             text_cat(t, "OFF");
         else {
@@ -273,13 +296,13 @@ static void x_value(int i, char *t)
 }
 static void x_knob_turn(int i, int32_t d)
 {
-    uint32_t ty = set.fx.slot[ui.fx_focus & 3u].type % BRK_NFXT, j = (uint32_t)(i & 3) + (ui.fx_page == XP_MOD ? 4u : 0u);
-    brk_fxx_t *x = fxx_of(ui.fx_focus);
+    uint32_t ty = usl(fxk())->type % BRK_NFXT, j = (uint32_t)(i & 3) + (FXPG == XP_MOD ? 4u : 0u);
+    brk_fxx_t *x = fxx_of(fxk());
     const xk_t *k = xk(ty, i);
     static const uint8_t MODN[4] = {BRK_MOD_DIVS, 0, BRK_MOD_SHAPES, 4};
-    uint32_t n = ui.fx_page == XP_MOD ? MODN[i & 3] : k && k->unit == XU_CH ? k->n : 0u;
+    uint32_t n = FXPG == XP_MOD ? MODN[i & 3] : k && k->unit == XU_CH ? k->n : 0u;
     char t[16];
-    if (ui.fx_page == XP_MORE && !k)
+    if (FXPG == XP_MORE && !k)
         return;
     x->x[j] = knob_f(x->x[j], d, n ? 1.0f / (float)(n - 1u) : 0.02f, 0.0f, 1.0f);
     x_value(i, t);
@@ -292,8 +315,8 @@ static void x_knob_turn(int i, int32_t d)
 static void fx_algo(int32_t d, uint32_t sel);
 static void fx_next_part(void)
 {
-    if (ui.fx_page + 1u < fx_npages(set.fx.slot[ui.fx_focus & 3u].type)) {
-        ui.fx_page++;
+    if (FXPG + 1u < fx_npages(usl(fxk())->type)) {
+        FXPG++;
         page_say();
         ui.redraw |= RG_BLOCKS | RG_FOOT;
         return;
@@ -311,7 +334,7 @@ static const char *fx_param_name(uint32_t slot, int i)
 }
 static const char *base_param_name(uint32_t slot, int i)   /* its MAIN part's */
 {
-    const brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
+    const brk_fxslot_t *sl = usl(slot);
     if (i == 3)
         return sl->type == FXT_EMPTY ? "" : sl->type == FXT_DELAY ? "SEND" : sl->type == FXT_EQ ? "FREQ" : "MIX";
     return FXP_NAME[sl->type < BRK_NFXT ? sl->type : 0][i & 3];
@@ -319,7 +342,7 @@ static const char *base_param_name(uint32_t slot, int i)   /* its MAIN part's */
 
 static void fx_value(uint32_t slot, int i, char *t)
 {
-    const brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
+    const brk_fxslot_t *sl = usl(slot);
     float v = i == 3 ? sl->mix : sl->p[i & 3];
     t[0] = 0;
     if (mb_detail(slot)) {
@@ -421,7 +444,7 @@ static void fx_value(uint32_t slot, int i, char *t)
 
 static void fx_knob_turn(uint32_t slot, int i, int32_t d)
 {
-    brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
+    brk_fxslot_t *sl = usl(slot);
     char t[16];
     float step = 0.02f;
     if (i >= 0 && i <= 3 && mb_detail(slot)) {
@@ -455,20 +478,23 @@ static void fx_knob_turn(uint32_t slot, int i, int32_t d)
  * settings, on at once */
 static void fx_type_turn(int32_t d)
 {
-    brk_fxslot_t *sl = &set.fx.slot[ui.fx_focus & 3u];
+    uint32_t k = fxk(), pad = k >= BRK_FX_SLOTS;
+    brk_fxslot_t *sl = usl(k);
     int32_t t = clamp((int32_t)sl->type + (d > 0 ? 1 : -1), 0, BRK_NFXT - 1);
     char n[16];
+    if (pad && t == FXT_MBCOMP)          /* (MB COMP is the chain's alone) */
+        t = clamp(t + (d > 0 ? 1 : -1), 0, BRK_NFXT - 1);
     if ((uint32_t)t == sl->type)
         return;
     brk_fx_slot_defaults(sl, (int)t);
     sl->on = (uint8_t)(t != FXT_EMPTY);
     if (t == FXT_MBCOMP)                 /* an MB COMP put in: its detail from the start, at its AMOUNT */
-        brk_mbc_defaults(&set.mbc[ui.fx_focus & 3u]);
-    brk_fxx_defaults(&set.fxx[ui.fx_focus & 3u], (int)t);   /* its extras: the new effect's */
-    ui.fx_page = 0u;
+        brk_mbc_defaults(&set.mbc[k & 3u]);
+    brk_fxx_defaults(uxx(k), (int)t);    /* its extras: the new effect's */
+    FXPG = 0u;
     n[0] = 0;
-    text_cat(n, "SLOT ");
-    int_text((int32_t)(ui.fx_focus & 3u) + 1, n + 5);
+    text_cat(n, pad ? "PAD " : "SLOT ");
+    int_text((int32_t)(pad ? k - BRK_FX_SLOTS : k) + 1, n + (pad ? 4 : 5));
     app_say(n, BRK_FXT_NAME[t]);
     ui.redraw |= RG_BLOCKS | RG_FOOT;
     changed();
@@ -495,7 +521,7 @@ static void fx_algo(int32_t d, uint32_t sel)
         }
         changed();
     } else
-        ui.fx_page = 0u;                 /* another slot: from its first part */
+        FXPG = 0u;                 /* another slot: from its first part */
     ui.fx_focus = (uint8_t)b;
     int_text((int32_t)b + 1, n);
     if (sel)
@@ -518,7 +544,7 @@ static int delay_slot(void)              /* the chain's DELAY in use (the first 
 typedef struct { float thr, slope, ratio, knee; } mb_eff_t;
 static mb_eff_t mb_eff(uint32_t slot, uint32_t b)
 {
-    const brk_fxslot_t *sl = &set.fx.slot[slot & 3u];
+    const brk_fxslot_t *sl = usl(slot);
     const brk_mbc_t *m = &set.mbc[slot & 3u];
     float amt = brk_clampf(sl->p[b % MB_BANDS], 0.0f, 1.0f);
     mb_eff_t e;
@@ -597,7 +623,7 @@ static void draw_mbcomp(uint32_t now)
     const brk_mbc_t *m = &set.mbc[k];
     float gr[MB_BANDS], lvl[MB_BANDS], g[MB_BANDS], g_rest[MB_BANDS], grdb[MB_BANDS], flo, fhi;
     mb_eff_t e[MB_BANDS];
-    int32_t x, xlo, xhi, py = 0, focus = ui.fx_page >= MBP_LOW && ui.fx_page <= MBP_HIGH ? ui.fx_page - MBP_LOW : -1;
+    int32_t x, xlo, xhi, py = 0, focus = FXPG >= MBP_LOW && FXPG <= MBP_HIGH ? FXPG - MBP_LOW : -1;
     char t[16];
     solo = m->solo <= MB_BANDS ? m->solo : 0u;
     brk_fx_mb_meter(k, gr, lvl);
@@ -618,7 +644,7 @@ static void draw_mbcomp(uint32_t now)
 
     /* ---- above: the parts, the spectrum */
     cv_begin(240, 52, C_BLACK);
-    fx_chips(MBP_TAB, NMBP, ui.fx_page, 30, !sl->on ? "BYPASS" : solo ? "SOLO" : "ON",
+    fx_chips(MBP_TAB, NMBP, FXPG, 30, !sl->on ? "BYPASS" : solo ? "SOLO" : "ON",
              !sl->on ? C_DIM : solo ? MB_COL[solo - 1u] : C_HI);
     for (x = 0; x < 3; x++) {            /* 100 Hz, 1 kHz, 10 kHz: faint marks */
         int32_t gx = MB_X(x == 0 ? 100.0f : x == 1 ? 1000.0f : 10000.0f), y;
@@ -648,7 +674,7 @@ static void draw_mbcomp(uint32_t now)
         cv_rect(x, 17, 2, 1, C_DIM);
     for (b = 0; b < 2u; b++) {           /* the splits, their frequencies under them (lit on X-OVER) */
         int32_t sx = b ? xhi : xlo, y, w;
-        uint16_t c = ui.fx_page == MBP_XOVER ? C_WHITE : C_GRAY;
+        uint16_t c = FXPG == MBP_XOVER ? C_WHITE : C_GRAY;
         for (y = 13; y < 41; y += 2)
             cv_rect(sx, y, 1, 1, c);
         hz_text(b ? fhi : flo, t);
@@ -828,19 +854,24 @@ static float x_plot(uint32_t t, int32_t x, const float *p, const float *xx, uint
  * cycle (where it is now, what it moves) and its level in and out */
 static void draw_xview(uint32_t now)
 {
-    uint32_t k = ui.fx_focus & 3u, t = set.fx.slot[k].type, i, shape;
-    const brk_fxslot_t *sl = &set.fx.slot[k];
+    uint32_t k = fxk(), t = usl(k)->type, i, shape, pad = k >= BRK_FX_SLOTS, live;
+    const brk_fxslot_t *sl = usl(k);
     const float *xx = fxx_of(k)->x;
     brk_fx_meter_t m;
     float p[4], depth = (xx[FXX_DEPTH] - 0.5f) * 2.0f;
     int32_t x, py = 0, y, yb;
     uint16_t col = sl->on ? MB_COL[1] : C_GRAY;
     char nm[16];
-    brk_fx_meter(k, &m);
+    brk_fx_meter(eng_slot(k), &m);
+    live = pad ? eng_slot(k) < BRK_FX_ALL : sl->on;   /* (a key: while its voice sounds) */
     for (i = 0; i < 4u; i++)             /* the settings as the modulator leaves them (as set while it is off) */
-        p[i] = sl->on ? m.p[i] : i < 3u ? sl->p[i] : sl->mix;
+        p[i] = live ? m.p[i] : i < 3u ? sl->p[i] : sl->mix;
     cv_begin(240, 52, C_BLACK);
-    fx_chips(XP_NAME, NXP, ui.fx_page, 40, sl->on ? "ON" : "BYPASS", sl->on ? C_HI : C_DIM);
+    if (pad) {                           /* a key: held, latched or waiting */
+        uint32_t b = pfx_on() >> (k - BRK_FX_SLOTS) & 1u, h = pfx_latched >> (k - BRK_FX_SLOTS) & 1u;
+        fx_chips(XP_NAME, NXP, FXPG, 40, h ? "HOLD" : b ? "ON" : "OFF", h ? C_AMB : b ? C_HI : C_DIM);
+    } else
+        fx_chips(XP_NAME, NXP, FXPG, 40, sl->on ? "ON" : "BYPASS", sl->on ? C_HI : C_DIM);
     for (x = 0; x < 240; x += 4)         /* the middle (the tones), 0 dB (the responses) */
         cv_rect(x, 32, 2, 1, C_LINE);
     if (t == FXT_EMPTY)
@@ -858,7 +889,15 @@ static void draw_xview(uint32_t now)
     }
     cv_blit(0, 88);
     cv_begin(240, 52, C_BLACK);
-    for (i = 0; i < 4u; i++) {           /* the chain: each slot's effect, this one lit */
+    if (pad) {                           /* a key: which one, and how it holds */
+        nm[0] = 0;
+        text_cat(nm, "PAD ");
+        int_text((int32_t)(k - BRK_FX_SLOTS) + 1, nm + 4);
+        cv_rect(2, 0, 56, 11, C_HI);
+        cv_text(5, 0, &FONT_T, nm, C_BLACK);
+        cv_text(66, 0, &FONT_T, "SEL + KEY: HOLD", C_GRAY);
+    }
+    for (i = 0; !pad && i < 4u; i++) {   /* the chain: each slot's effect, this one lit */
         const brk_fxslot_t *o = &set.fx.slot[i];
         nm[0] = 0;
         text_cat(nm, SLOT_NUM[i]);
@@ -870,7 +909,7 @@ static void draw_xview(uint32_t now)
     cv_rect(0, 14, 176, 38, C_BLOCK);    /* the modulator: its cycle, where it is, what it moves */
     shape = brk_idx(xx[FXX_SHAPE], BRK_MOD_SHAPES);
     if (t == FXT_EMPTY || (depth > -0.01f && depth < 0.01f))
-        cv_text(6, 26, &FONT_T, "MOD OFF  (FX AGAIN: MOD)", C_DIM);
+        cv_text(6, 26, &FONT_T, pad ? "MOD OFF  (ARP AGAIN: MOD)" : "MOD OFF  (FX AGAIN: MOD)", C_DIM);
     else {
         for (x = 0; shape < MOD_SH && x < 176; x++) {
             y = 33 - (int32_t)(brk_mod_wave(shape, (float)x * (1.0f / 176.0f)) * 14.0f);
@@ -901,7 +940,7 @@ static void draw_xview(uint32_t now)
 /* the FX page: the focused slot's view (an MB COMP its own) */
 static void draw_chain(void)
 {
-    if (set.fx.slot[ui.fx_focus & 3u].type == FXT_MBCOMP)
+    if (usl(fxk())->type == FXT_MBCOMP)
         draw_mbcomp(plat_ms());
     else
         draw_xview(plat_ms());
