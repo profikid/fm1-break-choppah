@@ -6,7 +6,8 @@
 # package was built by the shared builder (zvenson/fm1-build@v1), and that builder releases on a tag. So merging to
 # main builds and tests (.github/workflows/ci.yml) but releases nothing; a tag releases.
 #
-#   scripts/release.sh              the next version (the last tag plus one minor, floor ./VERSION)
+#   scripts/release.sh              the next minor (the last tag plus one minor, floor ./VERSION)
+#   scripts/release.sh patch        the next patch (1.2 -> 1.2.1); minor and major as well (scripts/bump_version.sh)
 #   scripts/release.sh 0.97         this version
 #   scripts/release.sh 0.97-rc1    a prerelease (a tag with a suffix)
 #
@@ -16,19 +17,16 @@ cd "$(dirname "$0")/.."
 REMOTE="${REMOTE:-origin}"
 
 V="${1:-}"
-if [ -z "$V" ]; then
-    V="$(sh scripts/next_version.sh)"
-fi
+case "$V" in
+    ''|patch|minor|major) V="$(sh scripts/bump_version.sh "${V:-minor}")" ;;
+esac
 if ! printf '%s' "$V" | grep -Eq '^[0-9]{1,2}\.[0-9]{1,2}(\.[0-9]{1,2})?(-[A-Za-z0-9]+)?$'; then
     echo "release.sh: '$V' is not a version (X.Y, X.Y.Z or X.Y-suffix)" >&2
     exit 1
 fi
 
-# the notes, when they are written: docs/hub/notes_v096.md for v0.96
-# (the version's numbers without their leading zeros, so 08 is eight and not an octal error)
-dec() { v=$(printf '%s' "$1" | sed 's/^0*//'); if [ -n "$v" ]; then echo "$v"; else echo 0; fi; }
-MAJOR="${V%%.*}"; REST="${V#*.}"; MINOR="${REST%%.*}"; MINOR="${MINOR%%-*}"
-NOTES="docs/hub/notes_v$(printf '%03d' $(( $(dec "$MAJOR") * 100 + $(dec "$MINOR") ))).md"
+# the notes, when they are written: docs/hub/notes_v096.md for v0.96, notes_v102_1.md for v1.2.1
+NOTES="$(sh scripts/notes_path.sh "$V")"
 if printf '%s' "$V" | grep -q -- '-'; then
     echo "release.sh: $V is a prerelease: it keeps GitHub's changelog, not $NOTES"
 elif [ -f "$NOTES" ]; then

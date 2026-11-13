@@ -112,12 +112,17 @@ Clone with `--recursive` (fm1-base is a submodule in `base/`).
 `choppah-X.Y.fwsc` attached and rebuilds the site from that same package. That signed build is what lets the
 Firmware Hub show CHOPPAH as "Built from source on GitHub". No version edits by hand:
 
-- `scripts/release.sh` tags the next version (the last tag plus one minor) and pushes it; `scripts/release.sh 1.0`
-  tags that version. `scripts/next_version.sh` prints what the next release would be.
+- **From GitHub:** Actions → **Release: patch, minor or major** ([bump.yml](.github/workflows/bump.yml)) → Run
+  workflow, pick the kind: patch (1.2 → 1.2.1, fixes), minor (1.2 → 1.3, features) or major (1.2 → 2.0). It tags
+  main's head and runs the release on that tag; "dry run" only prints the version.
+- **From a computer:** `scripts/release.sh` tags the next minor and pushes it; `scripts/release.sh patch` (or `major`)
+  the next of that kind; `scripts/release.sh 1.0` that version. `scripts/bump_version.sh patch|minor|major` prints
+  what the next release would be.
 - `VERSION` is the floor, not the current release: raise it only to start a new major. The first release, with no
-  tags yet, is `VERSION` itself. The versions are `X.Y` (two digits each), the package identity `FM-1_86XXYYZZ`:
-  1.0 is `FM-1_86010000`.
-- The release's notes are `docs/hub/notes_vXY.md` (1.0 → `notes_v100.md`); without that file the release keeps
+  tags yet, is `VERSION` itself. The versions are `X.Y` or `X.Y.Z` (two digits each), the package identity
+  `FM-1_86XXYYZZ`: 1.0 is `FM-1_86010000`, 1.2.1 `FM-1_86010201`.
+- The release's notes are `docs/hub/notes_vXY.md` (1.0 → `notes_v100.md`), a patch's `notes_vXY_Z.md`
+  (1.2.1 → `notes_v102_1.md`, `scripts/notes_path.sh`); without that file the release keeps
   GitHub's auto-changelog. Write them **before** the tag.
 - `scripts/publish_site.sh VERSION DEST` builds and publishes the same site to any folder or server.
 

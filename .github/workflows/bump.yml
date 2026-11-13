@@ -1,0 +1,88 @@
+# SPDX-License-Identifier: MPL-2.0
+# Release CHOPPAH from GitHub, without a computer: Actions -> "Release: patch, minor or major" -> Run workflow, pick
+# the kind. The next version comes from the last release tag (scripts/bump_version.sh):
+#   patch  1.2 -> 1.2.1 (fixes)   minor  1.2 -> 1.3 (features)   major  1.2 -> 2.0
+# This workflow tags main's head (or the commit given) and runs .github/workflows/release.yml on that tag, which
+# builds, attests and publishes it as a push of the tag would (a tag pushed with this workflow's own token starts no
+# workflow by itself; a workflow_dispatch does). The release's notes are docs/hub/notes_vXYY.md, a patch's
+# notes_vXYY_Z.md (scripts/notes_path.sh): write them on main before running this.
+name: 'Release: patch, minor or major'
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: What kind of release
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+      ref:
+        description: Commit or branch to release (empty = main's head)
+        required: false
+        default: ''
+      dry_run:
+        description: Only print the version it would release
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: choppah-bump                # one tag at a time: two runs would pick the same version
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write                # the tag
+      actions: write                 # release.yml on it
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || 'main' }}
+          fetch-depth: 1
+
+      - name: The next version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          version="$(sh scripts/bump_version.sh "$BUMP")"
+          notes="$(sh scripts/notes_path.sh "$version")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "notes=$notes" >> "$GITHUB_OUTPUT"
+          {
+            echo "### CHOPPAH v$version ($BUMP)"
+            echo "Commit \`$(git rev-parse --short HEAD)\`: $(git log -1 --format=%s)"
+            if [ -f "$notes" ]; then echo "Notes: \`$notes\`"; else echo "No \`$notes\`: the release keeps GitHub's changelog"; fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+          if git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "v$version exists already" >&2
+            exit 1
+          fi
+
+      - name: Tag it
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+
+      - name: Build, attest and release the tag
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh workflow run release.yml --ref "v$VERSION"
+          echo "Started release.yml on v$VERSION: ${{ github.server_url }}/${{ github.repository }}/actions/workflows/release.yml" \
+            | tee -a "$GITHUB_STEP_SUMMARY"

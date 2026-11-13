@@ -46,10 +46,14 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
   builder (`zvenson/fm1-build@v1`, via `.github/workflows/release.yml`) builds it on GitHub, signs the build
   provenance, publishes the release and rebuilds the site. The Firmware Hub only shows "Built from source" for
   packages built that way. A push to main builds and tests (`.github/workflows/ci.yml`) but releases nothing.
-  The version is the last `vX.Y` tag + 1 minor (`scripts/next_version.sh`, floor `VERSION`); don't tag by hand or
-  bump `VERSION` for a minor; raise `VERSION` only for a new major.
-  Release notes live in `docs/hub/notes_vXY.md` (v0.96 → `notes_v096.md`); without that file the release keeps
-  GitHub's auto-changelog. Write the notes **before** the tag, so the release has them.
+  Releases come in three kinds (`scripts/bump_version.sh`, from the last `vX.Y[.Z]` tag, floor `VERSION`): patch
+  1.2 → 1.2.1, minor 1.2 → 1.3, major 1.2 → 2.0. Tag with `scripts/release.sh [patch|minor|major|X.Y[.Z]]` (default
+  minor) or the Actions workflow `bump.yml` ("Release: patch, minor or major", workflow_dispatch: it tags and runs
+  release.yml on the tag, since a tag pushed with GITHUB_TOKEN starts nothing). A Claude session can't push tags or
+  dispatch workflows through its proxy: Laurens runs it. Don't tag by hand or edit `VERSION` for a release.
+  Release notes live in `docs/hub/notes_vXY.md` (v0.96 → `notes_v096.md`), a patch's in `notes_vXY_Z.md`
+  (v1.2.1 → `notes_v102_1.md`; `scripts/notes_path.sh`); without that file the release keeps GitHub's
+  auto-changelog. Write the notes **before** the tag, so the release has them.
 - **The build is bit-reproduceerbaar**: the same commit gives the same `.fwsc` (v0.96 built locally = the published
   `85fabff9…`, 611,743 B). The site therefore serves the *attested* package of the release, not a second build.
 - **Always push to GitHub after changes** (Laurens' standing rule, 4 Nov 2026): commit and push as soon as a change is
@@ -79,14 +83,16 @@ come from the host scenarios (`app/build/scenarios/*.png`, copied into `app/docs
 ./build.sh             # firmware (needs scripts/bootstrap.sh, Docker/OrbStack on macOS)
 ./build.sh --host      # host simulator
 ./build.sh flash       # macOS Terminal only: the sandboxed shell has no USB access
-scripts/release.sh     # release: tag vX.Y (the next version) and push it; the workflow builds and attests it
+scripts/release.sh     # release: tag vX.Y (the next minor) and push it; the workflow builds and attests it
+scripts/release.sh patch # the next patch (1.2 -> 1.2.1); or major
 scripts/release.sh 0.97  # release this version
 ```
 
 ## The workflows
 
 - `ci.yml` — every push to main: the engine's tests, the firmware build, the emulator's build. Releases nothing.
-- `release.yml` — a tag vX.Y: the shared builder (`zvenson/fm1-build@v1`) builds the package, signs the build
+- `bump.yml` — run by hand (patch / minor / major): tags the next version and runs `release.yml` on that tag.
+- `release.yml` — a tag vX.Y[.Z] (pushed, or bump.yml's dispatch on it): the shared builder (`zvenson/fm1-build@v1`) builds the package, signs the build
   provenance (an attestation), and the release is published with it; the site is rebuilt from the same package.
   This is what makes the Firmware Hub show "Built from source on GitHub" — a build in another workflow does not.
   The release's notes are `docs/hub/notes_vXY.md`; write them before the tag.
