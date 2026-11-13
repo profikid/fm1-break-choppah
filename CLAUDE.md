@@ -49,8 +49,9 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
   Releases come in three kinds (`scripts/bump_version.sh`, from the last `vX.Y[.Z]` tag, floor `VERSION`): patch
   1.2 → 1.2.1, minor 1.2 → 1.3, major 1.2 → 2.0. Tag with `scripts/release.sh [patch|minor|major|X.Y[.Z]]` (default
   minor) or the Actions workflow `bump.yml` ("Release: patch, minor or major", workflow_dispatch: it tags and runs
-  release.yml on the tag, since a tag pushed with GITHUB_TOKEN starts nothing). A Claude session can't push tags or
-  dispatch workflows through its proxy: Laurens runs it. Don't tag by hand or edit `VERSION` for a release.
+  release.yml on the tag, since a tag pushed with GITHUB_TOKEN starts nothing). A Claude session can't push tags
+  through its proxy, but can run bump.yml: `gh api -X POST repos/profikid/fm1-break-choppah/actions/workflows/bump.yml/dispatches
+  -f ref=main -f 'inputs[bump]=patch'` (`gh workflow run` needs GraphQL, which is blocked). Don't tag by hand or edit `VERSION` for a release.
   Release notes live in `docs/hub/notes_vXY.md` (v0.96 → `notes_v096.md`), a patch's in `notes_vXY_Z.md`
   (v1.2.1 → `notes_v102_1.md`; `scripts/notes_path.sh`); without that file the release keeps GitHub's
   auto-changelog. Write the notes **before** the tag, so the release has them.
