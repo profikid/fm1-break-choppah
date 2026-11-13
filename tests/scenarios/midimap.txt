@@ -1,0 +1,127 @@
+# CHOPPAH: MIDI's map and channel (PRD A-72..A-74, A-77). GLOBAL's CHANNEL part: the channel (OMNI, 1..16) and what
+# goes out (notes, CC, program changes); notes 24-35 the breaks; CC 20-23 turn K1-K4, CC 24-39 set the chain's
+# slots; program changes 0-15 the pattern, 16-31 the break; song position and continue; nothing echoed back
+#   app/build/host/choppah_host tests/scenarios/midimap.txt app/build/scenarios
+wait 2600
+tap GLO
+wait 100
+turn ALGO 3 10
+wait 150
+expect gpage 3
+expect midi_ch 0
+expect midi_out 0
+shot mm_channel.png
+# out off: a key sends nothing
+out
+tapkey w0
+wait 50
+expect_no_out USB 90 30 64
+# channel 2, everything out
+spin K1 2
+spin K2 1
+spin K3 1
+spin K4 1
+wait 150
+expect midi_ch 2
+expect midi_out 7
+shot mm_channel_set.png
+tap HOME
+wait 100
+tap PLAY
+wait 300
+# another channel's: nothing; channel 2's: the pad
+midi USB 90 40 64
+wait 60
+expect pads 0
+midi USB 80 40 00
+midi USB 91 40 64
+wait 60
+expect pads 1
+midi USB 81 40 00
+wait 60
+expect pads 0
+# CC 24-39: slot 1's MIX (CC 27)
+midi USB B1 1B 00
+wait 60
+expect fx1_mix 0
+midi USB B0 1B 7F
+wait 60
+expect fx1_mix 0
+midi USB B1 1B 7F
+wait 60
+expect fx1_mix 127
+# CC 20: HOME's K1 (GATE), by as much as the value moves; the first only places the fader
+midi USB B1 14 7F
+wait 60
+expect gate 100
+midi USB B1 14 77
+wait 60
+expect gate <100
+# program changes: pattern 4 at the loop's end, break 2; none sent back
+out
+midi USB C1 03 00
+wait 60
+expect pat_next 3
+midi USB C1 11 00
+wait 60
+expect brk 1
+expect_no_out USB C1 03 00
+expect_no_out USB C1 11 00
+# notes 24-35: the breaks
+midi USB 91 18 64
+midi USB 81 18 00
+wait 60
+expect brk 0
+# notes out (channel 2): a white key, a black key
+out
+key w0 down
+wait 50
+expect_out USB 91 30 64
+key w0 up
+wait 50
+expect_out USB 81 30 00
+tapkey b2
+wait 50
+expect_out USB 91 42 64
+# CC out: K1 turned on HOME (CC 20, from 64: two fast detents, accelerated, are 4), a chain slot's knob on FX (its own CC, not K's)
+out
+spin K1 2
+wait 50
+expect_out USB B1 14 44
+tap FX
+wait 100
+out
+spin K4 -5
+wait 50
+expect_no_out USB B1 17 3B
+expect_out USB B1 1B 72
+# program change out: PRESETS, ALGORITHM on HOME
+tap HOME
+wait 100
+out
+spin PRESET 1
+wait 50
+expect_out USB C1 04 00
+spin ALGO 1
+wait 50
+expect_out USB C1 11 00
+tap PLAY
+wait 200
+# song position: clock in on, a continue from 16th 16 (bar 2) starts there
+tap GLO
+wait 100
+expect gpage 0
+spin K1 1
+wait 100
+midi USB F2 10 00
+midi USB FB 00 00
+clock 18 21
+expect step >15
+expect step <21
+midi USB FC 00 00
+wait 100
+midi USB FA 00 00
+clock 18 21
+expect step <4
+midi USB FC 00 00
+wait 100

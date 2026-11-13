@@ -71,6 +71,11 @@ typedef struct {
     /* (appended 8 Nov 2026: the ARP page's black keys, each an effect slot, PRD B-55) */
     brk_fxslot_t pfx[NPFX];
     brk_fxx_t pfxx[NPFX];
+    /* (appended 13 Nov 2026: GLOBAL's CHANNEL part, PRD A-72..A-74, A-77; 0 = OMNI, nothing out: older saves too) */
+    uint8_t midi_ch;                     /* the channel notes, CC and program changes come in on (and go out on):
+                                          * 0 any (out: 1), 1..16 that one */
+    uint8_t midi_out;                    /* MO_*: what goes out besides the clock */
+    uint8_t rsv4[2];
 } settings_t;
 #define SET_SIZE_MIN offsetof(settings_t, rsv2)   /* the shortest save that loads: CHP7's first size */
 _Static_assert(sizeof(settings_t) <= 3840u, "a store object holds 3840 bytes");
@@ -415,8 +420,55 @@ void app_init(void)
 #define PKT_RT(b) (0x0Fu | (uint32_t)(b) << 8)   /* a real-time byte as a USB-MIDI packet (CIN 0xF) */
 #define MIDI_SLICE0 48u                  /* C3: slice 1 */
 #define MIDI_PAD0 64u                    /* E4: black key 1 (to D5: black key 11) */
+#define MIDI_BRK0 24u                    /* C1: break 1 (to B1: break 12) */
+#define CC_K1 20u                        /* CC 20..23: K1..K4 turned (by as much as the value moves) */
+#define CC_FX0 24u                       /* CC 24..39: the chain's slots 1..4, each SET 1, SET 2, SET 3, MIX */
+#define MO_NOTES 1u                      /* set.midi_out: the panel's keys as notes */
+#define MO_CC 2u                         /* the knobs as CC */
+#define MO_PC 4u                         /* pattern and break changes as program changes */
 static uint32_t midi_pad_held, midi_pad_down;   /* black keys by note (bit i: key i): held, and pressed since the
                                           * last frame (so a note shorter than a frame still presses the key) */
+static int32_t midi_enc[4];              /* K1..K4 turned by CC 20..23 since the last frame */
+static uint8_t cc_in[4], cc_out[4];      /* their last value + 1 (0: none yet; out starts from 64) */
+static uint8_t mo_quiet;                 /* MIDI in acting: nothing sent back out for it */
+static void break_ask(uint32_t i);       /* (with the UI) */
+static void pattern_go(int32_t want);
+static void midi_fx_cc(uint32_t i, uint32_t v);
+
+static int midi_ch_ok(uint32_t st) { return !set.midi_ch || (st & 15u) + 1u == set.midi_ch; }
+static uint32_t midi_dest(void);
+/* a channel message out on the channel (OMNI: 1), when GLOBAL's CHANNEL part sends that kind */
+static void midi_send3(uint32_t st, uint32_t a, uint32_t b, uint32_t kind)
+{
+    if (!(set.midi_out & kind) || mo_quiet)
+        return;
+    st |= set.midi_ch ? set.midi_ch - 1u : 0u;
+    plat_midi_send(st >> 4 | st << 8 | (a & 0x7Fu) << 16 | (b & 0x7Fu) << 24, midi_dest());
+}
+static void midi_cc(uint32_t c, uint32_t v)   /* a CC in: K1..K4 turned, or a chain slot's setting */
+{
+    if (c >= CC_K1 && c < CC_K1 + 4u) {
+        uint32_t i = c - CC_K1;
+        if (cc_in[i])                    /* (the first only says where the fader is) */
+            midi_enc[i] += (int32_t)v - (int32_t)(cc_in[i] - 1u);
+        cc_in[i] = (uint8_t)(v + 1u);
+    } else if (c >= CC_FX0 && c < CC_FX0 + 16u)
+        midi_fx_cc(c - CC_FX0, v);
+}
+static void midi_k_out(uint32_t i, int32_t d)   /* K1..K4 turned on the panel: CC 20..23, a value moved by the turn */
+{
+    int32_t v = (cc_out[i] ? (int32_t)cc_out[i] - 1 : 64) + d;
+    v = v < 0 ? 0 : v > 127 ? 127 : v;
+    cc_out[i] = (uint8_t)(v + 1);
+    midi_send3(0xB0u, CC_K1 + i, (uint32_t)v, MO_CC);
+}
+static void midi_pc(uint32_t n)          /* program change in: 0..15 the pattern, 16..31 the break */
+{
+    if (n < NPAT)
+        pattern_go((int32_t)n);
+    else if (n - 16u < n_breaks && n >= 16u)
+        break_ask(n - 16u);
+}
 static void midi_slice(int s, int on);   /* (with the UI: they play as the keys, and REC records them) */
 static void midi_drum(uint32_t lane);
 #define MS_PER_SAMPLE (1000.0f / (float)BRK_SR)
@@ -431,7 +483,9 @@ static struct {
     uint32_t ring[24], i;                /* the last 24 ticks' times: a beat */
     uint32_t last, n;                    /* the last tick; ticks since the start (FA) */
     float bpm;                           /* the tempo they give, smoothed */
+    uint32_t spp;                        /* the song position given (F2), in 16ths: where a continue starts */
     uint8_t run, port;                   /* started (FA / FB, not yet FC); where they come from */
+    uint8_t cont;                        /* a continue: 16ths still to place the loop on */
 } ext;
 
 static uint32_t midi_dest(void)
@@ -465,10 +519,23 @@ void app_loop(void)
     uint32_t pkt;
     int port;
     while (plat_midi_in(&pkt, &port)) {
-        uint32_t st = pkt >> 8 & 0xFFu, t = plat_ms();
-        if ((st & 0xE0u) == 0x80u) {     /* notes, any channel: 48..63 (C3..D#4) the slices, held as the white keys;
-                                          * 64..74 (E4..D5) the black keys; 36 the kick, 38 the snare, 42 / 44 / 46 the hat (a drum machine's) */
-            uint32_t note = pkt >> 16 & 0x7Fu, on = (st & 0xF0u) == 0x90u && (pkt >> 24 & 0x7Fu);
+        uint32_t st = pkt >> 8 & 0xFFu, t = plat_ms(), d1 = pkt >> 16 & 0x7Fu, d2 = pkt >> 24 & 0x7Fu;
+        if (st >= 0x80u && st < 0xF0u && !midi_ch_ok(st))
+            continue;                    /* another channel's (GLOBAL's CHANNEL part: not OMNI) */
+        mo_quiet = 1u;
+        if ((st & 0xF0u) == 0xB0u)
+            midi_cc(d1, d2);
+        else if ((st & 0xF0u) == 0xC0u)
+            midi_pc(d1);
+        mo_quiet = 0u;
+        if ((st & 0xE0u) == 0x80u) {     /* notes, on the channel: 48..63 (C3..D#4) the slices, held as the white keys;
+                                          * 64..74 (E4..D5) the black keys; 24..35 (C1..B1) the breaks; 36 the kick,
+                                          * 38 the snare, 42 / 44 / 46 the hat (a drum machine's) */
+            uint32_t note = d1, on = (st & 0xF0u) == 0x90u && d2;
+            mo_quiet = 1u;
+            if (on && note >= MIDI_BRK0 && note < MIDI_BRK0 + 12u && note - MIDI_BRK0 < n_breaks)
+                break_ask(note - MIDI_BRK0);
+            mo_quiet = 0u;
             if (note >= MIDI_SLICE0 && note < MIDI_SLICE0 + 16u)
                 midi_slice((int)(note - MIDI_SLICE0), (int)on);
             else if (note >= MIDI_PAD0 && note < MIDI_PAD0 + 11u) {   /* 64..74 (E4..D5): the black keys, held
@@ -501,16 +568,24 @@ void app_loop(void)
                     set.tempo_x10 = (uint16_t)(ext.bpm * 10.0f + 0.5f);   /* (shown; not a change to save) */
                 }
             }
-            if (ext.run) {               /* each beat: where the outside clock is, for the render */
-                if (ext.n % 24u == 0u) {
+            if (ext.run) {               /* each beat: where the outside clock is, for the render (after a
+                                          * continue, the next two 16ths too: it starts where the song is) */
+                if (ext.n % 24u == 0u || (ext.cont && ext.n % 6u == 0u)) {
+                    if (ext.cont)
+                        ext.cont--;
                     sync_n16 = ext.n / 6u;
                     sync_ms = t;
                     sync_c++;
                 }
                 ext.n++;
             }
-        } else if (st == 0xFAu || st == 0xFBu) {   /* start (continue starts again too: no song position yet) */
-            ext.n = 0u;
+        } else if (st == 0xF2u)          /* song position (16ths): where a continue starts */
+            ext.spp = d1 | d2 << 7;
+        else if (st == 0xFAu || st == 0xFBu) {   /* start: from the top; continue: from the song position */
+            ext.n = st == 0xFBu ? ext.spp * 6u : 0u;
+            ext.cont = (uint8_t)(st == 0xFBu && ext.spp ? 2u : 0u);
+            if (st == 0xFAu)
+                ext.spp = 0u;
             ext.run = 1u;
             brk_play(0);
             brk_play(1);

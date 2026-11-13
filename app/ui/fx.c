@@ -442,6 +442,7 @@ static void fx_value(uint32_t slot, int i, char *t)
     }
 }
 
+static uint8_t cc_sent;                  /* this turn went out as a chain slot's CC */
 static void fx_knob_turn(uint32_t slot, int i, int32_t d)
 {
     brk_fxslot_t *sl = usl(slot);
@@ -468,8 +469,40 @@ static void fx_knob_turn(uint32_t slot, int i, int32_t d)
             step = 1.0f / (float)(BRK_DLY_DIVS - 1u);
         sl->p[i] = knob_f(sl->p[i], d, step, 0.0f, 1.0f);
     }
+    if (slot < BRK_FX_SLOTS) {           /* a chain slot's: its CC out (24 + 4 x slot + knob), not K's */
+        midi_send3(0xB0u, CC_FX0 + slot * 4u + (uint32_t)i,
+                   (uint32_t)((i == 3 ? sl->mix : sl->p[i]) * 127.0f + 0.5f), MO_CC);
+        cc_sent = 1u;
+    }
     fx_value(slot, i, t);
     app_say(fx_param_name(slot, i), t);
+    ui.redraw |= RG_BLOCKS;
+    changed();
+}
+
+/* CC 24..39 in: chain slot i / 4's setting i % 4 (SET 1..3, MIX) to v / 127; applied and shown at the next frame */
+static uint8_t fx_cc_at;                 /* 1 + the last one come in (0: none since the frame) */
+static void midi_fx_cc(uint32_t i, uint32_t v)
+{
+    brk_fxslot_t *sl = &set.fx.slot[i / 4u];
+    float f = (float)v * (1.0f / 127.0f);
+    if (sl->type == FXT_EMPTY)
+        return;
+    if (i % 4u == 3u)
+        sl->mix = f;
+    else
+        sl->p[i % 4u] = f;
+    fx_cc_at = (uint8_t)(i + 1u);
+}
+static void fx_cc_frame(void)            /* (input, each frame) */
+{
+    char t[16];
+    uint32_t i = fx_cc_at - 1u;
+    if (!fx_cc_at)
+        return;
+    fx_cc_at = 0u;
+    pct_text(i % 4u == 3u ? set.fx.slot[i / 4u].mix : set.fx.slot[i / 4u].p[i % 4u], t);
+    app_say(base_param_name(i / 4u, (int)(i % 4u)), t);
     ui.redraw |= RG_BLOCKS;
     changed();
 }

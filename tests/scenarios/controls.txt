@@ -17,6 +17,9 @@ wait 100
 expect gpage 2
 turn ALGO 1 10
 wait 100
+expect gpage 3
+turn ALGO 1 10
+wait 100
 expect gpage 0
 press SEL
 turn ALGO 1 10

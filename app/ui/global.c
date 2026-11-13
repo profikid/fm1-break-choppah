@@ -3,11 +3,23 @@
  * there in order.) */
 
 static void reset_all(void);             /* (below, with the break's change) */
+#define GPARTS 4u                        /* MIDI, PITCH, BT AUDIO, CHANNEL */
+static const char *const MO_NAME[3] = {"NOTES", "CC", "PC"};
 /* the GLOBAL page's knobs: clock in, clock out, Bluetooth, where MIDI goes */
 static const char *const MIDI_TO_NAME[3] = {"USB+BT", "USB", "BT"};
 static void global_value(int i, char *t)
 {
     t[0] = 0;
+    if (ui.gpage == 3u) {                /* CHANNEL: in (and out), and what goes out */
+        if (i == 0) {
+            if (set.midi_ch)
+                int_text(set.midi_ch, t);
+            else
+                text_cat(t, "OMNI");
+        } else
+            text_cat(t, set.midi_out >> (i - 1) & 1u ? "ON" : "OFF");
+        return;
+    }
     if (ui.gpage == 2u) {
         ch_bta_value(i, t);
         return;
@@ -32,6 +44,19 @@ static void global_turn(int i, int32_t d)
 {
     static const char *const NAME[4] = {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"};
     char t[16];
+    if (ui.gpage == 3u) {                /* K1 the channel (OMNI, 1..16), K2..K4 notes, CC, program changes out */
+        if (i == 0)
+            set.midi_ch = (uint8_t)clamp((int32_t)set.midi_ch + d, 0, 16);
+        else if (d > 0)
+            set.midi_out |= (uint8_t)(1u << (i - 1));
+        else
+            set.midi_out &= (uint8_t)~(1u << (i - 1));
+        global_value(i, t);
+        app_say(i ? MO_NAME[i - 1] : "CHANNEL", t);
+        ui.redraw |= RG_BLOCKS;
+        changed();
+        return;
+    }
     if (ui.gpage == 2u) {
         ch_bta_turn(i, d);
         return;
@@ -89,6 +114,28 @@ static void draw_global(const brk_status_t *st)
     char t[32], v[16];
     uint32_t p;
     int bs = plat_ble_state();
+    if (ui.gpage == 3u) {                /* CHANNEL: the channel, what goes out, the map */
+        cv_begin(240, 52, C_BLACK);
+        cv_text(6, 2, &FONT_T, "CHANNEL", C_GRAY);
+        global_value(0, t);
+        cv_text(96, 2, &FONT_T, t, C_HI);
+        cv_text(96, 14, &FONT_XS, set.midi_ch ? "IN AND OUT ON IT" : "IN: ANY. OUT: 1", C_DIM);
+        cv_text(6, 30, &FONT_T, "OUT", C_GRAY);
+        for (p = 0; p < 3u; p++) {
+            int32_t x = 96 + (int32_t)p * 48;
+            int on = set.midi_out >> p & 1u;
+            cv_rect(x, 28, 44, 18, on ? C_HI : C_BLOCK);
+            cv_text(x + 4, 30, &FONT_T, MO_NAME[p], on ? C_BLACK : C_DIM);
+        }
+        cv_blit(0, 88);
+        cv_begin(240, 52, C_BLACK);      /* the map, in short */
+        cv_text(6, 2, &FONT_XS, "NOTES 48-63 SLICES  64-74 PADS", C_WHITE);
+        cv_text(6, 14, &FONT_XS, "24-35 BREAKS  36 KICK 38 SNARE 42 HAT", C_WHITE);
+        cv_text(6, 26, &FONT_XS, "CC 20-23 K1-K4  24-39 FX SLOTS 1-4", C_WHITE);
+        cv_text(6, 38, &FONT_XS, "PC 0-15 PATTERN  16-31 BREAK", C_WHITE);
+        cv_blit(0, 140);
+        return;
+    }
     if (ui.gpage == 2u) {
         draw_bta();
         return;

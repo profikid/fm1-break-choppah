@@ -138,6 +138,7 @@ static void edit_open(void)
  * once the fade is done, and the render swaps it in on the next step: the bar's first. Stopped: at once */
 static void break_ask(uint32_t i)
 {
+    midi_send3(0xC0u, 16u + i, 0u, MO_PC);   /* (a program change out: 16 + the break) */
     set.brk = (uint8_t)i;                /* turning on fast just moves the target */
     brk_next = (int32_t)i;
     set_dirty = 1u;
@@ -203,9 +204,18 @@ static void slices_let_go(uint32_t keys)
 
 static void input(void)
 {
-    uint32_t keys = plat_keys(), btn = plat_buttons(), now = plat_ms(), i;
+    static uint32_t phys_was;            /* the panel's own keys last frame (MIDI's left out: notes out) */
+    uint32_t keys = plat_keys(), btn = plat_buttons(), now = plat_ms(), i, pk = keys ^ phys_was;
     uint32_t kdn, kup, bdn = btn & ~ui.btn;
     int k;
+    for (i = 0; i < 27u; i++) {          /* NOTES OUT: the white keys (where they play slices) and the black keys */
+        uint32_t b = i < 16u ? WK[i] : BK[i - 16u];
+        if (pk >> b & 1u && (i >= 16u || slices_page()))
+            midi_send3(keys >> b & 1u ? 0x90u : 0x80u, i < 16u ? MIDI_SLICE0 + i : MIDI_PAD0 + i - 16u,
+                       keys >> b & 1u ? 100u : 0u, MO_NOTES);
+    }
+    phys_was = keys;
+    fx_cc_frame();
     for (i = 0; i < 11u; i++)            /* MIDI notes 64..74: the black keys, as if pressed on the panel */
         if ((midi_pad_held | midi_pad_down) >> i & 1u)
             keys |= 1u << BK[i];
@@ -306,7 +316,7 @@ static void input(void)
         }
     }
     if (bdn & 1u << B_GLO)               /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, BT audio */
-        global_part(ui.page == PG_GLOBAL ? (ui.gpage + 1u) % 3u : 0u);
+        global_part(ui.page == PG_GLOBAL ? (ui.gpage + 1u) % GPARTS : 0u);
     if (bdn & 1u << B_EDIT) {            /* EDIT: the drums' sounds, the one edited last; again, the next drum */
         if (ui.page == PG_KICK || ui.page == PG_PERC)
             ui.einst = (uint8_t)((ui.einst + 1u) % 3u);
@@ -446,9 +456,15 @@ static void input(void)
         }
     }
     for (k = 0; k < NE; k++) {
-        int32_t d = plat_enc(k);
+        int32_t dp = plat_enc(k), d = dp;   /* the panel's turn, and CC 20..23's (K1..K4) with it */
+        if (k >= EN_K1 && k < EN_K1 + 4) {
+            d += midi_enc[k - EN_K1];
+            midi_enc[k - EN_K1] = 0;
+        }
         if (!d)
             continue;
+        mo_quiet = !dp;                  /* (a CC's turn goes nowhere out) */
+        cc_sent = 0u;
         ui.touched = 1u;
         if (btn & 1u << B_SEL)
             ui.tap_combo = 1u;           /* (SEL + a knob is no tap) */
@@ -472,7 +488,7 @@ static void input(void)
             else if (btn & 1u << B_SEL)
                 break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
             else if (ui.page == PG_GLOBAL)   /* GLOBAL: its part */
-                global_part((ui.gpage + (d > 0 ? 1u : 2u)) % 3u);
+                global_part((ui.gpage + (d > 0 ? 1u : GPARTS - 1u)) % GPARTS);
             else if (ui.page == PG_KICK) {    /* the kick: its part (MIX, each layer and its FX, MACRO, OUT) */
                 kick_part_set((kick_part() + (d > 0 ? 1u : KPARTS - 1u)) % KPARTS);
                 ui.redraw |= RG_BLOCKS | RG_FOOT;
@@ -517,6 +533,9 @@ static void input(void)
             pad_knob_turn(ui.pad_focus, k - EN_K1, d);
         else
             knob_turn(k, d);
+        if (dp && k >= EN_K1 && k < EN_K1 + 4 && !cc_sent)
+            midi_k_out((uint32_t)(k - EN_K1), dp);   /* CC OUT: K1..K4 as CC 20..23 */
+        mo_quiet = 0u;
     }
     ui.keys = keys;
     ui.btn = btn;
@@ -644,7 +663,7 @@ static int32_t tab(int32_t x, const char *s, int on)
 }
 /* the pages' buttons as printed, GLOBAL's parts, SEQ's lanes: for the tabs and the header (page_say) */
 static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP"};
-static const char *const GPART[3] = {"MIDI", "PITCH", "BT AUDIO"};
+static const char *const GPART[GPARTS] = {"MIDI", "PITCH", "BT AUDIO", "CHANNEL"};
 static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
 static void draw_tabs(void)
 {
@@ -671,7 +690,7 @@ static void draw_tabs(void)
         }
     }
     else if (ui.page == PG_GLOBAL)
-        for (i = 0; i < 3u; i++)
+        for (i = 0; i < GPARTS; i++)
             x = tab(x, GPART[i], i == ui.gpage);
     else if (ui.page == PG_MIX) {
         x = tab(x, "LEVELS", !ui.mpage);
@@ -713,7 +732,7 @@ static void page_say(void)
     switch (ui.page) {
     case PG_HOME: text_cat(t, "PERFORM"); break;
     case PG_GEN: text_cat(t, "GENERATOR"); break;
-    case PG_GLOBAL: text_cat(t, GPART[ui.gpage % 3u]); break;
+    case PG_GLOBAL: text_cat(t, GPART[ui.gpage % GPARTS]); break;
     case PG_MIX: text_cat(t, ui.mpage ? "GROOVE" : "LEVELS"); break;
     case PG_SEQ: text_cat(t, SEQL[ui.seq_lane % NSEQL]); break;
     case PG_TAP: text_cat(t, "TAP TEMPO"); break;
@@ -810,7 +829,9 @@ static void draw_foot(const brk_status_t *st)
         static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
         static const char *const KN_GROOVE[4] = {"SWING", "DRUMS", "", ""};
         static const char *const KN_BTA[4] = {"BT AUDIO", "DEVICE", "SCAN", "CONNECT"};
-        const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_BTA[i] : ui.page == PG_GLOBAL && ui.gpage
+        static const char *const KN_CHAN[4] = {"CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"};
+        const char *name = ui.page == PG_GLOBAL && ui.gpage == 3u ? KN_CHAN[i]
+                           : ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_BTA[i] : ui.page == PG_GLOBAL && ui.gpage
                            ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
                            ? KN_GROOVE[i] : KN[ui.page][i];
         if (ui.shown >= 100) {           /* a white key held: its loop, or its slice's effect */
@@ -1095,8 +1116,9 @@ int app_expect(const char *what, int *got)
                                     "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo",
                                     "pfx_on", "pfx_sel", "pfx_latched", "roll_pitch_x10", "demo", "fx_page",
                                     "mb_solo", "mb_thr_low", "mb_slot2_thr_low", "pfx_type", "pfx_voices",
-                                    "pfx_busy", "pads"};
-    int v[27];
+                                    "pfx_busy", "pads", "midi_ch", "midi_out", "fx1_mix", "fx1_type", "gate",
+                                    "step", "pat_next"};
+    int v[34];
     uint32_t i;
     brk_status_t st;
     v[0] = ui.page;
@@ -1129,7 +1151,14 @@ int app_expect(const char *what, int *got)
     v[25] = (int)brk_fx_pad_busy();
     brk_status(&st);
     v[26] = (int)st.pads;                /* the HOME pads on (engine) */
-    for (i = 0; i < 27u; i++)
+    v[27] = set.midi_ch;
+    v[28] = set.midi_out;
+    v[29] = (int)(set.fx.slot[0].mix * 127.0f + 0.5f);
+    v[30] = set.fx.slot[0].type;
+    v[31] = set.gate;
+    v[32] = st.step;
+    v[33] = pat_next;
+    for (i = 0; i < 34u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

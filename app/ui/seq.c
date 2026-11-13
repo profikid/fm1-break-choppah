@@ -227,10 +227,9 @@ static void seq_turn(int i, int32_t d)
     app_say(ui.msg[0], t);
     ui.redraw |= RG_BLOCKS | RG_FOOT;    /* (the knobs' values too: they show the step) */
 }
-static void pattern_pick(int32_t d)      /* PRESETS: the next or previous pattern (playing: at the loop's end) */
+static void pattern_go(int32_t want)      /* pattern want (playing: at the loop's end); a program change out */
 {
-    int32_t cur = pat_next >= 0 ? pat_next : set.pattern;
-    int32_t want = (cur + (d > 0 ? 1 : (int32_t)NPAT - 1)) % (int32_t)NPAT;
+    midi_send3(0xC0u, (uint32_t)want, 0u, MO_PC);
     if (playing_now())
         pat_next = (int8_t)want;
     else {
@@ -240,6 +239,11 @@ static void pattern_pick(int32_t d)      /* PRESETS: the next or previous patter
     }
     say_int(playing_now() ? "NEXT PATTERN" : "PATTERN", want + 1, "");
     ui.redraw |= RG_HEAD | RG_BLOCKS | RG_FOOT;
+}
+static void pattern_pick(int32_t d)      /* PRESETS: the next or previous pattern */
+{
+    int32_t cur = pat_next >= 0 ? pat_next : set.pattern;
+    pattern_go((cur + (d > 0 ? 1 : (int32_t)NPAT - 1)) % (int32_t)NPAT);
 }
 static uint32_t keys_lit(const brk_status_t *st)   /* the white keys' lights on a lane's page (TAP: the beat) */
 {
