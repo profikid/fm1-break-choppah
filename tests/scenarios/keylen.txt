@@ -1,0 +1,43 @@
+# CHOPPAH: a white key's LENGTH (K1 while held) has the jungle chops: 3/16 after 1/8, 3/8 after 1/4 (PRD B-10a; on
+# the bank's 2-bar breaks of 16 slices, 1/8 is one slice);
+# held at 3/16 while playing, the key loops every 3 16ths (8 repeats in 2.25 s at 170 BPM)
+#   app/build/host/choppah_host tests/scenarios/keylen.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 600
+key w0 down
+wait 200
+expect klen0 3
+turn K1 1 10
+wait 150
+expect klen0 8
+shot kl_3_16.png
+turn K1 1 10
+wait 150
+expect klen0 4
+expect key 0
+turn K1 1 10
+wait 150
+expect klen0 9
+shot kl_3_8.png
+turn K1 1 10
+wait 150
+expect klen0 5
+turn K1 1 10
+wait 150
+expect klen0 6
+turn K1 -4 10
+wait 150
+expect klen0 8
+key w0 up
+wait 300
+key w0 down
+wait 250
+expect key 0
+wait 2000
+expect key_n >6
+expect key_n <10
+key w0 up
+wait 200
+tap PLAY
+wait 200

@@ -1117,8 +1117,8 @@ int app_expect(const char *what, int *got)
                                     "pfx_on", "pfx_sel", "pfx_latched", "roll_pitch_x10", "demo", "fx_page",
                                     "mb_solo", "mb_thr_low", "mb_slot2_thr_low", "pfx_type", "pfx_voices",
                                     "pfx_busy", "pads", "midi_ch", "midi_out", "fx1_mix", "fx1_type", "gate",
-                                    "step", "pat_next", "key"};
-    int v[35];
+                                    "step", "pat_next", "key", "key_n", "klen0"};
+    int v[37];
     uint32_t i;
     brk_status_t st;
     v[0] = ui.page;
@@ -1159,7 +1159,9 @@ int app_expect(const char *what, int *got)
     v[32] = st.step;
     v[33] = pat_next;
     v[34] = st.key;                      /* the white key (slice) held, -1 none */
-    for (i = 0; i < 35u; i++)
+    v[35] = (int)st.key_n;               /* its repeats */
+    v[36] = set.keys[0].len;             /* the first key's LENGTH (BRK_KEY_SLICES' index) */
+    for (i = 0; i < 37u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

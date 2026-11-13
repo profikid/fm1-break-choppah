@@ -135,7 +135,7 @@ dot on its block):
 
 | Knob | Sets | Range |
 | --- | --- | --- |
-| K1 LENGTH | How long the window is, shown as music for this break | 1/8 of a slice … 16 slices (2-bar breaks: 1/64 … 2 BAR) |
+| K1 LENGTH | How long the window is, shown as music for this break | 1/8 of a slice … 16 slices (2-bar breaks: 1/64 … 2 BAR), with the jungle chops between: **3/16** after 1/8 and **3/8** after 1/4 (1.5 and 3 slices) |
 | K2 PITCH | The key's own pitch, on top of OCT | −12 … +12 semitones |
 | K3 START | Where in the slice the window starts | 0 … 94 % of the slice |
 | K4 MODE | LOOP · PING-PONG (every other repeat backwards) · REVERSE · ONE SHOT (once, then quiet while held) | |

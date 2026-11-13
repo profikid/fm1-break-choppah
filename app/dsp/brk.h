@@ -76,7 +76,9 @@ extern const char *const BRK_ROLL_DIV_NAME[BRK_ROLL_DIVS];
  * starts in its slice: LENGTH slices long (1/8 .. 16 of them), from START sixteenths into the slice, at PITCH, in
  * MODE. The loop restarts every LENGTH on the tempo's grid, playing or stopped. */
 #define BRK_KEYS 16u
-#define BRK_KEY_LENS 8u                  /* 1/8 1/4 1/2 1 2 4 8 16 slices */
+#define BRK_KEY_LENS 10u                 /* 1/8 1/4 1/2 1 2 4 8 16 slices, then 1.5 and 3 (3/16 and 3/8 of the bank's
+                                          * 2-bar breaks, 16 slices each: the jungle chops: added 14 Nov 2026 at the end so saved lengths keep theirs;
+                                          * LENGTH turns through them in order, BRK_KEY_ORDER) */
 enum { KEY_LOOP, KEY_PINGPONG, KEY_REVERSE, KEY_ONESHOT, BRK_KEY_MODES };
 typedef struct {
     uint8_t len;                         /* 0..BRK_KEY_LENS-1: 3 = one slice */
@@ -85,6 +87,7 @@ typedef struct {
     uint8_t mode;                        /* KEY_* */
 } brk_keyset_t;                          /* 4 bytes: written to the render as one word */
 extern const float BRK_KEY_SLICES[BRK_KEY_LENS];
+extern const uint8_t BRK_KEY_ORDER[BRK_KEY_LENS];   /* the lengths shortest first: 0 1 2 3 8 4 9 5 6 7 */
 
 /* each slice's own effect (PRD B-32), whenever that slice plays (the loop, a key, a roll): a filter, crunch, drive or
  * ring mod on the slice alone, or a throw of it into the FX chain's delay (ECHO) or reverb (VERB); and its own level.

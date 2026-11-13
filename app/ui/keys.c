@@ -114,8 +114,12 @@ static void key_knob_turn(int key, int k, int32_t d)
         slx_knob_turn(key, k, d);
         return;
     }
-    if (k == 0)
-        ks->len = (uint8_t)clamp((int32_t)ks->len + d, 0, BRK_KEY_LENS - 1);
+    if (k == 0) {                        /* LENGTH: shortest to longest (3/16 after 1/8, 3/8 after 1/4) */
+        int32_t o = 0;
+        while (o < (int32_t)BRK_KEY_LENS - 1 && BRK_KEY_ORDER[o] != ks->len)
+            o++;
+        ks->len = BRK_KEY_ORDER[clamp(o + d, 0, BRK_KEY_LENS - 1)];
+    }
     else if (k == 1)
         ks->pitch = (int8_t)clamp((int32_t)ks->pitch + d, -12, 12);
     else if (k == 2)

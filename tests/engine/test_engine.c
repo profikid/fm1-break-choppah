@@ -583,6 +583,27 @@ static void test_key_loops(void)
     render(buf, sl * 5u, 0, 0, 0);
     brk_status(&st);
     CHECK(st.key == -1 && render(buf, BLOCK, 0, 0, 0) == 0.0f, "let go (stopped): it ends with its window");
+    /* the jungle chops on a 2-bar break of 16 slices (an 8th each, as the bank's): 1.5 slices restart every 3 16ths
+     * (3/16), 3 every 6 (3/8) */
+    {
+        static const uint8_t LEN[2] = {8u, 9u};
+        static const uint32_t N[2] = {2u, 1u};
+        static const float PH[2] = {1.0f / 3.0f, 1.0f / 6.0f};
+        for (i = 0; i < 2u; i++) {
+            fresh(1);
+            brk.bars = 2u;               /* (the synth's bar of 16 slices played as 2 bars: a slice an 8th) */
+            brk_set_break(&brk);
+            brk_keyset_defaults(&k);
+            k.len = LEN[i];
+            brk_keyset(3u, &k);
+            brk_key(3, 1);
+            render(buf, sl * 7u, 0, 0, 0);
+            brk_status(&st);
+            CHECK(st.key == 3 && st.key_n == N[i] && fabsf(st.key_phase - PH[i]) < 0.06f,
+                  "length %s: %u repeats in 7 16ths, %.2f into the next", i ? "3/8" : "3/16", st.key_n, st.key_phase);
+            brk_key(3, 0);
+        }
+    }
     /* ping-pong: every other repeat backwards */
     fresh(1);
     brk_keyset_defaults(&k);
