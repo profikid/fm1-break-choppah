@@ -15,7 +15,7 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 4. The pads
 5. Patterns and the sequencer
 6. The FX chain
-7. GLOBAL: MIDI, Bluetooth, pitch, Bluetooth audio, reset
+7. GLOBAL: MIDI, Bluetooth, pitch, Bluetooth audio, reset (and the MIDI map)
 8. The drums: kick, snare, hat
 9. The mixer
 10. Pages and knobs
@@ -102,7 +102,7 @@ back. That touch only ends the demo: it doesn't play a slice or start the break.
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
 | PRESETS | The pattern, P1–P16 (§5); while playing the new one starts at the end of the loop |
 | SEQ · REC | The sequencer; recording the keys into the pattern (§5). SEL + REC: clear the pattern (SEL + SAVE takes it back) |
-| MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 64–74 (E4–D5) press black keys 1–11 (on HOME the performance pads, on ARP the effect pads; SEL + the note holds an ARP pad); 36 the kick, 38 the snare, 42 / 44 / 46 the hat (§8); any channel |
+| MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 64–74 (E4–D5) press black keys 1–11 (on HOME the performance pads, on ARP the effect pads; SEL + the note holds an ARP pad); 24–35 (C1–B1) pick the break; 36 the kick, 38 the snare, 42 / 44 / 46 the hat (§8). Any channel, or the one set on GLOBAL's CHANNEL part: the whole map is in §7, [MIDI map](#midi-map) |
 | ALGORITHM | (HOME, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
 | MASTER | Volume |
 
@@ -388,16 +388,17 @@ whose part you are on.
 ## 7. GLOBAL: MIDI, Bluetooth, pitch, Bluetooth audio, reset
 
 **GLO** opens the GLOBAL page: the slice blocks give way to the state of MIDI, and K1–K4 set it (SAVE keeps it).
-**GLO again** (or ALGORITHM) turns to its second part, the pitch; **a third time**, Bluetooth audio (both below).
+**GLO again** (or ALGORITHM) turns to its second part, the pitch; **a third time**, Bluetooth audio; **a fourth
+time**, CHANNEL: the MIDI channel and what goes out (all below, with the whole [MIDI map](#midi-map)).
 
 ![GLOBAL, following a 119 BPM clock over USB](img/screen-global.png "The GLOBAL page")
 
 | Knob | Sets | |
 | --- | --- | --- |
-| K1 CLOCK IN | OFF · FOLLOW | Following, MIDI clock from USB, the TRS jack or Bluetooth sets the tempo (the header says EXT; SELECT and tap tempo wait), START plays from bar 1, STOP stops, and the loop eases onto the clock's beat every beat |
+| K1 CLOCK IN | OFF · FOLLOW | Following, MIDI clock from USB, the TRS jack or Bluetooth sets the tempo (the header says EXT; SELECT and tap tempo wait), START plays from bar 1, CONTINUE from the song position the clock last sent (SONG POSITION), STOP stops, and the loop eases onto the clock's beat every beat |
 | K2 CLOCK OUT | OFF · ON | While playing, 24 clocks a beat (straight, whatever the swing); PLAY sends START, stopping sends STOP, HOME + PLAY sends START again |
 | K3 BLUETOOTH | ON · OFF | Bluetooth MIDI: the FM-1 shows up as **CHOPPAH XXXX** in a computer's, phone's or tablet's Bluetooth MIDI settings. Off ends the link and stops advertising; at power-on it starts as saved |
-| K4 MIDI TO | USB+BT · USB · BT | Where the clock goes |
+| K4 MIDI TO | USB+BT · USB · BT | Where MIDI goes out: the clock, and the notes, CC and program changes CHANNEL sends |
 
 The panel shows Bluetooth's state (ready to pair, connected), the clock coming in (its tempo, where from, running or
 stopped), the clock going out, and a light for MIDI in and out on each port. The FM-1 has no MIDI out jack: MIDI goes
@@ -435,6 +436,65 @@ audio runs late: 150–300 ms between a key and your ear, so it is for listening
 (use the FM-1's own output or USB for that). Bluetooth MIDI keeps working beside it on the same radio. Turning
 Bluetooth audio on starts the radio even when Bluetooth MIDI is off.
 
+**CHANNEL (GLO four times):** the MIDI channel, and what CHANNEL sends besides the clock. Everything starts off, so
+nothing new goes out until you turn it on.
+
+![GLOBAL's CHANNEL part: channel 2, notes, CC and program changes out](img/screen-channel.png "GLOBAL: CHANNEL")
+
+| Knob | Sets | |
+| --- | --- | --- |
+| K1 CHANNEL | OMNI (the default) · 1 … 16 | OMNI listens to every channel and sends on channel 1. A channel listens to that one only (notes, CC and program changes; the clock has no channel) and sends on it |
+| K2 NOTES OUT | OFF · ON | The panel's keys go out as notes: a white key as its slice's note (48–63; on SEQ and tap tempo, where the white keys edit steps or tap, they don't), a black key as its pad's (64–74), velocity 100 |
+| K3 CC OUT | OFF · ON | K1–K4 go out as CC 20–23; a chain slot's knob on the FX page as its own CC (24–39, below) instead |
+| K4 PC OUT | OFF · ON | A pattern change goes out as program change 0–15, a break change as 16–31 |
+
+What comes in is never sent back out, so a DAW recording CHOPPAH's notes and knobs can play them back into it, and a
+MIDI thru loop doesn't feed itself.
+
+### MIDI map
+
+CHOPPAH's MIDI in and out, on every port: USB, the TRS jack (in only) and Bluetooth. Notes, CC and program changes
+come in on any channel (OMNI) or on GLOBAL's CHANNEL; the clock and the transport on any. Note names: middle C (60)
+is C4.
+
+**Notes in** (also while stopped):
+
+| Notes | Do |
+| --- | --- |
+| 24–35 (C1–B1) | Pick break 1–12 (playing: at the next bar, as ALGORITHM does) |
+| 36 (C2) | The kick |
+| 38 (D2) | The snare |
+| 42, 44, 46 (F#2, G#2, A#2) | The hat |
+| 48–63 (C3–D#4) | Slices 1–16, held like the white keys |
+| 64–74 (E4–D5) | Black keys 1–11, held like the panel's: on HOME the performance pads, on ARP the effect pads, SEL + the note holds an ARP pad |
+
+Velocity doesn't change the sound; velocity 0 is a note off. With REC on and playing, slice and drum notes are
+written into the pattern (as the keys are); break and pad notes are not.
+
+**CC in and out:**
+
+| CC | Does |
+| --- | --- |
+| 20–23 | K1–K4 on the page you are on, as if turned: by as much as the value moves (the first value only places the fader). Out: the knob's turns, as a value that moves with them |
+| 24–27 | FX chain slot 1: SET 1, SET 2, SET 3 (its K1–K3), MIX (K4), 0–127 over the whole range |
+| 28–31 | Slot 2, the same |
+| 32–35 | Slot 3 |
+| 36–39 | Slot 4 |
+
+An empty slot ignores its CCs. The slot CCs set the effect's main settings (its MAIN part on the FX page), whatever
+the slot holds.
+
+**Program changes in and out:**
+
+| Program | Does |
+| --- | --- |
+| 0–15 | Pattern 1–16 (playing: at the loop's end, as PRESETS does) |
+| 16–31 | Break 1–16 (the ones the firmware has) |
+
+**Clock and transport** (with CLOCK IN on FOLLOW): 24 clocks a beat set the tempo; START plays from bar 1, CONTINUE
+from the last SONG POSITION (counted from the top of the song, so bar 5 of a DAW's song is the loop's first step
+again), STOP stops. Out (CLOCK OUT on): 24 clocks a beat while playing, START with PLAY, STOP when it stops.
+
 ## 8. The drums: kick, snare, hat
 
 Three synthesised drums play under the break, in time with it (swing included), on the pattern's drum lanes (§5):
@@ -467,7 +527,7 @@ The kick is four layers summed and pushed into a clipper:
 | --- | --- |
 | ALGORITHM | The part: MIX, a layer (SUB, PUNCH, GRIT, CLICK), its FX, MACRO, OUT |
 | PRESETS | A built-in kick: 909, TECHNO, EARLY HC, ROTTERDAM (the start), INDUSTRIAL, DISTORTO. The steps, routing and volume stay |
-| MIDI note 36 (C1) | Plays the kick, from any channel, also while stopped |
+| MIDI note 36 (C2) | Plays the kick, on the MIDI channel (§7, [MIDI map](#midi-map)), also while stopped |
 
 | Part | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
@@ -499,7 +559,7 @@ shape is its box in the strip below. Its steps: SEQ's KICK lane (empty to start)
 | SOUND | Level | Tune | Decay | Tone (the hat: METAL / NOISE) |
 | SHAPE | Snap (the hat: CUT, the high-pass) | Drive | | |
 
-MIDI notes 38 (D1) play the snare, 42, 44 and 46 the hat, also while stopped. SAVE keeps the drums with the rest.
+MIDI notes 38 (D2) play the snare, 42, 44 and 46 the hat, also while stopped. SAVE keeps the drums with the rest.
 (ENV, which used to open SNARE / HAT, is tap tempo now: §3.)
 
 ## 9. The mixer
@@ -532,6 +592,7 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | Reset all (twice) |
 | GLO a third time (BT audio) | On / off | Device | Scan | Connect / hang up |
+| GLO a fourth time (channel) | MIDI channel (OMNI, 1–16) | Notes out | CC out | Program changes out |
 | ARP (black keys hold effects; ARP again: MORE, MOD) | the shown key's effect: setting 1 | Setting 2 | Setting 3 | Mix |
 | ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | Click level (0: off) |
 | EDIT (kick; ALGORITHM its part) | see §8: MIX, SUB … CLICK FX, MACRO, OUT | | | |

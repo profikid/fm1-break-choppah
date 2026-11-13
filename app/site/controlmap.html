@@ -181,11 +181,13 @@
       notes: [["SEL + FX", "Bypass the focused slot"], ["FX held + ALGO", "Move the slot along the chain"], ["Key held + FX", "That key's slice effect on K1–K4"],
               ["MB COMP focused", "FX again steps AMOUNT · LOW · MID · HIGH · GAIN · X-OVER, then the next slot"],
               ["MB COMP · band", "THRESH · RATIO · ATTACK · RELEASE"], ["MB COMP · GAIN / X-OVER", "LOW MID HIGH SOLO · LOW X HIGH X KNEE OUTPUT"]] },
-    { id: "glo", btn: "GLO", name: "GLOBAL", sub: "MIDI, pitch, Bluetooth audio", again: "next part (3)", subs: [
+    { id: "glo", btn: "GLO", name: "GLOBAL", sub: "MIDI, pitch, Bluetooth audio, channel", again: "next part (4)", subs: [
       { n: "MIDI", k: ["CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"], strip: "BLUETOOTH · CLOCK IN · CLOCK OUT · PORTS", note: "status" },
       { n: "PITCH", k: ["PITCH", "GRAIN", "SNAP", "RESET ALL"], strip: "PITCH MODE · GRAIN · SNAP", note: "what the snap is in this break" },
-      { n: "BT AUDIO", k: ["BT AUDIO", "DEVICE", "SCAN", "CONNECT"], strip: "BT AUDIO: STATE · DEVICES", note: "" } ],
-      algo: "Part", presets: "Pattern P1–P16", keys: "slices", notes: [["K4 RESET ALL", "Turn twice within 3 s"]] },
+      { n: "BT AUDIO", k: ["BT AUDIO", "DEVICE", "SCAN", "CONNECT"], strip: "BT AUDIO: STATE · DEVICES", note: "" },
+      { n: "CHANNEL", k: ["CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"], strip: "CHANNEL · OUT · THE MIDI MAP", note: "OMNI or 1–16; each out off by default" } ],
+      algo: "Part", presets: "Pattern P1–P16", keys: "slices", notes: [["K4 RESET ALL", "Turn twice within 3 s"],
+        ["CC 20–23 · 24–39", "K1–K4 · the chain's slots"], ["PC 0–15 · 16–31", "Pattern · break"], ["Notes 24–35", "Breaks 1–12"]] },
     { id: "edit", btn: "EDIT", name: "DRUM DESIGN", sub: "Kick, snare, hat sounds", again: "next drum (3)", part: true, subs: [
       { n: "KICK · MIX", k: ["SUB", "PUNCH", "GRIT", "CLICK"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "ALGORITHM: MIX, SUB, SUB FX … CLICK FX, MACRO, OUT" },
       { n: "KICK · LAYER", k: ["LEVEL", "PITCH", "DECAY", "TONE"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "SUB, PUNCH, GRIT, CLICK" },
@@ -195,7 +197,7 @@
       { n: "SNARE / HAT · SOUND", k: ["LEVEL", "TUNE", "DECAY", "TONE"], strip: "6 SETTINGS · THE 3 DRUMS", note: "EDIT again: the snare, then the hat" },
       { n: "SNARE / HAT · SHAPE", k: ["SNAP / CUT", "DRIVE", "", ""], strip: "6 SETTINGS · THE 3 DRUMS", note: "" } ],
       algo: "Part", presets: "Kick / sound", keys: "slices",
-      notes: [["Steps", "On SEQ's KICK, SNARE and HAT lanes"], ["MIDI 36 · 38 · 42", "Kick · snare · hat"]] },
+      notes: [["Steps", "On SEQ's KICK, SNARE and HAT lanes"], ["MIDI 36 · 38 · 42", "Kick · snare · hat (C2 · D2 · F#2)"]] },
     { id: "lfo", btn: "LFO", name: "MIXER", sub: "Levels and groove", again: "next part (2)", subs: [
       { n: "LEVELS", k: ["BREAK", "KICK", "PERC", "FX"], strip: "4 FADERS AND METERS", note: "FX shows the 4 slots" },
       { n: "GROOVE", k: ["SWING", "DRUMS ROUTE", "", ""], strip: "SWING · THE DRUMS' ROUTE", note: "" } ],
