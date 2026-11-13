@@ -204,8 +204,14 @@ static void slices_let_go(uint32_t keys)
 static void input(void)
 {
     uint32_t keys = plat_keys(), btn = plat_buttons(), now = plat_ms(), i;
-    uint32_t kdn = keys & ~ui.keys, kup = ui.keys & ~keys, bdn = btn & ~ui.btn;
+    uint32_t kdn, kup, bdn = btn & ~ui.btn;
     int k;
+    for (i = 0; i < 11u; i++)            /* MIDI notes 64..74: the black keys, as if pressed on the panel */
+        if ((midi_pad_held | midi_pad_down) >> i & 1u)
+            keys |= 1u << BK[i];
+    midi_pad_down = 0u;
+    kdn = keys & ~ui.keys;
+    kup = ui.keys & ~keys;
     if (keys != ui.keys || btn != ui.btn)
         ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
     if (ui.lobo_t || demo.on) {          /* RESET ALL's screen or the demo up: a press only ends it (app_frame) */
@@ -1089,9 +1095,10 @@ int app_expect(const char *what, int *got)
                                     "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo",
                                     "pfx_on", "pfx_sel", "pfx_latched", "roll_pitch_x10", "demo", "fx_page",
                                     "mb_solo", "mb_thr_low", "mb_slot2_thr_low", "pfx_type", "pfx_voices",
-                                    "pfx_busy"};
-    int v[26];
+                                    "pfx_busy", "pads"};
+    int v[27];
     uint32_t i;
+    brk_status_t st;
     v[0] = ui.page;
     v[1] = ui.gpage;
     v[2] = ui.kpage;
@@ -1120,7 +1127,9 @@ int app_expect(const char *what, int *got)
     for (i = 0; i < BRK_PAD_V; i++)      /* the voices given to keys */
         v[24] += pfx_owner[i] != 0u;
     v[25] = (int)brk_fx_pad_busy();
-    for (i = 0; i < 26u; i++)
+    brk_status(&st);
+    v[26] = (int)st.pads;                /* the HOME pads on (engine) */
+    for (i = 0; i < 27u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

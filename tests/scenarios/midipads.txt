@@ -1,0 +1,63 @@
+# CHOPPAH: MIDI notes 64..74 (E4..D5) press the black keys (A-76): on HOME the performance pads, on ARP the effect
+# pads, held while the note is; SEL + the note latches an ARP pad as the panel's key does. A note shorter than a
+# frame still presses the key
+#   app/build/host/choppah_host tests/scenarios/midipads.txt app/build/scenarios
+wait 2600
+tap PLAY
+wait 600
+expect pads 0
+midi USB 90 40 64
+wait 100
+expect pads 1
+shot mp_home_roll.png
+midi USB 80 40 00
+wait 100
+expect pads 0
+midi USB 93 43 7F
+midi USB 90 4A 50
+wait 100
+expect pads 1032
+midi USB 83 43 00
+midi USB 90 4A 00
+wait 100
+expect pads 0
+midi USB 90 4B 64
+wait 100
+expect pads 0
+midi USB 80 4B 00
+tap ARP
+wait 150
+expect page 9
+midi USB 90 41 64
+wait 100
+expect pfx_on 2
+expect pfx_sel 1
+shot mp_arp_held.png
+midi USB 80 41 00
+wait 100
+expect pfx_on 0
+midi USB 90 40 64
+midi USB 80 40 00
+wait 50
+expect pfx_sel 0
+press SEL
+midi USB 90 42 64
+wait 50
+midi USB 80 42 00
+release SEL
+wait 100
+expect pfx_latched 4
+expect pfx_on 4
+press SEL
+midi USB 90 42 64
+wait 50
+midi USB 80 42 00
+release SEL
+wait 100
+expect pfx_latched 0
+tap HOME
+wait 100
+midi USB 90 3C 64
+wait 100
+expect pads 0
+midi USB 80 3C 00

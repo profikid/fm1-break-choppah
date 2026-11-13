@@ -414,6 +414,9 @@ void app_init(void)
 /* ------------------------------------------------------- MIDI clock, Bluetooth --- */
 #define PKT_RT(b) (0x0Fu | (uint32_t)(b) << 8)   /* a real-time byte as a USB-MIDI packet (CIN 0xF) */
 #define MIDI_SLICE0 48u                  /* C3: slice 1 */
+#define MIDI_PAD0 64u                    /* E4: black key 1 (to D5: black key 11) */
+static uint32_t midi_pad_held, midi_pad_down;   /* black keys by note (bit i: key i): held, and pressed since the
+                                          * last frame (so a note shorter than a frame still presses the key) */
 static void midi_slice(int s, int on);   /* (with the UI: they play as the keys, and REC records them) */
 static void midi_drum(uint32_t lane);
 #define MS_PER_SAMPLE (1000.0f / (float)BRK_SR)
@@ -464,10 +467,19 @@ void app_loop(void)
     while (plat_midi_in(&pkt, &port)) {
         uint32_t st = pkt >> 8 & 0xFFu, t = plat_ms();
         if ((st & 0xE0u) == 0x80u) {     /* notes, any channel: 48..63 (C3..D#4) the slices, held as the white keys;
-                                          * 36 the kick, 38 the snare, 42 / 44 / 46 the hat (a drum machine's) */
+                                          * 64..74 (E4..D5) the black keys; 36 the kick, 38 the snare, 42 / 44 / 46 the hat (a drum machine's) */
             uint32_t note = pkt >> 16 & 0x7Fu, on = (st & 0xF0u) == 0x90u && (pkt >> 24 & 0x7Fu);
             if (note >= MIDI_SLICE0 && note < MIDI_SLICE0 + 16u)
                 midi_slice((int)(note - MIDI_SLICE0), (int)on);
+            else if (note >= MIDI_PAD0 && note < MIDI_PAD0 + 11u) {   /* 64..74 (E4..D5): the black keys, held
+                                          * as the panel's (input() reads them with the keys: every page's own) */
+                uint32_t b = 1u << (note - MIDI_PAD0);
+                if (on) {
+                    midi_pad_held |= b;
+                    midi_pad_down |= b;
+                } else
+                    midi_pad_held &= ~b;
+            }
             else if (on && (note == 36u || note == 38u || note == 42u || note == 44u || note == 46u))
                 midi_drum(note == 36u ? LANE_KICK : note == 38u ? LANE_SNARE : LANE_HAT);
             continue;
