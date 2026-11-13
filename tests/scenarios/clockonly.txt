@@ -1,0 +1,39 @@
+# CHOPPAH: issue #4. A synth on the TRS jack sends its clock and its notes on channel 1: on OMNI its notes play
+# slices; with GLOBAL's CHANNEL set to another channel (16) they are left alone and the clock is still followed
+#   app/build/host/choppah_host tests/scenarios/clockonly.txt app/build/scenarios
+wait 2600
+tap GLO
+wait 100
+spin K1 1
+wait 100
+expect gpage 0
+# OMNI (as before 1.3): the synth's C3 plays slice 1
+midi TRS FA 00 00
+clock 48 21
+midi TRS 90 30 64
+clock 12 21
+expect pads 0
+expect key 0
+midi TRS 80 30 00
+midi TRS FC 00 00
+wait 300
+# CHANNEL 16: the synth's notes are left alone, the clock still followed
+turn ALGO 3 10
+wait 100
+expect gpage 3
+spin K1 16
+wait 100
+expect midi_ch 16
+midi TRS FA 00 00
+clock 48 21
+out
+midi TRS 90 30 64
+midi TRS 90 40 64
+clock 48 21
+expect key -1
+expect pads 0
+expect_bpm 117 121
+midi TRS 80 30 00
+midi TRS 80 40 00
+midi TRS FC 00 00
+wait 200
