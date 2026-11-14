@@ -129,8 +129,12 @@ sixteenths); the list lives on this site and costs the FM-1 no space. The reader
 Beside the eight built in, the FM-1 holds one break of your own. Make it on the site's
 [Your break](https://profikid.github.io/fm1-break-choppah/breaks/) page, in Chrome or Edge on a computer:
 
-1. **Load a sample**: a drum loop of whole bars, in any format the browser plays. The page guesses how many bars it
-   is from its length (pick another number if it guessed wrong, or type the tempo), and which two bars to use.
+1. **Pick a break** from the library: all 70 breaks in CHOPPAH's repository (the ten classics, eight of them built
+   in, and Cyberworm's sixty Amens), each with its tempo and bars, and a search. Or **load a sample** of your own: a
+   drum loop of whole bars, in any format the browser plays. The page guesses how many bars it is from its length
+   (pick another number if it guessed wrong, or type the tempo), and you pick which two bars to use. A tempo under
+   95 BPM is doubled when the sample comes in (a two-bar loop at 175 would otherwise be taken for one bar at 87.5);
+   ×2 and ÷2 change it.
 2. **Hear it chopped**: the page makes the break exactly as the built-in ones were made (levelled to match them, at
    22.05 kHz, sixteen slices snapped to the hits) and plays what the FM-1 will play. Play loops it, a slice or the
    keys 1–8 and Q–I play one slice, Chop rearranges the slices every bar, and the slider previews it at another

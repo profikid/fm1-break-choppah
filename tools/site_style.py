@@ -111,8 +111,42 @@ def install(site):
     page.write_text(s, encoding="utf-8")
 
 
+def library(out):
+    """the break manager's library: every WAV in breaks/ (breaks/breaks.txt: its tempo, the bars it holds, its name;
+    breaks/README.md: the record each classic is from) as 16-bit mono WAV at its own rate in breaks/lib/, and
+    lib/index.json listing them. The page makes a break of one as it would of a file (no loss: it ends at 22.05 kHz)"""
+    import array
+    import json
+    import struct
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent))
+    import prep_breaks
+    root = APP.parent / "breaks"
+    records = {}
+    for m in re.finditer(r'^\| ([A-Z][A-Z0-9 -]*) \| ([^|]+?) \| [0-9.]+ \|', (root / "README.md").read_text(encoding="utf-8"), re.M):
+        records[m.group(1).strip()] = m.group(2).strip()
+    items = []
+    for line in (root / "breaks.txt").read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^([*-])\s+(\S+)\s+([0-9.]+)\s+(\d+)\s+(\d+)\s+(.+?)\s*$", line)
+        if not m:
+            continue
+        mark, rel, bpm, _, of, name = m.groups()
+        x, rate = prep_breaks.read_wav(root / rel)
+        pcm = array.array("h", (max(-32768, min(32767, int(round(v * 32767)))) for v in x))
+        dst = out / "lib" / rel
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(b"RIFF" + struct.pack("<I", 36 + 2 * len(pcm)) + b"WAVEfmt " +
+                        struct.pack("<IHHIIHH", 16, 1, 1, rate, 2 * rate, 2, 16) + b"data" +
+                        struct.pack("<I", 2 * len(pcm)) + pcm.tobytes())
+        items.append({"file": "lib/" + rel, "name": name, "bpm": float(bpm), "bars": int(of),
+                      "group": "classics" if rel.startswith("classics/") else "amens",
+                      "builtin": mark == "*", "record": records.get(name, "") if rel.startswith("classics/") else ""})
+    (out / "lib" / "index.json").write_text(json.dumps(items, indent=0), encoding="utf-8")
+    return len(items)
+
+
 def breaks(site):
-    """the break manager (app/site/breaks.html): the site's style and header, at breaks/"""
+    """the break manager (app/site/breaks.html): the site's style and header, at breaks/, and its library"""
     page = (APP / "site" / "breaks.html").read_text(encoding="utf-8")
     css = (APP / "site" / "site.css").read_text(encoding="utf-8")
     if "/*SITE_CSS*/" not in page or "<!--HEADER-->" not in page:
@@ -120,6 +154,7 @@ def breaks(site):
     page = page.replace("<style>/*SITE_CSS*/", FONTS + "<style>" + css, 1).replace("<!--HEADER-->", header("Your break"), 1)
     (site / "breaks").mkdir(parents=True, exist_ok=True)
     (site / "breaks" / "index.html").write_text(page, encoding="utf-8")
+    print(f"site_style: breaks/: the break manager, {library(site / 'breaks')} breaks in its library")
 
 
 def main(site):

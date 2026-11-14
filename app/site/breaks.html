@@ -53,6 +53,14 @@
 .brk .facts b { color: var(--fg); font-weight: 600; }
 .brk .hint { font-size: 14px; color: var(--faint); }
 .brk .hidden { display: none !important; }
+.brk [role=tab][aria-selected="true"], .brk [role=tab][aria-selected="true"]:hover:not(:disabled) { background: var(--amber); color: #1a1406; }
+.brk input[type=search] { font: 500 15px/1.2 var(--f-mono); color: var(--fg); background: var(--raise); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; width: 24ch; }
+.brk #lib h3 { font: 600 13px/1.2 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 16px 0 8px; }
+.brk #lib .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; max-height: 360px; overflow: auto; }
+.brk #lib .grid button { text-align: left; text-transform: none; letter-spacing: 0; font: 600 14px/1.25 var(--f-mono); padding: 9px 10px; }
+.brk #lib .grid button small { display: block; font: 500 12px/1.3 var(--f-mono); color: var(--dim); margin-top: 3px; }
+.brk #lib .grid button[aria-current="true"] { background: var(--amber); color: #1a1406; }
+.brk #lib .grid button[aria-current="true"] small { color: #3a2a06; }
 .brk #zoom { height: 110px; cursor: crosshair; }
 .brk .zoom .facts { margin-top: 6px; }
 .brk .state:empty { display: none; }
@@ -89,21 +97,36 @@ the one CHOPPAH starts with. Chrome or Edge, on a computer.</p>
 
 <section class="card" aria-labelledby="h-load">
   <h2 id="h-load">2. A sample</h2>
-  <p class="sub">A drum loop of whole bars: WAV, AIFF, MP3, FLAC or anything else your browser plays. Two bars are
-  used; a one-bar loop is played twice.</p>
-  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a sample, or drop one here">
-    Drop a sample here, or click to choose one
-    <input type="file" id="file" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" class="hidden">
+  <p class="sub">Pick a break from the library, or load a drum loop of your own. Two bars are used; a one-bar loop is
+  played twice.</p>
+  <div class="row" role="tablist" aria-label="Where the sample comes from">
+    <button role="tab" id="tabLib" aria-selected="true" aria-controls="libBox">From the library</button>
+    <button role="tab" id="tabFile" aria-selected="false" aria-controls="fileBox">Your own file</button>
+  </div>
+  <div id="libBox" role="tabpanel" aria-labelledby="tabLib">
+    <div class="row"><label class="f">Find<input type="search" id="libFind" placeholder="amen, 175, jungle…" spellcheck="false"></label>
+      <span class="state" id="libState" role="status"></span></div>
+    <div id="lib"></div>
+  </div>
+  <div id="fileBox" role="tabpanel" aria-labelledby="tabFile" class="hidden">
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a sample, or drop one here">
+      Drop a sample here, or click to choose one: WAV, AIFF, MP3, FLAC or anything else your browser plays
+      <input type="file" id="file" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" class="hidden">
+    </div>
   </div>
   <div id="edit" class="hidden">
     <div class="row">
       <label class="f">Name<input type="text" id="name" maxlength="11" spellcheck="false"></label>
-      <label class="f">Bars in the file<select id="bars"><option>1</option><option selected>2</option><option>4</option><option>8</option><option>16</option></select></label>
+      <label class="f">Bars in the file<select id="bars"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>6</option><option>8</option><option>12</option><option>16</option><option>24</option><option>32</option></select></label>
       <label class="f">Use bars<select id="start"></select></label>
       <label class="f">Tempo (BPM)<input type="number" id="bpm" min="40" max="300" step="0.01"></label>
+      <button id="half" title="Half the tempo: the file holds half as many bars" aria-label="Half the tempo">÷2</button>
+      <button id="dbl" title="Double the tempo: the file holds twice as many bars" aria-label="Double the tempo">×2</button>
       <label class="f">Slices<select id="snap"><option value="1" selected>On the hits</option><option value="0">Even grid</option></select></label>
       <label class="f">Level<select id="level"><option value="1" selected>As the built-in breaks</option><option value="0">Loudest at full scale</option></select></label>
     </div>
+    <p class="hint">Under 95 BPM the tempo is doubled when a sample comes in: a two-bar loop at 175 is otherwise taken
+    for one bar at 87.5. ×2 and ÷2 change it (the file then holds twice or half as many bars).</p>
     <div class="facts" id="facts"></div>
     <div class="wave"><canvas id="wave" width="1100" height="150" aria-label="Your break: its waveform and slices. Drag a slice's start to move it"></canvas></div>
     <div class="zoom hidden" id="zoomBox">
@@ -389,29 +412,91 @@ let src = null, made = null;
 const player = new Player($("keys"), $("wave"), (on) => { $("play").textContent = on ? "Stop" : "Play"; });
 const devPlayer = new Player($("devKeys"), $("devWave"), (on) => { $("devPlay").textContent = on ? "Stop" : "Play"; });
 
-async function loadFile(f) {
+async function loadFile(f) { return loadAudio(await f.arrayBuffer(), f.name); }
+async function loadAudio(bytes, fname, known) {   /* known: a library break's {name, bpm, bars} */
   try {
-    const buf = await audio().decodeAudioData(await f.arrayBuffer());
+    const buf = await audio().decodeAudioData(bytes);
     const n = buf.length, mono = new Float32Array(n);
     for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) mono[i] += d[i] / buf.numberOfChannels; }
     src = { x: mono, rate: buf.sampleRate, dur: n / buf.sampleRate };
-    $("name").value = f.name.replace(/\.[^.]*$/, "").replace(/[^A-Za-z0-9 ]+/g, " ").trim().toUpperCase().slice(0, 11) || "MY BREAK";
-    let best = 2, err = 1e9;             /* the bars that give the most likely tempo (a break: 80..180) */
-    for (const b of [1, 2, 4, 8, 16]) { const bpm = 240 * b / src.dur, e = bpm < 80 ? 80 - bpm : bpm > 180 ? bpm - 180 : Math.abs(bpm - 130) / 100; if (e < err) { err = e; best = b; } }
-    $("bars").value = String(best);
+    $("name").value = known ? known.name : fname.replace(/\.[^.]*$/, "").replace(/[^A-Za-z0-9 ]+/g, " ").trim().toUpperCase().slice(0, 11) || "MY BREAK";
+    let best = 2, err = 1e9, bpm;        /* the bars that give the most likely tempo (a break: 80..180) */
+    for (const b of [1, 2, 4, 8, 16]) { const t = 240 * b / src.dur, e = t < 80 ? 80 - t : t > 180 ? t - 180 : Math.abs(t - 130) / 100; if (e < err) { err = e; best = b; } }
+    if (known) { best = known.bars; bpm = known.bpm; } else bpm = 240 * best / src.dur;
+    while (bpm < 95 && best * 2 <= 32) { best *= 2; bpm *= 2; }   /* under 95: doubled (a 2-bar loop, not 1 slow one) */
+    setBars(best);
     fillStart();
-    $("bpm").value = (240 * best / src.dur).toFixed(2);
+    $("bpm").value = bpm.toFixed(2);
     $("edit").classList.remove("hidden");
     await make();
   } catch (e) {
     say($("sendStatus"), "That file can't be read as audio here (" + e.message + ").", true);
   }
 }
-function fillStart() {
+function setBars(n) {                    /* the bars in the file (an option added if it has none) */
+  const b = $("bars");
+  if (![...b.options].some((o) => +o.value === n)) b.insertAdjacentHTML("beforeend", `<option>${n}</option>`);
+  b.value = String(n);
+}
+function fillStart() {                   /* which two bars: any bar can start them */
   const bars = +$("bars").value, s = $("start");
   s.innerHTML = "";
-  for (let b = 0; b < Math.max(1, bars - 1); b += 2) s.insertAdjacentHTML("beforeend", `<option value="${b}">${bars === 1 ? "1 (twice)" : (b + 1) + "–" + (b + 2)}</option>`);
+  for (let b = 0; b < Math.max(1, bars - 1); b++) s.insertAdjacentHTML("beforeend", `<option value="${b}">${bars === 1 ? "1 (twice)" : (b + 1) + "–" + (b + 2)}</option>`);
 }
+function retime(f) {                     /* ×2, ÷2: the tempo, and the bars the file holds with it */
+  if (!src) return;
+  const bars = +$("bars").value * f;
+  if (bars < 1 || bars > 32 || bars !== Math.floor(bars)) return;
+  setBars(bars);
+  $("bpm").value = (+$("bpm").value * f).toFixed(2);
+  fillStart();
+  make();
+}
+
+/* ---------------------------------------------------------------- the library: breaks/ in the repository */
+let lib = null;
+async function loadLib() {
+  try {
+    lib = await (await fetch("lib/index.json")).json();
+  } catch (e) {
+    $("libState").textContent = "The library can't be read here.";
+    return;
+  }
+  showLib();
+}
+function showLib() {
+  const q = $("libFind").value.trim().toLowerCase(), box = $("lib");
+  box.innerHTML = "";
+  for (const [g, title] of [["classics", "Classic breaks, from the records"], ["amens", "Cyberworm's Amens, royalty-free"]]) {
+    const items = lib.filter((b) => b.group === g && (!q || (b.name + " " + b.record + " " + b.bpm).toLowerCase().includes(q)));
+    if (!items.length) continue;
+    box.insertAdjacentHTML("beforeend", `<h3>${title}</h3>`);
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    for (const b of items) {
+      const k = document.createElement("button");
+      k.innerHTML = `${b.name}<small>${b.bpm} BPM · ${b.bars} bar${b.bars > 1 ? "s" : ""}${b.builtin ? " · built in" : ""}${b.record ? "<br>" + b.record : ""}</small>`;
+      k.onclick = () => pickLib(b, k);
+      grid.appendChild(k);
+    }
+    box.appendChild(grid);
+  }
+  $("libState").textContent = q ? "" : `${lib.length} breaks`;
+}
+async function pickLib(b, k) {
+  document.querySelectorAll("#lib .grid button").forEach((x) => x.removeAttribute("aria-current"));
+  k.setAttribute("aria-current", "true");
+  $("libState").textContent = "Loading " + b.name + "…";
+  try {
+    await loadAudio(await (await fetch(b.file)).arrayBuffer(), b.file, b);
+    $("libState").textContent = b.name + (b.record ? ", " + b.record : "");
+  } catch (e) { $("libState").textContent = b.name + " can't be loaded (" + e.message + ")."; }
+}
+for (const [t, box, other, obox] of [["tabLib", "libBox", "tabFile", "fileBox"], ["tabFile", "fileBox", "tabLib", "libBox"]])
+  $(t).onclick = () => {
+    $(t).setAttribute("aria-selected", "true"); $(other).setAttribute("aria-selected", "false");
+    $(box).classList.remove("hidden"); $(obox).classList.add("hidden");
+  };
 let making = 0;
 async function make() {                  /* the sample -> the break, as prep_breaks.py would make it */
   if (!src) return;
@@ -652,6 +737,10 @@ $("file").onchange = (e) => e.target.files[0] && loadFile(e.target.files[0]);
 drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
 drop.ondragleave = () => drop.classList.remove("over");
 drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && loadFile(e.dataTransfer.files[0]); };
+$("half").onclick = () => retime(0.5);
+$("dbl").onclick = () => retime(2);
+$("libFind").oninput = () => lib && showLib();
+loadLib();
 $("bars").onchange = () => { fillStart(); $("bpm").value = (240 * +$("bars").value / src.dur).toFixed(2); make(); };
 for (const id of ["start", "bpm", "snap", "level"]) $(id).onchange = make;
 $("play").onclick = () => { audio().resume(); player.on ? player.stop() : player.start(); };
