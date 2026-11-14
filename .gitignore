@@ -5,5 +5,6 @@ firmware/stock/
 *.rfm1
 __pycache__/
 .DS_Store
-app/web/
+app/web/*
+!app/web/words/
 app/bank_data.h
