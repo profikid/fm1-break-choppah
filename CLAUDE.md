@@ -48,7 +48,10 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
   (`app/site/breaks.html` -> site `breaks/`; `app_sysex` in ui/main.c: F0 7D 43 48 CMD 7-bit-packed DATA F7); present,
   it is break 1 (`n_user`, `slot_of`) and always the break at power-on. fm1-base's resource region can't hold it (it
   only takes the build's own payload). Tests: `tests/custom_break.sh` (upload, play, reboot, read back, delete in the
-  simulator), `tests/page_parity.sh` (the page's conversion = prep_breaks.py, byte for byte).
+  simulator), `tests/page_parity.sh` (the page's conversion = prep_breaks.py, byte for byte), `tests/page_warp.sh` (the page's
+  groove warp: hits onto the grid sample for sample). The page's library is Cyberworm's Amens from breaks/
+  (tools/site_style.py converts them at site build); a page-only change goes live by running pages.yml (version: the
+  latest release, package-from: release), no firmware release needed.
 - **Releases are tags, not merges** (since 6 Nov 2026): `scripts/release.sh` tags vX.Y and pushes it; the shared
   builder (`zvenson/fm1-build@v1`, via `.github/workflows/release.yml`) builds it on GitHub, signs the build
   provenance, publishes the release and rebuilds the site. The Firmware Hub only shows "Built from source" for

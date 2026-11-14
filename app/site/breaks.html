@@ -138,6 +138,7 @@ the one CHOPPAH starts with. Chrome or Edge, on a computer.</p>
       <button id="play" class="go">Play</button>
       <button id="chop" aria-pressed="false">Chop</button>
       <button id="resetSlices" disabled>Reset slices</button>
+      <button id="warp" aria-pressed="false" title="Pull each slice's hit onto the grid, stretching the sound between">Warp to the grid</button>
       <label class="f" style="flex-direction:row;align-items:center;gap:10px">Preview at
         <input type="range" id="tempo" min="60" max="200" step="1" aria-label="Preview tempo"><b id="tempoV"></b></label>
     </div>
@@ -146,6 +147,10 @@ the one CHOPPAH starts with. Chrome or Edge, on a computer.</p>
     (Shift: 10 ms), ↑ and ↓ pick the next or the previous one, Esc lets go. Each move plays the slice. The first slice
     starts at the loop's start and the last ends at its end. Changing the bars, tempo, slices or level starts the
     slices again; Reset slices does too.</p>
+    <p class="hint"><b>Warp to the grid</b> tightens a loose loop: each slice's start is a warp marker, pulled onto its
+    grid line (the dotted lines; every slice an eighth apart) and the sound between stretched or squeezed to fit,
+    its pitch kept and each hit's attack untouched. Place the slices on the hits first, then warp; you keep moving
+    them on the original, and hear and send the warped break.</p>
     <p class="hint">Click a slice, or press 1–8 and Q–I, to hear it alone. Chop plays the slices in a new order every
     bar, the way the generator rearranges a break. The preview repitches with the tempo, as CHOPPAH's SPEED mode.</p>
   </div>
@@ -323,7 +328,7 @@ function readBank(img) {                 /* -> {name, bpm, rate, pcm, slices} or
 let ctx = null;
 const audio = () => (ctx = ctx || new AudioContext());
 class Player {
-  constructor(keysEl, canvas, onState) { this.keys = keysEl; this.canvas = canvas; this.onState = onState; this.b = null; this.on = false; this.chop = false; }
+  constructor(keysEl, canvas, onState, view) { this.keys = keysEl; this.canvas = canvas; this.onState = onState; this.view = view; this.b = null; this.on = false; this.chop = false; }
   set(b) {
     this.stop();
     this.b = b;
@@ -339,7 +344,7 @@ class Player {
       this.keys.appendChild(k);
     }
     this.lit = -1;
-    draw(this.canvas, b, -1);
+    draw(this.canvas, this.view ? this.view() : b, -1, this.sel === undefined ? -1 : this.sel);
   }
   hit(i, t) {                            /* slice i at time t, repitched to the tempo, cut at its end (3 ms fade) */
     const b = this.b, c = audio(), rate = this.tempo / b.bpm, a = b.slices[i] / b.rate, d = (b.slices[i + 1] - b.slices[i]) / b.rate / rate;
@@ -357,7 +362,7 @@ class Player {
     if (this.lit >= 0 && this.keys.children[this.lit]) this.keys.children[this.lit].classList.remove("on");
     this.lit = i;
     if (i >= 0 && this.keys.children[i]) this.keys.children[i].classList.add("on");
-    draw(this.canvas, this.b, i, this.sel === undefined ? -1 : this.sel);
+    draw(this.canvas, this.view ? this.view() : this.b, i, this.sel === undefined ? -1 : this.sel);
   }
   start() {
     if (!this.b) return;
@@ -389,6 +394,15 @@ function draw(cv, b, lit, sel = -1) {
   const g = cv.getContext("2d"), W = cv.width, H = cv.height, n = b.pcm.length;
   g.fillStyle = "#0b0a08"; g.fillRect(0, 0, W, H);
   if (lit >= 0) { g.fillStyle = "rgba(255,178,26,.16)"; g.fillRect(b.slices[lit] / n * W, 0, (b.slices[lit + 1] - b.slices[lit]) / n * W, H); }
+  if (b.grid) {                          /* warp: the grid the hits land on, and each marker's way to it */
+    const m = b.slices.length - 1;
+    g.fillStyle = "rgba(255,243,211,.35)";
+    for (let i = 1; i < m; i++) {
+      const gx = Math.round(i * W / m), mx = Math.round(b.slices[i] / n * W);
+      for (let y = 0; y < H - 12; y += 6) g.fillRect(gx, y, 1, 3);
+      g.fillRect(Math.min(gx, mx), H - 13, Math.abs(gx - mx) + 1, 2);
+    }
+  }
   g.fillStyle = "#a39a85";
   for (let x = 0; x < W; x++) {
     let p = 0;
@@ -408,8 +422,9 @@ function draw(cv, b, lit, sel = -1) {
 
 /* ---------------------------------------------------------------- a sample in */
 const $ = (id) => document.getElementById(id);
-let src = null, made = null;
-const player = new Player($("keys"), $("wave"), (on) => { $("play").textContent = on ? "Stop" : "Play"; });
+let src = null, made = null, E = null;   /* E: the source as cut, its markers (the slices placed); made: the bank */
+const player = new Player($("keys"), $("wave"), (on) => { $("play").textContent = on ? "Stop" : "Play"; },
+  () => (E ? { pcm: E.src.pcm, slices: E.marks, grid: warpOn } : made));   /* the source and its markers */
 const devPlayer = new Player($("devKeys"), $("devWave"), (on) => { $("devPlay").textContent = on ? "Stop" : "Play"; });
 
 async function loadFile(f) { return loadAudio(await f.arrayBuffer(), f.name); }
@@ -520,30 +535,83 @@ async function make() {                  /* the sample -> the break, as prep_bre
   if (my !== making) return;
   const slices = slicePoints(pcm0, NSLICES, $("snap").value === "1");
   const name = ($("name").value || "MY BREAK").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").slice(0, 11);
-  const img = buildBank({ name, bpm, rate, pcm: pcm0, slices });
-  made = readBank(img);                  /* the preview: the ADPCM decoded again, as the FM-1 plays it */
-  made.img = img;
-  made.src = { name, bpm, rate, pcm: pcm0 }; /* (for the slices moved by hand: the bank made again from these) */
-  made.edited = false;
-  const was = player.on;
+  E = { src: { name, bpm, rate, pcm: pcm0 }, marks: slices, edited: false };
   player.sel = -1;
-  player.set(made);
   $("zoomBox").classList.add("hidden");
   $("tempo").value = Math.round(bpm); $("tempoV").textContent = Math.round(bpm) + " BPM";
+  remake();
+}
+function facts() {
+  const img = made.img, m = E.src;
+  $("facts").innerHTML = `<b>${m.name}</b> · ${m.bpm.toFixed(2)} BPM · 2 bars · ${(E.src.pcm.length / m.rate).toFixed(2)} s at ${(m.rate / 1000).toFixed(2)} kHz · ` +
+    `<b>${(img.length / 1024).toFixed(1)} KB</b> of ${(cap / 1024).toFixed(0)} KB` + (E.edited ? " · slices placed by hand" : "") +
+    (warpOn ? " · warped onto the grid" : "") +
+    (img.length > cap ? ' · <span style="color:#ff9b85">too big</span>' : "");
+  $("resetSlices").disabled = !E.edited;
+  sendable();
+}
+function remake() {                      /* the bank from the source and its markers: warped onto the grid, or as cut */
+  const pcm = warpOn ? warp(E.src.pcm, E.marks, E.src.rate) : E.src.pcm;
+  const slices = warpOn ? E.marks.map((_, i) => Math.round(i * pcm.length / NSLICES)) : E.marks;
+  const img = buildBank({ ...E.src, pcm, slices }), was = player.on, tempo = player.tempo;
+  made = readBank(img);                  /* the preview: the ADPCM decoded again, as the FM-1 plays it */
+  made.img = img;
+  player.set(made);
+  if (tempo) player.tempo = tempo;
   if (was) player.start();
   facts();
 }
-function facts() {
-  const img = made.img, m = made.src;
-  $("facts").innerHTML = `<b>${m.name}</b> · ${m.bpm.toFixed(2)} BPM · 2 bars · ${(made.pcm.length / m.rate).toFixed(2)} s at ${(m.rate / 1000).toFixed(2)} kHz · ` +
-    `<b>${(img.length / 1024).toFixed(1)} KB</b> of ${(cap / 1024).toFixed(0)} KB` + (made.edited ? " · slices placed by hand" : "") +
-    (img.length > cap ? ' · <span style="color:#ff9b85">too big</span>' : "");
-  $("resetSlices").disabled = !made.edited;
-  sendable();
+
+/* ---------------------------------------------------------------- warp: the hits onto the grid */
+/* Each slice's start (a hit, as placed) is a warp marker: warped, it lands on its grid line (slice i at i/16 of the
+   loop) and the sound up to the next is stretched or squeezed to fit, its pitch kept: the first 8 ms (the attack)
+   as they are, the rest by WSOLA (overlap-added 23 ms grains, each placed where it best continues the last), 2 ms
+   faded out at the end. The loop's length is the same. */
+let warpOn = false;
+const HANN = new Float32Array(512).map((_, i) => 0.5 - 0.5 * Math.cos(2 * Math.PI * i / 512));
+function wsola(x, outLen) {
+  const N = 512, Hs = N >> 1, tol = 128;
+  if (x.length < N + 2 * tol || outLen < N) {   /* too short for grains: read faster or slower (a tail: inaudible) */
+    const y = new Float32Array(outLen), r = x.length / Math.max(1, outLen);
+    for (let i = 0; i < outLen; i++) { const p = i * r, k = Math.floor(p), f = p - k; y[i] = (x[k] || 0) * (1 - f) + (x[k + 1] || 0) * f; }
+    return y;
+  }
+  const y = new Float32Array(outLen + N), w = new Float32Array(outLen + N);
+  const frames = Math.ceil((outLen - N) / Hs) + 1, Ha = (x.length - N) / Math.max(1, frames - 1);
+  let prev = 0;
+  for (let k = 0; k < frames; k++) {
+    const o = k * Hs, nominal = Math.round(k * Ha);
+    let best = clamp(nominal, 0, x.length - N);
+    if (k) {
+      const nat = prev + Hs;               /* where the last grain would go on: the best match to it, near nominal */
+      let bc = -Infinity;
+      for (let d = -tol; d <= tol; d += 2) {
+        const p = nominal + d;
+        if (p < 0 || p + N > x.length || nat + Hs > x.length) continue;
+        let c = 0;
+        for (let j = 0; j < Hs; j += 2) c += x[p + j] * x[nat + j];
+        if (c > bc) { bc = c; best = p; }
+      }
+    }
+    for (let j = 0; j < N; j++) { y[o + j] += x[best + j] * HANN[j]; w[o + j] += HANN[j]; }
+    prev = best;
+  }
+  const out = new Float32Array(outLen);
+  for (let i = 0; i < outLen; i++) out[i] = w[i] > 1e-3 ? y[i] / w[i] : y[i];
+  return out;
 }
-function remake() {                      /* the bank again with the slices (or the name) as they are now */
-  made.img = buildBank({ ...made.src, slices: made.slices });
-  facts();
+function warp(x, marks, rate) {
+  const n = marks.length - 1, L = x.length, y = new Float32Array(L);
+  const A = Math.round(rate * 0.008), F = Math.round(rate * 0.002);
+  for (let i = 0; i < n; i++) {
+    const g0 = Math.round(i * L / n), slot = Math.round((i + 1) * L / n) - g0;
+    const seg = x.subarray(marks[i], marks[i + 1]), a = Math.min(A, seg.length, slot);
+    if (seg.length === slot) { y.set(seg, g0); continue; }   /* (already on the grid: as it is) */
+    y.set(seg.subarray(0, a), g0);
+    y.set(wsola(seg.subarray(a), slot - a), g0 + a);
+    for (let j = 0; j < F && j < slot; j++) y[g0 + slot - 1 - j] *= j / F;
+  }
+  return y;
 }
 
 /* ---------------------------------------------------------------- the slices by hand */
@@ -551,36 +619,36 @@ const ZOOM_S = 0.06;                     /* the close-up: 60 ms either side */
 let dragging = 0, zc = 0;                /* dragging: 1 on the waveform, 2 on the close-up; zc: the close-up's middle */
 const sampleAt = (cv, e, a, z) => a + (e.clientX - cv.getBoundingClientRect().left) / cv.getBoundingClientRect().width * z;
 function markerNear(e) {                 /* the start (1..15) within 8 px of the pointer, or -1 */
-  const r = $("wave").getBoundingClientRect(), n = made.pcm.length;
+  const r = $("wave").getBoundingClientRect(), n = E.src.pcm.length;
   let best = -1, d = 9;
-  for (let i = 1; i < made.slices.length - 1; i++) {
-    const px = Math.abs(made.slices[i] / n * r.width - (e.clientX - r.left));
+  for (let i = 1; i < E.marks.length - 1; i++) {
+    const px = Math.abs(E.marks[i] / n * r.width - (e.clientX - r.left));
     if (px < d) { d = px; best = i; }
   }
   return best;
 }
 function place(i, at) {                  /* start i to sample at, kept 10 ms from its neighbours */
-  const s = made.slices, gap = Math.round(made.src.rate * 0.01);
+  const s = E.marks, gap = Math.round(E.src.rate * 0.01);
   s[i] = clamp(Math.round(at), s[i - 1] + gap, s[i + 1] - gap);
-  made.edited = true;
+  E.edited = true;
   showSel();
 }
 function pick(i) {
   player.sel = i;
-  zc = made.slices[i];
+  zc = E.marks[i];
   $("zoomBox").classList.toggle("hidden", i < 1);
   showSel();
 }
 function showSel() {
   const i = player.sel;
-  draw($("wave"), made, player.lit, i);
+  draw($("wave"), player.view(), player.lit, i);
   if (i < 1) return;
-  const s = made.slices, rate = made.src.rate, cv = $("zoom"), g = cv.getContext("2d"), W = cv.width, H = cv.height;
+  const s = E.marks, rate = E.src.rate, cv = $("zoom"), g = cv.getContext("2d"), W = cv.width, H = cv.height;
   const half = Math.round(rate * ZOOM_S), a = zc - half, z = 2 * half;
   g.fillStyle = "#0b0a08"; g.fillRect(0, 0, W, H);
   g.strokeStyle = "#a39a85"; g.beginPath();
   for (let x = 0; x < W; x++) {
-    const k = Math.floor(a + x * z / W), v = k >= 0 && k < made.pcm.length ? made.pcm[k] : 0;
+    const k = Math.floor(a + x * z / W), v = k >= 0 && k < E.src.pcm.length ? E.src.pcm[k] : 0;
     x ? g.lineTo(x, H / 2 - v * (H / 2 - 4)) : g.moveTo(x, H / 2 - v * (H / 2 - 4));
   }
   g.stroke();
@@ -765,39 +833,44 @@ wave.onpointerdown = (e) => {
 wave.onpointermove = (e) => {
   if (!made) return;
   if (dragging !== 1) { wave.style.cursor = markerNear(e) > 0 ? "ew-resize" : "pointer"; return; }
-  place(player.sel, sampleAt(wave, e, 0, made.pcm.length));
-  zc = made.slices[player.sel];
+  place(player.sel, sampleAt(wave, e, 0, E.src.pcm.length));
+  zc = E.marks[player.sel];
 };
 zoom.onpointerdown = (e) => {
   if (!made || player.sel < 1) return;
   audio().resume();
   dragging = 2; zoom.setPointerCapture(e.pointerId);
-  const half = Math.round(made.src.rate * ZOOM_S);
+  const half = Math.round(E.src.rate * ZOOM_S);
   place(player.sel, sampleAt(zoom, e, zc - half, 2 * half));
 };
 zoom.onpointermove = (e) => {
   if (dragging !== 2) return;
-  const half = Math.round(made.src.rate * ZOOM_S);
+  const half = Math.round(E.src.rate * ZOOM_S);
   place(player.sel, sampleAt(zoom, e, zc - half, 2 * half));
 };
 const letGo = () => {                    /* a move done: the bank again, the slice heard, the close-up on it */
   if (!dragging) return;
   dragging = 0;
-  zc = made.slices[player.sel];
+  zc = E.marks[player.sel];
   remake(); showSel();
   player.hit(player.sel, audio().currentTime);
 };
 wave.onpointerup = wave.onpointercancel = zoom.onpointerup = zoom.onpointercancel = letGo;
+$("warp").onclick = (e) => {
+  warpOn = !warpOn;
+  e.target.setAttribute("aria-pressed", warpOn);
+  if (E) { remake(); showSel(); }
+};
 $("resetSlices").onclick = () => {
-  const s = slicePoints(made.src.pcm, NSLICES, $("snap").value === "1");
-  s.forEach((v, i) => { made.slices[i] = v; });
-  made.edited = false;
+  const s = slicePoints(E.src.pcm, NSLICES, $("snap").value === "1");
+  s.forEach((v, i) => { E.marks[i] = v; });
+  E.edited = false;
   pick(-1); remake();
 };
 $("name").onchange = () => {             /* the name alone: the slices stay as placed */
   if (!made) return;
-  made.src.name = ($("name").value || "MY BREAK").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").slice(0, 11);
-  made.name = made.src.name;
+  E.src.name = ($("name").value || "MY BREAK").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").slice(0, 11);
+  made.name = E.src.name;
   remake();
 };
 for (const [cv, p] of [[$("devWave"), devPlayer]])
@@ -816,11 +889,11 @@ document.addEventListener("keydown", (e) => {
     e.preventDefault();
     if (e.key === "Escape") { pick(-1); return; }
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-      pick(clamp(player.sel + (e.key === "ArrowUp" ? 1 : -1), 1, made.slices.length - 2));
+      pick(clamp(player.sel + (e.key === "ArrowUp" ? 1 : -1), 1, E.marks.length - 2));
       return;
     }
-    place(player.sel, made.slices[player.sel] + (e.key === "ArrowRight" ? 1 : -1) * made.src.rate * (e.shiftKey ? 0.01 : 0.001));
-    zc = made.slices[player.sel]; remake(); showSel();
+    place(player.sel, E.marks[player.sel] + (e.key === "ArrowRight" ? 1 : -1) * E.src.rate * (e.shiftKey ? 0.01 : 0.001));
+    zc = E.marks[player.sel]; remake(); showSel();
     audio().resume(); player.hit(player.sel, audio().currentTime);
     return;
   }

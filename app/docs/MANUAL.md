@@ -139,7 +139,10 @@ Beside the eight built in, the FM-1 holds one break of your own. Make it on the 
    keys 1–8 and Q–I play one slice, Chop rearranges the slices every bar, and the slider previews it at another
    tempo. **Place the slices yourself** if a hit is cut early or late: drag a slice's start on the waveform, and
    place it exactly in the close-up below (60 ms either side), or with ← and → (1 ms; Shift: 10 ms). Each move
-   plays the slice.
+   plays the slice. **Warp to the grid** tightens a loose loop: each slice's start becomes a warp marker, pulled
+   onto its grid line (every slice an eighth apart), and the sound between is stretched or squeezed to fit, its
+   pitch kept and each hit's attack untouched. Place the slices on the hits first, then warp; you go on moving them
+   on the original, and hear and send the warped break.
 3. **Connect** the FM-1 by USB, **stop** CHOPPAH, and **send it**. It takes a few seconds; the FM-1 says RECEIVING A
    BREAK, then BREAK and its name.
 
