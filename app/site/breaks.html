@@ -539,6 +539,7 @@ async function make() {                  /* the sample -> the break, as prep_bre
   player.sel = -1;
   $("zoomBox").classList.add("hidden");
   $("tempo").value = Math.round(bpm); $("tempoV").textContent = Math.round(bpm) + " BPM";
+  player.tempo = bpm;                    /* a new sample (or bars, tempo): its preview at its own tempo, not the last one's */
   remake();
 }
 function facts() {
