@@ -97,18 +97,18 @@ the one CHOPPAH starts with. Chrome or Edge, on a computer.</p>
 
 <section class="card" aria-labelledby="h-load">
   <h2 id="h-load">2. A sample</h2>
-  <p class="sub">Pick a break from the library, or load a drum loop of your own. Two bars are used; a one-bar loop is
+  <p class="sub">Load a drum loop of your own, or pick one of Cyberworm's Amens from the library. Two bars are used; a one-bar loop is
   played twice.</p>
   <div class="row" role="tablist" aria-label="Where the sample comes from">
-    <button role="tab" id="tabLib" aria-selected="true" aria-controls="libBox">From the library</button>
-    <button role="tab" id="tabFile" aria-selected="false" aria-controls="fileBox">Your own file</button>
+    <button role="tab" id="tabFile" aria-selected="true" aria-controls="fileBox">Your own file</button>
+    <button role="tab" id="tabLib" aria-selected="false" aria-controls="libBox">From the library</button>
   </div>
-  <div id="libBox" role="tabpanel" aria-labelledby="tabLib">
-    <div class="row"><label class="f">Find<input type="search" id="libFind" placeholder="amen, 175, jungle…" spellcheck="false"></label>
+  <div id="libBox" role="tabpanel" aria-labelledby="tabLib" class="hidden">
+    <div class="row"><label class="f">Find<input type="search" id="libFind" placeholder="175, jungle, tape…" spellcheck="false"></label>
       <span class="state" id="libState" role="status"></span></div>
     <div id="lib"></div>
   </div>
-  <div id="fileBox" role="tabpanel" aria-labelledby="tabFile" class="hidden">
+  <div id="fileBox" role="tabpanel" aria-labelledby="tabFile">
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a sample, or drop one here">
       Drop a sample here, or click to choose one: WAV, AIFF, MP3, FLAC or anything else your browser plays
       <input type="file" id="file" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" class="hidden">
@@ -467,7 +467,7 @@ async function loadLib() {
 function showLib() {
   const q = $("libFind").value.trim().toLowerCase(), box = $("lib");
   box.innerHTML = "";
-  for (const [g, title] of [["classics", "Classic breaks, from the records"], ["amens", "Cyberworm's Amens, royalty-free"]]) {
+  for (const [g, title] of [["amens", "Cyberworm's Amens, royalty-free"]]) {
     const items = lib.filter((b) => b.group === g && (!q || (b.name + " " + b.record + " " + b.bpm).toLowerCase().includes(q)));
     if (!items.length) continue;
     box.insertAdjacentHTML("beforeend", `<h3>${title}</h3>`);

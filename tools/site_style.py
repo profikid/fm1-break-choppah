@@ -112,9 +112,10 @@ def install(site):
 
 
 def library(out):
-    """the break manager's library: every WAV in breaks/ (breaks/breaks.txt: its tempo, the bars it holds, its name;
-    breaks/README.md: the record each classic is from) as 16-bit mono WAV at its own rate in breaks/lib/, and
-    lib/index.json listing them. The page makes a break of one as it would of a file (no loss: it ends at 22.05 kHz)"""
+    """the break manager's library: Cyberworm's Amens in breaks/ (cw/, huge/; the classics are left out: the firmware
+    has them; breaks/breaks.txt: the tempo, the bars it holds, the name) as 16-bit mono WAV at its own rate in
+    breaks/lib/, and lib/index.json listing them. The page makes a break of one as it would of a file (no loss: it
+    ends at 22.05 kHz)"""
     import array
     import json
     import struct
@@ -131,6 +132,8 @@ def library(out):
         if not m:
             continue
         mark, rel, bpm, _, of, name = m.groups()
+        if rel.startswith("classics/"):
+            continue
         x, rate = prep_breaks.read_wav(root / rel)
         pcm = array.array("h", (max(-32768, min(32767, int(round(v * 32767)))) for v in x))
         dst = out / "lib" / rel
