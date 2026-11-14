@@ -28,8 +28,8 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - Bluetooth MIDI is on (`ble = true`, `ble_stack = "own"`: fm1-base's own stack, nothing of JieLi's); the GLOBAL
   page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash. Bluetooth audio out
   (`bt_audio = true`, A2DP) is on too: ~37 KB of flash, its packet queue in the pool (`BP_MQ_ATTR` in app.h).
-- Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); ~581,100 B used on
-  14 Nov 2026 (v1.4: the custom break): **~0.5 KB left, the flash is full**. Bluetooth audio
+- Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); 581,284 B used on
+  14 Nov 2026 (v1.4: the custom break): **280 B left, the flash is full**. Bluetooth audio
   (~37 KB, A2DP + SBC) has no smaller build in fm1-base; fm1-base's resource region (`resources`, APP_RES_BASE) could
   take some of the break bank out of the app slot (it only fits the data area's ~268 KB, not the whole bank). The break bank (`CH_BANK`, ~369 KB) is most of it. Anything new needs something taken out first (ask Laurens what).
   Block-rate engine code is `BRK_COLD` (built for size) and calls the shared maths (`brk_exp2f_c` and the like,
