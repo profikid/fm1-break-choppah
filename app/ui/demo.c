@@ -13,7 +13,7 @@
 #define DEMO_SCENE_MS 8000u
 #define DEMO_SCENES 5u
 #define DEMO_FRAME_MS 40u                /* 25 frames a second */
-#define DEMO_STARS 64u
+#define DEMO_STARS 48u                  /* (64 until 14 Nov 2026: 192 B of pool for the screen reader) */
 
 static struct {
     uint8_t on;

@@ -880,7 +880,10 @@ static void draw_foot(const brk_status_t *st)
 /* the screen reader (fm1-reader; fm1-base's announce.c sends it, the words file says it: words.tsv). Messages go
  * through app_say (a run of them, a knob turning, said once it settles); here, what the screen is: a new page,
  * part, key or pad held, or the SEL card (when it settles), everything on WHERE, and play / stop */
-static char sp_buf[ANN_MAX + 1] PLAT_POOL;
+/* sp_buf: the text being built. It shares the demo's stars (pool RAM is short): speak() never runs while the demo
+ * does, and the text is copied away (sent, or into announce.c's ann_later) before speak() returns */
+#define sp_buf ((char *)&demo_sky)
+typedef char sp_buf_fits[sizeof demo_sky >= ANN_MAX + 1u ? 1 : -1];
 static void sp_cat(const char *s)
 {
     uint32_t n = 0;
