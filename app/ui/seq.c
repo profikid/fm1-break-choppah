@@ -35,7 +35,7 @@ static void undo_swap(void)
     pat_t t;
     char n[6] = "P";
     if (undo_idx >= NPAT) {
-        app_say("UNDO", "NOTHING YET");
+        app_warn("UNDO", "NOTHING YET");
         return;
     }
     t = pats.p[undo_idx];

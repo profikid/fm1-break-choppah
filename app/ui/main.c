@@ -797,8 +797,8 @@ static void draw_help(void)
     }
 }
 
-/* the foot: the pads, then the page and its knobs with their values */
-static void draw_foot(const brk_status_t *st)
+/* knob i's name, and its value into t, as the foot shows them (0: no knob there) */
+static const char *foot_knob(uint32_t i, char *t)
 {
     static const char *const KN[NPAGES][4] = {{"GATE", "FILTER", "FX", "CMPLX"},
                                               {"CMPLX", "ANCHOR", "ROLL", "FILL"},
@@ -810,6 +810,47 @@ static void draw_foot(const brk_status_t *st)
                                               {"", "", "", ""},
                                               {"TEMPO", "FINE", "HALF / X2", "CLICK"},
                                               {"P1", "P2", "P3", "MIX"}};
+    static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
+    static const char *const KN_GROOVE[4] = {"SWING", "DRUMS", "", ""};
+    static const char *const KN_BTA[4] = {"BT AUDIO", "DEVICE", "SCAN", "CONNECT"};
+    static const char *const KN_CHAN[4] = {"CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"};
+    static const char *const KN_LANE[4] = {"FILL", "ROTATE", "CLR / 4X4", "COPY"};
+    const char *name = ui.page == PG_GLOBAL && ui.gpage == 3u ? KN_CHAN[i]
+                       : ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_BTA[i] : ui.page == PG_GLOBAL && ui.gpage
+                       ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
+                       ? KN_GROOVE[i] : KN[ui.page][i];
+    t[0] = 0;
+    if (ui.shown >= 100) {               /* a white key held: its loop, or its slice's effect */
+        if (ui.key_layer)
+            slx_knob_value(ui.shown - 100, (int)i, t);
+        else
+            key_knob_value(ui.shown - 100, (int)i, t);
+        return ui.key_layer ? SLX_KNOB[i] : KEY_KNOB[i];
+    }
+    if (ui.shown >= 0) {                 /* a pad held: its own settings */
+        name = PAD_KNOB[ui.shown][i];
+        if (!name)
+            return 0;
+        if (ui.shown == PAD_DUB && delay_slot() >= 0)
+            name = fx_param_name((uint32_t)delay_slot(), (int)i);   /* (TIME FEEDBK TONE SEND) */
+        pad_knob_value(ui.shown, (int)i, t);
+        return name;
+    }
+    if (ui.page == PG_FX || ui.page == PG_ARP)   /* the focused slot's effect: its settings, then MIX */
+        name = fx_param_name(fxk(), (int)i);
+    else if (ui.page == PG_KICK)
+        name = kick_knob_name((int)i);
+    else if (ui.page == PG_PERC)
+        name = PERC_KNOB[ui.pvoice % PERC_VOICES][ui.ppage][i];
+    else if (ui.page == PG_SEQ && ui.seq_lane >= SL_KICK)
+        name = KN_LANE[i];
+    knob_value((int)i, t);
+    return name;
+}
+
+/* the foot: the pads, then the page and its knobs with their values */
+static void draw_foot(const brk_status_t *st)
+{
     uint32_t i;
     char t[16];
     draw_tabs();
@@ -826,50 +867,107 @@ static void draw_foot(const brk_status_t *st)
             cv_rect(x, 12, 20, 2, C_WHITE);
     }
     for (i = 0; i < 4u; i++) {
-        static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
-        static const char *const KN_GROOVE[4] = {"SWING", "DRUMS", "", ""};
-        static const char *const KN_BTA[4] = {"BT AUDIO", "DEVICE", "SCAN", "CONNECT"};
-        static const char *const KN_CHAN[4] = {"CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"};
-        const char *name = ui.page == PG_GLOBAL && ui.gpage == 3u ? KN_CHAN[i]
-                           : ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_BTA[i] : ui.page == PG_GLOBAL && ui.gpage
-                           ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
-                           ? KN_GROOVE[i] : KN[ui.page][i];
-        if (ui.shown >= 100) {           /* a white key held: its loop, or its slice's effect */
-            cv_text(4 + (int32_t)i * 60, 18, &FONT_T, ui.key_layer ? SLX_KNOB[i] : KEY_KNOB[i], C_HI);
-            if (ui.key_layer)
-                slx_knob_value(ui.shown - 100, (int)i, t);
-            else
-                key_knob_value(ui.shown - 100, (int)i, t);
-            cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
+        const char *name = foot_knob(i, t);
+        if (!name)
             continue;
-        }
-        if (ui.shown >= 0) {             /* a pad held: its own settings */
-            name = PAD_KNOB[ui.shown][i];
-            if (!name)
-                continue;
-            if (ui.shown == PAD_DUB && delay_slot() >= 0)
-                name = fx_param_name((uint32_t)delay_slot(), (int)i);   /* (TIME FEEDBK TONE SEND) */
-            cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, C_HI);
-            pad_knob_value(ui.shown, (int)i, t);
-            cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
-            continue;
-        }
-        if (ui.page == PG_FX || ui.page == PG_ARP)   /* the focused slot's effect: its settings, then MIX */
-            name = fx_param_name(fxk(), (int)i);
-        else if (ui.page == PG_KICK)
-            name = kick_knob_name((int)i);
-        else if (ui.page == PG_PERC)
-            name = PERC_KNOB[ui.pvoice % PERC_VOICES][ui.ppage][i];
-        else if (ui.page == PG_SEQ && ui.seq_lane >= SL_KICK) {
-            static const char *const KN_LANE[4] = {"FILL", "ROTATE", "CLR / 4X4", "COPY"};
-            name = KN_LANE[i];
-        }
-        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.page == PG_FX || ui.page == PG_ARP
+        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.shown >= 0 ? C_HI : ui.page == PG_FX || ui.page == PG_ARP
                 ? (usl(fxk())->on ? C_HI : C_DIM) : C_GRAY);
-        knob_value((int)i, t);
         cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
     }
     cv_blit(0, 192);
+}
+
+/* the screen reader (fm1-reader; fm1-base's announce.c sends it, the words file says it: words.tsv). Messages go
+ * through app_say (a run of them, a knob turning, said once it settles); here, what the screen is: a new page,
+ * part, key or pad held, or the SEL card (when it settles), everything on WHERE, and play / stop */
+static char sp_buf[ANN_MAX + 1] PLAT_POOL;
+static void sp_cat(const char *s)
+{
+    uint32_t n = 0;
+    while (sp_buf[n])
+        n++;
+    while (*s && n < ANN_MAX)
+        sp_buf[n++] = *s++;
+    sp_buf[n] = 0;
+}
+static void screen_text(int all)         /* into sp_buf: the screen's name, its knobs; all: the transport too */
+{
+    static const char *const SELC[8] = {"ALGO BREAK", "PRESETS PATTERN", "REC CLEAR PATTERN", "ARP RANDOM PATTERN",
+                                        "SAVE UNDO OR REDO", "SELECT FINE TEMPO", "KEY RESETS THE KEY", ""};
+    uint32_t i;
+    char t[24];
+    sp_buf[0] = 0;
+    if (ui.help) {                       /* SEL alone: its combinations */
+        sp_cat("SEL BUTTON COMBINATIONS: SEL WITH");
+        for (i = 0; SELC[i][0]; i++) {
+            sp_cat(i ? ", " : " ");
+            sp_cat(SELC[i]);
+        }
+        sp_cat(".");
+        return;
+    }
+    if (ui.shown >= 100) {
+        sp_cat("KEY ");
+        int_text(ui.shown - 99, t);
+        sp_cat(t);
+        sp_cat(ui.key_layer ? " SLICE EFFECT" : " LOOP");
+    } else if (ui.shown >= 0) {
+        sp_cat(PAD_NAME[ui.shown % BRK_NPADS]);
+        sp_cat(" PAD");
+    } else {
+        page_say();                      /* (its header message: the button and the part) */
+        sp_cat(ui.msg[0]);
+        sp_cat(" ");
+        sp_cat(ui.msg[1]);
+    }
+    for (i = 0; i < 4u; i++) {
+        const char *n = foot_knob(i, t);
+        if (n && n[0]) {
+            sp_cat(". ");
+            sp_cat(n);
+            sp_cat(" ");
+            sp_cat(t[0] ? t : "-");
+        }
+    }
+    if (all) {                           /* WHERE: the break, the pattern, the tempo, playing or not */
+        const brk_break_t *b = brk_get_break();
+        sp_cat(". ");
+        sp_cat(b ? b->name : "");
+        sp_cat(". PATTERN ");
+        int_text(set.pattern + 1, t);
+        sp_cat(t);
+        sp_cat(". ");
+        tenths_text(set.tempo_x10, t);
+        sp_cat(t);
+        sp_cat(" BPM. ");
+        sp_cat(playing_now() ? "PLAYING" : "STOPPED");
+    }
+    sp_cat(".");
+}
+static void speak(uint32_t now)
+{
+    static uint32_t ctx_was, play_was;
+    static int32_t shown_was = -1;
+    uint32_t ctx, play = (uint32_t)playing_now();
+    if (ann_on() && !ui.intro && !demo.on) {
+        ctx = ui.page | ui.gpage << 4 | ui.mpage << 6 | ui.seq_lane << 7 | ui.fx_focus << 10 | (uint32_t)FXPG << 13 |
+              pfx_sel << 15 | ui.einst << 19 | ui.ppage << 21 | (uint32_t)kick_part() << 22 | ui.help << 26 |
+              ui.key_layer << 27;
+        ctx = ctx * 31u + (uint32_t)(ui.shown + 1);
+        if (ann_where()) {
+            screen_text(1);
+            ann_say(sp_buf, 0, ANN_NOW);
+        } else if (ctx != ctx_was && !(ui.shown < 0 && shown_was >= 0 && ctx - (uint32_t)(ui.shown + 1) ==
+                                       ctx_was - (uint32_t)(shown_was + 1))) {   /* (a key or pad let go: quiet) */
+            screen_text(0);
+            ann_later(sp_buf, ANN_NOW, 200u, now);
+        } else if (play != play_was)
+            ann_say(play ? "PLAY" : "STOP", 0, ANN_NOW);
+        ctx_was = ctx;
+        play_was = play;
+        shown_was = ui.shown;
+    }
+    ann_tick(now);
 }
 
 void app_ui_init(void)
@@ -893,6 +991,7 @@ void app_frame(void)
     uint32_t now = plat_ms(), hdr;
     input();
     break_poll();
+    speak(now);                          /* (the screen reader: what this frame's input changed) */
     if (ui.touched)                      /* (the time itself: "now | 1" was a millisecond ahead half the time, and
                                           * now - idle_t then wrapped round to the demo at once) */
         ui.idle_t = now;
@@ -981,7 +1080,7 @@ void app_frame(void)
         static uint32_t shed_seen;
         uint32_t sh = brk_fx_shed();
         if (sh > shed_seen)
-            app_say("OVERLOAD", "FX SLOT BYPASSED");
+            app_warn("OVERLOAD", "FX SLOT BYPASSED");
         shed_seen = sh;
     }
     if ((ui.page == PG_FX || ui.page == PG_ARP) && usl(fxk())->type != FXT_EMPTY && now - ui.panel_drawn >= 66u)

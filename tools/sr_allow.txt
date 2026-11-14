@@ -1,0 +1,11 @@
+# words the screen reader says that the audit's dictionary lacks (tools/sr_audit.sh --allow)
+choppah
+omni
+multiband
+distorto
+device
+reset
+resets
+# the host simulator's pretend Bluetooth speaker
+jbl
+pre-delay

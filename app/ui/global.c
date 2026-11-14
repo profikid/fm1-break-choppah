@@ -74,7 +74,7 @@ static void global_turn(int i, int32_t d)
                 reset_all();
             } else {
                 ui.reset_t = plat_ms() | 1u;
-                app_say("RESET ALL?", "TURN K4 AGAIN");
+                app_warn("RESET ALL?", "TURN K4 AGAIN");
             }
             foot_dirty = 1u;
             return;

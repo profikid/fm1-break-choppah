@@ -61,8 +61,16 @@ static void pad_knob_value(int pad, int k, char *t)
         break;
     case PAD_HALF: times_text(p->half_speed, t); break;
     case PAD_TAPESTOP:
-        if (k == 0) { signed_tenths(p->stop_beats, " BT", t); if (t[0] == '+') t[0] = ' '; }
-        else { signed_tenths(p->spin_steps, " ST", t); if (t[0] == '+') t[0] = ' '; }
+        if (k == 0)
+            signed_tenths(p->stop_beats, " BT", t);
+        else
+            signed_tenths(p->spin_steps, " ST", t);
+        if (t[0] == '+') {               /* (no sign: always positive) */
+            uint32_t j = 0;
+            do
+                t[j] = t[j + 1];
+            while (t[j++]);
+        }
         break;
     case PAD_GATE:
         if (k == 0) text_cat(t, BRK_GATE_DIV_NAME[p->gate_div % BRK_GATE_DIVS]);

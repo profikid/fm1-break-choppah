@@ -219,7 +219,7 @@ static void ch_bta_turn(int i, int32_t d)
     char n[18];
     int k, f, st = ch_bta_state();
     if (!ch_bta_have()) {
-        app_say("BT AUDIO", "NOT IN THIS BUILD");
+        app_warn("BT AUDIO", "NOT IN THIS BUILD");
         return;
     }
     if (i == 0) {
@@ -231,7 +231,7 @@ static void ch_bta_turn(int i, int32_t d)
         set_dirty = 1u;
         app_say("BT AUDIO", on ? "ON" : "OFF");
     } else if (st == PLAT_BTA_OFF)
-        app_say("BT AUDIO", "TURN K1 ON");
+        app_warn("BT AUDIO", "TURN K1 ON");
     else if (i == 1) {
         uint32_t c = ch_bta_count();
         ui.bta_sel = (uint8_t)(c ? (uint32_t)clamp((int32_t)ui.bta_sel + (d > 0 ? 1 : -1), 0, (int32_t)c - 1) : 0u);
@@ -246,7 +246,7 @@ static void ch_bta_turn(int i, int32_t d)
             ui.bta_sel = 0u;             /* (it becomes the last one: first in the list) */
             app_say("CONNECT", n);
         } else
-            app_say("BT AUDIO", "SCAN FIRST (K3)");
+            app_warn("BT AUDIO", "SCAN FIRST (K3)");
     } else if (ui.btn & 1u << B_SEL) {   /* SEL held, left: forget a remembered device */
         if (ch_bta_entry(ui.bta_sel, n, &k, &f) && k >= 0) {
             ch_bta_forget(k);

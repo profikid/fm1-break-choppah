@@ -1,7 +1,142 @@
 # SPDX-License-Identifier: MPL-2.0
-# CHOPPAH's words for a screen reader (fm1-reader): the text on the screen <TAB> what to say.
+# CHOPPAH's words for a screen reader (fm1-reader): the text on the screen <TAB> what to say. # takes a number, *
+# a word left out; whole words, capitals ignored, the longest match wins (fm1-reader's INTEGRATION.md, RULES.md).
+# Checked with tools/sr_audit.sh. A changed table makes a new words file (app/web/words/): commit it.
 # url: https://profikid.github.io/fm1-break-choppah/words/
 CHOPPAH	choppah
 BPM	B P M
 DJ FILTER	D J filter
 FX	effects
+# the pages: the buttons as printed, and their parts
+HOME PERFORM	home, perform
+HOME GENERATOR	home, generator
+GLO	global
+GLO MIDI	global, MIDI part
+GLO PITCH	global, pitch part
+GLO BT AUDIO	global, Bluetooth audio part
+GLO CHANNEL	global, channel part
+LFO LEVELS	mixer, levels
+LFO GROOVE	mixer, groove
+SEQ	sequencer
+SEQ #-#	sequencer, steps # to #
+SEQ KICK	sequencer, kick lane
+SEQ SNARE	sequencer, snare lane
+SEQ HAT	sequencer, hat lane
+STEPS #-#	steps # to #
+ENV TAP TEMPO	tap tempo page
+ARP PAD #	effect pad #
+FX SLOT #	effects slot #
+SLOT #	slot #
+EDIT KICK	edit, kick
+EDIT SNARE	edit, snare
+EDIT HAT	edit, hat
+MORE	more settings
+MAIN	main settings
+# the black keys' pads
+R8 PAD	roll eighth pad
+R16 PAD	roll sixteenth pad
+R32 PAD	roll thirty-second pad
+REV PAD	reverse pad
+FRZ PAD	freeze pad
+HLF PAD	half speed pad
+STP PAD	tape stop pad
+GAT PAD	gate pad
+RND PAD	random pad
+FLT PAD	filter throw pad
+DUB PAD	dub throw pad
+STOP # BT	stop # beats
+SPIN UP # ST	spin up # steps
+UP # ST	up # steps
+# knobs
+CMPLX	complexity
+FEEDBK	feedback
+THRESH	threshold
+RESO	resonance
+FREQ	frequency
+AMT	amount
+MOD	modulation
+RING MOD	ring modulator
+MB COMP	multiband compressor
+EQ	equalizer
+X-OVER	crossover
+XOVER	crossover
+SC HPF	side-chain high-pass
+HPF	high-pass filter
+LOW F	low frequency
+HIGH F	high frequency
+MID Q Q #	mid Q #
+LOW X	low crossover
+HIGH X	high crossover
+MAKE-UP	make-up gain
+METAL/NZ	metal or noise
+S&H	sample and hold
+TRI	triangle
+LP	low-pass
+HP	high-pass
+BP	band-pass
+LP #	low-pass #
+HP #	high-pass #
+LO-PASS	low-pass
+HI-PASS	high-pass
+AM	amplitude modulation
+DEG	degrees
+# ST	# semitones
+# SL	# slices
+SL	slices
+KEEP LEN	keep length
+TURN 2X	turn twice
+HALF / X2	half or double
+L / R	turn left or right
+CLR / 4X4	clear or four on the floor
+L CLR R 4X4	left clears, right four on the floor
+ROTATE < >	rotate, turn left or right
+REVERSE REVERSE	reverse on
+REVERSE FORWARD	reverse off
+HITS X#	hits #
+#HZ	# hertz
+#K	# kilohertz
+#MS	# milliseconds
+#DB	# decibels
+#DEG	# degrees
+# the drums, presets
+EARLY HC	early hardcore
+HC	hardcore
+SNAP # SL	snap # slices
+# MIDI and Bluetooth
+BT	Bluetooth
+BT AUDIO	Bluetooth audio
+USB+BT	USB and Bluetooth
+TRS	T R S
+P#	pattern #
+COPY FROM P#	copy from pattern #
+EXT CLOCK	outside clock
+TEMPO EXT CLOCK	tempo follows the outside clock
+THRU FX	through the effects
+AROUND FX	around the effects
+NOTHING YET	nothing to undo yet
+UNDO NOTHING YET	nothing to undo yet
+RESET ALL? TURN K4 AGAIN	reset all settings? Turn K 4 again: yes. Anything else: no
+K#	K #
+OVERLOAD FX SLOT BYPASSED	overload: an effects slot is bypassed, not heard
+NOT IN THIS BUILD	not in this build
+SCAN FIRST (K3)	no devices: scan first, with K 3
+TURN K1 ON	not on: turn K 1 on first
+SEL	select
+SEL BUTTON COMBINATIONS	select button combinations
+SEL WITH	select with
+ALGO	algorithm
+REC	record
+KEY # SLICE EFFECT	key #, its slice's effects
+KEY # LOOP	key #, its loop
+-	none
+4X4	four on the floor
+PC	program change
+PC OUT	program changes out
+CC OUT	controller changes out
+PRE	pre-delay
+PERC	percussion
+3/16	three sixteenths
+3/8	three eighths
+1/64	sixty-fourth
+#ST	# semitones
+x#	times #

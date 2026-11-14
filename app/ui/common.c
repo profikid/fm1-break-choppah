@@ -99,6 +99,7 @@ static void tenths_text(int32_t v, char *b)   /* 1700 -> "170.0" */
     text_cat(b, t);
 }
 
+static uint32_t say_keep;                 /* the next app_say is a warning (app_warn) */
 void app_say(const char *a, const char *b)
 {
     uint32_t i;
@@ -110,6 +111,22 @@ void app_say(const char *a, const char *b)
     ui.msg[1][i] = 0;
     ui.msg_until = plat_ms() + 1300u;
     ui.redraw |= 1u;               /* RG_HEAD: the message */
+    if (ann_on() && a && a[0]) {   /* and to a screen reader: a run (a knob turning) said once it settles */
+        char t[48];
+        t[0] = 0;
+        text_cat(t, ui.msg[0]);
+        if (ui.msg[1][0]) {
+            text_cat(t, " ");
+            text_cat(t, ui.msg[1]);
+        }
+        ann_later(t, ANN_NOW | say_keep, 120u, plat_ms());
+    }
+    say_keep = 0u;
+}
+static void app_warn(const char *a, const char *b)   /* a warning: heard whole (ANN_KEEP) */
+{
+    say_keep = ANN_KEEP;
+    app_say(a, b);
 }
 
 static void say_int(const char *what, int32_t v, const char *unit)

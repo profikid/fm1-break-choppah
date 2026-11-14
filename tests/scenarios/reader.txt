@@ -1,0 +1,62 @@
+# CHOPPAH: the screen reader (fm1-reader; fm1-base's announce.c). A reader that starts listening hears the whole
+# screen; a new page, part, held key or pad is said once it settles; a knob's value once it stops; play and stop;
+# a warning; a key or pad let go says nothing. Three quick detents are said once, as they settle. The words: app/words.tsv (tools/sr_audit.sh)
+#   app/build/host/choppah_host tests/scenarios/reader.txt app/build/scenarios
+wait 2600
+tap HOME
+wait 300
+listen
+wait 300
+said AMEN. PATTERN 1. 170.0 BPM. STOPPED.
+tap FX
+wait 400
+said FX SLOT 1 CRUNCH. BITS
+turn K1 1 10
+turn K1 1 10
+turn K1 1 10
+wait 300
+said BITS 7 BIT
+said_none
+tap PLAY
+wait 200
+said PLAY
+tap HOME
+wait 400
+said HOME
+key w2 down
+wait 600
+said KEY 3 LOOP. LENGTH 1/8
+key w2 up
+wait 400
+said_none
+key b6 down
+wait 500
+said STP PAD. STOP
+key b6 up
+wait 400
+said_none
+tap SEL
+wait 400
+said SEL BUTTON COMBINATIONS
+tap SEL
+wait 400
+said HOME
+tap PLAY
+wait 200
+said STOP
+press SEL
+tap SAVE
+release SEL
+wait 300
+said UNDO NOTHING YET
+where
+wait 100
+said 170.0 BPM. STOPPED.
+tap GLO
+wait 100
+turn ALGO 1 10
+wait 100
+turn ALGO 1 10
+wait 400
+said GLO BT AUDIO
+unsaid GLO PITCH
