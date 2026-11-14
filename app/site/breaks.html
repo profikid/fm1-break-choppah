@@ -435,6 +435,24 @@ async function make() {                  /* the sample -> the break, as prep_bre
 
 /* ---------------------------------------------------------------- the FM-1 over Web MIDI */
 let midi = null, out = null, inp = null, cap = CAP_DEFAULT, devInfo = null, waiting = null, playing = false;
+let helloWait = null, fwName = "CHOPPAH";
+/* the firmware's own name and version, as it gives it to a screen reader (fm1-reader PROTOCOL.md: HELLO, then BYE so
+   it doesn't go on talking): the port's name can't be trusted. Every FM-1 firmware on Felucca has the same USB ID, and
+   macOS keeps the first name it saw for it, so an FM-1 that once ran X0X may still show as X0X */
+function whoIs(port) {
+  return new Promise((res) => {
+    helloWait = res;
+    port.send([0xF0, 0x7D, 0x53, 0x52, 0x01, 0x01, 0xF7]);
+    setTimeout(() => { if (helloWait === res) { helloWait = null; res(""); } }, 600);
+  }).then((n) => { port.send([0xF0, 0x7D, 0x53, 0x52, 0x02, 0xF7]); return n; });
+}
+function portNote() {                    /* a port named after another firmware: why, and how to rename it */
+  if (/choppah/i.test(out.name)) return "";
+  return `<br><span class="hint">Your computer calls this port “${out.name.replace(/[<>&]/g, "")}”: it keeps the name of a firmware
+  this FM-1 ran before, since the FM-1's firmwares share one USB ID. It is ${fwName} answering, and the name changes
+  nothing. On a Mac, to see CHOPPAH's name: unplug the FM-1, open Audio MIDI Setup, Window › Show MIDI Studio, delete the
+  greyed-out “${out.name.replace(/[<>&]/g, "")}” device, and plug the FM-1 in again.</span>`;
+}
 function pack7(b) {
   const o = [];
   for (let i = 0; i < b.length; i += 7) {
@@ -452,6 +470,12 @@ function unpack7(p) {
 const u32 = (v) => [v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >>> 24) & 255];
 function onMsg(e) {
   const d = e.data;
+  if (d[0] === 0xF0 && d[1] === 0x7D && d[2] === 0x53 && d[3] === 0x52 && d[4] === 1 && helloWait) {
+    let n = "";                           /* the screen reader's HELLO answer: the firmware's name and version */
+    for (let i = 6; i < d.length - 1 && d[i]; i++) n += String.fromCharCode(d[i]);
+    const w = helloWait; helloWait = null; w(n);
+    return;
+  }
   if (d[0] !== 0xF0 || d[1] !== 0x7D || d[2] !== 0x43 || d[3] !== 0x48) return;
   if (!inp) inp = e.target;
   if (waiting && (d[4] & 0x3F) === waiting.cmd) { const w = waiting; waiting = null; w.res({ code: d[5], data: unpack7(d.subarray(6, d.length - 1)) }); }
@@ -480,6 +504,7 @@ $("connect").onclick = async () => {
     try { const r = await ask(1, [], 700, o); out = o; devInfo = r.data; break; } catch (e) { /* not CHOPPAH */ }
   }
   if (!out) { say($("devStatus"), "No CHOPPAH found. Is it plugged in by USB, running CHOPPAH 1.4 or later?", true); return; }
+  fwName = (await whoIs(out)) || "CHOPPAH";
   await info();
 };
 async function info() {
@@ -487,7 +512,7 @@ async function info() {
   const d = r.data, dv = new DataView(d.buffer);
   playing = !!d[1]; cap = dv.getUint32(4, true);
   const has = !!d[2], size = dv.getUint32(8, true);
-  say($("devStatus"), `<b>${out.name}</b> connected · ${playing ? "playing" : "stopped"} · ` + (has ? "a break of your own on it" : "no break of your own on it yet"));
+  say($("devStatus"), `<b>${fwName}</b> connected · ${playing ? "playing" : "stopped"} · ` + (has ? "a break of your own on it" : "no break of your own on it yet") + portNote());
   $("connect").textContent = "Refresh";
   sendable();
   if (has) await readBack(size); else { $("devBreak").classList.add("hidden"); devPlayer.stop(); }
@@ -505,7 +530,7 @@ async function readBack(size) {
   devPlayer.set(b);
   $("devFacts").innerHTML = `On the FM-1: <b>${b.name}</b> · ${b.bpm.toFixed(2)} BPM · ${(b.pcm.length / b.rate).toFixed(2)} s at ${(b.rate / 1000).toFixed(2)} kHz · ${(size / 1024).toFixed(1)} KB · break 1`;
   $("devBreak").classList.remove("hidden");
-  say($("devStatus"), `<b>${out.name}</b> connected · ${playing ? "playing" : "stopped"} · break 1 is <b>${b.name}</b>`);
+  say($("devStatus"), `<b>${fwName}</b> connected · ${playing ? "playing" : "stopped"} · break 1 is <b>${b.name}</b>` + portNote());
 }
 function sendable() { $("send").disabled = !(out && made && made.img.length <= cap); }
 
