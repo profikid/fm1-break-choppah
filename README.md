@@ -136,3 +136,5 @@ Kuroshita (Hügelton Instruments). The generator's behaviour follows the ideas o
 Gen; its code is new.
 
 M-VAVE and FM-1 are trademarks of their owners. CHOPPAH is not affiliated with M-VAVE.
+
+You can also try CHOPPAH in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
