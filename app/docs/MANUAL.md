@@ -134,7 +134,9 @@ Beside the eight built in, the FM-1 holds one break of your own. Make it on the 
 2. **Hear it chopped**: the page makes the break exactly as the built-in ones were made (levelled to match them, at
    22.05 kHz, sixteen slices snapped to the hits) and plays what the FM-1 will play. Play loops it, a slice or the
    keys 1–8 and Q–I play one slice, Chop rearranges the slices every bar, and the slider previews it at another
-   tempo.
+   tempo. **Place the slices yourself** if a hit is cut early or late: drag a slice's start on the waveform, and
+   place it exactly in the close-up below (60 ms either side), or with ← and → (1 ms; Shift: 10 ms). Each move
+   plays the slice.
 3. **Connect** the FM-1 by USB, **stop** CHOPPAH, and **send it**. It takes a few seconds; the FM-1 says RECEIVING A
    BREAK, then BREAK and its name.
 
