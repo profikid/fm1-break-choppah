@@ -114,7 +114,7 @@ TEMPO EXT CLOCK	tempo follows the outside clock
 THRU FX	through the effects
 AROUND FX	around the effects
 NOTHING YET	nothing to undo yet
-UNDO NOTHING YET	nothing to undo yet
+UNDO NOTHING YET	no undo yet: nothing has changed
 RESET ALL? TURN K4 AGAIN	reset all settings? Turn K 4 again: yes. Anything else: no
 K#	K #
 OVERLOAD FX SLOT BYPASSED	overload: an effects slot is bypassed, not heard
@@ -140,3 +140,6 @@ PERC	percussion
 1/64	sixty-fourth
 #ST	# semitones
 x#	times #
+STOP FIRST TO LOAD A BREAK	not loaded: stop first, then send the break again
+BREAK NOT LOADED IT DOESN'T CHECK	the break was not loaded: it does not check. Send it again
+BREAK NOT LOADED FLASH OR SIZE	the break was not loaded: the flash failed or it is too big

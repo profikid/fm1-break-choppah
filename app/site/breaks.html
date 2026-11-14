@@ -1,0 +1,579 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- CHOPPAH's break manager (PRD A-60): one break of your own on the FM-1. tools/site_style.py puts it at breaks/ on
+     the site, with the site's style and header. A sample is made into a break here exactly as the built-in ones are
+     (tools/prep_breaks.py: two bars, levelled to -16 dBFS with a look-ahead limiter, at most 22.05 kHz, sixteen slices
+     snapped to the hits, IMA ADPCM, a bank of one slot) and written over Web MIDI SysEx (ui/main.c app_sysex: F0 7D 43
+     48 CMD 7-bit-packed DATA F7). The preview plays the ADPCM decoded again: what the FM-1 will play. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHOPPAH · Your break</title>
+<style>/*SITE_CSS*/
+.brk h1 { margin-top: 8px; }
+.brk .lede { color: var(--dim); max-width: 720px; margin: 0 0 28px; }
+.brk section.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; margin: 0 0 22px; }
+.brk section.card h2 { margin: 0 0 6px; padding: 0; border: 0; font-size: 22px; }
+.brk .sub { color: var(--dim); margin: 0 0 14px; font-size: 15px; }
+.brk button {
+  font: 600 13px/1 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--hot);
+  background: #2a261d; border: 0; padding: 11px 14px; border-radius: 6px; box-shadow: inset 0 -2px 0 #11100c; cursor: pointer;
+}
+.brk button:hover:not(:disabled) { background: #3a3426; }
+.brk button.go { background: var(--amber); color: #1a1406; }
+.brk button.go:hover:not(:disabled) { background: #ffc44d; }
+.brk button.warn { color: #ffb4a0; }
+.brk button:disabled { opacity: .4; cursor: default; }
+.brk button[aria-pressed="true"], .brk button[aria-pressed="true"]:hover:not(:disabled) { background: var(--amber); color: #1a1406; }
+.brk .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+.brk .state { font: 500 14px/1.5 var(--f-mono); color: var(--dim); }
+.brk .state b { color: var(--fg); font-weight: 600; }
+.brk .state .bad { color: #ff9b85; }
+.brk .drop {
+  border: 2px dashed var(--line); border-radius: 10px; padding: 26px; text-align: center; color: var(--dim); cursor: pointer;
+}
+.brk .drop.over, .brk .drop:hover { border-color: var(--amber); color: var(--fg); }
+.brk label.f { display: flex; flex-direction: column; gap: 4px; font: 500 12px/1.2 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
+.brk input[type=text], .brk input[type=number], .brk select {
+  font: 500 15px/1.2 var(--f-mono); color: var(--fg); background: var(--raise); border: 1px solid var(--line);
+  border-radius: 6px; padding: 8px 10px; min-width: 0;
+}
+.brk input[type=text] { width: 15ch; text-transform: uppercase; }
+.brk input[type=number] { width: 10ch; }
+.brk input[type=range] { width: 180px; accent-color: var(--amber); }
+.brk .wave { position: relative; margin: 14px 0 6px; }
+.brk canvas { display: block; width: 100%; height: 150px; background: #0b0a08; border-radius: 8px; border: 1px solid var(--line); cursor: pointer; }
+.brk .keys { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; margin-top: 6px; }
+.brk .keys button { padding: 8px 0; font-size: 12px; text-transform: none; }
+.brk .keys button.on { background: var(--amber); color: #1a1406; }
+.brk .meter { height: 8px; background: var(--raise); border-radius: 4px; overflow: hidden; flex: 1 1 200px; }
+.brk .meter i { display: block; height: 100%; width: 0; background: var(--amber); transition: width .1s; }
+.brk .facts { font: 500 13px/1.5 var(--f-mono); color: var(--dim); }
+.brk .facts b { color: var(--fg); font-weight: 600; }
+.brk .hint { font-size: 14px; color: var(--faint); }
+.brk .hidden { display: none !important; }
+.brk .state:empty { display: none; }
+@media (max-width: 700px) { .brk .keys { grid-template-columns: repeat(8, 1fr); } }
+</style>
+</head>
+<body class="brk">
+<!--HEADER-->
+<div class="page">
+<main id="main">
+<h1>Your break</h1>
+<p class="lede">Put one break of your own on the FM-1, beside the eight built in. Load a sample, hear it chopped into
+sixteen slices exactly as CHOPPAH will play it, and send it over USB. While it is on the FM-1, it is break 1 and
+the one CHOPPAH starts with. Chrome or Edge, on a computer.</p>
+
+<section class="card" aria-labelledby="h-dev">
+  <h2 id="h-dev">1. The FM-1</h2>
+  <p class="sub">Plug the FM-1 in by USB with CHOPPAH 1.4 or later running, then connect.</p>
+  <div class="row">
+    <button id="connect" class="go">Connect</button>
+    <span class="state" id="devStatus" role="status">Not connected.</span>
+  </div>
+  <div id="devBreak" class="hidden">
+    <div class="facts" id="devFacts"></div>
+    <div class="wave"><canvas id="devWave" width="1100" height="150" aria-label="The break on the FM-1: its waveform and slices"></canvas></div>
+    <div class="keys" id="devKeys" aria-label="Its slices"></div>
+    <div class="row">
+      <button id="devPlay">Play</button>
+      <button id="devChop" aria-pressed="false">Chop</button>
+      <button id="devDelete" class="warn">Delete from the FM-1</button>
+    </div>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="h-load">
+  <h2 id="h-load">2. A sample</h2>
+  <p class="sub">A drum loop of whole bars: WAV, AIFF, MP3, FLAC or anything else your browser plays. Two bars are
+  used; a one-bar loop is played twice.</p>
+  <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a sample, or drop one here">
+    Drop a sample here, or click to choose one
+    <input type="file" id="file" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" class="hidden">
+  </div>
+  <div id="edit" class="hidden">
+    <div class="row">
+      <label class="f">Name<input type="text" id="name" maxlength="11" spellcheck="false"></label>
+      <label class="f">Bars in the file<select id="bars"><option>1</option><option selected>2</option><option>4</option><option>8</option><option>16</option></select></label>
+      <label class="f">Use bars<select id="start"></select></label>
+      <label class="f">Tempo (BPM)<input type="number" id="bpm" min="40" max="300" step="0.01"></label>
+      <label class="f">Slices<select id="snap"><option value="1" selected>On the hits</option><option value="0">Even grid</option></select></label>
+      <label class="f">Level<select id="level"><option value="1" selected>As the built-in breaks</option><option value="0">Loudest at full scale</option></select></label>
+    </div>
+    <div class="facts" id="facts"></div>
+    <div class="wave"><canvas id="wave" width="1100" height="150" aria-label="Your break: its waveform and slices"></canvas></div>
+    <div class="keys" id="keys" aria-label="Its slices"></div>
+    <div class="row">
+      <button id="play" class="go">Play</button>
+      <button id="chop" aria-pressed="false">Chop</button>
+      <label class="f" style="flex-direction:row;align-items:center;gap:10px">Preview at
+        <input type="range" id="tempo" min="60" max="200" step="1" aria-label="Preview tempo"><b id="tempoV"></b></label>
+    </div>
+    <p class="hint">Click a slice, or press 1–8 and Q–I, to hear it alone. Chop plays the slices in a new order every
+    bar, the way the generator rearranges a break. The preview repitches with the tempo, as CHOPPAH's SPEED mode.</p>
+  </div>
+</section>
+
+<section class="card" aria-labelledby="h-send">
+  <h2 id="h-send">3. Send it</h2>
+  <p class="sub">CHOPPAH must be stopped: writing the flash pauses the sound. It replaces the break already there.</p>
+  <div class="row">
+    <button id="send" class="go" disabled>Send to the FM-1</button>
+    <div class="meter" aria-hidden="true"><i id="bar"></i></div>
+  </div>
+  <p class="state" id="sendStatus" role="status"></p>
+</section>
+</main>
+</div>
+
+<script>
+"use strict";
+/* ---------------------------------------------------------------- the break, as tools/prep_breaks.py makes it */
+const RATE = 22050, MAX_LEN = 106496, NSLICES = 16, CAP_DEFAULT = 14 * 4096;
+const STEP = [7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66, 73, 80, 88, 97,
+  107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449, 494, 544, 598, 658, 724, 796,
+  876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428,
+  4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350,
+  22385, 24623, 27086, 29794, 32767];
+const ADJ = [-1, -1, -1, -1, 2, 4, 6, 8];
+const clamp = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+
+function loudnessDb(x, rate) {             /* the RMS of 50 ms windows, the quiet ones left out */
+  const w = Math.max(1, Math.floor(rate * 0.05)), win = [];
+  for (let i = 0; i < Math.max(1, x.length - w + 1); i += w) {
+    let e = 0;
+    for (let k = i; k < i + w && k < x.length; k++) e += x[k] * x[k];
+    win.push(e / w);
+  }
+  const mean = win.reduce((a, b) => a + b, 0) / win.length;
+  let loud = win.filter((e) => e > mean * 0.01);
+  if (!loud.length) loud = win;
+  return 10 * Math.log10(Math.max(1e-12, loud.reduce((a, b) => a + b, 0) / loud.length));
+}
+function limit(y, rate, ceiling) {         /* look-ahead (2 ms) limiter, 40 ms release: -> [samples, most gain off] */
+  const n = y.length, la = Math.max(1, Math.floor(rate * 0.002));
+  const req = new Float32Array(n), ahead = new Float32Array(n), held = new Float32Array(n), out = new Float32Array(n);
+  for (let i = 0; i < n; i++) req[i] = y[i] ? Math.min(1, ceiling / Math.abs(y[i])) : 1;
+  const q = new Int32Array(n);
+  let qh = 0, qt = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    while (qt > qh && req[q[qt - 1]] >= req[i]) qt--;
+    q[qt++] = i;
+    while (q[qh] > i + la - 1) qh++;
+    ahead[i] = req[q[qh]];
+  }
+  const rel = 1 - Math.exp(-1 / (rate * 0.04));
+  let env = 1;
+  for (let i = 0; i < n; i++) { env = ahead[i] < env ? ahead[i] : env + (1 - env) * rel; held[i] = env; }
+  let acc = la, most = 1;
+  for (let i = 0; i < n; i++) {
+    acc += held[i] - (i >= la ? held[i - la] : 1);
+    const g = Math.min(acc / la, req[i]);
+    if (g < most) most = g;
+    out[i] = y[i] * g;
+  }
+  return [out, most];
+}
+function level(x, rate, target = -16, ceiling = 0.98) {
+  let g = Math.pow(10, (target - loudnessDb(x, rate)) / 20), out = x;
+  for (let t = 0; t < 5; t++) {
+    const y = new Float32Array(x.length);
+    for (let i = 0; i < x.length; i++) y[i] = x[i] * g;
+    out = limit(y, rate, ceiling)[0];
+    const err = target - loudnessDb(out, rate);
+    if (Math.abs(err) < 0.2) break;
+    g *= Math.pow(10, err / 20);
+  }
+  return out;
+}
+function peakNorm(x) {
+  let p = 1e-9;
+  for (const v of x) p = Math.max(p, Math.abs(v));
+  return x.map((v) => v * 0.98 / p);
+}
+function slicePoints(x, n, hits) {         /* sixteen, moved to the strongest onset within a third of a slice */
+  const len = x.length;
+  let pts = Array.from({ length: n + 1 }, (_, i) => Math.floor(len * i / n));
+  if (!hits) return pts;
+  const hop = 256, env = [];
+  let prev = 0;
+  for (let i = 0; i < len - hop; i += hop) {
+    let e = 0;
+    for (let k = i; k < i + hop; k++) e += x[k] * x[k];
+    env.push(Math.max(0, e - prev));
+    prev = e;
+  }
+  const reach = Math.floor(Math.floor(len / n) / 3);
+  for (let i = 1; i < n; i++) {
+    const lo = Math.max(0, Math.floor((pts[i] - reach) / hop)), hi = Math.min(env.length - 1, Math.floor((pts[i] + reach) / hop));
+    if (hi > lo) {
+      let best = lo;
+      for (let j = lo; j <= hi; j++) if (env[j] > env[best]) best = j;
+      pts[i] = best * hop;
+    }
+  }
+  const s = [...new Set(pts)].sort((a, b) => a - b);
+  return s.length === n + 1 ? s : Array.from({ length: n + 1 }, (_, i) => Math.floor(len * i / n));
+}
+function adpcmEncode(x) {
+  let pred = 0, idx = 0;
+  const out = new Uint8Array((x.length + 1) >> 1);
+  for (let i = 0; i < x.length; i++) {
+    const s = clamp(Math.round(x[i] * 32767), -32768, 32767);
+    let d = s - pred, step = STEP[idx], code = 0, diff = step >> 3;
+    if (d < 0) { code = 8; d = -d; }
+    if (d >= step) { code |= 4; d -= step; diff += step; }
+    if (d >= step >> 1) { code |= 2; d -= step >> 1; diff += step >> 1; }
+    if (d >= step >> 2) { code |= 1; diff += step >> 2; }
+    pred = clamp(code & 8 ? pred - diff : pred + diff, -32768, 32767);
+    idx = clamp(idx + ADJ[code & 7], 0, 88);
+    out[i >> 1] |= code << (4 * (i & 1));
+  }
+  return out;
+}
+function adpcmDecode(data, n) {
+  let pred = 0, idx = 0;
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const code = (data[i >> 1] >> (4 * (i & 1))) & 15, step = STEP[idx];
+    let diff = step >> 3;
+    if (code & 4) diff += step;
+    if (code & 2) diff += step >> 1;
+    if (code & 1) diff += step >> 2;
+    pred = clamp(code & 8 ? pred - diff : pred + diff, -32768, 32767);
+    idx = clamp(idx + ADJ[code & 7], 0, 88);
+    out[i] = pred / 32768;
+  }
+  return out;
+}
+const CRC = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+function crc32(b) { let c = ~0; for (const v of b) c = CRC[(c ^ v) & 255] ^ (c >>> 8); return (~c) >>> 0; }
+
+/* a bank of one slot (app/dsp/brk_bank.h): header {magic "CHB1", version 1, slots 1, size, CRC-32}, the slot
+   {name[12], bpm x100, rate, len, data offset, data len, bars, slices, rsv, slice[33]}, the ADPCM */
+function buildBank(b) {
+  const data = adpcmEncode(b.pcm), body = new Uint8Array(168 + data.length), dv = new DataView(body.buffer);
+  for (let i = 0; i < 12; i++) body[i] = i < b.name.length ? b.name.charCodeAt(i) & 0x7F : 0;
+  dv.setUint32(12, Math.round(b.bpm * 100), true);
+  dv.setUint32(16, b.rate, true);
+  dv.setUint32(20, b.pcm.length, true);
+  dv.setUint32(24, 16 + 168, true);
+  dv.setUint32(28, data.length, true);
+  body[32] = 2; body[33] = b.slices.length - 1;
+  for (let i = 0; i < 33; i++) dv.setUint32(36 + 4 * i, i < b.slices.length ? b.slices[i] : b.pcm.length, true);
+  body.set(data, 168);
+  const img = new Uint8Array(16 + body.length), hv = new DataView(img.buffer);
+  hv.setUint32(0, 0x31424843, true); hv.setUint16(4, 1, true); hv.setUint16(6, 1, true);
+  hv.setUint32(8, body.length, true); hv.setUint32(12, crc32(body), true);
+  img.set(body, 16);
+  return img;
+}
+function readBank(img) {                 /* -> {name, bpm, rate, pcm, slices} or null */
+  if (img.length < 16 + 168) return null;
+  const dv = new DataView(img.buffer, img.byteOffset, img.byteLength);
+  if (dv.getUint32(0, true) !== 0x31424843 || dv.getUint16(6, true) < 1) return null;
+  if (crc32(img.subarray(16, 16 + dv.getUint32(8, true))) !== dv.getUint32(12, true)) return null;
+  const s = 16, len = dv.getUint32(s + 20, true), off = dv.getUint32(s + 24, true), ns = img[s + 33];
+  let name = "";
+  for (let i = 0; i < 12 && img[s + i]; i++) name += String.fromCharCode(img[s + i]);
+  const slices = [];
+  for (let i = 0; i <= ns; i++) slices.push(dv.getUint32(s + 36 + 4 * i, true));
+  return { name, bpm: dv.getUint32(s + 12, true) / 100, rate: dv.getUint32(s + 16, true),
+           pcm: adpcmDecode(img.subarray(off, off + dv.getUint32(s + 28, true)), len), slices, size: img.length };
+}
+
+/* ---------------------------------------------------------------- playing a break: slices on a step clock */
+let ctx = null;
+const audio = () => (ctx = ctx || new AudioContext());
+class Player {
+  constructor(keysEl, canvas, onState) { this.keys = keysEl; this.canvas = canvas; this.onState = onState; this.b = null; this.on = false; this.chop = false; }
+  set(b) {
+    this.stop();
+    this.b = b;
+    this.buf = audio().createBuffer(1, b.pcm.length, b.rate);
+    this.buf.copyToChannel(b.pcm, 0);
+    this.tempo = b.bpm;
+    this.keys.innerHTML = "";
+    for (let i = 0; i < b.slices.length - 1; i++) {
+      const k = document.createElement("button");
+      k.textContent = i + 1;
+      k.setAttribute("aria-label", "Slice " + (i + 1));
+      k.onclick = () => this.hit(i, audio().currentTime);
+      this.keys.appendChild(k);
+    }
+    this.lit = -1;
+    draw(this.canvas, b, -1);
+  }
+  hit(i, t) {                            /* slice i at time t, repitched to the tempo, cut at its end (3 ms fade) */
+    const b = this.b, c = audio(), rate = this.tempo / b.bpm, a = b.slices[i] / b.rate, d = (b.slices[i + 1] - b.slices[i]) / b.rate / rate;
+    const src = c.createBufferSource(), g = c.createGain();
+    src.buffer = this.buf; src.playbackRate.value = rate;
+    src.connect(g); g.connect(c.destination);
+    g.gain.setValueAtTime(1, t); g.gain.setValueAtTime(1, t + Math.max(0, d - 0.003)); g.gain.linearRampToValueAtTime(0, t + d);
+    src.start(t, a); src.stop(t + d + 0.01);
+    if (this.voice) try { this.voice.g.gain.cancelScheduledValues(t); this.voice.g.gain.setValueAtTime(this.voice.g.gain.value, t); this.voice.g.gain.linearRampToValueAtTime(0, t + 0.003); } catch (e) { /* gone */ }
+    this.voice = { g };
+    setTimeout(() => this.light(i), Math.max(0, (t - c.currentTime) * 1000));
+  }
+  light(i) {
+    if (!this.b) return;
+    if (this.lit >= 0 && this.keys.children[this.lit]) this.keys.children[this.lit].classList.remove("on");
+    this.lit = i;
+    if (i >= 0 && this.keys.children[i]) this.keys.children[i].classList.add("on");
+    draw(this.canvas, this.b, i);
+  }
+  start() {
+    if (!this.b) return;
+    audio().resume();
+    this.on = true; this.step = 0; this.next = audio().currentTime + 0.06; this.order = [...Array(this.b.slices.length - 1).keys()];
+    this.timer = setInterval(() => this.tick(), 25);
+    this.onState(true);
+  }
+  tick() {                               /* 25 ms ahead of time: the slices due in the next 100 ms */
+    const n = this.b.slices.length - 1, len = 60 / this.tempo * 8 / n;   /* two bars over n slices */
+    while (this.next < audio().currentTime + 0.1) {
+      if (this.step % 8 === 0 && this.chop) this.order = chopOrder(n, this.step % n);
+      this.hit(this.chop ? this.order[this.step % n] : this.step % n, this.next);
+      this.next += len; this.step++;
+    }
+  }
+  stop() { if (this.timer) clearInterval(this.timer); this.timer = 0; this.on = false; this.light(-1); this.onState && this.onState(false); }
+}
+function chopOrder(n, at) {              /* the generator's way: the downbeats kept, the rest rearranged, some repeated */
+  const o = [...Array(n).keys()];
+  for (let i = at; i < at + 8 && i < n; i++) {
+    if (i % 4 === 0) continue;
+    const r = Math.random();
+    o[i] = r < 0.35 ? o[i - 1] : r < 0.8 ? Math.floor(Math.random() * n) : i;
+  }
+  return o;
+}
+function draw(cv, b, lit) {
+  const g = cv.getContext("2d"), W = cv.width, H = cv.height, n = b.pcm.length;
+  g.fillStyle = "#0b0a08"; g.fillRect(0, 0, W, H);
+  if (lit >= 0) { g.fillStyle = "rgba(255,178,26,.16)"; g.fillRect(b.slices[lit] / n * W, 0, (b.slices[lit + 1] - b.slices[lit]) / n * W, H); }
+  g.fillStyle = "#a39a85";
+  for (let x = 0; x < W; x++) {
+    let p = 0;
+    for (let i = Math.floor(x * n / W); i < Math.floor((x + 1) * n / W); i++) p = Math.max(p, Math.abs(b.pcm[i]));
+    const h = p * (H / 2 - 6);
+    g.fillRect(x, H / 2 - h, 1, 2 * h);
+  }
+  g.fillStyle = "#ffb21a"; g.font = "600 13px 'IBM Plex Mono', monospace";
+  for (let i = 0; i < b.slices.length - 1; i++) {
+    const x = Math.round(b.slices[i] / n * W);
+    g.fillRect(x, 0, 1, H);
+    g.fillText(String(i + 1), x + 4, 15);
+  }
+}
+
+/* ---------------------------------------------------------------- a sample in */
+const $ = (id) => document.getElementById(id);
+let src = null, made = null;
+const player = new Player($("keys"), $("wave"), (on) => { $("play").textContent = on ? "Stop" : "Play"; });
+const devPlayer = new Player($("devKeys"), $("devWave"), (on) => { $("devPlay").textContent = on ? "Stop" : "Play"; });
+
+async function loadFile(f) {
+  try {
+    const buf = await audio().decodeAudioData(await f.arrayBuffer());
+    const n = buf.length, mono = new Float32Array(n);
+    for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c); for (let i = 0; i < n; i++) mono[i] += d[i] / buf.numberOfChannels; }
+    src = { x: mono, rate: buf.sampleRate, dur: n / buf.sampleRate };
+    $("name").value = f.name.replace(/\.[^.]*$/, "").replace(/[^A-Za-z0-9 ]+/g, " ").trim().toUpperCase().slice(0, 11) || "MY BREAK";
+    let best = 2, err = 1e9;             /* the bars that give the most likely tempo (a break: 80..180) */
+    for (const b of [1, 2, 4, 8, 16]) { const bpm = 240 * b / src.dur, e = bpm < 80 ? 80 - bpm : bpm > 180 ? bpm - 180 : Math.abs(bpm - 130) / 100; if (e < err) { err = e; best = b; } }
+    $("bars").value = String(best);
+    fillStart();
+    $("bpm").value = (240 * best / src.dur).toFixed(2);
+    $("edit").classList.remove("hidden");
+    await make();
+  } catch (e) {
+    say($("sendStatus"), "That file can't be read as audio here (" + e.message + ").", true);
+  }
+}
+function fillStart() {
+  const bars = +$("bars").value, s = $("start");
+  s.innerHTML = "";
+  for (let b = 0; b < Math.max(1, bars - 1); b += 2) s.insertAdjacentHTML("beforeend", `<option value="${b}">${bars === 1 ? "1 (twice)" : (b + 1) + "–" + (b + 2)}</option>`);
+}
+let making = 0;
+async function make() {                  /* the sample -> the break, as prep_breaks.py would make it */
+  if (!src) return;
+  const my = ++making, bpm = +$("bpm").value, bars = +$("bars").value, startBar = +$("start").value || 0;
+  if (!(bpm >= 40 && bpm <= 300)) return;
+  const barLen = src.rate * 240 / bpm;
+  let x;
+  if (bars === 1) {                      /* one bar, twice */
+    const one = src.x.subarray(0, Math.min(src.x.length, Math.round(barLen)));
+    x = new Float32Array(one.length * 2); x.set(one); x.set(one, one.length);
+  } else x = src.x.slice(Math.round(startBar * barLen), Math.round((startBar + 2) * barLen));
+  const want = Math.round(2 * barLen);
+  if (x.length < want - 2) { const y = new Float32Array(want); y.set(x); x = y; }
+  x = $("level").value === "1" ? level(x, src.rate) : peakNorm(x);
+  const rate = Math.min(RATE, Math.floor(MAX_LEN / (2 * 240 / bpm)));   /* slow breaks at a lower rate, to fit */
+  const oc = new OfflineAudioContext(1, Math.max(1, Math.round(x.length * rate / src.rate)), rate);
+  const ab = oc.createBuffer(1, x.length, src.rate);
+  ab.copyToChannel(x, 0);
+  const node = oc.createBufferSource(); node.buffer = ab; node.connect(oc.destination); node.start();
+  const pcm0 = (await oc.startRendering()).getChannelData(0).slice(0, MAX_LEN);
+  if (my !== making) return;
+  const slices = slicePoints(pcm0, NSLICES, $("snap").value === "1");
+  const name = ($("name").value || "MY BREAK").toUpperCase().replace(/[^A-Z0-9 ]/g, " ").slice(0, 11);
+  const img = buildBank({ name, bpm, rate, pcm: pcm0, slices });
+  made = readBank(img);                  /* the preview: the ADPCM decoded again, as the FM-1 plays it */
+  made.img = img;
+  const was = player.on;
+  player.set(made);
+  $("tempo").value = Math.round(bpm); $("tempoV").textContent = Math.round(bpm) + " BPM";
+  if (was) player.start();
+  $("facts").innerHTML = `<b>${name}</b> · ${bpm.toFixed(2)} BPM · 2 bars · ${(made.pcm.length / rate).toFixed(2)} s at ${(rate / 1000).toFixed(2)} kHz · ` +
+    `<b>${(img.length / 1024).toFixed(1)} KB</b> of ${(cap / 1024).toFixed(0)} KB` + (img.length > cap ? ' · <span style="color:#ff9b85">too big</span>' : "");
+  sendable();
+}
+
+/* ---------------------------------------------------------------- the FM-1 over Web MIDI */
+let midi = null, out = null, inp = null, cap = CAP_DEFAULT, devInfo = null, waiting = null, playing = false;
+function pack7(b) {
+  const o = [];
+  for (let i = 0; i < b.length; i += 7) {
+    const g = b.subarray(i, i + 7); let hi = 0;
+    g.forEach((v, j) => { hi |= (v >> 7) << j; });
+    o.push(hi, ...Array.from(g, (v) => v & 0x7F));
+  }
+  return o;
+}
+function unpack7(p) {
+  const o = [];
+  for (let i = 0; i < p.length; i += 8) for (let j = 1; j < 8 && i + j < p.length; j++) o.push(p[i + j] | ((p[i] >> (j - 1)) & 1) << 7);
+  return new Uint8Array(o);
+}
+const u32 = (v) => [v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >>> 24) & 255];
+function onMsg(e) {
+  const d = e.data;
+  if (d[0] !== 0xF0 || d[1] !== 0x7D || d[2] !== 0x43 || d[3] !== 0x48) return;
+  if (!inp) inp = e.target;
+  if (waiting && (d[4] & 0x3F) === waiting.cmd) { const w = waiting; waiting = null; w.res({ code: d[5], data: unpack7(d.subarray(6, d.length - 1)) }); }
+}
+function ask(cmd, data = [], ms = 3000, port = out) {
+  return new Promise((res, rej) => {
+    waiting = { cmd, res };
+    port.send([0xF0, 0x7D, 0x43, 0x48, cmd, ...pack7(Uint8Array.from(data)), 0xF7]);
+    setTimeout(() => { if (waiting && waiting.res === res) { waiting = null; rej(new Error("no answer")); } }, ms);
+  });
+}
+const ERR = { 1: "CHOPPAH is playing: stop it (PLAY) and try again.", 2: "The break doesn't fit.", 3: "The flash could not be written.", 4: "The break as written doesn't check." };
+function say(el, t, bad) { el.innerHTML = bad ? `<span class="bad">${t}</span>` : t; }
+
+$("connect").onclick = async () => {
+  try {
+    midi = midi || await navigator.requestMIDIAccess({ sysex: true });
+  } catch (e) {
+    say($("devStatus"), "No MIDI with SysEx here: use Chrome or Edge, and allow it.", true); return;
+  }
+  say($("devStatus"), "Looking for CHOPPAH…");
+  midi.inputs.forEach((i) => { i.onmidimessage = onMsg; });
+  const outs = [...midi.outputs.values()].filter((o) => o.state !== "disconnected");
+  const likely = outs.filter((o) => /choppah|fm-?1/i.test(o.name));
+  for (const o of likely.concat(outs.filter((o) => !likely.includes(o)))) {
+    try { const r = await ask(1, [], 700, o); out = o; devInfo = r.data; break; } catch (e) { /* not CHOPPAH */ }
+  }
+  if (!out) { say($("devStatus"), "No CHOPPAH found. Is it plugged in by USB, running CHOPPAH 1.4 or later?", true); return; }
+  await info();
+};
+async function info() {
+  const r = await ask(1);
+  const d = r.data, dv = new DataView(d.buffer);
+  playing = !!d[1]; cap = dv.getUint32(4, true);
+  const has = !!d[2], size = dv.getUint32(8, true);
+  say($("devStatus"), `<b>${out.name}</b> connected · ${playing ? "playing" : "stopped"} · ` + (has ? "a break of your own on it" : "no break of your own on it yet"));
+  $("connect").textContent = "Refresh";
+  sendable();
+  if (has) await readBack(size); else { $("devBreak").classList.add("hidden"); devPlayer.stop(); }
+}
+async function readBack(size) {
+  const img = new Uint8Array(size);
+  for (let off = 0; off < size; off += 256) {
+    const n = Math.min(256, size - off), r = await ask(5, [...u32(off), ...u32(n)]);
+    if (r.code) throw new Error("read " + r.code);
+    img.set(r.data.subarray(4, 4 + n), off);
+    say($("devStatus"), `Reading the break on the FM-1… ${Math.round(100 * (off + n) / size)}%`);
+  }
+  const b = readBank(img);
+  if (!b) { say($("devStatus"), "The break on the FM-1 doesn't check: send one again.", true); return; }
+  devPlayer.set(b);
+  $("devFacts").innerHTML = `On the FM-1: <b>${b.name}</b> · ${b.bpm.toFixed(2)} BPM · ${(b.pcm.length / b.rate).toFixed(2)} s at ${(b.rate / 1000).toFixed(2)} kHz · ${(size / 1024).toFixed(1)} KB · break 1`;
+  $("devBreak").classList.remove("hidden");
+  say($("devStatus"), `<b>${out.name}</b> connected · ${playing ? "playing" : "stopped"} · break 1 is <b>${b.name}</b>`);
+}
+function sendable() { $("send").disabled = !(out && made && made.img.length <= cap); }
+
+$("send").onclick = async () => {
+  const img = made.img, st = $("sendStatus"), bar = $("bar");
+  $("send").disabled = true;
+  try {
+    player.stop();
+    let r = await ask(2, u32(img.length), 15000);      /* the flash erased first: a moment */
+    if (r.code) throw new Error(ERR[r.code] || "code " + r.code);
+    for (let off = 16; off < img.length; off += 512) {
+      r = await ask(3, [...u32(off), ...img.subarray(off, off + 512)]);
+      if (r.code) throw new Error(ERR[r.code] || "code " + r.code);
+      bar.style.width = (100 * off / img.length).toFixed(1) + "%";
+      say(st, `Sending… ${Math.round(100 * off / img.length)}%`);
+    }
+    r = await ask(4, img.subarray(0, 16), 5000);       /* the header last: the break counts once it checks */
+    if (r.code) throw new Error(ERR[r.code] || "code " + r.code);
+    bar.style.width = "100%";
+    say(st, `<b>${made.name}</b> is on the FM-1: break 1, and the break CHOPPAH starts with.`);
+    await info();
+  } catch (e) {
+    say(st, "Not sent: " + e.message, true);
+  }
+  sendable();
+};
+$("devDelete").onclick = async () => {
+  if (!confirm("Delete your break from the FM-1? The eight built-in breaks stay.")) return;
+  try {
+    const r = await ask(6, [], 8000);
+    if (r.code) throw new Error(ERR[r.code] || "code " + r.code);
+    say($("sendStatus"), "Your break is deleted from the FM-1.");
+    await info();
+  } catch (e) { say($("sendStatus"), "Not deleted: " + e.message, true); }
+};
+
+/* ---------------------------------------------------------------- the controls */
+const drop = $("drop");
+drop.onclick = () => $("file").click();
+drop.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("file").click(); } };
+$("file").onchange = (e) => e.target.files[0] && loadFile(e.target.files[0]);
+drop.ondragover = (e) => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove("over"); e.dataTransfer.files[0] && loadFile(e.dataTransfer.files[0]); };
+$("bars").onchange = () => { fillStart(); $("bpm").value = (240 * +$("bars").value / src.dur).toFixed(2); make(); };
+for (const id of ["start", "bpm", "snap", "level", "name"]) $(id).onchange = make;
+$("play").onclick = () => { audio().resume(); player.on ? player.stop() : player.start(); };
+$("devPlay").onclick = () => { audio().resume(); devPlayer.on ? devPlayer.stop() : devPlayer.start(); };
+$("chop").onclick = (e) => { player.chop = !player.chop; e.target.setAttribute("aria-pressed", player.chop); };
+$("devChop").onclick = (e) => { devPlayer.chop = !devPlayer.chop; e.target.setAttribute("aria-pressed", devPlayer.chop); };
+$("tempo").oninput = (e) => { player.tempo = +e.target.value; $("tempoV").textContent = e.target.value + " BPM"; };
+for (const [cv, p] of [[$("wave"), player], [$("devWave"), devPlayer]])
+  cv.onclick = (e) => {
+    if (!p.b) return;
+    audio().resume();
+    const r = cv.getBoundingClientRect(), at = (e.clientX - r.left) / r.width * p.b.pcm.length;
+    let i = 0;
+    while (i < p.b.slices.length - 2 && p.b.slices[i + 1] <= at) i++;
+    p.hit(i, audio().currentTime);
+  };
+const KEYS = "12345678qwertyui";
+document.addEventListener("keydown", (e) => {
+  if (e.target.matches("input, select, textarea") || e.repeat || e.metaKey || e.ctrlKey) return;
+  const i = KEYS.indexOf(e.key.toLowerCase());
+  if (i >= 0 && player.b) { audio().resume(); player.hit(i, audio().currentTime); }
+  if (e.key === " " && player.b) { e.preventDefault(); $("play").click(); }
+});
+if (!navigator.requestMIDIAccess) say($("devStatus"), "This browser has no Web MIDI: use Chrome or Edge to send the break. You can still load and hear a sample.", true);
+</script>
+</body>
+</html>

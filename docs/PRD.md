@@ -24,7 +24,7 @@ a safe mode and a route back to stock firmware.
 3. **Sound:** a crunchy, 90s-sampler character (repitch, not time-stretch, by default) with clean
    headroom: no clicks at slice edges and no dropouts.
 4. **The breaks:** a desktop tool that slices, levels and encodes the breaks built into the firmware
-   (`breaks/breaks.txt`). Loading samples of your own onto the device is out of scope (3 Nov 2026, §4.7).
+   (`breaks/breaks.txt`), and one break of your own beside them (A-60, back 14 Nov 2026: the site's break manager).
 5. **Safe to install:** never brick the device; always a way back to stock.
 
 ### 1.2 Non-goals (v1)
@@ -181,7 +181,7 @@ ABG's four, plus the master section a live unit needs.
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| A-60 | ~~Import up to **8 custom loops**~~ **Dropped 3 Nov 2026:** CHOPPAH does not load samples of its own; the breaks are the firmware's (`breaks/breaks.txt`, A-61). A-62–A-64 go with it | — | |
+| A-60 | **One custom break** (14 Nov 2026, v1.4; dropped 3 Nov as "8 custom loops", back as one): a 2-bar break of the player's, a bank of one slot (§8.3) in the data area at 0x97000 (14 sectors, 56 KB), written over USB by the site's break manager (`breaks/`, app/site/breaks.html: load a sample, two bars of it, levelled, at most 22.05 kHz (lower for breaks under 99.4 BPM, to fit the PCM buffer), sixteen slices on the hits, IMA ADPCM, exactly as tools/prep_breaks.py; a chopped preview of the ADPCM decoded again; send; read the break on the FM-1 back and play it; delete). SysEx F0 7D 43 48: INFO, BEGIN (erase), DATA (512 B, acknowledged), COMMIT (the header last, CRC-32 checked), READ, DELETE; writes only while stopped. Present, it is break 1 and the break at power-on; the built-in breaks follow | P1 | *Done; tests/custom_break.sh (upload, refused while playing, break 1, played, kept at power-on, read back byte for byte, deleted), tests/page_parity.sh (the page = prep_breaks.py byte for byte). +1.6 KB of flash* |
 | A-61 | **Prep tool** (`tools/prep_breaks.py`, Python stdlib only): WAV in → trim to whole bars (by BPM or detected) → loudness to −16 dBFS RMS of the loud parts with a look-ahead peak limiter (3 Nov 2026; was peak-normalised, THINK sat ~8 dB under DRUMMER) → slice markers (grid or transient) → resample → IMA ADPCM → bank image + manifest | P0 | Amen 2 bars fits in < 45 KB; the 8 breaks within 0.6 dB of each other at the output (simulator) |
 | A-62 | **Upload** over USB: CLI (`tools/fm1_breaks.py upload`) and a web page (Chrome/Edge, Web MIDI SysEx) | P0 | A full bank uploads in < 60 s; a failed upload leaves the old bank intact (A/B or verify-then-commit) |
 | A-63 | On-device slice editor (EDIT): move markers, nudge in 1 ms, set slice count, set native BPM, rename | P1 | |
@@ -505,7 +505,7 @@ user presets (the kick is saved with the settings), and the overload guard (E-7,
 | **M2 Sequencer + generator** | Steps, swing, generator, randomize, tap tempo, patterns, persistence | A-7, A-10, A-11, A-38, B-14, B-20, B-21 |
 | **M3 Remix FX + looper** | Freeze, reverse gate, retrigger, RMX, step random, pitch ±, looper with overdub | §4.3, §4.4 P0 rows |
 | **M4 DSP** | Ring mod, stereo HPF, flanger, degrader, master DJ filter + limiter; overload guard | §4.5 P0 rows, N-1, N-2 |
-| **M5 Breaks** | prep tool (built); loading your own breaks dropped 3 Nov 2026 | §4.7 |
+| **M5 Breaks** | prep tool (built); one break of your own, from the site's break manager (14 Nov 2026, v1.4) | §4.7 |
 | **M6 Performance mode** | Black-key pads, hold-to-loop, scrub, tape stop, p-locks, chains | §5 P0 rows |
 | **M7 MIDI + sync** | Clock in/out, note/CC maps, USB audio recording flow | §4.8 |
 | **M8 Release 1.0** | Manual, help cards, emulator, web installer, soak test | All P0 + N-1..N-6 |

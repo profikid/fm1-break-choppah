@@ -77,7 +77,9 @@ too, left out for room) and 60 royalty-free Amen loops by Dmitriy "Cyberworm" Va
 400 KB for breaks). `./build.sh` builds the marked ones into `app/bank_data.h` (generated,
 git-ignored) whenever the list or a WAV changes; to use other breaks, move the `*`s, or add WAVs and lines, and
 build. `./build.sh bank` builds just the bank and says whether it fits ([breaks/README.md](breaks/README.md)).
-The breaks are built in: CHOPPAH does not load samples of your own.
+One break of your own goes beside them: the site's break manager ([Your break](https://profikid.github.io/fm1-break-choppah/breaks/),
+`app/site/breaks.html`) makes it from a sample as `prep_breaks.py` would and writes it over USB into the flash's data
+area, where it is break 1 and the break CHOPPAH starts with.
 
 ## Building
 

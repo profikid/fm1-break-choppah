@@ -119,7 +119,10 @@ void app_say(const char *a, const char *b)
             text_cat(t, " ");
             text_cat(t, ui.msg[1]);
         }
-        ann_later(t, ANN_NOW | say_keep, 120u, plat_ms());
+        if (say_keep)              /* a warning: at once, heard whole */
+            ann_say(t, 0, ANN_NOW | ANN_KEEP);
+        else
+            ann_later(t, ANN_NOW, 120u, plat_ms());
     }
     say_keep = 0u;
 }

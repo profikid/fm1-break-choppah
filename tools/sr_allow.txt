@@ -9,3 +9,4 @@ resets
 # the host simulator's pretend Bluetooth speaker
 jbl
 pre-delay
+receiving

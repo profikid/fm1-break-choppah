@@ -15,7 +15,8 @@ mkdir -p "$O" app/build/scenarios
 rm -f "$O/said.tsv"
 python3 tools/sr_walk.py > "$O/walk.txt"
 FM1B_SAID_LOG="$PWD/$O/said.tsv" "$H" "$O/walk.txt" "$O" > /dev/null
-for f in tests/scenarios/*.txt; do
+for f in tests/scenarios/*.txt app/build/custom/custom.txt; do
+    [ -f "$f" ] || continue
     FM1B_SAID_LOG="$PWD/$O/said.tsv" "$H" "$f" app/build/scenarios > /dev/null || true
 done
 sort -u "$O/said.tsv" > "$O/all.tsv"

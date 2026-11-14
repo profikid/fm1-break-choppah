@@ -121,8 +121,27 @@ sixteenths); the list lives on this site and costs the FM-1 no space. The reader
 | PRESETS | The pattern, P1–P16 (§5); while playing the new one starts at the end of the loop |
 | SEQ · REC | The sequencer; recording the keys into the pattern (§5). SEL + REC: clear the pattern (SEL + SAVE takes it back) |
 | MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 64–74 (E4–D5) press black keys 1–11 (on HOME the performance pads, on ARP the effect pads; SEL + the note holds an ARP pad); 24–35 (C1–B1) pick the break; 36 the kick, 38 the snare, 42 / 44 / 46 the hat (§8). Any channel, or the one set on GLOBAL's CHANNEL part: the whole map is in §7, [MIDI map](#midi-map) |
-| ALGORITHM | (HOME, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set |
+| ALGORITHM | (HOME, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each, played at the tempo you set. A break of your own, when there is one, comes first ([Your own break](#your-own-break)) |
 | MASTER | Volume |
+
+### Your own break
+
+Beside the eight built in, the FM-1 holds one break of your own. Make it on the site's
+[Your break](https://profikid.github.io/fm1-break-choppah/breaks/) page, in Chrome or Edge on a computer:
+
+1. **Load a sample**: a drum loop of whole bars, in any format the browser plays. The page guesses how many bars it
+   is from its length (pick another number if it guessed wrong, or type the tempo), and which two bars to use.
+2. **Hear it chopped**: the page makes the break exactly as the built-in ones were made (levelled to match them, at
+   22.05 kHz, sixteen slices snapped to the hits) and plays what the FM-1 will play. Play loops it, a slice or the
+   keys 1–8 and Q–I play one slice, Chop rearranges the slices every bar, and the slider previews it at another
+   tempo.
+3. **Connect** the FM-1 by USB, **stop** CHOPPAH, and **send it**. It takes a few seconds; the FM-1 says RECEIVING A
+   BREAK, then BREAK and its name.
+
+Your break is **break 1** (the built-in ones follow) and **the break CHOPPAH starts with** every time it is switched
+on. Sending another replaces it. Connected, the page reads the break on the FM-1 back: you see and hear what is on it,
+and can delete it (the built-in breaks stay). A break of your own is two bars and at most 56 KB: breaks under
+99.4 BPM are kept at a slightly lower sample rate to fit. It stays through updates of CHOPPAH, and RESET ALL keeps it.
 
 ### Tap tempo
 
