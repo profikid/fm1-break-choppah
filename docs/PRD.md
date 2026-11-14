@@ -208,7 +208,7 @@ ABG's four, plus the master section a live unit needs.
 | --- | --- | --- | --- |
 | A-80 | Hold-for-help cards on every button | P1 | |
 | A-81 | Manual (docs/MANUAL.md → site) | P1 | |
-| A-82 | Screen-reader words (fm1-reader) | P2 | |
+| A-82 | Screen-reader words (fm1-reader) | P2 | *Done 14 Nov 2026 (v1.3.2, discussion #2): app_say to the reader (settled runs, warnings kept whole), speak() for pages, parts, held keys and pads, the SEL card, WHERE, play / stop; app/words.tsv (the words files in app/web/words/, on the site); tools/sr_audit.sh: fm1-reader's audit over a walk of every page and value (tools/sr_walk.py) and the scenarios, no errors or warnings; scenario reader.txt. ~1.3 KB of flash; its text shares the demo's stars in the pool (48 stars, were 64)* |
 | A-83 | **Battery in the header** (7 Nov 2026): the level next to the header's level meter (fm1-base's `plat_battery`: 0..3 bars, 4 a USB host powers the FM-1, -1 not read yet): a small battery outline with its bars from the foot, red at one bar or none (a bolt while USB powers it), nothing before the first reading. It redraws when the level changes, not every frame | P1 | *Done; host scenario: the icon beside the meter at 3 bars; 0 and 1 red, 4 the bolt. Not yet seen on an FM-1* |
 
 ---

@@ -28,8 +28,10 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - Bluetooth MIDI is on (`ble = true`, `ble_stack = "own"`: fm1-base's own stack, nothing of JieLi's); the GLOBAL
   page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash. Bluetooth audio out
   (`bt_audio = true`, A2DP) is on too: ~37 KB of flash, its packet queue in the pool (`BP_MQ_ATTR` in app.h).
-- Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); 577,720 B used on
-  13 Nov 2026 (v1.3, with the MIDI map): **~3.8 KB left, the flash is full**. The break bank (`CH_BANK`, ~369 KB) is most of it. Anything new needs something taken out first (ask Laurens what).
+- Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); 579,460 B used on
+  14 Nov 2026 (v1.3.2: fm1-base c8e0599 and the screen reader): **~2.1 KB left, the flash is full**. Bluetooth audio
+  (~37 KB, A2DP + SBC) has no smaller build in fm1-base; fm1-base's resource region (`resources`, APP_RES_BASE) could
+  take some of the break bank out of the app slot (it only fits the data area's ~268 KB, not the whole bank). The break bank (`CH_BANK`, ~369 KB) is most of it. Anything new needs something taken out first (ask Laurens what).
   Block-rate engine code is `BRK_COLD` (built for size) and calls the shared maths (`brk_exp2f_c` and the like,
   brk_math.c; the UI too) instead of an inline copy; the FX chain's per-sample loop (`fx_samples`) is `BRK_RAM`:
   .ram_text on the FM-1 (fast, packed in flash), so nothing it reaches may be a call (`BRK_INL` in brk_fx.c forces
@@ -60,6 +62,15 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - **Always push to GitHub after changes** (Laurens' standing rule, 4 Nov 2026): commit and push as soon as a change is
   done, before moving on. Finished, tested work goes to main; work in progress that doesn't build or fit
   yet goes to a branch of its own and is pushed there.
+
+## The screen reader (fm1-reader)
+
+fm1-base's `device/announce.c` sends the screen to a reader; CHOPPAH's side is in `app/ui/main.c` ("the screen
+reader": `speak()`, `screen_text()`, `foot_knob()`) and `app_say` / `app_warn` (common.c). The words are
+`app/words.tsv`; each build writes its words file into `app/web/words/` (committed, every one kept: devices point at
+them; never edit or delete a published one). After changing any text on the screen run `./build.sh --host` and
+`tools/sr_audit.sh` (fm1-reader cloned next to this repo, or FM1_READER=...): no errors, no warnings. The reader's
+text buffer shares the demo's stars in the pool (`sp_buf`).
 
 ## The update screen
 

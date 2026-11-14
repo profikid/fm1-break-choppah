@@ -10,7 +10,7 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 ## Contents
 
 1. Install
-2. The screens
+2. The screens (and the screen reader)
 3. Playing
 4. The pads
 5. Patterns and the sequencer
@@ -87,6 +87,24 @@ The lights play along: a light runs round the buttons, and the keys follow the b
 back. That touch only ends the demo: it doesn't play a slice or start the break.
 
 ![The demo's scenes: BARS, WAVE, TUNNEL, WORMHOLE, STARS](img/screen-demo.png "The demo")
+
+### Screen reader
+
+CHOPPAH can read its screen aloud, for players who can't see it. Connect the FM-1 to a computer by USB, open the
+[FM-1 Screen Reader](https://charlesvestal.github.io/fm1-reader/) in Chrome or Edge, and click Connect. The page
+speaks with its own voice, or hands the words to your own screen reader (VoiceOver, NVDA, JAWS, TalkBack).
+
+- When the reader connects, and whenever it asks, you hear the whole screen: the page and its part, the four knobs
+  with their values, the break, the pattern, the tempo, and whether it is playing.
+- A new page or part, a white key held (its loop or its slice effect) or a black-key pad held is said once it
+  settles: its name, then its knobs. Letting go of a key or pad says nothing.
+- A knob says its name and value when it stops turning. Every message on the screen is said (saved, cleared, next
+  pattern, next break), and PLAY says play or stop.
+- Warnings are heard whole: an FX slot bypassed for overload, nothing to undo, Bluetooth audio not on.
+- SEL pressed alone reads its combinations.
+
+The words CHOPPAH sends are spelled out in full (CMPLX is complexity, R16 is the 1/16 roll pad, 3/16 is three
+sixteenths); the list lives on this site and costs the FM-1 no space. The reader page needs nothing installed.
 
 ## 3. Playing
 
