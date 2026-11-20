@@ -58,5 +58,5 @@ turn ALGO 1 10
 wait 100
 turn ALGO 1 10
 wait 400
-said GLO BT AUDIO
+said GLO SPLIT
 unsaid GLO PITCH

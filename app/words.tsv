@@ -13,7 +13,7 @@ HOME GENERATOR	home, generator
 GLO	global
 GLO MIDI	global, MIDI part
 GLO PITCH	global, pitch part
-GLO BT AUDIO	global, Bluetooth audio part
+GLO SPLIT	global, split part
 GLO CHANNEL	global, channel part
 LFO LEVELS	mixer, levels
 LFO GROOVE	mixer, groove
@@ -98,13 +98,22 @@ HITS X#	hits #
 #MS	# milliseconds
 #DB	# decibels
 #DEG	# degrees
+# the split (PRD S-030): A and B are break A and break B
+LOOP A	loop break A
+LOOP B	loop break B
+LOOP A AND B	loop both breaks
+BREAK A	break A
+BREAK B	break B
+BAR A	bar of break A
+BAR B	bar of break B
+BAR OF A	bar of break A
+BAR OF B	bar of break B
 # the drums, presets
 EARLY HC	early hardcore
 HC	hardcore
 SNAP # SL	snap # slices
 # MIDI and Bluetooth
 BT	Bluetooth
-BT AUDIO	Bluetooth audio
 USB+BT	USB and Bluetooth
 TRS	T R S
 P#	pattern #
@@ -119,8 +128,6 @@ RESET ALL? TURN K4 AGAIN	reset all settings? Turn K 4 again: yes. Anything else:
 K#	K #
 OVERLOAD FX SLOT BYPASSED	overload: an effects slot is bypassed, not heard
 NOT IN THIS BUILD	not in this build
-SCAN FIRST (K3)	no devices: scan first, with K 3
-TURN K1 ON	not on: turn K 1 on first
 SEL	select
 SEL BUTTON COMBINATIONS	select button combinations
 SEL WITH	select with

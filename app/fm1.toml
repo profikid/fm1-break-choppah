@@ -5,7 +5,7 @@ usb_manufacturer = "CHOPPAH"
 usb_product = "CHOPPAH FM-1"
 ble = true                     # Bluetooth MIDI (PRD A-71): on and off on the GLOBAL page
 ble_stack = "own"              # fm1-base's own stack: nothing of JieLi's, ~40 KB
-bt_audio = true                # Bluetooth audio out (A2DP source to headphones and speakers, PRD A-72): GLOBAL
+bt_audio = false               # Bluetooth audio out: removed 21 Nov 2026 (v1.5) to make room for the split (PRD S-030)
 usb_audio_in = true            # the FM-1 recordable over USB (PRD A-50)
 usb_audio_out = false
 words = "words.tsv"
@@ -21,7 +21,7 @@ licence = "MPL-2.0"
 credits = "Built on fm1-base and felucca-bsp, from Felucca by Leo Kuroshita (Hügelton Instruments)."
 # firmware.json (for the firmware hubs: the Firmware Hub, RemoteFM1, M-Flasher)
 author = "Laurens Profittlich"
-description = "CHOPPAH turns the M-VAVE FM-1 into an Amen break chopper. Eight classic Amen-family breaks are cut into sixteen slices on the white keys; hold a key to loop it. The black keys are momentary pads for rolls, reverse, freeze, tape stop, gate, filter and dub throws. A live generator rearranges the break, and a four-slot FX chain and a DJ filter sit behind it. Bluetooth audio sends the whole mix to a speaker or headphones."
+description = "CHOPPAH turns the M-VAVE FM-1 into an Amen break chopper. Eight classic Amen-family breaks are cut into sixteen slices on the white keys; hold a key to loop it. The black keys are momentary pads for rolls, reverse, freeze, tape stop, gate, filter and dub throws. A live generator rearranges the break, and a four-slot FX chain and a DJ filter sit behind it. The split puts a bar of one break and a bar of another in one loop: latch either bar, or layer a key of each."
 tags = ["drum-machine", "sampler"]
 install = "https://profikid.github.io/fm1-break-choppah/install/"
 site = "https://profikid.github.io/fm1-break-choppah/"

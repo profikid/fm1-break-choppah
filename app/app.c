@@ -50,8 +50,8 @@ typedef struct {
     uint8_t brk_level;                   /* the MIXER's BREAK fader, 0..100 % */
     uint8_t drums_chain;                 /* the drums (kick, snare, hat): 1 through the FX chain, 0 around it */
     uint8_t pattern;                     /* the pattern playing, 0..NPAT-1 (patterns: their own store object) */
-    uint8_t bta_on;                      /* Bluetooth audio out (GLOBAL, third part): on at power-on, the last device
-                                          * connected again */
+    uint8_t bta_on;                      /* (Bluetooth audio out's on byte, PRD A-72: gone 21 Nov 2026, kept so older
+                                          * saves keep their size; unused) */
     uint8_t bta_rsv;                     /* (the SBC coding's byte: it was a knob once, but the knob is gone; the byte
                                           * stays, so older saves keep their size) */
     uint8_t click;                       /* the metronome's click (TAP K4): its level, 0 (off) .. 100 %, on each beat
@@ -76,6 +76,11 @@ typedef struct {
                                           * 0 any (out: 1), 1..16 that one */
     uint8_t midi_out;                    /* MO_*: what goes out besides the clock */
     uint8_t rsv4[2];
+    /* (appended 21 Nov 2026: the split, PRD S-030, GLOBAL's SPLIT part; 0 = off, older saves too) */
+    uint8_t split;                       /* 1: the break is two: bar 1 of break A (brk), bar 2 of break B */
+    uint8_t split_b;                     /* break B: its number + 1 (0: the break after A) */
+    uint8_t split_bars;                  /* bit 0: A's second bar, bit 1: B's second bar (0: their first) */
+    uint8_t rsv5;
 } settings_t;
 #define SET_SIZE_MIN offsetof(settings_t, rsv2)   /* the shortest save that loads: CHP7's first size */
 _Static_assert(sizeof(settings_t) <= 3840u, "a store object holds 3840 bytes");
@@ -396,8 +401,110 @@ static const char *break_name(uint32_t i)
     return s ? t : brk0.name;
 }
 
+/* the split (PRD S-030): break B's number */
+static uint32_t split_b_of(uint32_t a)
+{
+    uint32_t b = set.split_b ? set.split_b - 1u : a + 1u;
+    return b < n_breaks ? b : n_user + n_synth < n_breaks ? n_user + n_synth : 0u;
+}
+
+/* bar `bar` of a slot (its first n samples, n = a bar) decoded into dst; the bars before it are decoded over dst and
+ * forgotten (IMA ADPCM only reads forwards). from: where the bar begins in the slot */
+static uint32_t bar_decode(const uint8_t *bk, const bank_slot_t *s, uint32_t bar, int16_t *dst, uint32_t n,
+                           uint32_t *from)
+{
+    adpcm_state_t st = {0, 0, 0};
+    const uint8_t *src = bk + s->data_off;
+    uint32_t bars = s->bars ? s->bars : 1u, skip;
+    if (bar >= bars)
+        bar = bars - 1u;
+    skip = *from = (s->len / bars * bar) & ~1u;   /* (even: whole bytes) */
+    while (skip) {
+        uint32_t k = skip < (n & ~1u) ? skip : n & ~1u;
+        adpcm_decode(&st, src, dst, k);
+        src += k / 2u;
+        skip -= k;
+    }
+    adpcm_decode(&st, src, dst, n);
+    return n;
+}
+
+/* the split's half of a slot: its slices in the bar, re-based to `base` and scaled from the bar's n samples to m,
+ * at most 16; into d->slice from k. Returns the count */
+static uint32_t split_slices(const bank_slot_t *s, uint32_t bar, uint32_t from, uint32_t n, uint32_t m,
+                             uint32_t base, brk_break_t *d, uint32_t k)
+{
+    uint32_t bars = s->bars ? s->bars : 1u, j0, j1, st, j, c = 0u;
+    if (bar >= bars)
+        bar = bars - 1u;
+    j0 = s->nslices * bar / bars;
+    j1 = s->nslices * (bar + 1u) / bars;
+    st = (j1 - j0 + 15u) / 16u;          /* (a 32-slice bar: every other marker) */
+    for (j = j0; j < j1; j += st) {
+        uint32_t x = c && s->slice[j] > from ? (s->slice[j] - from) * m / n : 0u;   /* (< 2^32: two bars' samples) */
+        x += base;
+        if (c && x <= d->slice[k + c - 1u])
+            continue;                    /* (markers that met when scaled) */
+        if (x >= base + m)
+            break;
+        d->slice[k + c++] = x;
+    }
+    return c;
+}
+
+/* the split: bar 1 of break a (as it is), then bar 2 of break b repitched to a's bar's length (it plays in a's
+ * tempo), in pcm_a. b's bar is decoded to pcm_a's end, then read forwards into place behind a's: the reads stay ahead
+ * of the writes (la + lb + 4 <= CH_PCM_MAX). 0: one isn't in the bank */
+static const brk_break_t *split_load(uint32_t a, uint32_t b, brk_break_t *d)
+{
+    const uint8_t *ka, *kb;
+    const bank_slot_t *sa = slot_of(a, &ka), *sb = slot_of(b, &kb);
+    uint32_t la, lb, fa, fb, o, k, na, nb;
+    int16_t *raw;
+    float r, pos;
+    if (!sa || !sb)
+        return 0;
+    la = sa->len / (sa->bars ? sa->bars : 1u);
+    lb = sb->len / (sb->bars ? sb->bars : 1u);
+    if (la > (CH_PCM_MAX - 8u) / 2u)
+        la = (CH_PCM_MAX - 8u) / 2u;     /* (a few samples off the slowest: nothing to hear, the steps re-cut it) */
+    if (la + lb + 6u + lb / la > CH_PCM_MAX)
+        lb = CH_PCM_MAX - 6u - la - 2u;
+    if (la < 64u || lb < 64u || lb > 7u * la)
+        return 0;                        /* (r < 8: the reads stay ahead of the writes to the end) */
+    bar_decode(ka, sa, set.split_bars & 1u, pcm_a, la, &fa);
+    raw = pcm_a + CH_PCM_MAX - lb;
+    bar_decode(kb, sb, (set.split_bars >> 1) & 1u, raw, lb, &fb);
+    r = (float)lb / (float)la;
+    for (o = 0, pos = 0.0f; o < la; o++, pos = (float)o * r) {   /* 4-point Hermite, as the voices read */
+        int32_t i = (int32_t)pos, y;
+        float t = pos - (float)i, xm = (float)raw[i > 0 ? i - 1 : 0], x0 = (float)raw[i];
+        float x1 = (float)raw[(uint32_t)i + 1u < lb ? i + 1 : i], x2 = (float)raw[(uint32_t)i + 2u < lb ? i + 2 : i];
+        float c1 = 0.5f * (x1 - xm), c2 = xm - 2.5f * x0 + 2.0f * x1 - 0.5f * x2, c3 = 0.5f * (x2 - xm) + 1.5f * (x0 - x1);
+        y = (int32_t)(((c3 * t + c2) * t + c1) * t + x0);
+        pcm_a[la + o] = (int16_t)(y > 32767 ? 32767 : y < -32768 ? -32768 : y);
+    }
+    na = split_slices(sa, set.split_bars & 1u, fa, la, la, 0u, d, 0u);
+    nb = split_slices(sb, (set.split_bars >> 1) & 1u, fb, lb, la, la, d, na);
+    d->pcm = pcm_a;
+    d->len = 2u * la;
+    d->rate = sa->rate;
+    d->bpm_x100 = sa->bpm_x100;          /* (two bars of a's: its tempo) */
+    d->bars = 2u;
+    d->nslices = na + nb;
+    d->slice[na + nb] = 2u * la;
+    d->split = na;
+    for (k = o = 0; o < 5u && sa->name[o] && sa->name[o] != ' '; o++)   /* "AMEN+THINK" */
+        d->name[k++] = sa->name[o];
+    d->name[k++] = '+';
+    for (o = 0; k < 12u && o < 12u && sb->name[o] && sb->name[o] != ' '; o++)
+        d->name[k++] = sb->name[o];
+    d->name[k] = 0;
+    return d;
+}
+
 /* break i into pcm_a and the descriptor the render isn't using (whatever plays from pcm_a meanwhile is muted, see
- * break_poll); hand it to the render after */
+ * break_poll); hand it to the render after. With the split on, i is break A and the break is the two (split_load) */
 static const brk_break_t *break_load(uint32_t i)
 {
     const uint8_t *bk;
@@ -405,6 +512,11 @@ static const brk_break_t *break_load(uint32_t i)
     brk_break_t *d = brk_get_break() == &brk_cur[0] ? &brk_cur[1] : &brk_cur[0];
     const brk_break_t *b = &brk0;
     uint32_t k;
+    if (s && set.split && split_load(i, split_b_of(i), d)) {
+        set.brk = (uint8_t)i;
+        wave_build(d);
+        return d;
+    }
     if (s) {
         adpcm_state_t st = {0, 0, 0};
         adpcm_decode(&st, bk + s->data_off, pcm_a, s->len);
@@ -419,6 +531,7 @@ static const brk_break_t *break_load(uint32_t i)
         for (k = 0; k < 12u; k++)
             d->name[k] = s->name[k];
         d->name[12] = 0;
+        d->split = 0u;
         b = d;
     } else {                             /* a built-in style, played into RAM now */
         if (i >= n_user + n_synth)
@@ -783,7 +896,6 @@ void app_panic(void)
 #include "ui/fx.c"
 #include "ui/pads.c"
 #include "ui/keys.c"
-#include "ui/bta.c"
 #include "ui/global.c"
 #include "ui/arp.c"
 #include "ui/seq.c"

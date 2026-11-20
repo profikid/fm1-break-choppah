@@ -64,9 +64,9 @@ typedef struct {
 
 static voice_t v[2];
 static int cur;                          /* the voice that plays; the other fades out */
-static int32_t step = -1, last_slice = -1, pending = BRK_NO_SLICE;
-static uint32_t pending_at;              /* the snap: the step (counted from the reset) the key pressed begins on */
-static float pending_wait = -1.0f;       /* or, less than a step apart, the samples until it does (< 0: a step) */
+static voice_t lv[2];                    /* the layer's two voices (a key held in the split's other half, PRD S-032) */
+static int lcur;
+static int32_t step = -1, last_slice = -1;
 static uint32_t bar, held_mask, reset_seen, pads_now, rng = 0x1234567u;
 static float to_next;                    /* samples to the next step */
 static float tape = 1.0f;                /* tape stop: 1 running .. 0 stopped */
@@ -87,14 +87,31 @@ static float rat_pitch, step_pitch;
 static uint32_t step_in_len;             /* the length of the step playing, for the gate */
 static float step_age;
 static brk_status_t status;
-/* the key loop (brk_keyset): the key held last loops its window, restarting every key_steps 16ths */
-static int32_t key_slice = -1;           /* the key looping, -1 none */
-static brk_keyset_t key_set;             /* its settings, as the repeat playing began */
-static float key_steps;                  /* its length in 16ths of the tempo */
-static float key_left;                   /* samples to the next repeat */
-static float key_lo, key_w;              /* its window in the break's samples */
-static float key_pitch;                  /* semitones, while a key's sound plays */
-static uint32_t key_n;                   /* repeats since the key went down */
+/* the key loops (brk_keyset), two lanes. Lane 0: the key held last loops its window on the loop's own voices
+ * (the sequencer quiet meanwhile), restarting every steps 16ths. Lane 1, the layer (PRD S-032): with a split
+ * (brk_split), a key held in the half lane 0's key isn't in loops on voices of its own, on top; one a half, the last
+ * key pressed in a half winning */
+typedef struct {
+    voice_t *pv;                         /* its two voices */
+    int *pc;                             /* which of them plays */
+    int32_t slice;                       /* the key looping, -1 none */
+    int32_t pending;                     /* a key pressed while playing, waiting for its snap point (BRK_NO_SLICE) */
+    uint32_t pending_at;                 /* the snap: the step (counted from the reset) it begins on */
+    float pending_wait;                  /* or, less than a step apart, the samples until it does (< 0: a step) */
+    brk_keyset_t set;                    /* its settings, as the repeat playing began */
+    float steps;                         /* its length in 16ths of the tempo */
+    float left;                          /* samples to the next repeat */
+    float lo, w;                         /* its window in the break's samples */
+    float pitch;                         /* semitones, while its sound plays */
+    uint32_t n;                          /* repeats since the key went down */
+} lane_t;
+static lane_t kl[2] = {{v, &cur, -1, BRK_NO_SLICE, 0u, -1.0f, {3u, 0, 0u, 0u}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0u},
+                       {lv, &lcur, -1, BRK_NO_SLICE, 0u, -1.0f, {3u, 0, 0u, 0u}, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0u}};
+#define K0 (&kl[0])
+#define K1 (&kl[1])
+/* the split (PRD S-030): brk_break_t.split */
+static volatile int p_half = -1;         /* the half asked for: -1 both, 0 the first, 1 the second */
+static int half_on = -1;                 /* the half in force: it changes at a bar line */
 /* MIDI clock */
 #define CLK_MAX 32u
 static uint16_t clk_off[CLK_MAX];        /* the last render's ticks: their sample offsets */
@@ -231,15 +248,16 @@ static inline float voice_fx_run(voice_t *o, float x)
     return x * o->lvl;
 }
 
-static void voice_start(const brk_break_t *b, int32_t s, int rev, float at, float gain)
+/* a voice of the pair pv (pc: the one playing) starts slice s; the other fades out */
+static void voice_start_in(voice_t *pv, int *pc, const brk_break_t *b, int32_t s, int rev, float at, float gain)
 {
-    voice_t *o = &v[cur], *n;
+    voice_t *o = &pv[*pc], *n;
     if (o->active) {                     /* the old voice fades out */
         o->amp_to = 0.0f;
         o->amp_step = o->amp / FADE_OUT;
     }
-    cur ^= 1;
-    n = &v[cur];
+    *pc ^= 1;
+    n = &pv[*pc];
     n->slice = s;
     n->lo = (float)b->slice[s];
     /* playing, a slice runs on into the next until the next trigger; stopped (free play) it stops at its end */
@@ -260,7 +278,12 @@ static void voice_start(const brk_break_t *b, int32_t s, int rev, float at, floa
     n->gate_left = -1.0f;
     voice_fx(n, b, s);
     n->active = 1;
-    last_slice = s;
+    if (pv == v)
+        last_slice = s;
+}
+static void voice_start(const brk_break_t *b, int32_t s, int rev, float at, float gain)
+{
+    voice_start_in(v, &cur, b, s, rev, at, gain);
 }
 
 static void trigger(const brk_break_t *b, int32_t s, int rev)
@@ -303,14 +326,14 @@ static brk_keyset_t keyset_of(int32_t s)
 }
 
 /* key s's settings as they are now: its length in 16ths */
-static void key_refresh(const brk_break_t *b, int32_t s)
+static void key_refresh(lane_t *k, const brk_break_t *b, int32_t s)
 {
-    key_set = keyset_of(s);
-    key_steps = BRK_KEY_SLICES[key_set.len] * (float)(b->bars * BRK_STEPS_PER_BAR) / (float)b->nslices;
+    k->set = keyset_of(s);
+    k->steps = BRK_KEY_SLICES[k->set.len] * (float)(b->bars * BRK_STEPS_PER_BAR) / (float)b->nslices;
 }
 
 /* a repeat of key s's loop: its window from the start, forwards or backwards (the mode, the REVERSE pad) */
-static void key_begin(const brk_break_t *b, int32_t s)
+static void key_begin(lane_t *k, const brk_break_t *b, int32_t s)
 {
     float ns = (float)b->len / (float)(b->bars * BRK_STEPS_PER_BAR);         /* a 16th in the break's samples */
     float hi;
@@ -318,43 +341,68 @@ static void key_begin(const brk_break_t *b, int32_t s)
     voice_t *n;
     if (s < 0 || (uint32_t)s >= b->nslices)
         return;
-    key_refresh(b, s);
-    key_lo = (float)b->slice[s] + (float)(key_set.start & 15u) * (1.0f / 16.0f) * (float)(b->slice[s + 1] - b->slice[s]);
-    key_w = key_steps * ns;
-    if (key_w < 32.0f)
-        key_w = 32.0f;
-    rev = key_set.mode == KEY_REVERSE || (key_set.mode == KEY_PINGPONG && (key_n & 1u));
+    key_refresh(k, b, s);
+    k->lo = (float)b->slice[s] + (float)(k->set.start & 15u) * (1.0f / 16.0f) * (float)(b->slice[s + 1] - b->slice[s]);
+    k->w = k->steps * ns;
+    if (k->w < 32.0f)
+        k->w = 32.0f;
+    rev = k->set.mode == KEY_REVERSE || (k->set.mode == KEY_PINGPONG && (k->n & 1u));
     rev ^= (int)((pads_now >> PAD_REVERSE) & 1u);
-    hi = key_lo + key_w > (float)b->len ? (float)b->len : key_lo + key_w;
-    voice_start(b, s, rev, rev ? hi - 1.0f : key_lo, 1.0f);
-    n = &v[cur];
-    n->lo = key_lo;
+    hi = k->lo + k->w > (float)b->len ? (float)b->len : k->lo + k->w;
+    voice_start_in(k->pv, k->pc, b, s, rev, rev ? hi - 1.0f : k->lo, 1.0f);
+    n = &k->pv[*k->pc];
+    n->lo = k->lo;
     if (rev) {                           /* backwards: round the window until the next repeat */
         n->hi = hi;
-        n->loop = (uint8_t)(key_set.mode != KEY_ONESHOT);
+        n->loop = (uint8_t)(k->set.mode != KEY_ONESHOT);
         n->wrap = 0u;
-    } else if (key_set.mode == KEY_ONESHOT) {   /* once through the window, then quiet */
+    } else if (k->set.mode == KEY_ONESHOT) {   /* once through the window, then quiet */
         n->hi = hi;
         n->wrap = 0u;
     } else {                             /* forwards it runs on (round the break's end) until the next repeat */
         n->hi = (float)b->len;
         n->wrap = 1u;
     }
-    key_pitch = (float)key_set.pitch;
+    k->pitch = (float)k->set.pitch;
 }
 
-/* the key let go (or tapped): playing, the sound runs on into the loop; stopped, it ends with its window */
-static void key_let_go(const brk_break_t *b)
+/* the key let go (or tapped): playing, lane 0's sound runs on into the loop; stopped (and the layer always), it ends
+ * with its window */
+static void key_let_go(lane_t *k, const brk_break_t *b)
 {
-    voice_t *c = &v[cur];
-    key_slice = -1;
+    voice_t *c = &k->pv[*k->pc];
+    int run = p_playing && k == K0;
+    k->slice = -1;
     if (!c->active)
         return;
     c->loop = 0u;
     if (c->dir > 0.0f) {
-        c->hi = p_playing ? (float)b->len : (key_lo + key_w > (float)b->len ? (float)b->len : key_lo + key_w);
-        c->wrap = (uint8_t)(p_playing != 0);
+        c->hi = run ? (float)b->len : (k->lo + k->w > (float)b->len ? (float)b->len : k->lo + k->w);
+        c->wrap = (uint8_t)run;
     }
+}
+
+static int half_of(const brk_break_t *b, int32_t s) { return b->split && (uint32_t)s >= b->split; }
+
+/* the lane a key pressed goes to: the layer when lane 0 has a key of the other half (or the layer one of this
+ * half), else lane 0 */
+static lane_t *lane_for(const brk_break_t *b, int32_t s)
+{
+    int32_t a = K0->slice >= 0 ? K0->slice : K0->pending, l = K1->slice >= 0 ? K1->slice : K1->pending;
+    if (!b->split)
+        return K0;
+    if (l >= 0 && half_of(b, l) == half_of(b, s))
+        return K1;
+    return a >= 0 && half_of(b, a) != half_of(b, s) ? K1 : K0;
+}
+
+/* the half in force keeps the loop's own slices in it: one of the other half folds over */
+static int32_t fold(const brk_break_t *b, int32_t s)
+{
+    uint32_t lo = half_on ? b->split : 0u, hi = half_on ? b->nslices : b->split;
+    if (half_on < 0 || s < 0 || hi <= lo || b->split >= b->nslices)
+        return s;
+    return (uint32_t)s >= lo && (uint32_t)s < hi ? s : (int32_t)(lo + (uint32_t)s % (hi - lo));
 }
 
 /* the slice the loop itself plays at step i, or -1 (no slice starts there) */
@@ -412,73 +460,93 @@ static void roll_begin(const brk_break_t *b)   /* the roll repeats the slice sou
 }
 
 /* a key pressed while playing, at its snap point: its loop starts here (released already: one hit) */
-static void key_snapped(const brk_break_t *b)
+static void key_snapped(lane_t *k, const brk_break_t *b)
 {
-    int32_t s = pending;
-    pending = BRK_NO_SLICE;
-    pending_wait = -1.0f;
-    key_n = 0u;
-    key_begin(b, s);
-    key_left = key_steps * step_len();
+    int32_t s = k->pending;
+    k->pending = BRK_NO_SLICE;
+    k->pending_wait = -1.0f;
+    k->n = 0u;
+    key_begin(k, b, s);
+    k->left = k->steps * step_len();
     if ((held_mask >> s) & 1u)
-        key_slice = s;
+        k->slice = s;
     else
-        key_let_go(b);                   /* a tap: one hit */
+        key_let_go(k, b);                /* a tap: one hit */
 }
 
 /* a key pressed while playing: where it begins (brk_snap). Whole steps wait for that step (the swing's); less than a
  * step counts samples, straight. now_len: the step playing's length */
-static void key_snap(const brk_break_t *b, int32_t s)
+static void key_snap(lane_t *k, const brk_break_t *b, int32_t s)
 {
     float sps = (float)(b->bars * BRK_STEPS_PER_BAR) / (float)b->nslices, snap = p_snap * sps, pos, target;
-    pending = s;
-    pending_wait = -1.0f;
+    k->pending = s;
+    k->pending_wait = -1.0f;
     if (!steps_total || !step_in_len) {  /* not begun yet: the first step */
-        pending_at = steps_total;
+        k->pending_at = steps_total;
         return;
     }
     pos = (float)(steps_total - 1u) + ((float)step_in_len - to_next) / (float)step_in_len;   /* in 16ths */
     if (snap <= 0.0f) {                  /* OFF: now */
-        pending_wait = 0.0f;
+        k->pending_wait = 0.0f;
         return;
     }
     target = snap * (float)((uint32_t)(pos / snap) + 1u);    /* the next grid point after now */
     if (snap >= 0.999f && target - (float)(uint32_t)(target + 0.001f) < 0.002f)
-        pending_at = (uint32_t)(target + 0.5f);   /* a whole step: on_step begins it */
+        k->pending_at = (uint32_t)(target + 0.5f);   /* a whole step: on_step begins it */
     else
-        pending_wait = (target - pos) * step_len();
+        k->pending_wait = (target - pos) * step_len();
+}
+
+/* a key down on lane k: playing, at its snap point; stopped (free play), now, looping while held */
+static void key_press(lane_t *k, const brk_break_t *b, int32_t s, int playing, float sl)
+{
+    if (playing)
+        key_snap(k, b, s);
+    else {
+        k->n = 0u;
+        key_begin(k, b, s);
+        k->left = k->steps * sl;
+        k->slice = s;
+    }
 }
 
 static void on_step(const brk_break_t *b)
 {
-    uint32_t n = loop_steps(b);
+    uint32_t n = loop_steps(b), hl = n / 2u;
     const brk_step_t *p;
     int32_t s = BRK_NO_SLICE;
     int rev = (pads_now >> PAD_REVERSE) & 1u;
     step = (int32_t)(((uint32_t)(step + 1)) % n);
-    if (step == 0)
+    if (hl && !((uint32_t)step % hl)) {  /* a bar line (a split's halves are its bars): the half asked for */
+        half_on = b->split ? p_half : -1;
+        if (half_on >= 0 && (uint32_t)step / hl != (uint32_t)half_on)
+            step = (int32_t)((uint32_t)half_on * hl);   /* one half alone: round that bar again */
+    }
+    if (step == (half_on > 0 ? (int32_t)hl : 0))
         bar++;
     step_age = 0.0f;
     rat_count = 0u;
     step_pitch = 0.0f;
     if (p_ps.gate_div != 0u || !(step & 1))
         gate_pos = 0.0f;                 /* the gate starts with the step (1/8: every other step) */
+    if (K1->pending != BRK_NO_SLICE && K1->pending_wait < 0.0f && steps_total >= K1->pending_at)
+        key_snapped(K1, b);              /* the layer's snap point (the pads leave it alone) */
     if (suppressed())
         return;
     p = &pat[step];
-    if (pending != BRK_NO_SLICE && pending_wait < 0.0f && steps_total >= pending_at) {   /* the snap point */
-        key_snapped(b);
+    if (K0->pending != BRK_NO_SLICE && K0->pending_wait < 0.0f && steps_total >= K0->pending_at) {   /* the snap */
+        key_snapped(K0, b);
         if (roll_arm)
             roll_begin(b);
         return;
     }
-    if (key_slice >= 0) {                /* a key looping owns the voice: the sequencer counts on, quiet */
+    if (K0->slice >= 0) {                /* a key looping owns the voice: the sequencer counts on, quiet */
         if (roll_arm)
             roll_begin(b);
         return;
     }
     if (((pads_now >> PAD_RANDOM) & 1u) && brk_randf(&rng) < p_ps.rnd_amount) {
-        s = (int32_t)(brk_rand(&rng) % b->nslices);   /* a random slice, and a random pitch for it */
+        s = fold(b, (int32_t)(brk_rand(&rng) % b->nslices));   /* a random slice, and a random pitch for it */
         step_pitch = (float)(int32_t)((brk_randf(&rng) * 2.0f - 1.0f) * p_ps.rnd_pitch);
     } else {
         int32_t f;
@@ -493,6 +561,7 @@ static void on_step(const brk_break_t *b)
             s = generate(b, f);
         else
             return;
+        s = fold(b, s);
         if (p->flags & STEP_REVERSE)
             rev ^= 1;
         step_pitch = (float)p->pitch;
@@ -505,7 +574,7 @@ static void on_step(const brk_break_t *b)
             rat_pitch = step_pitch;
         }
     }
-    key_pitch = 0.0f;                    /* the loop's own sound now, not a key's */
+    K0->pitch = 0.0f;                    /* the loop's own sound now, not a key's */
     {
         float keep = step_pitch;         /* (trigger leaves it; the random step set its own) */
         trigger(b, s, rev);
@@ -670,18 +739,22 @@ void brk_render(float *out, uint32_t n)
     clk_cnt = 0u;
     ev_cnt = 0u;
     if (was_playing && !playing) {       /* stopped: the break fades out (2 ms), but a key held loops on */
-        uint32_t k;
-        pending = BRK_NO_SLICE;
+        uint32_t k, j;
         roll_slice = -1;
         roll_arm = 0u;
         rat_count = 0u;
-        if (key_slice < 0)
-            for (k = 0; k < 2u; k++)
-                if (v[k].active) {
-                    v[k].amp_to = 0.0f;
-                    v[k].amp_step = v[k].amp / FADE_OUT + 1e-6f;
-                    v[k].loop = v[k].wrap = 0u;
+        for (j = 0; j < 2u; j++) {
+            kl[j].pending = BRK_NO_SLICE;
+            if (kl[j].slice < 0)
+                for (k = 0; k < 2u; k++) {
+                    voice_t *o = &kl[j].pv[k];
+                    if (o->active) {
+                        o->amp_to = 0.0f;
+                        o->amp_step = o->amp / FADE_OUT + 1e-6f;
+                        o->loop = o->wrap = 0u;
+                    }
                 }
+        }
     }
     was_playing = playing;
     while (q_r != q_w) {                 /* the keys */
@@ -689,32 +762,34 @@ void brk_render(float *out, uint32_t n)
         q_r++;
         if (e.slice < 0 || (uint32_t)e.slice >= b->nslices || e.slice >= 32)
             continue;
-        if (e.down) {
+        if (e.down) {                    /* playing: quantised, the next snap point; stopped: now */
+            lane_t *k = lane_for(b, e.slice);
             held_mask |= 1u << e.slice;
-            if (playing)
-                key_snap(b, e.slice);    /* quantised: the next snap point */
-            else {                       /* free play: now, looping while held */
-                key_n = 0u;
-                key_begin(b, e.slice);
-                key_left = key_steps * sl;
-                key_slice = e.slice;
-            }
+            key_press(k, b, e.slice, playing, sl);
         } else {
+            uint32_t j;
             held_mask &= ~(1u << e.slice);
-            if (e.slice == key_slice) {  /* the key looping let go: another still held takes over, or none */
-                key_let_go(b);
-                if (held_mask) {
-                    int32_t k = 0;
-                    while (!((held_mask >> k) & 1u))
-                        k++;
-                    if (playing)
-                        key_snap(b, k);
-                    else {
-                        key_n = 0u;
-                        key_begin(b, k);
-                        key_left = key_steps * sl;
-                        key_slice = k;
-                    }
+            for (j = 0; j < 2u; j++) {   /* the key looping let go: another still held takes over, or none */
+                lane_t *k = &kl[j], *o = &kl[j ^ 1u];
+                uint32_t m = held_mask;
+                if (e.slice != k->slice)
+                    continue;
+                key_let_go(k, b);
+                if (o->slice >= 0)       /* (not the other lane's key) */
+                    m &= ~(1u << o->slice);
+                if (o->pending >= 0)
+                    m &= ~(1u << o->pending);
+                if (j) {                 /* the layer: a key of its own half */
+                    int32_t t;
+                    for (t = 0; t < 32; t++)
+                        if (half_of(b, t) != half_of(b, e.slice))
+                            m &= ~(1u << t);
+                }
+                if (m) {
+                    int32_t t = 0;
+                    while (!((m >> t) & 1u))
+                        t++;
+                    key_press(k, b, t, playing, sl);
                 }
             }
         }
@@ -777,21 +852,28 @@ void brk_render(float *out, uint32_t n)
                 }
             }
         }
-        if (pending != BRK_NO_SLICE && pending_wait >= 0.0f && playing && !suppressed()) {
-            pending_wait -= 1.0f;        /* a snap less than a step (or OFF): its moment */
-            if (pending_wait <= 0.0f)
-                key_snapped(b);
-        }
-        if (key_slice >= 0 && !suppressed()) {   /* the key loop: its window again, every key_steps 16ths */
-            key_left -= 1.0f;
-            if (key_left <= 0.0f) {      /* (the settings as they are now: a one shot turned back to a loop
-                                          * loops again) */
-                key_refresh(b, key_slice);
-                if (key_set.mode != KEY_ONESHOT) {
-                    key_n++;
-                    key_begin(b, key_slice);
+        {
+            uint32_t j;
+            for (j = 0; j < 2u; j++) {   /* (the pads that own the loop's voice hold lane 0, not the layer) */
+                lane_t *k = &kl[j];
+                int go = j || !suppressed();
+                if (k->pending != BRK_NO_SLICE && k->pending_wait >= 0.0f && playing && go) {
+                    k->pending_wait -= 1.0f;   /* a snap less than a step (or OFF): its moment */
+                    if (k->pending_wait <= 0.0f)
+                        key_snapped(k, b);
                 }
-                key_left += key_steps * sl;
+                if (k->slice >= 0 && go) {   /* the key loop: its window again, every steps 16ths */
+                    k->left -= 1.0f;
+                    if (k->left <= 0.0f) {   /* (the settings as they are now: a one shot turned back to a loop
+                                              * loops again) */
+                        key_refresh(k, b, k->slice);
+                        if (k->set.mode != KEY_ONESHOT) {
+                            k->n++;
+                            key_begin(k, b, k->slice);
+                        }
+                        k->left += k->steps * sl;
+                    }
+                }
             }
         }
         if (roll_slice >= 0) {           /* the roll: the captured spot again, every roll_len */
@@ -825,7 +907,7 @@ void brk_render(float *out, uint32_t n)
                 fxp += brk_clampf((float)roll_n * p_ps.roll_pitch, -36.0f, 36.0f);
             if ((pads_now >> PAD_FREEZE) & 1u)
                 fxp += p_ps.frz_pitch;
-            fxp += key_pitch;
+            fxp += K0->pitch;
             pf = brk_exp2f((p_pitch + step_pitch + fxp) * (1.0f / 12.0f));
             inc = ratio * half * tape;
             if (!keep) {                 /* SPEED: the pitch is the speed */
@@ -835,6 +917,15 @@ void brk_render(float *out, uint32_t n)
         }
         voice_tick(b, &v[0], inc, pf, &acc, &ea, &va);
         voice_tick(b, &v[1], inc, pf, &acc, &ea, &va);
+        if (lv[0].active | lv[1].active) {   /* the layer: the tempo, HALF, REVERSE's speed, the tape, its own pitch */
+            float lpf = brk_exp2f((p_pitch + K1->pitch) * (1.0f / 12.0f)), linc = ratio * half * tape;
+            if (!keep) {
+                linc *= lpf;
+                lpf = 1.0f;
+            }
+            voice_tick(b, &lv[0], linc, lpf, &acc, &ea, &va);
+            voice_tick(b, &lv[1], linc, lpf, &acc, &ea, &va);
+        }
         /* the gate pad: open for gate_len of each 1/8, 1/16 or 1/32 */
         g = 1.0f;
         gate_pos += 1.0f;
@@ -867,12 +958,19 @@ void brk_render(float *out, uint32_t n)
     status.tape = tape;
     status.gate = gate_amp;
     status.phase = step_in_len ? brk_clampf(step_age / (float)step_in_len, 0.0f, 1.0f) : 0.0f;
-    status.key = key_slice;
-    status.key_lo = key_lo;
-    status.key_w = key_w;
-    status.key_phase = key_slice >= 0 && key_steps > 0.0f
-                       ? brk_clampf(1.0f - key_left / (key_steps * sl), 0.0f, 1.0f) : 0.0f;
-    status.key_n = (uint16_t)key_n;
+    status.key = K0->slice;
+    status.key_lo = K0->lo;
+    status.key_w = K0->w;
+    status.key_phase = K0->slice >= 0 && K0->steps > 0.0f
+                       ? brk_clampf(1.0f - K0->left / (K0->steps * sl), 0.0f, 1.0f) : 0.0f;
+    status.key_n = (uint16_t)K0->n;
+    status.layer = K1->slice;
+    status.layer_lo = K1->lo;
+    status.layer_w = K1->w;
+    status.layer_phase = K1->slice >= 0 && K1->steps > 0.0f
+                         ? brk_clampf(1.0f - K1->left / (K1->steps * sl), 0.0f, 1.0f) : 0.0f;
+    status.layer_pos = lv[lcur].active ? lv[lcur].pos : -1.0f;
+    status.half = (int8_t)half_on;
     status.key_rev = (uint8_t)(v[cur].dir < 0.0f);
     status.bar16 = steps_total ? (int8_t)((steps_total - 1u) & 15u) : (int8_t)-1;
 }
@@ -895,12 +993,21 @@ BRK_COLD static void pattern_defaults(void)
 BRK_COLD void brk_init(void)
 {
     pattern_defaults();
-    v[0].active = v[1].active = 0u;
-    v[0].loop = v[1].loop = 0u;
+    v[0].active = v[1].active = lv[0].active = lv[1].active = 0u;
+    v[0].loop = v[1].loop = lv[0].loop = lv[1].loop = 0u;
     step = -1;
     last_slice = -1;
-    pending = BRK_NO_SLICE;
-    pending_wait = -1.0f;
+    {
+        uint32_t j;
+        for (j = 0; j < 2u; j++) {
+            kl[j].slice = -1;
+            kl[j].pending = BRK_NO_SLICE;
+            kl[j].pending_wait = -1.0f;
+            kl[j].pitch = 0.0f;
+            kl[j].n = 0u;
+        }
+    }
+    p_half = half_on = -1;
     bar = held_mask = pads_now = p_pads = 0u;
     p_playing = 0;
     to_next = 0.0f;
@@ -913,9 +1020,6 @@ BRK_COLD void brk_init(void)
     gate_pos = 0.0f;
     rat_count = 0u;
     step_pitch = 0.0f;
-    key_slice = -1;
-    key_pitch = 0.0f;
-    key_n = 0u;
     steps_total = 0u;
     was_playing = 0;
     clk_cnt = 0u;
@@ -1012,7 +1116,7 @@ static const brk_break_t *swap_now(void)
 {
     brk_now = p_swap;
     p_swap = 0;
-    v[0].active = v[1].active = 0u;
+    v[0].active = v[1].active = lv[0].active = lv[1].active = 0u;
     p_mute = 0;
     mute_amp = 1.0f;
     return brk_now;
@@ -1033,6 +1137,8 @@ BRK_COLD void brk_pitch_mode(int keep_length, float grain_ms)
     p_grain = brk_clampf(grain_ms, 10.0f, 80.0f) * ((float)BRK_SR / 1000.0f);
     p_keep = keep_length != 0;
 }
+BRK_COLD void brk_half(int h) { p_half = h < 0 || h > 1 ? -1 : h; }
+int brk_get_half(void) { return p_half; }
 BRK_COLD void brk_swing(float s) { p_swing = brk_clampf(s, 0.5f, 0.75f); }
 BRK_COLD void brk_gate(float g) { p_gate = brk_clampf(g, 0.05f, 1.0f); }
 BRK_COLD void brk_snap(float slices) { p_snap = brk_clampf(slices, 0.0f, 16.0f); }
@@ -1120,6 +1226,8 @@ void brk_sync(uint32_t n16, float age)
         uint32_t n = loop_steps(brk_now);
         uint32_t want = n16 + (uint32_t)(age / sl) + 1u;   /* the 16th that begins next */
         step = (int32_t)((want + n - 1u) % n);   /* on_step's +1 makes it want's place in the pattern */
+        if (half_on >= 0)                /* one half alone: its place in that bar */
+            step = (int32_t)((uint32_t)half_on * (n / 2u) + ((uint32_t)step + 1u) % (n / 2u) + n - 1u) % (int32_t)n;
         steps_total = want;              /* and the ++ after it makes the count want + 1 (number want playing) */
         to_next = 1.0f;
         clk_k = 12u;

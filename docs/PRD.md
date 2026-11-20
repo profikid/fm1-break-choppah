@@ -158,6 +158,21 @@ All voices play sample material. A voice can play a full break, a slice, or a su
 
 The implementation must not add oscillator-based fallback voices. If no valid sample is loaded, the relevant trigger is silent and the UI reports the missing sample.
 
+### 5.3 Split breaks (added 21 Nov 2026, v1.5)
+
+A split puts two breaks into the one decoded break buffer: bar 1 is a bar of break A, bar 2 a bar of break B. It is
+one break to the engine (2 bars, A's tempo and rate, A's slices then B's), so playback, slicing, the sequencer and
+the FX are unchanged. Set on GLOBAL's third part (SPLIT: K1 on / off, K2 break B, K3 A's bar, K4 B's bar).
+
+| ID | Requirement | Priority | Acceptance |
+| --- | --- | --- | --- |
+| S-030 | **Split break:** bar 1 of the split is bar 1 or 2 of break A as it is; bar 2 is bar 1 or 2 of break B, repitched (4-point Hermite, at load) to A's bar's length so it plays at A's tempo. White keys 1–8 A's slices, 9–16 B's. Turning it on or changing B or a bar reloads the break at the next bar, as a break change (S-002). Saved (settings appended: `split`, `split_b`, `split_bars`) | P1 | *Done; scenario split.txt; the loader decodes both bars into `pcm_a` (B's to the buffer's end, read forwards behind A's), no second buffer* |
+| S-031 | **Half latch:** a white key pressed latches its half: from the next bar line the loop rounds that bar alone; SEL + a key, both halves again. The loop's own slices (pattern, generator, RANDOM) fold into the half; keys still play any slice. A pattern queued changes at the half's end | P1 | *Done; engine test test_split (HALF 1 three bars on steps 0..15, HALF 2 asked mid-bar waits for the bar line, COMPLEXITY stays in the half, no split ignores it); scenario split.txt* |
+| S-032 | **Layered halves:** with a split, a key held in the half the looping key isn't in loops on a second voice pair of its own, on top (one key a half; within a half the last key pressed wins). It snaps as a key; let go, it plays out its window. The layer follows the tempo, HALF, REVERSE's speed, the tape stop and its key's pitch; the other pads act on the first key. Pressing the layer's key doesn't change the latch | P1 | *Done; engine test test_split (both sound, a second key per half takes it over, playing: the layer waits for its snap, then loops on over the loop); no split: the last key wins as before. Host cost: about +5 µs a block on the break engine while layering, nothing otherwise* |
+
+To make room (the flash was full: 132 B free), **Bluetooth audio out (A2DP) was removed** (`bt_audio = false`,
+~32 KB of flash, ~7 KB RAM and ~23 KB pool back; its settings byte kept as reserved). Bluetooth MIDI stays.
+
 ---
 
 ## 6. Sample-only rhythm engine: POLYMATH

@@ -202,6 +202,34 @@ static void slices_let_go(uint32_t keys)
             brk_key((int)i, 0);
 }
 
+/* the split (PRD S-030): a white key pressed latches its half, the loop rounding that bar alone from the next bar line;
+ * SEL + a key, both halves again. A key pressed while one of the other half is held layers (PRD S-032) and leaves the
+ * latch as it is */
+static void split_key(uint32_t i, uint32_t keys, uint32_t btn)
+{
+    const brk_break_t *b = brk_get_break();
+    uint32_t k;
+    int h;
+    if (!b || !b->split)
+        return;
+    h = i >= b->split;
+    if (btn & 1u << B_SEL) {
+        ui.tap_combo = 1u;               /* (not SEL's card) */
+        if (brk_get_half() >= 0) {
+            brk_half(-1);
+            app_say("LOOP", "A AND B");
+        }
+        return;
+    }
+    for (k = 0; k < 16u; k++)
+        if (k != i && keys >> WK[k] & 1u && (int)(k >= b->split) != h)
+            return;                      /* a layer: the latch stays */
+    if (brk_get_half() != h) {
+        brk_half(h);
+        app_say("LOOP", h ? "B" : "A");
+    }
+}
+
 static void input(void)
 {
     static uint32_t phys_was;            /* the panel's own keys last frame (MIDI's left out: notes out) */
@@ -254,6 +282,7 @@ static void input(void)
         if (kdn >> WK[i] & 1u) {
             if (ui.rec && playing_now())
                 rec_slice(i);            /* REC: into the pattern too */
+            split_key(i, keys, btn);     /* a split: the key's half latched (SEL + key: both again) */
             brk_key((int)i, 1);
             ui.key_focus = (int8_t)i;    /* the engine loops the key pressed last */
             ui.key_since = now;
@@ -663,7 +692,7 @@ static int32_t tab(int32_t x, const char *s, int on)
 }
 /* the pages' buttons as printed, GLOBAL's parts, SEQ's lanes: for the tabs and the header (page_say) */
 static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP"};
-static const char *const GPART[GPARTS] = {"MIDI", "PITCH", "BT AUDIO", "CHANNEL"};
+static const char *const GPART[GPARTS] = {"MIDI", "PITCH", "SPLIT", "CHANNEL"};
 static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
 static void draw_tabs(void)
 {
@@ -812,11 +841,11 @@ static const char *foot_knob(uint32_t i, char *t)
                                               {"P1", "P2", "P3", "MIX"}};
     static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
     static const char *const KN_GROOVE[4] = {"SWING", "DRUMS", "", ""};
-    static const char *const KN_BTA[4] = {"BT AUDIO", "DEVICE", "SCAN", "CONNECT"};
+    static const char *const KN_SPLIT[4] = {"SPLIT", "BREAK B", "BAR A", "BAR B"};
     static const char *const KN_CHAN[4] = {"CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"};
     static const char *const KN_LANE[4] = {"FILL", "ROTATE", "CLR / 4X4", "COPY"};
     const char *name = ui.page == PG_GLOBAL && ui.gpage == 3u ? KN_CHAN[i]
-                       : ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_BTA[i] : ui.page == PG_GLOBAL && ui.gpage
+                       : ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_SPLIT[i] : ui.page == PG_GLOBAL && ui.gpage
                        ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
                        ? KN_GROOVE[i] : KN[ui.page][i];
     t[0] = 0;
@@ -976,7 +1005,8 @@ static void speak(uint32_t now)
 void app_ui_init(void)
 {
     lcd_fill(0, 0, 240, 240, C_BLACK);
-    ui.last_step = ui.last_slice = -2;
+    ui.last_step = ui.last_slice = ui.last_layer = -2;
+    ui.last_half = -2;
     ui.intro = 1u;                       /* the start screen first */
     ui.intro_t0 = plat_ms();
     ui.idle_t = ui.intro_t0;
@@ -1004,7 +1034,6 @@ void app_frame(void)
             demo_end();
         } else {
             leds();
-            ch_bta_poll(now);
             demo_frame(now);
             return;
         }
@@ -1048,19 +1077,22 @@ void app_frame(void)
         }
     }
     ui.touched = 0u;
-    ch_bta_poll(now);
     brk_status(&st);
     b = brk_get_break();
-    if (pat_next >= 0 && (!st.playing || (st.step >= 0 && (uint32_t)st.step + 1u >= pat_len()))) {
+    if (pat_next >= 0 && (!st.playing || (st.step >= 0 && (st.half >= 0 ? st.step % 16 == 15   /* (a half alone) */
+                                                          : (uint32_t)st.step + 1u >= pat_len())))) {
         set.pattern = (uint8_t)pat_next;  /* the pattern picked: in for the loop's next round (its last step plays) */
         pat_next = -1;
         pat_apply();
         set_dirty = 1u;
         ui.redraw |= RG_BLOCKS | RG_FOOT;
     }
-    if (st.step != ui.last_step || st.slice != ui.last_slice) {   /* the playhead moved */
+    if (st.step != ui.last_step || st.slice != ui.last_slice || st.layer != ui.last_layer ||
+        st.half != ui.last_half) {       /* the playhead moved (or the layer's, or the split's half) */
         ui.last_step = st.step;
         ui.last_slice = st.slice;
+        ui.last_layer = st.layer;
+        ui.last_half = st.half;
         ui.redraw |= RG_WAVE | RG_BLOCKS;
     }
     if (ui.keys != ui.last_keys) {
@@ -1327,10 +1359,6 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
         app_splash();
         return 1;
     }
-    if (!strcmp(cmd, "bta_sim")) {       /* bta_sim: a pretend Bluetooth audio (the host has no radio) for the page */
-        bta_sim_on = 1u;
-        return 1;
-    }
     if (!strcmp(cmd, "expect_bpm")) {    /* expect_bpm LO HI (whole BPM): the tempo the engine plays at */
         int32_t x100 = (int32_t)(brk_get_tempo() * 100.0f + 0.5f), bad = x100 < atoi(a) * 100 || x100 > atoi(b) * 100;
         host_fails += bad ? 1 : 0;
@@ -1347,8 +1375,9 @@ int app_expect(const char *what, int *got)
                                     "pfx_on", "pfx_sel", "pfx_latched", "roll_pitch_x10", "demo", "fx_page",
                                     "mb_solo", "mb_thr_low", "mb_slot2_thr_low", "pfx_type", "pfx_voices",
                                     "pfx_busy", "pads", "midi_ch", "midi_out", "fx1_mix", "fx1_type", "gate",
-                                    "step", "pat_next", "key", "key_n", "klen0", "n_user", "n_breaks"};
-    int v[39];
+                                    "step", "pat_next", "key", "key_n", "klen0", "n_user", "n_breaks",
+                                    "split", "split_at", "half", "half_ask", "layer"};
+    int v[44];
     uint32_t i;
     brk_status_t st;
     v[0] = ui.page;
@@ -1393,7 +1422,12 @@ int app_expect(const char *what, int *got)
     v[36] = set.keys[0].len;             /* the first key's LENGTH (BRK_KEY_SLICES' index) */
     v[37] = (int)n_user;                 /* a custom break (break 1) */
     v[38] = (int)n_breaks;
-    for (i = 0; i < 39u; i++)
+    v[39] = set.split;
+    v[40] = brk_get_break() ? (int)brk_get_break()->split : 0;   /* the break playing: its first half's slices */
+    v[41] = st.half;                     /* the half in force, -1 both */
+    v[42] = brk_get_half();              /* the half asked for */
+    v[43] = st.layer;                    /* the layer's key, -1 none */
+    for (i = 0; i < 44u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

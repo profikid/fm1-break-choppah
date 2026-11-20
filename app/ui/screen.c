@@ -399,6 +399,19 @@ static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now
         {                                /* the break, the pattern (> one queued), REC */
             int32_t x = cv_text(24, 6, &FONT_B, b ? break_name(set.brk) : "NO BREAK",   /* (amber: still to come) */
                                 brk_next >= 0 ? C_AMB : C_WHITE);
+            if (b && set.split) {        /* the split: + break B, small */
+                char sb[16];
+                sb[0] = '+';
+                sb[1] = 0;
+                text_cat(sb, break_name(split_b_of(set.brk)));
+                if (text_w(&FONT_T, sb) > 60) {   /* (its first word, if long) */
+                    uint32_t k = 1u;
+                    while (sb[k] && sb[k] != ' ')
+                        k++;
+                    sb[k] = 0;
+                }
+                x = cv_text(x + 2, 10, &FONT_T, sb, b->split ? C_GRAY : C_AMB);
+            }
             t[0] = 'P';
             int_text((int32_t)set.pattern + 1, t + 1);
             if (pat_next >= 0)
@@ -433,14 +446,30 @@ static void draw_wave(const brk_status_t *st, const brk_break_t *b)
             if (set.gate && set.gate < 100u && st->key < 0)   /* gated: only the part that sounds lit */
                 lit_z = lit_a + ((lit_z - lit_a) * (int32_t)set.gate + 99) / 100;
         }
-        for (i = 0; i < 240u; i++) {
-            int32_t h = wave_px[i] * 5 / 6;
-            cv_rect((int32_t)i, 22 - h, 1, 2 * h + 1, (int32_t)i >= lit_a && (int32_t)i < lit_z ? C_HI : C_DIM);
+        int32_t sx = b->split ? (int32_t)(b->slice[b->split] * 240u / b->len) : 240, la = -1, lz = -1;
+        if (st->layer >= 0 && b->split) {   /* the layer's slice lit too (PRD S-032) */
+            la = (int32_t)(b->slice[st->layer] * 240u / b->len);
+            lz = (int32_t)(b->slice[st->layer + 1] * 240u / b->len);
+            cv_rect(la, 1, lz - la, 42, C_BLOCK);
+        }
+        for (i = 0; i < 240u; i++) {     /* (a split's half not playing: dark) */
+            int32_t h = wave_px[i] * 5 / 6, x = (int32_t)i;
+            int out = st->half >= 0 && (x < sx) != (st->half == 0);
+            cv_rect(x, 22 - h, 1, 2 * h + 1, (x >= lit_a && x < lit_z) || (x >= la && x < lz) ? C_HI
+                    : out ? C_LINE : C_DIM);
         }
         for (i = 1; i < b->nslices; i++)
             cv_rect((int32_t)(b->slice[i] * 240u / b->len), 0, 1, 5, C_GRAY);
+        if (b->split) {                  /* the split: where B begins, A and B named (the half asked for amber) */
+            int ask = brk_get_half();
+            cv_rect(sx, 0, 1, 44, C_AMB);
+            cv_text(2, 32, &FONT_XS, "A", ask != 1 ? C_AMB : C_GRAY);
+            cv_text(sx + 3, 32, &FONT_XS, "B", ask != 0 ? C_AMB : C_GRAY);
+        }
         if (st->slice >= 0)
             cv_rect((int32_t)((uint32_t)st->pos * 240u / b->len), 0, 1, 44, C_WHITE);
+        if (st->layer >= 0 && st->layer_pos >= 0.0f)
+            cv_rect((int32_t)((uint32_t)st->layer_pos * 240u / b->len), 0, 1, 44, C_WHITE);
     }
     cv_blit(0, 44);
 }
@@ -453,7 +482,7 @@ static void draw_blocks(const brk_status_t *st, uint32_t keys)
         cv_begin(240, 52, C_BLACK);
         for (k = row * 8u; k < row * 8u + 8u; k++) {
             int32_t x = 1 + (int32_t)(k % 8u) * 30, held = (keys >> WK[k]) & 1u;
-            int on = st->slice == (int32_t)k, have = k < blk_n;
+            int on = st->slice == (int32_t)k || st->layer == (int32_t)k, have = k < blk_n;
             uint16_t ground = on ? C_BLOCK_HI : C_BLOCK, ink = on ? C_BLACK : have ? C_GRAY : C_LINE;
             cv_rect(x, 0, 28, 50, held ? C_WHITE : ground);
             if (held)

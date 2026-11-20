@@ -28,6 +28,7 @@ static void fresh(uint32_t bars)
 {
     brk_init();
     brk_synth_break(pcm, RATE, BPM, bars, &brk);
+    brk.split = 0u;
     brk_set_break(&brk);
     brk_tempo(BPM);
     brk_pitch(0.0f);
@@ -592,6 +593,154 @@ static void test_styles(void)
 /* the soundboard through the dub delay: echoes after the sound has stopped */
 
 /* the white keys' own loops (brk_keyset): length, ping-pong, one shot, pitch, and the loop back after */
+/* the split (PRD S-030 to S-032): a 2-bar break of 16 slices, the first 8 bar 1 (break A), the rest bar 2 (break B) */
+static void split_fresh(void)
+{
+    fresh(1);
+    brk.bars = 2u;                       /* (the synth's bar of 16 slices played as 2 bars: a slice an 8th) */
+    brk.split = 8u;
+    brk_set_break(&brk);
+}
+static void steps_over(uint32_t n, int32_t *lo, int32_t *hi)   /* the steps seen in n frames: their range */
+{
+    uint32_t i = 0;
+    *lo = 99;
+    *hi = -1;
+    while (i < n) {
+        brk_status_t st;
+        brk_render(buf, BLOCK);
+        brk_status(&st);
+        if (st.step >= 0 && st.step < *lo)
+            *lo = st.step;
+        if (st.step > *hi)
+            *hi = st.step;
+        i += BLOCK;
+    }
+}
+static float rms_of(const float *x, uint32_t n)
+{
+    double a = 0.0;
+    uint32_t i;
+    for (i = 0; i < n; i++)
+        a += (double)x[i] * (double)x[i];
+    return (float)sqrt(a / (double)n);
+}
+static void test_split(void)
+{
+    uint32_t sl = brk_step_len_samples(), i;
+    int32_t lo, hi, seen, sls[64], ok;
+    brk_status_t st;
+    float both, one;
+    /* one half alone: from the next bar line the loop rounds bar 1 only, its slices those of the first half */
+    split_fresh();
+    brk_play(1);
+    brk_half(0);
+    render(buf, sl * 16u, 0, 0, 0);      /* (to the first bar line) */
+    steps_over(sl * 48u, &lo, &hi);
+    CHECK(lo == 0 && hi == 15, "HALF 1: three bars on steps %d..%d (0..15)", lo, hi);
+    render(buf, sl * 32u, &seen, sls, 64);
+    for (ok = 1, i = 1; i < (uint32_t)seen; i++)
+        if (sls[i] < 0 || sls[i] >= 8)
+            ok = 0;
+    CHECK(ok && seen > 20, "and only the first half's slices sound");
+    /* the second half asked for mid-bar: it waits for the bar line */
+    render(buf, sl * 4u + sl / 2u, 0, 0, 0);
+    brk_status(&st);
+    brk_half(1);
+    {
+        int32_t at = st.step;
+        steps_over(sl * (uint32_t)(15 - at), &lo, &hi);
+        CHECK(hi <= 15, "HALF 2 asked mid-bar (step %d): bar 1 plays out (up to %d)", at, hi);
+    }
+    render(buf, sl, 0, 0, 0);            /* (over the bar line) */
+    steps_over(sl * 33u, &lo, &hi);
+    CHECK(lo == 16 && hi == 31, "then bar 2 alone: steps %d..%d (16..31)", lo, hi);
+    brk_status(&st);
+    CHECK(st.half == 1, "the status says half 2 (%d)", st.half);
+    /* the generator's slices fold into the half */
+    {
+        brk_gen_t g = {0.9f, 0.0f, 0.0f, 0.0f, 0u};
+        brk_gen(&g);
+        render(buf, sl * 64u, &seen, sls, 64);
+        for (ok = 1, i = 1; i < (uint32_t)seen; i++)
+            if (sls[i] >= 0 && sls[i] < 8)
+                ok = 0;
+        CHECK(ok && seen > 20, "COMPLEXITY's jumps stay in half 2");
+        g.complexity = 0.0f;
+        brk_gen(&g);
+    }
+    /* both again */
+    brk_half(-1);
+    steps_over(sl * 80u, &lo, &hi);
+    CHECK(lo == 0 && hi == 31, "both halves again: steps %d..%d", lo, hi);
+    /* no split: the half asked for does nothing */
+    fresh(1);
+    brk.bars = 2u;
+    brk_set_break(&brk);
+    brk_play(1);
+    brk_half(0);
+    steps_over(sl * 80u, &lo, &hi);
+    CHECK(lo == 0 && hi == 31, "no split: HALF ignored (steps %d..%d)", lo, hi);
+
+    /* layers, stopped: a key in each half sounds together */
+    split_fresh();
+    brk_key(2, 1);
+    render(buf, sl * 2u, 0, 0, 0);
+    one = rms_of(buf, sl * 2u);
+    brk_key(11, 1);
+    render(buf, sl * 2u, 0, 0, 0);
+    both = rms_of(buf, sl * 2u);
+    brk_status(&st);
+    CHECK(st.key == 2 && st.layer == 11, "a key in each half: key %d loops, %d layers", st.key, st.layer);
+    CHECK(both > one * 1.15f, "and both sound (rms %.4f, one alone %.4f)", both, one);
+    CHECK(st.layer_lo == (float)brk.slice[11] && st.layer_pos >= 0.0f, "the layer loops its own window (from %.0f)",
+          st.layer_lo);
+    brk_key(5, 1);                       /* the first half again: it takes over that half, the layer stays */
+    render(buf, sl, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.key == 5 && st.layer == 11, "a second key in half 1 takes it over (key %d, layer %d)", st.key, st.layer);
+    brk_key(13, 1);
+    render(buf, sl, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.key == 5 && st.layer == 13, "and one in half 2 the layer (key %d, layer %d)", st.key, st.layer);
+    brk_key(13, 0);
+    render(buf, sl, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.layer == 11, "the layer let go: 11, still held, takes it again (%d)", st.layer);
+    brk_key(11, 0);
+    brk_key(5, 0);
+    brk_key(2, 0);
+    render(buf, sl * 4u, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.key == -1 && st.layer == -1 && render(buf, BLOCK, 0, 0, 0) == 0.0f, "all let go: quiet");
+    /* playing: the layer lands on the snap too, over the key looping */
+    split_fresh();
+    brk_play(1);
+    render(buf, sl / 2u, 0, 0, 0);
+    brk_key(1, 1);
+    render(buf, sl * 2u, 0, 0, 0);
+    brk_key(12, 1);
+    brk_status(&st);
+    CHECK(st.layer == -1, "playing: the layer waits for its snap");
+    render(buf, sl * 3u, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.key == 1 && st.layer == 12, "then layers (key %d, layer %d)", st.key, st.layer);
+    brk_key(1, 0);
+    render(buf, sl * 3u, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.key == -1 && st.layer == 12, "the key let go, the layer loops on over the loop (%d)", st.layer);
+    brk_key(12, 0);
+    /* no split: the last key wins, as ever */
+    fresh(1);
+    brk_key(2, 1);
+    brk_key(11, 1);
+    render(buf, sl, 0, 0, 0);
+    brk_status(&st);
+    CHECK(st.key == 11 && st.layer == -1, "no split: the last key wins (key %d, layer %d)", st.key, st.layer);
+    brk_key(2, 0);
+    brk_key(11, 0);
+}
+
 static void test_key_loops(void)
 {
     brk_keyset_t k;
@@ -1907,6 +2056,7 @@ int main(int argc, char **argv)
     test_quantised_key();
     test_hold_loops();
     test_key_loops();
+    test_split();
     test_clock();
     test_keep_length();
     test_gate();

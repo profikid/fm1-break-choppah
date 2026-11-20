@@ -15,7 +15,7 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 4. The pads
 5. Patterns and the sequencer
 6. The FX chain
-7. GLOBAL: MIDI, Bluetooth, pitch, Bluetooth audio, reset (and the MIDI map)
+7. GLOBAL: MIDI, Bluetooth, pitch, reset, the split (and the MIDI map)
 8. The drums: kick, snare, hat
 9. The mixer
 10. Pages and knobs
@@ -100,7 +100,7 @@ speaks with its own voice, or hands the words to your own screen reader (VoiceOv
   settles: its name, then its knobs. Letting go of a key or pad says nothing.
 - A knob says its name and value when it stops turning. Every message on the screen is said (saved, cleared, next
   pattern, next break), and PLAY says play or stop.
-- Warnings are heard whole: an FX slot bypassed for overload, nothing to undo, Bluetooth audio not on.
+- Warnings are heard whole: an FX slot bypassed for overload, nothing to undo.
 - SEL pressed alone reads its combinations.
 
 The words CHOPPAH sends are spelled out in full (CMPLX is complexity, R16 is the 1/16 roll pad, 3/16 is three
@@ -430,10 +430,10 @@ whose part you are on.
 
 ![MB COMP's GAIN part with the low soloed: the rest of the spectrum falls away](img/screen-mbcomp-solo.png "MB COMP solo")
 
-## 7. GLOBAL: MIDI, Bluetooth, pitch, Bluetooth audio, reset
+## 7. GLOBAL: MIDI, Bluetooth, pitch, reset, the split
 
 **GLO** opens the GLOBAL page: the slice blocks give way to the state of MIDI, and K1–K4 set it (SAVE keeps it).
-**GLO again** (or ALGORITHM) turns to its second part, the pitch; **a third time**, Bluetooth audio; **a fourth
+**GLO again** (or ALGORITHM) turns to its second part, the pitch; **a third time**, the split; **a fourth
 time**, CHANNEL: the MIDI channel and what goes out (all below, with the whole [MIDI map](#midi-map)).
 
 ![GLOBAL, following a 119 BPM clock over USB](img/screen-global.png "The GLOBAL page")
@@ -457,29 +457,45 @@ connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings →
 | K1 PITCH | KEEP LENGTH (the default) · SPEED | KEEP LENGTH changes the pitch only: each slice keeps its length (a granular pitch shift), so a key pitched +7 still fills its loop. SPEED is the classic repitch: up plays faster and shorter, down slower and longer (K1 left) |
 | K2 GRAIN | 10 … 80 ms | KEEP LENGTH's grains: shorter keeps hits tight, longer sounds smoother on held sounds |
 | K3 SNAP | OFF · 1/8 · 1/4 · 1/2 · 1 (the default) · 2 · 4 slices | Where a white key pressed while playing lands: at once (OFF), or at the next point of a grid that many slices apart, counted from the top of the pattern. The panel says what it is in this break (on the 2-bar breaks 1 slice = 1/8, 1/2 slice = 1/16, 2 slices = 1/4). Stopped, keys always play at once |
-| K4 RESET ALL | Turn once ("RESET ALL?"), then again within 3 seconds | Clears everything back to how it came: tempo, generator, FX chain, kick, snare and hat, mixer, keys, slices, GLOBAL, Bluetooth audio, and all 16 patterns; the first break is chosen and it is saved at once. Bluetooth pairings are kept. The screen says so: LOBOTOMIZED, for 3 seconds (a key or button ends it sooner) |
+| K4 RESET ALL | Turn once ("RESET ALL?"), then again within 3 seconds | Clears everything back to how it came: tempo, generator, FX chain, kick, snare and hat, mixer, keys, slices, GLOBAL, the split, and all 16 patterns; the first break is chosen and it is saved at once. Bluetooth pairings are kept. The screen says so: LOBOTOMIZED, for 3 seconds (a key or button ends it sooner) |
 
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
 tempo's own repitch, HALF, REVERSE's speed and the tape stop stay speed effects.
 
 ![RESET ALL done: the lobotomy screen](img/screen-lobotomized.png "LOBOTOMIZED")
 
-**Bluetooth audio (GLO three times):** CHOPPAH plays through Bluetooth headphones or a Bluetooth speaker.
+<a id="split"></a>**The split (GLO three times):** two breaks in one loop. Bar 1 is a bar of break A (the break
+ALGORITHM picks), bar 2 a bar of break B. White keys 1–8 are A's slices, 9–16 B's. B is played at A's tempo: its bar
+is repitched to the length of A's, as an old sampler would, so the two stay in time whatever their own tempos.
 
-![Bluetooth audio, streaming to a speaker](img/screen-btaudio.png "Bluetooth audio")
+![GLOBAL's SPLIT part: Amen in bar 1, Think in bar 2](img/screen-split-global.png "GLOBAL: SPLIT")
 
-| Knob | Does |
-| --- | --- |
-| K1 BT AUDIO | OFF · ON. On at power-on as saved (SAVE), and then it connects the last device again by itself |
-| K2 DEVICE | Picks from the list: the devices it remembers (LAST, KNOWN), then the ones a scan found (NEW) |
-| K3 SCAN | Any turn looks for headphones and speakers for about 10 seconds. Put the device in pairing mode first |
-| K4 CONNECT | Right: connect the device chosen (a new one pairs and is remembered; four are kept). Left: hang up. SEL held + left: forget the remembered device chosen |
+| Knob | Sets | |
+| --- | --- | --- |
+| K1 SPLIT | OFF · ON | On, the break becomes the two at the next bar (stopped, at once); the header shows A's name with "+B" beside it |
+| K2 BREAK B | Any break | The break in bar 2 (at first, the one after A) |
+| K3 BAR A | BAR 1 · BAR 2 | Which of A's two bars plays |
+| K4 BAR B | BAR 1 · BAR 2 | Which of B's two bars plays |
 
-While it streams, the FM-1's own speaker and headphone output go quiet and MASTER still sets the level. It is stereo,
-as the FM-1's own output: the ping-pong delay, the reverb and the flanger spread left and right. Bluetooth
-audio runs late: 150–300 ms between a key and your ear, so it is for listening and showing, not for playing in time
-(use the FM-1's own output or USB for that). Bluetooth MIDI keeps working beside it on the same radio. Turning
-Bluetooth audio on starts the radio even when Bluetooth MIDI is off.
+Playing a split:
+
+- **A key latches its half.** Press a key of A (1–8) and from the next bar line the loop rounds bar 1 alone; a key of
+  B (9–16), bar 2 alone. Switch between them on the fly: the change always waits for the bar line, so it lands in
+  time. The loop's own slices (the pattern's, the generator's, RANDOM's) stay in that half.
+- **SEL + a key** plays A then B again.
+- **A key of each half held plays both, layered**: the second key loops on voices of its own over the first. One key
+  a half: another key in the same half takes that half over, as ever. A key held while one of the other half is held
+  doesn't change the latch. The pads (rolls, FREEZE, REVERSE's flip) work on the first key; the layer follows the
+  tempo, HALF, REVERSE's speed, the tape stop and its own key's pitch.
+- The waveform marks where B begins (amber) and names A and B (the half asked for in amber); the half not playing
+  is dark, and a layer's slice is lit beside the key's.
+
+![Bar 2 (Think) alone: bar 1 is dark](img/screen-split.png "The split, bar 2 latched")
+
+![A key of A held, a key of B layered over it](img/screen-split-layer.png "The split, layered")
+
+Bar 1 and bar 2 share the one break buffer, so each half is a bar: a split holds two bars, as any break. Bluetooth
+audio out (to headphones and speakers) was taken out to make room for it (v1.5).
 
 **CHANNEL (GLO four times):** the MIDI channel, and what CHANNEL sends besides the clock. Everything starts off, so
 nothing new goes out until you turn it on.
@@ -636,7 +652,7 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | SEQ, a drum lane | Fill | Rotate | Clear / 4x4 | Copy |
 | GLO (global) | Clock in | Clock out | Bluetooth | MIDI to |
 | GLO again (pitch, snap) | Keep length / speed | Grain | Snap | Reset all (twice) |
-| GLO a third time (BT audio) | On / off | Device | Scan | Connect / hang up |
+| GLO a third time (split) | Split on / off | Break B | A's bar | B's bar |
 | GLO a fourth time (channel) | MIDI channel (OMNI, 1–16) | Notes out | CC out | Program changes out |
 | ARP (black keys hold effects; ARP again: MORE, MOD) | the shown key's effect: setting 1 | Setting 2 | Setting 3 | Mix |
 | ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | Click level (0: off) |

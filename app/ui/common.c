@@ -21,7 +21,8 @@ static struct {
     uint32_t tap_t;                      /* SEL went down then: a tap if it comes up alone */
     uint8_t tap_pend, tap_combo;         /* SEL down as a tap; something else touched while it was held */
     uint32_t oct_t, oct_rep;             /* OCT- / OCT+ held: repeats that speed up */
-    int32_t last_step, last_slice;
+    int32_t last_step, last_slice, last_layer;
+    int8_t last_half;
     uint32_t last_pads, last_keys, last_hdr;
     uint32_t intro_t0;                   /* the start screen: when it began (0: over) */
     uint8_t intro, intro_drawn;          /* showing it; blocks drawn so far */
@@ -33,8 +34,7 @@ static struct {
     uint8_t key_turned;                  /* a knob turned while it is held: its view at once */
     uint32_t key_since;                  /* when it was pressed */
     int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
-    uint8_t gpage;                       /* the GLOBAL page's part: 0 MIDI and Bluetooth, 1 pitch, 2 BT audio, 3 channel */
-    uint8_t bta_sel, bta_booted;         /* BT AUDIO: the device chosen in its list; the boot's reconnect done */
+    uint8_t gpage;                       /* the GLOBAL page's part: 0 MIDI and Bluetooth, 1 pitch, 2 split, 3 channel */
     uint8_t kpage, klayer, kpreset;      /* the KICK page: its sub-page (KP_*), the layer it edits, the preset */
     uint8_t mpage;                       /* the MIXER's half: 0 LEVELS (break, kick, perc, FX), 1 GROOVE */
     uint8_t seq_lane, seq_step;          /* the SEQ page: the lane (SL_*) and the break step (0..31) it edits */

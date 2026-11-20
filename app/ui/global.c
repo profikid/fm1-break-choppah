@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* CHOPPAH: the GLOBAL page: MIDI clock, Bluetooth MIDI, pitch, snap, RESET ALL. (Part of app.c's unity: included
- * there in order.) */
+/* CHOPPAH: the GLOBAL page: MIDI clock, Bluetooth MIDI, pitch, snap, RESET ALL, the split. (Part of app.c's unity:
+ * included there in order.) */
 
 static void reset_all(void);             /* (below, with the break's change) */
-#define GPARTS 4u                        /* MIDI, PITCH, BT AUDIO, CHANNEL */
+#define GPARTS 4u                        /* MIDI, PITCH, SPLIT, CHANNEL */
 static const char *const MO_NAME[3] = {"NOTES", "CC", "PC"};
 /* the GLOBAL page's knobs: clock in, clock out, Bluetooth, where MIDI goes */
 static const char *const MIDI_TO_NAME[3] = {"USB+BT", "USB", "BT"};
@@ -20,8 +20,13 @@ static void global_value(int i, char *t)
             text_cat(t, set.midi_out >> (i - 1) & 1u ? "ON" : "OFF");
         return;
     }
-    if (ui.gpage == 2u) {
-        ch_bta_value(i, t);
+    if (ui.gpage == 2u) {                /* SPLIT: on, break B, the bar of each */
+        if (i == 0)
+            text_cat(t, set.split ? "ON" : "OFF");
+        else if (i == 1)
+            text_cat(t, break_name(split_b_of(set.brk)));
+        else
+            text_cat(t, set.split_bars >> (i - 2) & 1u ? "BAR 2" : "BAR 1");
         return;
     }
     if (ui.gpage) {                      /* the pitch: speed or keep length, the grains */
@@ -57,8 +62,27 @@ static void global_turn(int i, int32_t d)
         changed();
         return;
     }
-    if (ui.gpage == 2u) {
-        ch_bta_turn(i, d);
+    if (ui.gpage == 2u) {                /* SPLIT (PRD S-030): K1 on / off, K2 break B, K3 A's bar, K4 B's bar */
+        static const char *const SN[4] = {"SPLIT", "BREAK B", "BAR OF A", "BAR OF B"};
+        uint32_t was = set.split | (uint32_t)set.split_b << 8 | (uint32_t)set.split_bars << 16;
+        if (i == 0)
+            set.split = d > 0;
+        else if (i == 1)
+            set.split_b = (uint8_t)((split_b_of(set.brk) + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks + 1u);
+        else if (d > 0)
+            set.split_bars |= (uint8_t)(1u << (i - 2));
+        else
+            set.split_bars &= (uint8_t)~(1u << (i - 2));
+        global_value(i, t);
+        app_say(SN[i], t);
+        if (was != (set.split | (uint32_t)set.split_b << 8 | (uint32_t)set.split_bars << 16)) {
+            if (!set.split)
+                brk_half(-1);
+            if (set.split || i == 0)     /* the break again, at the next bar (break_poll) */
+                break_ask(set.brk);
+        }
+        ui.redraw |= RG_BLOCKS;
+        changed();
         return;
     }
     if (ui.gpage) {
@@ -136,8 +160,26 @@ static void draw_global(const brk_status_t *st)
         cv_blit(0, 140);
         return;
     }
-    if (ui.gpage == 2u) {
-        draw_bta();
+    if (ui.gpage == 2u) {                /* SPLIT: the two breaks and their bars, how the keys work */
+        const brk_break_t *b = brk_get_break();
+        uint32_t k;
+        cv_begin(240, 52, C_BLACK);
+        for (k = 0; k < 2u; k++) {
+            int32_t y = 2 + (int32_t)k * 26;
+            t[0] = 0;
+            text_cat(t, break_name(k ? split_b_of(set.brk) : set.brk));
+            cv_text(6, y, &FONT_T, k ? "BREAK B" : "BREAK A", C_GRAY);
+            cv_text(6, y + 12, &FONT_XS, k ? "BAR 2: KEYS 9-16" : "BAR 1: KEYS 1-8", C_DIM);
+            cv_text(96, y, &FONT_T, t, set.split ? C_HI : C_DIM);
+            cv_text(96, y + 12, &FONT_XS, set.split_bars >> k & 1u ? "ITS SECOND BAR" : "ITS FIRST BAR", C_DIM);
+        }
+        cv_blit(0, 88);
+        cv_begin(240, 52, C_BLACK);
+        cv_text(6, 2, &FONT_T, "SPLIT", C_GRAY);
+        cv_text(96, 2, &FONT_T, !set.split ? "OFF" : b && b->split ? "ON" : "WAITING", set.split ? C_HI : C_DIM);
+        cv_text(6, 20, &FONT_XS, "A KEY: LOOP ITS BAR.  SEL + KEY: BOTH", set.split ? C_WHITE : C_DIM);
+        cv_text(6, 32, &FONT_XS, "AN A KEY AND A B KEY HELD: LAYERED", set.split ? C_WHITE : C_DIM);
+        cv_blit(0, 140);
         return;
     }
     if (ui.gpage) {                      /* the pitch: what the mode does, the pitch now */
