@@ -48,15 +48,6 @@ wait 3000
 expect half_ask 1
 expect half 1
 shot sp_half_b.png
-# ALGORITHM with bar 2 latched: break B changes (A stays), at the next bar
-expect brk 0
-expect split_b 4
-turn ALGO 1 10
-wait 3000
-expect brk 0
-expect split_b 5
-expect half 1
-shot sp_algo_b.png
 # SEL + a key: both again
 press SEL
 tapkey w5
@@ -64,11 +55,6 @@ release SEL
 wait 3000
 expect half_ask -1
 expect half -1
-# ALGORITHM with both halves: break A
-turn ALGO 1 10
-wait 3000
-expect brk 1
-expect split_b 5
 # a key of each held: layered (keys count from 0; the first latched A, the second layers and leaves the latch)
 key w2 down
 wait 400
@@ -89,6 +75,33 @@ expect layer -1
 key w2 up
 wait 400
 expect key -1
+# SEL + a key: both again, then bar 2 latched for ALGORITHM
+press SEL
+tapkey w5
+release SEL
+wait 200
+tapkey w12
+wait 3000
+expect half 1
+# ALGORITHM with bar 2 latched: break B changes (A stays), at the next bar
+expect brk 0
+expect split_b 4
+turn ALGO 1 10
+wait 3000
+expect brk 0
+expect split_b 5
+expect half 1
+shot sp_algo_b.png
+press SEL
+tapkey w5
+release SEL
+wait 3000
+expect half -1
+# ALGORITHM with both halves: break A
+turn ALGO 1 10
+wait 3000
+expect brk 1
+expect split_b 5
 # off: one break again
 tap GLO
 wait 150

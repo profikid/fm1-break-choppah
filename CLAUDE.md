@@ -98,7 +98,9 @@ while the app area is rewritten. It ships in the package, so it shows when that 
 (`app/site/site.css`; the installer and the emulator, fm1-base's pages, also `app/site/install.css` and
 `app/site/emu.css`: only their style, never their markup, ids or script) and puts the interactive control map (`app/site/controlmap.html`) into the manual's section
 "The control map". When a page's controls change, update that file's `PAGES` list with the manual. Manual screenshots
-come from the host scenarios (`app/build/scenarios/*.png`, copied into `app/docs/img`).
+come from the host scenarios: `tools/doc_shots.py` (after `./build.sh --host`) runs them all and refreshes every
+picture in `app/docs/img`, the README's composites and the Hub card (`docs/img`) from its `MAP`; run it after any
+change to what the screen draws (`--check` lists stale ones). A new picture in the docs gets a line in `MAP`.
 
 ## Commands
 
