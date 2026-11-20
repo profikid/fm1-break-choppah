@@ -336,48 +336,72 @@ static void intro_end(void)
     ui.redraw = RG_ALL;
 }
 
-/* the battery, next to the header's level meter (plat_battery): three bars from the foot, red at one or none, a USB
- * host powering the FM-1 shows a bolt instead. 9 wide, rows 4..20 (the header's canvas); -1 (not read yet): nothing */
-#define BATT_W 9                         /* the body's width (the nub 3 wide on top of it) */
+/* The header (28 rows, a line under it). Everything sits on one band: FONT_B's capitals fill rows 8..18 (its
+ * baseline 18), FONT_T drawn at y 9 shares that baseline, and the play mark, the battery and the meter fill the same
+ * rows. Left: the play mark, the break (a split: A + B, both alike), the pattern, REC. Right, from the edge: the
+ * battery, the level meter, the tempo and BPM. */
+#define HD_TOP 8                         /* the band: rows 8..18 */
+#define HD_H 11
+#define HD_BATT_X 214                    /* the battery: body 16 wide, its nub 2 more (to x 231: 8 from the edge) */
+#define HD_METER_X 202                   /* the meter: 8 wide, 4 left of the battery */
+#define HD_TEMPO_R 194                   /* the tempo ends here, 8 left of the meter */
+
+/* the battery (plat_battery), lying down: three bars from the left, red at one or none; a USB host powering the
+ * FM-1 shows a bolt instead; -1 (not read yet): its outline only, so nothing moves when it is */
 #define BATT_LOW RGB(255, 104, 72)       /* one bar or none: red */
 static void draw_batt(int32_t x, int b)
 {
     uint16_t c = b >= 0 && b <= 1 ? BATT_LOW : C_DIM;
-    int32_t i;
-    if (b < 0)
-        return;                          /* not read yet (the keys own the converter: APP_KEY_SENSE) */
-    cv_rect(x + 3, 4, 3, 2, c);           /* the nub */
-    cv_rect(x, 6, BATT_W, 14, c);         /* the body's frame */
-    cv_rect(x + 1, 7, BATT_W - 2, 12, C_BLACK);
+    int32_t i, y = HD_TOP + 1;           /* the body: rows 9..17, centred on the band */
+    cv_rect(x, y, 16, 9, c);             /* the frame */
+    cv_rect(x + 1, y + 1, 14, 7, C_BLACK);
+    cv_rect(x + 16, y + 3, 2, 3, c);     /* the nub */
     if (b == 4) {                        /* a USB host powers the FM-1: a bolt */
-        cv_line(x + 5, 7, x + 2, 12, C_HI);
-        cv_line(x + 2, 12, x + 6, 12, C_HI);
-        cv_line(x + 6, 12, x + 3, 18, C_HI);
+        cv_line(x + 9, y + 1, x + 5, y + 4, C_HI);
+        cv_line(x + 5, y + 4, x + 10, y + 4, C_HI);
+        cv_line(x + 10, y + 4, x + 6, y + 7, C_HI);
         return;
     }
-    for (i = 0; i < b && i < 3; i++)      /* the bars from the foot up */
-        cv_rect(x + 2, 15 - i * 4, BATT_W - 4, 3, b <= 1 ? BATT_LOW : C_HI);
+    for (i = 0; i < b && i < 3; i++)     /* the bars from the left */
+        cv_rect(x + 2 + i * 4, y + 2, 3, 5, b <= 1 ? BATT_LOW : C_HI);
 }
 
-/* the header's level meter: what leaves, left and right, -48..0 dBFS in 18 steps of 2.7 dB; amber from -8 dB, the
- * top white near full scale */
+/* the header's level meter: what leaves, left and right, -48..0 dBFS in 18 steps of 2.7 dB shown on the band's 11
+ * rows; amber from -8 dB, the top white near full scale */
 static void draw_meter(void)
 {
     float lv[2];
     uint32_t c;
-    int32_t h;
+    int32_t h, px;
     lv[0] = meter_l;
     lv[1] = meter_r;
-    cv_begin(8, 20, C_BLACK);
+    cv_begin(8, HD_H, C_BLACK);
     for (c = 0; c < 2u; c++) {
         for (h = 0; h < 18; h++)         /* the steps it is above: -48 dB + 2.67 dB each (2^(dB / 6.02)) */
             if (lv[c] < brk_exp2f(((float)h * (48.0f / 18.0f) - 48.0f) * (1.0f / 6.0206f)))
                 break;
-        cv_rect((int32_t)c * 4, 1, 3, 18, C_BLOCK);
-        if (h)
-            cv_rect((int32_t)c * 4, 19 - h, 3, h, h >= 18 ? C_WHITE : h >= 15 ? C_AMB : C_HI);
+        px = (h * HD_H + 17) / 18;
+        cv_rect((int32_t)c * 4 + 1, 0, 3, HD_H, C_BLOCK);
+        if (px)
+            cv_rect((int32_t)c * 4 + 1, HD_H - px, 3, px, h >= 18 ? C_WHITE : h >= 15 ? C_AMB : C_HI);
     }
-    cv_blit(ui.meter_x, 4);
+    cv_blit(ui.meter_x, HD_TOP);
+}
+
+/* name into t (the break's on-screen name), cut to its first word (word) and to at most w pixels of FONT_B */
+static void head_name(char *t, uint32_t brk, int word, int32_t w)
+{
+    uint32_t k = 0u;
+    t[0] = 0;
+    text_cat(t, break_name(brk));
+    if (word)
+        while (t[k] && t[k] != ' ')
+            k++;
+    else
+        k = 12u;
+    t[k] = 0;
+    while (k > 1u && text_w(&FONT_B, t) > w)
+        t[--k] = 0;
 }
 
 /* the header: the break and the tempo, a play / stop mark; or a message for a moment */
@@ -390,42 +414,72 @@ static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now
         int32_t x = cv_text(8, 6, &FONT_B, ui.msg[0], C_WHITE);
         cv_text(x + 8, 6, &FONT_B, ui.msg[1], C_HI);
     } else {
-        if (st->playing) {               /* a play triangle, or a stop square */
+        int32_t tx, lx, x, room, tail, wl, k;
+        char pat[8], a[16], c[16];
+        uint32_t bb = split_b_of(set.brk);
+        int lab = 1, ext = ext_active();
+        /* the right: the battery at the edge, the meter, the tempo */
+        draw_batt(HD_BATT_X, plat_battery());
+        ui.meter_x = HD_METER_X;
+        tenths_text(set.tempo_x10, t);
+        tx = HD_TEMPO_R - text_w(&FONT_B, t);
+        cv_text(tx, 6, &FONT_B, t, C_HI);
+        wl = 3 + text_w(&FONT_T, ext ? "EXT" : "BPM");
+        /* the left: a play triangle, or a stop square */
+        if (st->playing) {
             int32_t r;
             for (r = 0; r < 6; r++)
-                cv_rect(8 + r, 8 + r, 1, 13 - 2 * r, C_HI);
+                cv_rect(8 + r, HD_TOP + r, 1, HD_H - 2 * r, C_HI);
         } else
-            cv_rect(8, 9, 10, 10, C_DIM);
-        {                                /* the break, the pattern (> one queued), REC */
-            int32_t x = cv_text(24, 6, &FONT_B, b ? break_name(set.brk) : "NO BREAK",   /* (amber: still to come) */
-                                brk_next >= 0 ? C_AMB : C_WHITE);
-            if (b && set.split) {        /* the split: + break B, small */
-                char sb[16];
-                sb[0] = '+';
-                sb[1] = 0;
-                text_cat(sb, break_name(split_b_of(set.brk)));
-                if (text_w(&FONT_T, sb) > 60) {   /* (its first word, if long) */
-                    uint32_t k = 1u;
-                    while (sb[k] && sb[k] != ' ')
-                        k++;
-                    sb[k] = 0;
-                }
-                x = cv_text(x + 2, 10, &FONT_T, sb, b->split && brk_next < 0 ? C_GRAY : C_AMB);
+            cv_rect(8, HD_TOP + 1, 9, 9, C_DIM);
+        /* the break (a split: A + B, alike), then the pattern (> one queued) and REC. The name gets the room left:
+         * whole names, else first words, BPM's label given up before a letter is (EXT's never) */
+        pat[0] = 'P';
+        int_text((int32_t)set.pattern + 1, pat + 1);
+        if (pat_next >= 0)
+            text_cat(pat, ">");
+        tail = 6 + text_w(&FONT_T, pat) + (ui.rec ? 4 + text_w(&FONT_T, "REC") : 0);
+        room = tx - 8 - 22 - tail;       /* (without the label) */
+        c[0] = 0;
+        for (k = 0; k < 4; k++) {        /* 0 whole + label, 1 whole, 2 first words + label, 3 first words */
+            int32_t w;
+            head_name(a, set.brk, k >= 2, 999);
+            w = text_w(&FONT_B, a);
+            if (set.split) {
+                head_name(c, bb, k >= 2, 999);
+                w += text_w(&FONT_B, " + ") + text_w(&FONT_B, c);
             }
-            t[0] = 'P';
-            int_text((int32_t)set.pattern + 1, t + 1);
-            if (pat_next >= 0)
-                text_cat(t, ">");
-            x = cv_text(x + 6, 10, &FONT_T, t, pat_next >= 0 ? C_AMB : C_GRAY);
-            if (ui.rec)
-                cv_text(x + 5, 10, &FONT_T, "REC", C_AMB);
+            lab = !(k & 1) || ext;
+            if (w <= room - (lab ? wl : 0))
+                break;
         }
-        tenths_text(set.tempo_x10, t);
-        cv_text(232 - text_w(&FONT_B, t), 6, &FONT_B, t, C_HI);
-        ui.meter_x = (int16_t)(228 - text_w(&FONT_B, t) - text_w(&FONT_T, "BPM") - 12);   /* left of BPM */
-        cv_text(228 - text_w(&FONT_B, t) - text_w(&FONT_T, ext_active() ? "EXT" : "BPM"), 10, &FONT_T,
-                ext_active() ? "EXT" : "BPM", ext_active() ? C_AMB : C_GRAY);
-        draw_batt(ui.meter_x - 12, plat_battery());        /* the battery, left of the level meter */
+        if (k == 4) {                    /* still too long: each its share, cut */
+            int32_t r = room - (ext ? wl : 0), plus = text_w(&FONT_B, " + ");
+            lab = ext;
+            if (set.split) {
+                int32_t half = (r - plus) / 2, wa = text_w(&FONT_B, a), wc = text_w(&FONT_B, c);
+                head_name(a, set.brk, 1, wa <= half ? wa : wc <= half ? r - plus - wc : half);
+                head_name(c, bb, 1, r - plus - text_w(&FONT_B, a));
+            } else
+                head_name(a, set.brk, 1, r);
+        }
+        if (lab) {
+            lx = tx - wl;
+            cv_text(lx, 9, &FONT_T, ext ? "EXT" : "BPM", ext ? C_AMB : C_GRAY);
+        }
+        x = 22;
+        if (!b)
+            x = cv_text(x, 6, &FONT_B, "NO BREAK", C_WHITE);
+        else {
+            x = cv_text(x, 6, &FONT_B, a, brk_next >= 0 ? C_AMB : C_WHITE);   /* (amber: still to come) */
+            if (set.split) {
+                x = cv_text(x, 6, &FONT_B, " + ", C_GRAY);
+                x = cv_text(x, 6, &FONT_B, c, brk_next >= 0 || !b->split ? C_AMB : C_WHITE);
+            }
+        }
+        x = cv_text(x + 6, 9, &FONT_T, pat, pat_next >= 0 ? C_AMB : C_GRAY);
+        if (ui.rec)
+            cv_text(x + 4, 9, &FONT_T, "REC", C_AMB);
     }
     cv_rect(0, 27, 240, 1, C_LINE);
     cv_blit(0, 0);

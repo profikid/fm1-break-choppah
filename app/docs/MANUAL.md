@@ -46,10 +46,11 @@ seconds, or at once on any key, the **slicer view** opens. PLAY on the start scr
 
 The slicer view, top to bottom:
 
-- **Header:** play or stop, the break's name, the pattern (P1–P16; "P2>" while P2 waits for the loop's end), REC
-  while recording, a level meter (left and right, what leaves after MASTER: amber from
-  −8 dB, white near full scale), the battery (three bars, red at one or none; a bolt
-  while a USB host powers the FM-1), the tempo.
+- **Header:** on the left, play or stop, the break's name (a split: both, "AMEN + THINK", alike; long names
+  shorten to their first word), the pattern (P1–P16; "P2>" while P2 waits for the loop's end), REC while
+  recording. On the right, from the edge: the battery (three bars, red at one or none; a bolt while a USB host
+  powers the FM-1), a level meter (left and right, what leaves after MASTER: amber from −8 dB, white near full
+  scale), the tempo (BPM, or EXT while an outside clock leads; BPM's label makes way when the names need the room).
 - **Tabs:** the button you pressed (as printed on the panel), then the page's parts as tabs, the one you are on lit:
   the button again (or ALGORITHM) goes to the next. On EDIT and FX the part edited shows at the right, "< SUB FX >".
   Opening a page, or turning to another part, says the same in the header for a moment: the button, then the part
@@ -472,7 +473,7 @@ is repitched to the length of A's, as an old sampler would, so the two stay in t
 
 | Knob | Sets | |
 | --- | --- | --- |
-| K1 SPLIT | OFF · ON | On, the break becomes the two at the next bar (stopped, at once); the header shows A's name with "+B" beside it |
+| K1 SPLIT | OFF · ON | On, the break becomes the two at the next bar (stopped, at once); the header shows both, "AMEN + THINK" |
 | K2 BREAK B | Any break | The break in bar 2 (at first, the one after A) |
 | K3 BAR A | BAR 1 · BAR 2 | Which of A's two bars plays |
 | K4 BAR B | BAR 1 · BAR 2 | Which of B's two bars plays |
