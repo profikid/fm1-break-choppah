@@ -410,7 +410,7 @@ static void draw_head(const brk_status_t *st, const brk_break_t *b, uint32_t now
                         k++;
                     sb[k] = 0;
                 }
-                x = cv_text(x + 2, 10, &FONT_T, sb, b->split ? C_GRAY : C_AMB);
+                x = cv_text(x + 2, 10, &FONT_T, sb, b->split && brk_next < 0 ? C_GRAY : C_AMB);
             }
             t[0] = 'P';
             int_text((int32_t)set.pattern + 1, t + 1);

@@ -104,6 +104,7 @@ LOOP B	loop break B
 LOOP A AND B	loop both breaks
 BREAK A	break A
 BREAK B	break B
+NEXT BREAK B	next break B
 BAR A	bar of break A
 BAR B	bar of break B
 BAR OF A	bar of break A

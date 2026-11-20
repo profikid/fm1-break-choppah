@@ -146,6 +146,19 @@ static void break_ask(uint32_t i)
     ui.redraw |= RG_HEAD;
 }
 
+/* ALGORITHM's break (HOME, the MIXER, SEL held anywhere). A split's (PRD S-033): the break of the half looping
+ * alone, B with bar 2 latched, else A; in at the next bar, as any break change */
+static void break_turn(int32_t d)
+{
+    uint32_t step = d > 0 ? 1u : n_breaks - 1u;
+    if (set.split && brk_get_half() == 1) {
+        set.split_b = (uint8_t)((split_b_of(set.brk) + step) % n_breaks + 1u);
+        break_ask(set.brk);
+        app_say(playing_now() ? "NEXT BREAK B" : "BREAK B", break_name(split_b_of(set.brk)));
+    } else
+        break_ask((set.brk + step) % n_breaks);
+}
+
 /* GLOBAL's RESET ALL: every setting and pattern to the start, saved (the Bluetooth pairings stay: OBJ_BLE) */
 static void reset_all(void)
 {
@@ -515,7 +528,7 @@ static void input(void)
             if (ui.page == PG_FX && btn & 1u << B_FX)
                 fx_algo(d, 1u);          /* FX held: the slot moves along the chain */
             else if (btn & 1u << B_SEL)
-                break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
+                break_turn(d);
             else if (ui.page == PG_GLOBAL)   /* GLOBAL: its part */
                 global_part((ui.gpage + (d > 0 ? 1u : GPARTS - 1u)) % GPARTS);
             else if (ui.page == PG_KICK) {    /* the kick: its part (MIX, each layer and its FX, MACRO, OUT) */
@@ -534,7 +547,7 @@ static void input(void)
             else if (ui.page == PG_ARP)  /* ARP: the black key shown (and edited) */
                 arp_select(d);
             else {                     /* the next or previous break */
-                break_ask((set.brk + (d > 0 ? 1u : n_breaks - 1u)) % n_breaks);
+                break_turn(d);
             }
         } else if (k == EN_PRESET && btn & 1u << B_SEL)
             pattern_pick(d);             /* SEL held: the pattern, on any page */
@@ -1376,8 +1389,8 @@ int app_expect(const char *what, int *got)
                                     "mb_solo", "mb_thr_low", "mb_slot2_thr_low", "pfx_type", "pfx_voices",
                                     "pfx_busy", "pads", "midi_ch", "midi_out", "fx1_mix", "fx1_type", "gate",
                                     "step", "pat_next", "key", "key_n", "klen0", "n_user", "n_breaks",
-                                    "split", "split_at", "half", "half_ask", "layer"};
-    int v[44];
+                                    "split", "split_at", "half", "half_ask", "layer", "split_b"};
+    int v[45];
     uint32_t i;
     brk_status_t st;
     v[0] = ui.page;
@@ -1427,7 +1440,8 @@ int app_expect(const char *what, int *got)
     v[41] = st.half;                     /* the half in force, -1 both */
     v[42] = brk_get_half();              /* the half asked for */
     v[43] = st.layer;                    /* the layer's key, -1 none */
-    for (i = 0; i < 44u; i++)
+    v[44] = set.split_b;                 /* break B's number + 1 */
+    for (i = 0; i < 45u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

@@ -42,7 +42,7 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
   the canvas is 240×60 (`APP_CANVAS_PX`), so draw in strips of ≤ 60 rows (draw_fx / draw_key draw two bands).
 - **The split** (PRD S-030 to S-032): `split_load` (app.c) builds one 2-bar break from a bar of break A and a bar of
   break B (repitched to A's bar) in `pcm_a`; `brk_break_t.split` is its first half's slice count, which the engine
-  uses for the half latch (`brk_half`) and the layer (a second key lane, `kl[1]`, with voices `lv[2]`). Without a
+  uses for the half latch (`brk_half`) and the layer (a second key lane, `kl[1]`, with voices `lv[2]`). ALGORITHM's break turn (`break_turn`, ui/main.c) moves break B while bar 2 is latched. Without a
   split (`split` 0) the engine behaves as before.
 - Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;
   `./build.sh` regenerates `app/bank_data.h` (never commit it, never edit it). The bank has 400 KB (`IMAGE_CAPACITY`

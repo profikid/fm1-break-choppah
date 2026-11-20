@@ -483,6 +483,9 @@ Playing a split:
   B (9–16), bar 2 alone. Switch between them on the fly: the change always waits for the bar line, so it lands in
   time. The loop's own slices (the pattern's, the generator's, RANDOM's) stay in that half.
 - **SEL + a key** plays A then B again.
+- **ALGORITHM changes the break of the bar looping alone**: with bar 2 latched it turns break B, otherwise break A
+  (SEL + ALGORITHM on any page too). The new break comes in at the next bar, as any break change, and the latch
+  stays, so you can keep one bar going and swap the break under it.
 - **A key of each half held plays both, layered**: the second key loops on voices of its own over the first. One key
   a half: another key in the same half takes that half over, as ever. A key held while one of the other half is held
   doesn't change the latch. The pads (rolls, FREEZE, REVERSE's flip) work on the first key; the layer follows the
