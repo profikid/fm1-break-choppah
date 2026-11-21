@@ -49,7 +49,7 @@ MAP = {
     "screen-start": "u3_intro_full",     # ui.txt
     "screen-tap": "t_tap_page",          # tap.txt
     "screen-split": "sp_half_b",         # split.txt
-    "screen-split-global": "sp_on",      # split.txt
+    "screen-split-home": "sp_on",        # split.txt
     "screen-split-layer": "sp_layer",    # split.txt
 }
 # the README's composites (docs/img): tiles of 240 x 240, 10 apart on the site's grey

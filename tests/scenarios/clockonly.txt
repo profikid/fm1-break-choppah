@@ -18,9 +18,9 @@ midi TRS 80 30 00
 midi TRS FC 00 00
 wait 300
 # CHANNEL 16: the synth's notes are left alone, the clock still followed
-turn ALGO 3 10
+turn ALGO 2 10
 wait 100
-expect gpage 3
+expect gpage 2
 spin K1 16
 wait 100
 expect midi_ch 16

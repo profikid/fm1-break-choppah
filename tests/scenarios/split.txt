@@ -1,15 +1,13 @@
-# CHOPPAH: the split (PRD S-030 to S-032). GLOBAL's third part (GLO three times): K1 SPLIT on, K2 break B, K3 / K4 the
+# CHOPPAH: the split (PRD S-030 to S-032). HOME's third part (HOME three times): K1 SPLIT on, K2 break B, K3 / K4 the
 # bar of each. Then bar 1 is break A (keys 1-8), bar 2 break B (keys 9-16): a key latches its half (the loop rounds
 # that bar alone from the next bar line), SEL + a key both again; a key of each half held plays both, layered.
 #   app/build/host/choppah_host tests/scenarios/split.txt app/build/scenarios
 wait 2600
-tap GLO
+tap HOME
 wait 150
-tap GLO
-wait 150
-tap GLO
+tap HOME
 wait 300
-expect gpage 2
+expect page 10
 shot sp_off.png
 expect split 0
 expect split_at 0
@@ -102,13 +100,12 @@ turn ALGO 1 10
 wait 3000
 expect brk 1
 expect split_b 5
-# off: one break again
-tap GLO
+# off: one break again (HOME's parts from PERFORM: GENERATOR, SPLIT)
+tap HOME
 wait 150
-tap GLO
-wait 150
-tap GLO
+tap HOME
 wait 300
+expect page 10
 turn K1 -1 10
 wait 3000
 expect split 0

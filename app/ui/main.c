@@ -55,6 +55,10 @@ static void knob_turn(int k, int32_t d)
         global_turn(k - EN_K1, d);
         return;
     }
+    if (ui.page == PG_SPLIT) {
+        split_turn(k - EN_K1, d);
+        return;
+    }
     if (ui.page == PG_KICK) {
         kick_knob_turn(k - EN_K1, d);
         return;
@@ -339,8 +343,8 @@ static void input(void)
             transport(!st.playing, 0);
         muted = 0u;
     }
-    if (bdn & 1u << B_HOME) {            /* HOME: PERFORM; again (let go alone), GENERATOR, and back */
-        if (ui.page == PG_HOME || ui.page == PG_GEN) {
+    if (bdn & 1u << B_HOME) {            /* HOME: PERFORM; again (let go alone), GENERATOR, SPLIT, and back */
+        if (home_page()) {
             ui.home_hold = 1u;
             ui.home_combo = 0u;
         } else {
@@ -351,13 +355,13 @@ static void input(void)
     }
     if (ui.home_hold && !(btn & 1u << B_HOME)) {
         ui.home_hold = 0u;
-        if (!ui.home_combo && (ui.page == PG_HOME || ui.page == PG_GEN)) {
-            ui.page = ui.page == PG_HOME ? PG_GEN : PG_HOME;
+        if (!ui.home_combo && home_page()) {
+            ui.page = ui.page == PG_HOME ? PG_GEN : ui.page == PG_GEN ? PG_SPLIT : PG_HOME;
             ui.redraw |= RG_FOOT | RG_BLOCKS;
             page_say();
         }
     }
-    if (bdn & 1u << B_GLO)               /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, BT audio */
+    if (bdn & 1u << B_GLO)               /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, the channel */
         global_part(ui.page == PG_GLOBAL ? (ui.gpage + 1u) % GPARTS : 0u);
     if (bdn & 1u << B_EDIT) {            /* EDIT: the drums' sounds, the one edited last; again, the next drum */
         if (ui.page == PG_KICK || ui.page == PG_PERC)
@@ -606,7 +610,8 @@ static void leds(void)
     brk_status(&st);
     if (st.playing)
         b |= 1u << B_PLAY;
-    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_HOME, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_EDIT, B_ENV, B_ARP};
+    static const uint8_t PAGE_BTN[NPAGES] = {B_HOME, B_HOME, B_FX, B_GLO, B_EDIT, B_LFO, B_SEQ, B_EDIT, B_ENV, B_ARP,
+                                                 B_HOME};
     b |= 1u << PAGE_BTN[ui.page];
     if (ui.rec)
         b |= 1u << B_REC;
@@ -648,6 +653,10 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
     }
     if (ui.page == PG_GLOBAL) {
         global_value(i, t);
+        return;
+    }
+    if (ui.page == PG_SPLIT) {
+        split_value(i, t);
         return;
     }
     if (ui.page == PG_KICK) {
@@ -704,8 +713,8 @@ static int32_t tab(int32_t x, const char *s, int on)
     return x + w + 3;
 }
 /* the pages' buttons as printed, GLOBAL's parts, SEQ's lanes: for the tabs and the header (page_say) */
-static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP"};
-static const char *const GPART[GPARTS] = {"MIDI", "PITCH", "SPLIT", "CHANNEL"};
+static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP", "HOME"};
+static const char *const GPART[GPARTS] = {"MIDI", "PITCH", "CHANNEL"};
 static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
 static void draw_tabs(void)
 {
@@ -715,9 +724,10 @@ static void draw_tabs(void)
     part[0] = 0;
     cv_begin(240, 14, C_BLACK);
     x = cv_text(4, 1, &FONT_T, BTN[ui.page % NPAGES], C_WHITE) + 6;
-    if (ui.page == PG_HOME || ui.page == PG_GEN) {   /* HOME: PERFORM, GENERATOR */
+    if (home_page()) {                   /* HOME: PERFORM, GENERATOR, SPLIT */
         x = tab(x, "PERFORM", ui.page == PG_HOME);
-        tab(x, "GENERATOR", ui.page == PG_GEN);
+        x = tab(x, "GENERATOR", ui.page == PG_GEN);
+        tab(x, "SPLIT", ui.page == PG_SPLIT);
     }
     else if (ui.page == PG_TAP)
         tab(x, "TAP TEMPO", 1);
@@ -774,6 +784,7 @@ static void page_say(void)
     switch (ui.page) {
     case PG_HOME: text_cat(t, "PERFORM"); break;
     case PG_GEN: text_cat(t, "GENERATOR"); break;
+    case PG_SPLIT: text_cat(t, "SPLIT"); break;
     case PG_GLOBAL: text_cat(t, GPART[ui.gpage % GPARTS]); break;
     case PG_MIX: text_cat(t, ui.mpage ? "GROOVE" : "LEVELS"); break;
     case PG_SEQ: text_cat(t, SEQL[ui.seq_lane % NSEQL]); break;
@@ -851,14 +862,13 @@ static const char *foot_knob(uint32_t i, char *t)
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
                                               {"", "", "", ""},
                                               {"TEMPO", "FINE", "HALF / X2", "CLICK"},
-                                              {"P1", "P2", "P3", "MIX"}};
+                                              {"P1", "P2", "P3", "MIX"},
+                                              {"SPLIT", "BREAK B", "BAR A", "BAR B"}};
     static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
     static const char *const KN_GROOVE[4] = {"SWING", "DRUMS", "", ""};
-    static const char *const KN_SPLIT[4] = {"SPLIT", "BREAK B", "BAR A", "BAR B"};
     static const char *const KN_CHAN[4] = {"CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"};
     static const char *const KN_LANE[4] = {"FILL", "ROTATE", "CLR / 4X4", "COPY"};
-    const char *name = ui.page == PG_GLOBAL && ui.gpage == 3u ? KN_CHAN[i]
-                       : ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_SPLIT[i] : ui.page == PG_GLOBAL && ui.gpage
+    const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_CHAN[i] : ui.page == PG_GLOBAL && ui.gpage
                        ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
                        ? KN_GROOVE[i] : KN[ui.page][i];
     t[0] = 0;
@@ -1112,7 +1122,7 @@ void app_frame(void)
         ui.last_keys = ui.keys;
         ui.redraw |= RG_BLOCKS;
     }
-    if (ui.page == PG_GLOBAL && now - ui.panel_drawn >= 200u)   /* the GLOBAL page's panel: five times a second */
+    if ((ui.page == PG_GLOBAL || ui.page == PG_SPLIT) && now - ui.panel_drawn >= 200u)   /* their panels: 5 a second */
         ui.redraw |= RG_BLOCKS;
     if (ui.page == PG_MIX && now - ui.mix_drawn >= 33u)   /* the MIXER's meters: about 30 times a second */
         ui.redraw |= RG_BLOCKS;
@@ -1215,6 +1225,9 @@ void app_frame(void)
             draw_perc(&st);
         else if (ui.page == PG_GLOBAL) {
             draw_global(&st);
+            ui.panel_drawn = now;
+        } else if (ui.page == PG_SPLIT) {
+            draw_split();
             ui.panel_drawn = now;
         } else if (ui.page == PG_FX) {
             draw_chain();

@@ -10,10 +10,10 @@ FX	effects
 # the pages: the buttons as printed, and their parts
 HOME PERFORM	home, perform
 HOME GENERATOR	home, generator
+HOME SPLIT	home, split part
 GLO	global
 GLO MIDI	global, MIDI part
 GLO PITCH	global, pitch part
-GLO SPLIT	global, split part
 GLO CHANNEL	global, channel part
 LFO LEVELS	mixer, levels
 LFO GROOVE	mixer, groove

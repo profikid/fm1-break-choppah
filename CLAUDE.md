@@ -28,7 +28,7 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - Bluetooth MIDI is on (`ble = true`, `ble_stack = "own"`: fm1-base's own stack, nothing of JieLi's); the GLOBAL
   page switches it, `APP_BLE_AT_BOOT` follows the saved setting. It costs ~40 KB of flash. Bluetooth audio out
   (A2DP) was removed 21 Nov 2026 (v1.5, Laurens's call) to make room for the split (`bt_audio = false`; its
-  settings byte `bta_on` stays as reserved, GLOBAL's third part is SPLIT now).
+  settings byte `bta_on` stays as reserved). GLOBAL has three parts: MIDI, PITCH, CHANNEL (`GPARTS`).
 - Flash: the app slot is 581,564 B (`APP_SLOT` 0x8DFBC in base/tools/fm1pkg_make.py: not 581 KiB); 549,084 B used on
   21 Nov 2026 (the split, Bluetooth audio out): **~32 KB left**. RAM .data+.bss 90,128 of 98,304 B. fm1-base's resource region (`resources`, APP_RES_BASE) could
   take some of the break bank out of the app slot (it only fits the data area's ~268 KB, not the whole bank). The break bank (`CH_BANK`, ~369 KB) is most of it. Watch the image line: when it fills again, anything new needs something taken out first (ask Laurens what).
@@ -43,7 +43,8 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
 - **The split** (PRD S-030 to S-032): `split_load` (app.c) builds one 2-bar break from a bar of break A and a bar of
   break B (repitched to A's bar) in `pcm_a`; `brk_break_t.split` is its first half's slice count, which the engine
   uses for the half latch (`brk_half`) and the layer (a second key lane, `kl[1]`, with voices `lv[2]`). ALGORITHM's break turn (`break_turn`, ui/main.c) moves break B while bar 2 is latched. Without a
-  split (`split` 0) the engine behaves as before.
+  split (`split` 0) the engine behaves as before. Its page is HOME's third part (`PG_SPLIT`: HOME cycles PERFORM,
+  GENERATOR, SPLIT; `split_value` / `split_turn` / `draw_split` in ui/global.c), since v1.5.1 (it was GLOBAL's).
 - Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;
   `./build.sh` regenerates `app/bank_data.h` (never commit it, never edit it). The bank has 400 KB (`IMAGE_CAPACITY`
   in `tools/prep_breaks.py`) and 16 slots, a break at most `CH_PCM_MAX` 106,496 samples (pool ~326 of 344 KB). The breaks are the bank's only: brk_synth is the no-bank fallback (and

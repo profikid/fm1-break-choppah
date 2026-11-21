@@ -6,7 +6,7 @@
 #define brk_exp2f brk_exp2f_c
 #define brk_log2f brk_log2f_c
 
-enum { PG_HOME, PG_GEN, PG_FX, PG_GLOBAL, PG_KICK, PG_MIX, PG_SEQ, PG_PERC, PG_TAP, PG_ARP, NPAGES };
+enum { PG_HOME, PG_GEN, PG_FX, PG_GLOBAL, PG_KICK, PG_MIX, PG_SEQ, PG_PERC, PG_TAP, PG_ARP, PG_SPLIT, NPAGES };
 static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
                                                 "FLT", "DUB"};
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
@@ -34,7 +34,7 @@ static struct {
     uint8_t key_turned;                  /* a knob turned while it is held: its view at once */
     uint32_t key_since;                  /* when it was pressed */
     int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
-    uint8_t gpage;                       /* the GLOBAL page's part: 0 MIDI and Bluetooth, 1 pitch, 2 split, 3 channel */
+    uint8_t gpage;                       /* the GLOBAL page's part: 0 MIDI and Bluetooth, 1 pitch, 2 channel */
     uint8_t kpage, klayer, kpreset;      /* the KICK page: its sub-page (KP_*), the layer it edits, the preset */
     uint8_t mpage;                       /* the MIXER's half: 0 LEVELS (break, kick, perc, FX), 1 GROOVE */
     uint8_t seq_lane, seq_step;          /* the SEQ page: the lane (SL_*) and the break step (0..31) it edits */
@@ -63,6 +63,7 @@ static struct {
 /* the white keys play slices (or, on the SEQ, KICK and SNARE / HAT pages, steps) */
 static void page_say(void);              /* the header: the page's button and part, as its tabs (main.c) */
 static int slices_page(void) { return ui.page != PG_SEQ && ui.page != PG_TAP; }
+static int home_page(void) { return ui.page == PG_HOME || ui.page == PG_GEN || ui.page == PG_SPLIT; }
 enum { RG_HEAD = 1, RG_WAVE = 2, RG_BLOCKS = 4, RG_FOOT = 8, RG_ALL = 15, RG_FX = 16 };
 
 static void text_cat(char *d, const char *s)

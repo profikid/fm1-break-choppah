@@ -162,9 +162,10 @@
   if (!root) return;
   const $ = (n) => root.querySelector('[data-cm="' + n + '"]');
   const PAGES = [
-    { id: "home", btn: "HOME", name: "PERFORM · GENERATOR", sub: "Play; how the break rearranges", again: "next part (2)", subs: [
+    { id: "home", btn: "HOME", name: "PERFORM · GENERATOR · SPLIT", sub: "Play; how the break rearranges; two breaks in one loop", again: "next part (3)", subs: [
       { n: "PERFORM", k: ["GATE", "DJ FILTER", "FX", "COMPLEXITY"], strip: "16 SLICE BLOCKS", note: "the slice playing lit; a held key outlined" },
-      { n: "GENERATOR", k: ["COMPLEXITY", "ANCHOR", "ROLL", "FILL"], strip: "16 SLICE BLOCKS", note: "HOME again" } ],
+      { n: "GENERATOR", k: ["COMPLEXITY", "ANCHOR", "ROLL", "FILL"], strip: "16 SLICE BLOCKS", note: "HOME again" },
+      { n: "SPLIT", k: ["SPLIT", "BREAK B", "BAR A", "BAR B"], strip: "SPLIT: A AND B, THEIR BARS", note: "HOME a third time. Bar 1 break A (keys 1-8), bar 2 break B (keys 9-16). A key latches its half from the next bar; SEL + key: both; a key of each half held: layered; ALGORITHM turns the latched bar's break" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
       notes: [["SEL", "Pressed alone: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["ARP", "Effects on the black keys"], ["MIDI 48–63 · 64–74", "Slices · black-key pads"]] },
     { id: "arp", btn: "ARP", name: "EFFECT PADS", sub: "An effect on each black key", again: "the shown key's next part (MAIN, MORE, MOD)", part: true, subs: [
@@ -181,10 +182,9 @@
       notes: [["SEL + FX", "Bypass the focused slot"], ["FX held + ALGO", "Move the slot along the chain"], ["Key held + FX", "That key's slice effect on K1–K4"],
               ["MB COMP focused", "FX again steps AMOUNT · LOW · MID · HIGH · GAIN · X-OVER, then the next slot"],
               ["MB COMP · band", "THRESH · RATIO · ATTACK · RELEASE"], ["MB COMP · GAIN / X-OVER", "LOW MID HIGH SOLO · LOW X HIGH X KNEE OUTPUT"]] },
-    { id: "glo", btn: "GLO", name: "GLOBAL", sub: "MIDI, pitch, split, channel", again: "next part (4)", subs: [
+    { id: "glo", btn: "GLO", name: "GLOBAL", sub: "MIDI, pitch, channel", again: "next part (3)", subs: [
       { n: "MIDI", k: ["CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"], strip: "BLUETOOTH · CLOCK IN · CLOCK OUT · PORTS", note: "status" },
       { n: "PITCH", k: ["PITCH", "GRAIN", "SNAP", "RESET ALL"], strip: "PITCH MODE · GRAIN · SNAP", note: "what the snap is in this break" },
-      { n: "SPLIT", k: ["SPLIT", "BREAK B", "BAR A", "BAR B"], strip: "SPLIT: A AND B, THEIR BARS", note: "Bar 1 break A (keys 1-8), bar 2 break B (keys 9-16). A key latches its half from the next bar; SEL + key: both; a key of each half held: layered; ALGORITHM turns the latched bar's break" },
       { n: "CHANNEL", k: ["CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"], strip: "CHANNEL · OUT · THE MIDI MAP", note: "OMNI or 1–16; each out off by default" } ],
       algo: "Part", presets: "Pattern P1–P16", keys: "slices", notes: [["K4 RESET ALL", "Turn twice within 3 s"],
         ["CC 20–23 · 24–39", "K1–K4 · the chain's slots"], ["PC 0–15 · 16–31", "Pattern · break"], ["Notes 24–35", "Breaks 1–12"]] },

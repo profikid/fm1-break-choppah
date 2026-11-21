@@ -5,9 +5,9 @@
 wait 2600
 tap GLO
 wait 100
-turn ALGO 3 10
+turn ALGO 2 10
 wait 150
-expect gpage 3
+expect gpage 2
 expect midi_ch 0
 expect midi_out 0
 shot mm_channel.png

@@ -162,7 +162,8 @@ The implementation must not add oscillator-based fallback voices. If no valid sa
 
 A split puts two breaks into the one decoded break buffer: bar 1 is a bar of break A, bar 2 a bar of break B. It is
 one break to the engine (2 bars, A's tempo and rate, A's slices then B's), so playback, slicing, the sequencer and
-the FX are unchanged. Set on GLOBAL's third part (SPLIT: K1 on / off, K2 break B, K3 A's bar, K4 B's bar).
+the FX are unchanged. Set on HOME's third part (HOME three times, after PERFORM and the GENERATOR; GLOBAL's third
+part until v1.5.1, 21 Nov 2026): SPLIT: K1 on / off, K2 break B, K3 A's bar, K4 B's bar.
 
 | ID | Requirement | Priority | Acceptance |
 | --- | --- | --- | --- |

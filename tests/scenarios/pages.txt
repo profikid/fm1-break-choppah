@@ -9,6 +9,10 @@ expect page 1
 shot n_arp.png
 tap HOME
 wait 120
+expect page 10
+shot n_split.png
+tap HOME
+wait 120
 expect page 0
 shot n_home.png
 tap FX
