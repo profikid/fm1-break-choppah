@@ -80,3 +80,14 @@ jobs:
           set -euo pipefail
           ./build.sh
           ./build.sh --web
+          cp app/build/choppah.fwsc "app/build/choppah-main-${GITHUB_SHA::7}.fwsc"
+
+      # The bleeding edge, for testing on a device before a release: the package of every push to main, kept 30 days
+      # (Actions > the run > Artifacts). Not attested and not a release: releases stay tags (release.yml).
+      - name: Firmware package (bleeding edge)
+        uses: actions/upload-artifact@v4
+        with:
+          name: choppah-main-${{ github.sha }}
+          path: app/build/choppah-main-*.fwsc
+          if-no-files-found: error
+          retention-days: 30

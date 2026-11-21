@@ -116,7 +116,9 @@ scripts/release.sh 0.97  # release this version
 
 ## The workflows
 
-- `ci.yml` — every push to main: the engine's tests, the firmware build, the emulator's build. Releases nothing.
+- `ci.yml` — every push to main: the engine's tests, the firmware build, the emulator's build. Releases nothing, but
+  uploads the package as an artifact (`choppah-main-<sha>`, `choppah-main-<sha7>.fwsc`, 30 days): the bleeding edge to
+  test on a device. Fetch it: `gh run download <run id> -R profikid/fm1-break-choppah -n choppah-main-<sha>`.
 - `bump.yml` — run by hand (patch / minor / major): tags the next version and runs `release.yml` on that tag.
 - `release.yml` — a tag vX.Y[.Z] (pushed, or bump.yml's dispatch on it): the shared builder (`zvenson/fm1-build@v1`) builds the package, signs the build
   provenance (an attestation), and the release is published with it; the site is rebuilt from the same package.
