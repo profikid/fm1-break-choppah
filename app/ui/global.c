@@ -122,7 +122,7 @@ static void draw_global(const brk_status_t *st)
         cv_blit(0, 88);
         cv_begin(240, 52, C_BLACK);      /* the map, in short */
         cv_text(6, 2, &FONT_XS, "NOTES 48-63 SLICES  64-74 PADS", C_WHITE);
-        cv_text(6, 14, &FONT_XS, "24-35 BREAKS  36 KICK 38 SNARE 42 HAT", C_WHITE);
+        cv_text(6, 14, &FONT_XS, "24-35 BREAKS  36 K 38 S 42 H 39 P SLICES", C_WHITE);
         cv_text(6, 26, &FONT_XS, "CC 20-23 K1-K4  24-39 FX SLOTS 1-4", C_WHITE);
         cv_text(6, 38, &FONT_XS, "PC 0-15 PATTERN  16-31 BREAK", C_WHITE);
         cv_blit(0, 140);

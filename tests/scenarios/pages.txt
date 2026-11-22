@@ -39,13 +39,15 @@ shot n_glo3.png
 tap EDIT
 wait 120
 expect page 4
+expect mc_part 0
 shot n_edit.png
 turn ALGO 2 10
 wait 120
 shot n_edit_part.png
 tap EDIT
 wait 120
-expect page 7
+expect page 4
+expect mc_part 1
 shot n_edit2.png
 turn ALGO 1 10
 wait 120

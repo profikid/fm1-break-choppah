@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 /* CHOPPAH: the pattern sequencer (SEQ), the drum lanes and REC. (Part of app.c's unity: included there in order.) */
 
-/* ---- the pattern sequencer (SEQ) and the drum lanes: the white keys on the SEQ, KICK and SNARE / HAT pages, REC */
+/* ---- the pattern sequencer (SEQ) and the drum lanes (each hit a slice of its role: the Slice Map), REC */
 enum { SL_BREAK1, SL_BREAK2, SL_KICK, SL_SNARE, SL_HAT, NSEQL };
 static const char *const SEQ_LANE_NAME[NSEQL] = {"STEPS 1-16", "STEPS 17-32", "KICK", "SNARE", "HAT"};
 static const char *const LANE_NAME[NLANES] = {"KICK", "SNARE", "HAT"};
@@ -94,13 +94,11 @@ static void midi_slice(int s, int on)    /* a note 48..63: as the white key, rec
         rec_slice((uint32_t)s);
     brk_key(s, on);
 }
-static void midi_drum(uint32_t l)        /* a drum note: the hit now, and with REC into its lane */
+static void midi_drum(uint32_t r)        /* a drum note: its role's slice now, and with REC into its lane */
 {
-    if (l == LANE_KICK)
-        kick_hit();
-    else
-        perc_hit(l == LANE_SNARE ? PV_SNARE : PV_HAT);
-    if (ui.rec && playing_now()) {
+    uint32_t l = r == ROLE_KICK ? LANE_KICK : r == ROLE_SNARE ? LANE_SNARE : LANE_HAT;
+    brk_role_hit(r);
+    if (ui.rec && playing_now() && r != ROLE_PERC) {
         pat_now()->lane[l] |= (uint16_t)(1u << rec_at(16u, 1));
         pat_lanes_out();
         set_dirty = 1u;
@@ -263,7 +261,7 @@ static uint32_t keys_lit(const brk_status_t *st)   /* the white keys' lights on 
         m ^= 1u << (st->step % 16);
     return m;
 }
-/* the drum lanes of the pattern playing (the SEQ, KICK and SNARE / HAT pages' lower strip): kick, snare and hat, 16
+/* the drum lanes of the pattern playing (the SEQ page's lower strip): kick, snare and hat, 16
  * steps each, the lane the keys edit outlined, the step playing white */
 static void draw_lanes(const brk_status_t *st, uint32_t sel)
 {

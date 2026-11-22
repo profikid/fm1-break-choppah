@@ -59,19 +59,15 @@ static void knob_turn(int k, int32_t d)
         split_turn(k - EN_K1, d);
         return;
     }
-    if (ui.page == PG_KICK) {
-        kick_knob_turn(k - EN_K1, d);
+    if (ui.page == PG_MC) {
+        mc_turn(k - EN_K1, d);
         return;
     }
     if (ui.page == PG_SEQ) {
         seq_turn(k - EN_K1, d);
         return;
     }
-    if (ui.page == PG_PERC) {
-        perc_turn(k - EN_K1, d);
-        return;
-    }
-    if (ui.page == PG_MIX) {             /* LEVELS: break, kick, snare and hat, FX; GROOVE: swing, the drums' route */
+    if (ui.page == PG_MIX) {             /* LEVELS: break, lanes, FX; GROOVE: swing, the lanes' route */
         char t[16];
         if (ui.mpage) {
             if (k == EN_K1) {
@@ -79,19 +75,18 @@ static void knob_turn(int k, int32_t d)
                 say_int("SWING", set.swing, "%");
             } else if (k == EN_K2) {
                 set.drums_chain = d > 0 ? 0u : 1u;   /* right: around the chain, left: through it */
-                app_say("DRUMS", set.drums_chain ? "THRU FX" : "AROUND FX");
+                app_say("LANES", set.drums_chain ? "THRU FX" : "AROUND FX");
             } else
                 return;
         } else if (k == EN_K1) {
             set.brk_level = (uint8_t)clamp((int32_t)set.brk_level + d * 2, 0, 100);
             say_int("BREAK", set.brk_level, "%");
-        } else if (k == EN_K2) {
-            set.kick.volume = knob_f(set.kick.volume, d, 0.02f, 0.0f, 1.0f);
-            pct_text(set.kick.volume, t);
-            app_say("KICK", t);
-        } else if (k == EN_K3) {         /* PERC: the snare and the hat */
-            set.perc.volume = knob_f(set.perc.volume, d, 0.02f, 0.0f, 1.0f);
-            say_int("PERC", (int32_t)(set.perc.volume * 100.0f + 0.5f), "%");
+        } else if (k == EN_K2) {         /* LANES: the drum lanes' and the scenes' slices */
+            set.lane_level = (uint8_t)clamp((int32_t)set.lane_level + d * 2, 0, 100);
+            say_int("LANES", set.lane_level, "%");
+        } else if (k == EN_K3) {
+            (void)t;
+            return;
         } else {                         /* FX: the whole chain against the dry sound */
             f->wet = knob_f(f->wet, d, 0.02f, 0.0f, 1.0f);
             say_int("FX", (int32_t)(f->wet * 100.0f + 0.5f), "%");
@@ -127,16 +122,6 @@ static void knob_turn(int k, int32_t d)
     changed();
 }
 
-/* EDIT: the drum ui.einst's sound (the kick's page, or the snare's or the hat's) */
-static void edit_open(void)
-{
-    ui.page = ui.einst ? PG_PERC : PG_KICK;
-    ui.redraw |= RG_FOOT | RG_BLOCKS;
-    if (ui.einst)
-        ui.pvoice = (uint8_t)(ui.einst - 1u);
-    page_say();
-}
-
 /* a break change (ALGORITHM): its name at once, the break itself at the next bar. Playing, break_poll waits for
  * the bar's last 16th, mutes the break (it runs on, the clock and the drums too), decodes the new one over pcm_a
  * once the fade is done, and the render swaps it in on the next step: the bar's first. Stopped: at once */
@@ -155,6 +140,8 @@ static void break_ask(uint32_t i)
 static void break_turn(int32_t d)
 {
     uint32_t step = d > 0 ? 1u : n_breaks - 1u;
+    if (!n_breaks)
+        return;
     if (set.split && brk_get_half() == 1) {
         set.split_b = (uint8_t)((split_b_of(set.brk) + step) % n_breaks + 1u);
         break_ask(set.brk);
@@ -167,10 +154,12 @@ static void break_turn(int32_t d)
 static void reset_all(void)
 {
     uint8_t ble_was_off = set.ble_off;
-    settings_defaults();
-    if (n_breaks > n_synth)
-        set.brk = (uint8_t)n_synth;      /* the bank's first break */
+    settings_defaults();                 /* (the bank's first break) */
     pat_defaults();
+    mc_defaults();                       /* MATHCORE's scenes and queue too */
+    mq_defaults();
+    mc.on = 0u;
+    brk_mc_start(-1);
     if (ble_was_off)
         plat_ble_enable(1);              /* (Bluetooth MIDI on again, as at the start) */
     break_ask(set.brk);
@@ -179,6 +168,8 @@ static void reset_all(void)
     pat_next = -1;
     (void)plat_store_save(OBJ_SETTINGS, &set, sizeof set);
     (void)plat_store_save(OBJ_PAT, &pats, sizeof pats);
+    mcs_saved = mq_saved = 0u;           /* (written whatever they were) */
+    (void)mc_save();
     set_dirty = 0u;
     app_say("ALL CLEARED", "");
     ui.lobo_t = plat_ms() | 1u;          /* the lobotomy screen (app_frame) */
@@ -202,7 +193,13 @@ static void break_poll(void)
     }
     if (brk_renders() - mark < 2u)       /* the fade out done */
         return;
-    brk_swap_break(break_load((uint32_t)brk_next));
+    {
+        const brk_break_t *nb = break_load((uint32_t)brk_next);
+        if (nb)
+            brk_swap_break(nb);
+        else
+            brk_set_break(0);            /* (no breaks at all: silence) */
+    }
     brk_next = -1;
     muting = 0u;
     ui.redraw |= RG_ALL;
@@ -285,6 +282,9 @@ static void input(void)
         return;
     }
     arp_keys(kdn, kup, btn, now);        /* the ARP page's black keys (and the latched ones, any page) */
+    if (mc_black(kdn, btn))              /* MATHCORE's LIVE and SCENE: the black keys queue and assign scenes */
+        for (i = 0; i < 11u; i++)
+            kdn &= ~(1u << BK[i]);
     for (i = 0; i < 16u; i++) {          /* white keys: slices, or a page's own */
         if (ui.page == PG_TAP) {         /* the TAP page: every white key taps */
             if (kdn >> WK[i] & 1u)
@@ -295,6 +295,15 @@ static void input(void)
             if (kdn >> WK[i] & 1u)
                 seq_key(i);
             continue;
+        }
+        if (mc_lane_page()) {            /* MATHCORE's LANE: the lane's events (SEL: 17..32) */
+            if (kdn >> WK[i] & 1u)
+                mc_white(i, btn);
+            continue;
+        }
+        if (kdn >> WK[i] & 1u && ui.page == PG_MC && mc.part == MCP_MAP) {
+            mc.slice = (uint8_t)i;       /* MAP: the slice shown (and played) */
+            ui.redraw |= RG_BLOCKS | RG_FOOT;
         }
         if (kdn >> WK[i] & 1u) {
             if (ui.rec && playing_now())
@@ -318,7 +327,7 @@ static void input(void)
                 }
     }
     for (i = 0; i < 11u; i++) {          /* black keys: the pads, held; the last one pressed has the screen (ARP: its own) */
-        if (kdn >> BK[i] & 1u && ui.page != PG_ARP) {
+        if (kdn >> BK[i] & 1u && pads_page()) {
             brk_pad((int)i, 1);
             ui.pad_focus = (int8_t)i;
             ui.pad_since = now;
@@ -329,7 +338,7 @@ static void input(void)
     if (ui.pad_focus >= 0 && !(keys >> BK[ui.pad_focus] & 1u)) {   /* let go: another pad still held, or none */
         ui.pad_focus = -1;
         for (i = 0; i < 11u; i++)
-            if (keys >> BK[i] & 1u && ui.page != PG_ARP)
+            if (keys >> BK[i] & 1u && pads_page())
                 ui.pad_focus = (int8_t)i;
     }
     if (bdn & 1u << B_PLAY) {
@@ -339,6 +348,9 @@ static void input(void)
             transport(st.playing, 1);
             app_say("RESET", "");
             ui.home_combo = 1u;          /* (not HOME's next part) */
+        } else if (!st.playing && ui.page == PG_MC) {   /* MATHCORE: the queue (or the scene edited) from the top */
+            if (mc_play())
+                transport(1, 0);
         } else
             transport(!st.playing, 0);
         muted = 0u;
@@ -363,12 +375,16 @@ static void input(void)
     }
     if (bdn & 1u << B_GLO)               /* GLOBAL: MIDI clock and Bluetooth; again, the pitch; again, the channel */
         global_part(ui.page == PG_GLOBAL ? (ui.gpage + 1u) % GPARTS : 0u);
-    if (bdn & 1u << B_EDIT) {            /* EDIT: the drums' sounds, the one edited last; again, the next drum */
-        if (ui.page == PG_KICK || ui.page == PG_PERC)
-            ui.einst = (uint8_t)((ui.einst + 1u) % 3u);
-        edit_open();
+    if (bdn & 1u << B_EDIT) {            /* EDIT: MATHCORE at the part used last; again, its next part */
+        uint32_t np = ui.page == PG_MC ? (mc.part + 1u) % MCPARTS : mc.part;
+        if (np == MCP_LANE)
+            slices_let_go(keys);         /* (LANE: the white keys are its events) */
+        mc.part = (uint8_t)np;
+        ui.page = PG_MC;
+        ui.redraw |= RG_FOOT | RG_BLOCKS;
+        page_say();
     }
-    if (bdn & 1u << B_LFO) {             /* LFO: the MIXER (the break, the kick, FX main, FX overlay); again, groove */
+    if (bdn & 1u << B_LFO) {             /* LFO: the MIXER (the break, the lanes, FX); again, groove */
         ui.mpage = ui.page == PG_MIX ? (uint8_t)!ui.mpage : 0u;
         ui.page = PG_MIX;
         ui.redraw |= RG_FOOT | RG_BLOCKS;
@@ -393,7 +409,10 @@ static void input(void)
         ui.redraw |= RG_FOOT | RG_BLOCKS;
         page_say();
     }
-    if (bdn & 1u << B_REC && btn & 1u << B_SEL) {   /* SEL + REC: clear (on SEQ its lane; else the pattern) */
+    if (bdn & 1u << B_REC && btn & 1u << B_SEL && ui.page == PG_MC && mc.part == MCP_LIVE) {
+        ui.tap_combo = 1u;
+        mq_clear();                      /* SEL + REC on LIVE: the queue cleared (the scene playing plays out) */
+    } else if (bdn & 1u << B_REC && btn & 1u << B_SEL) {   /* SEL + REC: clear (on SEQ its lane; else the pattern) */
         seq_clear(ui.page == PG_SEQ);
     } else if (bdn & 1u << B_REC) {      /* REC: record the keys and MIDI notes into the pattern while playing */
         ui.rec ^= 1u;
@@ -475,7 +494,7 @@ static void input(void)
         undo_swap();
     else if (bdn & 1u << B_SAVE) {
         app_say("SAVE", plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 &&
-                        plat_store_save(OBJ_PAT, &pats, sizeof pats) == 0 ? "DONE" : "FAILED");
+                        plat_store_save(OBJ_PAT, &pats, sizeof pats) == 0 && mc_save() == 0 ? "DONE" : "FAILED");
         set_dirty = 0u;
     }
     /* OCT- / OCT+: pitch in semitones, repeating faster while held; both: back to 0 */
@@ -535,15 +554,10 @@ static void input(void)
                 break_turn(d);
             else if (ui.page == PG_GLOBAL)   /* GLOBAL: its part */
                 global_part((ui.gpage + (d > 0 ? 1u : GPARTS - 1u)) % GPARTS);
-            else if (ui.page == PG_KICK) {    /* the kick: its part (MIX, each layer and its FX, MACRO, OUT) */
-                kick_part_set((kick_part() + (d > 0 ? 1u : KPARTS - 1u)) % KPARTS);
-                ui.redraw |= RG_BLOCKS | RG_FOOT;
-            } else if (ui.page == PG_SEQ) {   /* SEQ: the lane its keys edit */
+            else if (ui.page == PG_MC)   /* MATHCORE: the queue's cursor, the slice, the lane, the scene */
+                mc_algo(d);
+            else if (ui.page == PG_SEQ) {   /* SEQ: the lane its keys edit */
                 ui.seq_lane = (uint8_t)((ui.seq_lane + (d > 0 ? 1u : NSEQL - 1u)) % NSEQL);
-                page_say();
-                ui.redraw |= RG_BLOCKS | RG_FOOT;
-            } else if (ui.page == PG_PERC) {   /* the snare or the hat: SOUND or SHAPE */
-                ui.ppage ^= 1u;
                 page_say();
                 ui.redraw |= RG_BLOCKS | RG_FOOT;
             } else if (ui.page == PG_FX)
@@ -557,20 +571,8 @@ static void input(void)
             pattern_pick(d);             /* SEL held: the pattern, on any page */
         else if (k == EN_PRESET && (ui.page == PG_FX || ui.page == PG_ARP))
             fx_type_turn(d);             /* the focused slot's effect (ARP: the shown key's) */
-        else if (k == EN_PRESET && ui.page == PG_PERC) {   /* a built-in snare or hat */
-            uint8_t *pr = &ui.ppreset[ui.pvoice % PERC_VOICES];
-            *pr = (uint8_t)((*pr + (d > 0 ? 1u : PERC_PRESETS - 1u)) % PERC_PRESETS);
-            perc_preset(&set.perc.v[ui.pvoice % PERC_VOICES], ui.pvoice, *pr);
-            app_say(PERC_VOICE_NAME[ui.pvoice % PERC_VOICES], PERC_PRESET_NAME[ui.pvoice % PERC_VOICES][*pr]);
-            ui.redraw |= RG_BLOCKS | RG_FOOT;
-            changed();
-        } else if (k == EN_PRESET && ui.page == PG_KICK) {   /* a built-in kick (its volume kept) */
-            ui.kpreset = (uint8_t)((ui.kpreset + (d > 0 ? 1u : KICK_PRESETS - 1u)) % KICK_PRESETS);
-            kick_preset(&set.kick, ui.kpreset);
-            app_say("KICK", KICK_PRESET_NAME[ui.kpreset]);
-            ui.redraw |= RG_BLOCKS | RG_FOOT;
-            changed();
-        }
+        else if (k == EN_PRESET && ui.page == PG_MC)
+            mc_presets(d);               /* MATHCORE: LIVE moves the entry, LANE its knob sets */
         else if (k == EN_PRESET)
             pattern_pick(d);             /* elsewhere: the pattern */
         else if (key_tuned() >= 0)       /* a white key held: K1-K4 tune its loop */
@@ -618,14 +620,14 @@ static void leds(void)
     if (set_dirty)
         b |= 1u << B_SAVE;
     if (!slices_page()) {                /* a lane's page: its steps lit, the step playing flipped */
-        uint32_t m = keys_lit(&st);
+        uint32_t m = mc_lane_page() ? mc_keys_lit(&st) : keys_lit(&st);
         for (i = 0; i < 16u; i++)
             if (m >> i & 1u)
                 k |= 1u << WK[i];
     } else if (st.slice >= 0 && st.slice < 16)
         k |= 1u << WK[st.slice];
-    for (i = 0; i < 11u; i++)            /* (ARP: the keys' effects on) */
-        if ((ui.page == PG_ARP ? pfx_on() : st.pads) >> i & 1u)
+    for (i = 0; i < 11u; i++)            /* (ARP: the keys' effects on; MATHCORE's LIVE and SCENE: their scenes) */
+        if ((ui.page == PG_ARP ? pfx_on() : !pads_page() ? mc_black_lit(&st) : st.pads) >> i & 1u)
             k |= 1u << BK[i];
     plat_glow(1);
     plat_leds(b, k);
@@ -659,16 +661,12 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
         split_value(i, t);
         return;
     }
-    if (ui.page == PG_KICK) {
-        kick_value(i, t);
+    if (ui.page == PG_MC) {
+        mc_value(i, t);
         return;
     }
     if (ui.page == PG_SEQ) {
         seq_value(i, t);
-        return;
-    }
-    if (ui.page == PG_PERC) {
-        perc_value(i, t);
         return;
     }
     if (ui.page == PG_MIX) {
@@ -758,13 +756,15 @@ static void draw_tabs(void)
             text_cat(part, " ");
             text_cat(part, fx_part_name());
         }
-    } else {                             /* EDIT: the drum, and its part */
-        for (i = 0; i < 3u; i++)
-            x = tab(x, LANE_NAME[i], i == ui.einst);   /* (KICK SNARE HAT) */
-        if (ui.page == PG_KICK)
-            kick_part_name(kick_part(), part);
-        else
-            text_cat(part, ui.ppage ? "SHAPE" : "SOUND");
+    } else {                             /* EDIT: MATHCORE's parts; LANE its knobs, SCENE the scene */
+        for (i = 0; i < MCPARTS; i++)
+            x = tab(x, MCPART_NAME[i], i == mc.part);
+        if (mc.part == MCP_LANE)
+            text_cat(part, MKS_NAME[mc.kset % MKSETS]);
+        else if (mc.part == MCP_SCENE) {
+            char sc[2] = {scene_ch(mc.scene), 0};
+            text_cat(part, sc);
+        }
     }
     if (part[0]) {                       /* "< PART >": ALGORITHM turns it */
         char t[24] = "< ";
@@ -809,13 +809,17 @@ static void page_say(void)
             text_cat(t, fx_part_name());
         }
         break;
-    case PG_KICK:
-        text_cat(t, "KICK ");
-        kick_part_name(kick_part(), t);
-        break;
-    default:
-        text_cat(t, PERC_VOICE_NAME[ui.pvoice % PERC_VOICES]);
-        text_cat(t, ui.ppage ? " SHAPE" : " SOUND");
+    default:                             /* MATHCORE: "EDIT LIVE", "EDIT LANE KICK RHYTHM", "EDIT SCENE A" */
+        text_cat(t, MCPART_NAME[mc.part % MCPARTS]);
+        if (mc.part == MCP_LANE) {
+            text_cat(t, " ");
+            text_cat(t, ROLE_NAME[mc_lane()->role % MC_ROLES]);
+            text_cat(t, " ");
+            text_cat(t, MKS_NAME[mc.kset % MKSETS]);
+        } else if (mc.part == MCP_SCENE) {
+            char sc[3] = {' ', scene_ch(mc.scene), 0};
+            text_cat(t, sc);
+        }
         break;
     }
     app_say(BTN[ui.page % NPAGES], t);
@@ -858,14 +862,14 @@ static const char *foot_knob(uint32_t i, char *t)
                                               {"P1", "P2", "P3", "MIX"},
                                               {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"},
                                               {"", "", "", ""},
-                                              {"BREAK", "KICK", "PERC", "FX"},
+                                              {"BREAK", "LANES", "", "FX"},
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
                                               {"", "", "", ""},
                                               {"TEMPO", "FINE", "HALF / X2", "CLICK"},
                                               {"P1", "P2", "P3", "MIX"},
                                               {"SPLIT", "BREAK B", "BAR A", "BAR B"}};
     static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
-    static const char *const KN_GROOVE[4] = {"SWING", "DRUMS", "", ""};
+    static const char *const KN_GROOVE[4] = {"SWING", "LANES", "", ""};
     static const char *const KN_CHAN[4] = {"CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"};
     static const char *const KN_LANE[4] = {"FILL", "ROTATE", "CLR / 4X4", "COPY"};
     const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_CHAN[i] : ui.page == PG_GLOBAL && ui.gpage
@@ -890,10 +894,8 @@ static const char *foot_knob(uint32_t i, char *t)
     }
     if (ui.page == PG_FX || ui.page == PG_ARP)   /* the focused slot's effect: its settings, then MIX */
         name = fx_param_name(fxk(), (int)i);
-    else if (ui.page == PG_KICK)
-        name = kick_knob_name((int)i);
-    else if (ui.page == PG_PERC)
-        name = PERC_KNOB[ui.pvoice % PERC_VOICES][ui.ppage][i];
+    else if (ui.page == PG_MC)
+        name = mc_knob_name(i);
     else if (ui.page == PG_SEQ && ui.seq_lane >= SL_KICK)
         name = KN_LANE[i];
     knob_value((int)i, t);
@@ -907,9 +909,12 @@ static void draw_foot(const brk_status_t *st)
     char t[16];
     draw_tabs();
     cv_begin(240, 48, C_BLACK);
-    for (i = 0; i < 11u; i++) {          /* the pads; on ARP the keys' effects (latched: amber below, shown: white) */
-        int arp = ui.page == PG_ARP, on = arp ? (int)(pfx_on() >> i & 1u) : (int)(st->pads >> i & 1u);
-        const char *nm = arp ? pfx_short(i) : PAD_NAME[i];
+    for (i = 0; i < 11u; i++) {          /* the pads; on ARP the keys' effects (latched: amber below, shown: white);
+                                          * MATHCORE's LIVE and SCENE: the keys' scenes */
+        int arp = ui.page == PG_ARP, scn = !arp && !pads_page();
+        int on = arp ? (int)(pfx_on() >> i & 1u) : scn ? mc_pad_on(i, st) : (int)(st->pads >> i & 1u);
+        char lt[2];
+        const char *nm = arp ? pfx_short(i) : scn ? mc_pad_label(i, lt) : PAD_NAME[i];
         int32_t x = 2 + (int32_t)i * 21;
         cv_rect(x, 0, 20, 14, on ? C_HI : C_BLOCK);
         cv_text(x + (20 - text_w(&FONT_T, nm)) / 2, 1, &FONT_T, nm, on ? C_BLACK : arp && i == pfx_sel ? C_WHITE : C_GRAY);
@@ -1006,8 +1011,8 @@ static void speak(uint32_t now)
     uint32_t ctx, play = (uint32_t)playing_now();
     if (ann_on() && !ui.intro && !demo.on) {
         ctx = ui.page | ui.gpage << 4 | ui.mpage << 6 | ui.seq_lane << 7 | ui.fx_focus << 10 | (uint32_t)FXPG << 13 |
-              pfx_sel << 15 | ui.einst << 19 | ui.ppage << 21 | (uint32_t)kick_part() << 22 | ui.help << 26 |
-              ui.key_layer << 27;
+              pfx_sel << 15 | (uint32_t)mc.part << 19 | (uint32_t)mc.kset << 21 | (uint32_t)mc.lane << 23 |
+              ui.help << 26 | ui.key_layer << 27 | (uint32_t)mc.scene << 28;
         ctx = ctx * 31u + (uint32_t)(ui.shown + 1);
         if (ann_where()) {
             screen_text(1);
@@ -1101,6 +1106,7 @@ void app_frame(void)
     }
     ui.touched = 0u;
     brk_status(&st);
+    mc_frame(&st);                       /* MATHCORE: the queue's next entry, its end */
     b = brk_get_break();
     if (pat_next >= 0 && (!st.playing || (st.step >= 0 && (st.half >= 0 ? st.step % 16 == 15   /* (a half alone) */
                                                           : (uint32_t)st.step + 1u >= pat_len())))) {
@@ -1221,8 +1227,6 @@ void app_frame(void)
             ui.panel_drawn = now;
         } else if (ui.page == PG_SEQ)
             draw_seq(&st);
-        else if (ui.page == PG_PERC)
-            draw_perc(&st);
         else if (ui.page == PG_GLOBAL) {
             draw_global(&st);
             ui.panel_drawn = now;
@@ -1232,8 +1236,8 @@ void app_frame(void)
         } else if (ui.page == PG_FX) {
             draw_chain();
             ui.panel_drawn = now;
-        } else if (ui.page == PG_KICK)
-            draw_kick(&st);
+        } else if (ui.page == PG_MC)
+            draw_mc(&st);
         else if (ui.page == PG_MIX) {
             draw_mixer();
             ui.mix_drawn = now;
@@ -1396,19 +1400,23 @@ int app_host_cmd(const char *cmd, const char *a, const char *b, const char *c, c
 /* the scenarios' checks of the UI's state (expect WHAT VALUE) */
 int app_expect(const char *what, int *got)
 {
-    static const char *const W[] = {"page", "gpage", "kpage", "seq_lane", "fx_focus", "fx_on", "lane_kick",
+    static const char *const W[] = {"page", "gpage", "mc_part", "seq_lane", "fx_focus", "fx_on", "lane_kick",
                                     "lane_hat", "pattern", "brk", "brk_next", "help", "drums_chain", "lobo",
                                     "pfx_on", "pfx_sel", "pfx_latched", "roll_pitch_x10", "demo", "fx_page",
                                     "mb_solo", "mb_thr_low", "mb_slot2_thr_low", "pfx_type", "pfx_voices",
                                     "pfx_busy", "pads", "midi_ch", "midi_out", "fx1_mix", "fx1_type", "gate",
                                     "step", "pat_next", "key", "key_n", "klen0", "n_user", "n_breaks",
-                                    "split", "split_at", "half", "half_ask", "layer", "split_b"};
-    int v[45];
+                                    "split", "split_at", "half", "half_ask", "layer", "split_b",
+                                    "mc_on", "mq_n", "mc_scene", "mc_qpos", "mc_edit", "mc_kicks", "mc_snares",
+                                    "mc_hats", "mc_percs", "mc_missing", "mc_adv", "mc_hits", "mq_key0", "mc_state0",
+                                    "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next"};
+    int v[64];
+    uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
     v[0] = ui.page;
     v[1] = ui.gpage;
-    v[2] = ui.kpage;
+    v[2] = mc.part;
     v[3] = ui.seq_lane;
     v[4] = ui.fx_focus;
     v[5] = set.fx.slot[ui.fx_focus & 3u].on;
@@ -1454,7 +1462,24 @@ int app_expect(const char *what, int *got)
     v[42] = brk_get_half();              /* the half asked for */
     v[43] = st.layer;                    /* the layer's key, -1 none */
     v[44] = set.split_b;                 /* break B's number + 1 */
-    for (i = 0; i < 45u; i++)
+    v[45] = mc.on;                       /* MATHCORE: 1 the queue plays, 2 the scene edited */
+    v[46] = mq.n;
+    v[47] = st.mc_scene;                 /* the scene playing (0 = A), -1 none */
+    v[48] = mc.qpos;
+    v[49] = mc.scene;
+    for (i = 0; i < 4u; i++)             /* the Slice Map: each role's slices */
+        v[50 + i] = (int)mc_role_list(i, rl);
+    v[54] = st.mc_missing;
+    v[55] = (int)st.mc_adv;
+    v[56] = st.mc_hits[0] + st.mc_hits[1] + st.mc_hits[2] + st.mc_hits[3];   /* (mod 256 each) */
+    v[57] = mq.key[0] < MC_SCENES ? mq.key[0] : -1;
+    v[58] = mc.state[0];
+    v[59] = mc.cursor;
+    v[60] = mq.n ? mq.q[0] : -1;
+    v[61] = mq.n ? mq.q[mq.n - 1u] : -1;
+    v[62] = set.lane_level;
+    v[63] = st.mc_next;
+    for (i = 0; i < 64u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

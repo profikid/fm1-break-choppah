@@ -6,7 +6,9 @@
 #define brk_exp2f brk_exp2f_c
 #define brk_log2f brk_log2f_c
 
-enum { PG_HOME, PG_GEN, PG_FX, PG_GLOBAL, PG_KICK, PG_MIX, PG_SEQ, PG_PERC, PG_TAP, PG_ARP, PG_SPLIT, NPAGES };
+/* the pages (their numbers kept: the scenarios' "expect page"). PG_MC: MATHCORE on EDIT (ui/mc.c), where the drums'
+ * design was; PG_X7 was the snare and hat's page, gone with them (22 Nov 2026): never shown */
+enum { PG_HOME, PG_GEN, PG_FX, PG_GLOBAL, PG_MC, PG_MIX, PG_SEQ, PG_X7, PG_TAP, PG_ARP, PG_SPLIT, NPAGES };
 static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
                                                 "FLT", "DUB"};
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
@@ -35,11 +37,8 @@ static struct {
     uint32_t key_since;                  /* when it was pressed */
     int16_t shown;                       /* the strip shows: -1 the blocks, 0..10 a pad, 100 + k white key k */
     uint8_t gpage;                       /* the GLOBAL page's part: 0 MIDI and Bluetooth, 1 pitch, 2 channel */
-    uint8_t kpage, klayer, kpreset;      /* the KICK page: its sub-page (KP_*), the layer it edits, the preset */
-    uint8_t mpage;                       /* the MIXER's half: 0 LEVELS (break, kick, perc, FX), 1 GROOVE */
+    uint8_t mpage;                       /* the MIXER's half: 0 LEVELS (break, lanes, FX), 1 GROOVE */
     uint8_t seq_lane, seq_step;          /* the SEQ page: the lane (SL_*) and the break step (0..31) it edits */
-    uint8_t pvoice, ppage, ppreset[PERC_VOICES];   /* the SNARE / HAT page: its voice, sub-page, presets */
-    uint8_t einst;                       /* EDIT, the drums' design: 0 the kick (PG_KICK), 1 the snare, 2 the hat (PG_PERC) */
     uint8_t rec;                         /* REC: white keys and MIDI notes write into the pattern as it plays */
     uint8_t help;                        /* SEL pressed alone: the SEL combinations on the strip, until the next press */
     uint32_t help_t, tap_last;           /* when the card opened; the last tap (TAP's flash) */
@@ -60,9 +59,10 @@ static struct {
     float reel;                          /* the tape stop's reels, turns */
     uint8_t redraw;                      /* RG_* bits: the regions to draw again */
 } ui;
-/* the white keys play slices (or, on the SEQ, KICK and SNARE / HAT pages, steps) */
+/* the white keys play slices (or, on SEQ and MATHCORE's LANE, steps; on TAP, taps) */
 static void page_say(void);              /* the header: the page's button and part, as its tabs (main.c) */
-static int slices_page(void) { return ui.page != PG_SEQ && ui.page != PG_TAP; }
+static int mc_lane_page(void);           /* (ui/mc.c) */
+static int slices_page(void) { return ui.page != PG_SEQ && ui.page != PG_TAP && !mc_lane_page(); }
 static int home_page(void) { return ui.page == PG_HOME || ui.page == PG_GEN || ui.page == PG_SPLIT; }
 enum { RG_HEAD = 1, RG_WAVE = 2, RG_BLOCKS = 4, RG_FOOT = 8, RG_ALL = 15, RG_FX = 16 };
 

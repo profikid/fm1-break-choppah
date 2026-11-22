@@ -9,8 +9,8 @@
 #include "brk.h"
 #include "brk_fx.h"
 #include "brk_synth.h"
-#include "kick.h"
-#include "perc.h"
+#include "brk_math.h"
+#define brk_randf_test(s) (brk_randf(s) * 2.0f - 1.0f)
 
 #define RATE 22050u
 #define BPM 136.9f
@@ -1714,247 +1714,398 @@ static void test_overload(void)
           brk_fx_shed());
 }
 
-/* the snare and the hat (PRD K-10): each sounds on its own, in range, and dies away; the presets differ; a hit lands
- * on its sample; the snare's body is near its TUNE */
-static void test_perc(void)
+/* ------------------------------------------------------------------ MATHCORE (docs/PRD_MATHCORE.md) --- */
+/* a test break whose hits are known: K a low thump, S a mid body with noise, H quiet high hiss, P a high-mid knock */
+static void mc_test_break(const char *pat)
 {
-    static float o[BRK_SR / 2];
-    perc_t p;
-    uint32_t v, k, i, n = BRK_SR / 2, bounded = 1;
-    perc_defaults(&p);
-    for (v = 0; v < PERC_VOICES; v++)
-        for (k = 0; k < PERC_PRESETS; k++) {
-            uint16_t at = 100u;
-            uint8_t who = (uint8_t)(1u << v);
-            float pk = 0.0f, tail = 0.0f, before = 0.0f;
-            perc_preset(&p.v[v], v, k);
-            perc_set(&p);
-            perc_init();
-            for (i = 0; i < n; i += BLOCK) {
-                uint32_t m = n - i < BLOCK ? n - i : BLOCK;
-                perc_render(o + i, m, &at, &who, i == 0 ? 1u : 0u);
+    uint32_t n = 16u, sl = 1376u, i, s, seed = 7u;
+    float lp = 0.0f;
+    brk_init();
+    for (i = 0; i < n * sl; i++)
+        pcm[i] = 0;
+    for (s = 0; s < n; s++)
+        for (i = 0; i < sl; i++) {
+            float t = (float)i / (float)RATE, x = 0.0f, nz = brk_randf_test(&seed);
+            switch (pat[s]) {
+            case 'K': x = 0.9f * sinf(6.2831853f * 55.0f * t) * expf(-t * 18.0f); break;
+            case 'S': lp += (nz - lp) * 0.3f;
+                      x = (0.35f * sinf(6.2831853f * 330.0f * t) + 0.6f * lp) * expf(-t * 25.0f); break;
+            case 'H': x = 0.25f * (nz - lp) * expf(-t * 35.0f); lp = nz; break;
+            case 'P': x = 0.3f * sinf(6.2831853f * 900.0f * t) * expf(-t * 40.0f); break;
+            default: break;
             }
-            for (i = 0; i < n; i++) {
-                float a = fabsf(o[i]);
-                if (i < 100u && a > before) before = a;
-                if (a > pk) pk = a;
-                if (i > n - 2205u && a > tail) tail = a;
-            }
-            if (!(pk > 0.1f && pk <= 1.0f && before == 0.0f && tail < pk * 0.2f)) {
-                bounded = 0;
-                printf("  perc %s %s: peak %.3f before %.4f tail %.3f\n", PERC_VOICE_NAME[v], PERC_PRESET_NAME[v][k], pk,
-                       before, tail);
-            }
-            if (k == 0) {
-                char name[24];
-                snprintf(name, sizeof name, "perc_%s.wav", PERC_VOICE_NAME[v]);
-                wav(name, o, o, n);
-            }
+            pcm[s * sl + i] = (int16_t)(x * 30000.0f);
         }
-    CHECK(bounded, "snare and hat: every preset silent before its hit, in range, and gone in half a second");
-    /* the snare's body alone (no noise, no drive) rings at its tune */
-    perc_defaults(&p);
-    p.v[PV_SNARE].snap = 0.0f;
-    p.v[PV_SNARE].drive = 0.0f;
-    p.v[PV_SNARE].decay = 1.0f;
-    p.v[PV_SNARE].tune = 0.5f;
-    p.v[PV_SNARE].tone = 0.0f;
-    perc_set(&p);
-    perc_init();
-    perc_hit(PV_SNARE);
-    for (i = 0; i < n; i += BLOCK)
-        perc_render(o + i, n - i < BLOCK ? n - i : BLOCK, 0, 0, 0u);
-    {                                    /* Goertzel: the energy at the tune against an octave and a half up */
-        float want = perc_tune_hz(PV_SNARE, 0.5f), e[2];
-        uint32_t f;
-        for (f = 0; f < 2u; f++) {
-            float w = 2.0f * cosf(6.2831853f * want * (f ? 2.9f : 1.0f) / (float)BRK_SR), a = 0.0f, b = 0.0f;
-            for (i = 0; i < 8820u; i++) {
-                float c = o[i] + w * a - b;
-                b = a;
-                a = c;
-            }
-            e[f] = a * a + b * b - w * a * b;
-        }
-        CHECK(e[0] > e[1] * 4.0f, "snare body at its tune (%.0f Hz): %.1f dB over 2.9x it", want,
-              10.0f * log10f(e[0] / (e[1] + 1e-9f)));
+    brk.pcm = pcm;
+    brk.len = n * sl;
+    brk.rate = RATE;
+    brk.bars = 1u;
+    brk.nslices = n;
+    brk.split = 0u;
+    for (i = 0; i <= n; i++)
+        brk.slice[i] = i * sl;
+    brk.bpm_x100 = (uint32_t)(60.0f * (float)RATE / (4.0f * (float)sl) * 100.0f + 0.5f);
+    snprintf(brk.name, sizeof brk.name, "MC TEST");
+    brk_set_break(&brk);
+    brk_tempo((float)brk.bpm_x100 * 0.01f);
+    brk_pitch(0.0f);
+    brk_swing(0.5f);
+    brk_seed(1u);
+}
+
+/* the Slice Map, heard: the kicks, the snares, the hats where they are; each role found */
+static void test_mc_map(void)
+{
+    static const char P[] = "KHSHKHSHKHSHKHSP";
+    uint8_t r[BRK_MAX_SLICES];
+    uint32_t i, kick_ok = 1, snare_ok = 1, hat_ok = 1;
+    mc_test_break(P);
+    mc_auto_roles(&brk, r);
+    for (i = 0; i < 16u; i++) {
+        int k = r[i] >> ROLE_KICK & 1u, s = r[i] >> ROLE_SNARE & 1u, h = r[i] >> ROLE_HAT & 1u;
+        if (k != (P[i] == 'K'))
+            kick_ok = 0;
+        if (P[i] == 'S' ? !s : s && P[i] != 'P')
+            snare_ok = 0;
+        if (P[i] == 'H' && !h)
+            hat_ok = 0;
+        if (P[i] != 'H' && h)
+            hat_ok = 0;
     }
-    {                                    /* the screen's shape of a hit: loud at its start, quiet by its end */
-        perc_t ps;
-        uint8_t px[66];
-        uint32_t v2, c, pk;
-        perc_defaults(&ps);
-        for (v2 = 0; v2 < PERC_VOICES; v2++) {
-            perc_shape(v2, &ps.v[v2], px, 66u, 400u, 30u);
-            for (c = 0, pk = 0; c < 66u; c++)
-                pk = px[c] > pk ? px[c] : pk;
-            CHECK(pk >= 3u && px[65] < pk / 2u && (px[0] == pk || px[1] == pk || px[2] == pk),
-                  "perc_shape %u: a hit at its start, then its tail (%u .. %u)", v2, pk, px[65]);
-        }
+    CHECK(kick_ok, "Slice Map: the kicks are the K slices");
+    CHECK(snare_ok, "Slice Map: the snares are the S slices");
+    CHECK(hat_ok, "Slice Map: the hats are the H slices");
+    for (i = 0; i < 16u; i++)
+        printf("%s%s%s%s%s", i ? " " : "  map: ", r[i] & 1u ? "K" : "", r[i] & 2u ? "S" : "", r[i] & 4u ? "H" : "",
+               r[i] & 8u ? "P" : r[i] ? "" : "-");
+    printf("\n");
+    {
+        uint8_t r2[BRK_MAX_SLICES];
+        mc_auto_roles(&brk, r2);
+        CHECK(!memcmp(r, r2, sizeof r), "Slice Map: the same break gives the same map");
+    }
+    {                                    /* silence: no roles at all */
+        for (i = 0; i < brk.len; i++)
+            pcm[i] = 0;
+        mc_auto_roles(&brk, r);
+        for (i = 0; i < 16u && !r[i]; i++)
+            ;
+        CHECK(i == 16u, "Slice Map: a silent break has no roles");
     }
 }
 
-/* the kick (PRD K-*): its layers, its decay, its hits on their samples, the presets, the steps' events */
-static float kick_buf[BRK_SR];
-static float kick_run(const kick_t *k, uint32_t n, uint32_t hit_at)
+/* role lookup; multiple roles on a slice; an empty role is silent and says so; the pattern's drum lanes play roles */
+static float mc_lanes[BLOCK];
+static float mc_run(uint32_t n, float *peak_out, float *peak_lanes)
 {
-    uint32_t i = 0;
-    float peak = 0.0f;
-    kick_set(k);
-    kick_init();
+    static float o[BLOCK];
+    uint32_t i = 0, j;
+    float po = 0.0f, pl = 0.0f;
+    brk_lanes_out(mc_lanes);
     while (i < n) {
-        uint32_t m = n - i < BLOCK ? n - i : BLOCK, j;
-        uint16_t at = (uint16_t)(hit_at - i);
-        kick_render(kick_buf + i, m, &at, hit_at >= i && hit_at < i + m ? 1u : 0u);
-        for (j = 0; j < m; j++)
-            if (fabsf(kick_buf[i + j]) > peak)
-                peak = fabsf(kick_buf[i + j]);
+        uint32_t m = n - i < BLOCK ? n - i : BLOCK;
+        brk_render(o, m);
+        for (j = 0; j < m; j++) {
+            if (fabsf(o[j]) > po)
+                po = fabsf(o[j]);
+            if (fabsf(mc_lanes[j]) > pl)
+                pl = fabsf(mc_lanes[j]);
+        }
         i += m;
     }
-    return peak;
+    if (peak_out)
+        *peak_out = po;
+    if (peak_lanes)
+        *peak_lanes = pl;
+    return pl;
 }
-static float span_peak(uint32_t a, uint32_t b)
+static void test_mc_roles(void)
 {
-    float p = 0.0f;
-    for (; a < b; a++)
-        if (fabsf(kick_buf[a]) > p)
-            p = fabsf(kick_buf[a]);
-    return p;
+    uint8_t r[BRK_MAX_SLICES] = {0}, list[BRK_MAX_SLICES];
+    brk_status_t st;
+    float pl;
+    r[0] = 1u << ROLE_KICK;
+    r[4] = 1u << ROLE_SNARE | 1u << ROLE_PERC;
+    r[8] = 1u << ROLE_KICK;
+    CHECK(mc_role_slices(r, 16u, ROLE_KICK, list) == 2u && list[0] == 0u && list[1] == 8u,
+          "roles: KICK is slices 1 and 9");
+    CHECK(mc_role_slices(r, 16u, ROLE_PERC, list) == 1u && list[0] == 4u &&
+          mc_role_slices(r, 16u, ROLE_SNARE, list) == 1u && list[0] == 4u, "roles: one slice in two roles");
+    CHECK(mc_role_slices(r, 16u, ROLE_HAT, list) == 0u, "roles: HAT has none");
+    mc_test_break("KHSHKHSHKHSHKHSP");
+    brk_roles(r, BRK_MAX_SLICES);
+    brk_drum_lanes(0x0001u, 0u, 0u);     /* the pattern's kick on step 1: its KICK slice */
+    brk_play(1);
+    mc_run(brk.len, 0, &pl);
+    CHECK(pl > 0.2f, "drum lanes: the kick lane plays a KICK slice (%.3f)", pl);
+    brk_drum_lanes(0u, 0u, 0x0001u);     /* the hat lane: no HAT slice: silent, and said */
+    brk_play(0);
+    mc_run(BLOCK * 4u, 0, 0);
+    brk_play(1);
+    mc_run(brk.len, 0, &pl);
+    brk_status(&st);
+    CHECK(pl < 1e-6f && (st.mc_missing >> ROLE_HAT & 1u), "drum lanes: an empty role is silent (%.4f) and missing (%x)",
+          pl, st.mc_missing);
+    brk_play(0);
+    brk_drum_lanes(0u, 0u, 0u);
+    mc_run(BLOCK * 4u, 0, 0);
+    brk_role_hit(ROLE_SNARE);            /* MIDI's drum note: now, stopped too */
+    mc_run(BLOCK * 8u, 0, &pl);
+    CHECK(pl > 0.1f, "role hit: a SNARE slice at once (%.3f)", pl);
+    brk_lanes_out(0);
 }
 
-static void test_kick(void)
+/* the scenes' lanes: four at once, of 5, 7, 11 and 13 events, on one clock for 64 bars (their places always where the
+ * step count says); mute keeps the phase; the seed repeats; the break's loop quiet under a scene without it */
+static mc_scene_t mc_sc[MC_SCENES];
+static void mc_scene_init(mc_scene_t *s, uint32_t bars)
 {
-    kick_t k, solo;
-    uint32_t i, l, n = BRK_SR / 2u, zc = 0;
-    float p, first = 0.0f, prev_peak = -1.0f;
-    int differ = 0, bounded = 1;
-    kick_defaults(&k);
-    CHECK(sizeof(kick_t) == 136u, "kick_t is %u bytes (136)", (unsigned)sizeof(kick_t));
-    p = kick_run(&k, n, 1000u);
-    CHECK(span_peak(0, 1000u) == 0.0f, "kick: silent before its hit (%.4f)", span_peak(0, 1000u));
-    CHECK(p > 0.4f && p <= 1.0f, "kick: a full hit (peak %.3f)", p);
-    wav("kick_default.wav", kick_buf, kick_buf, n);
-    p = kick_run(&k, BRK_SR, 0u);
-    CHECK(span_peak(BRK_SR - 2205u, BRK_SR) < p * 0.1f, "kick: it decays (%.3f at the end of a second, %.3f peak)",
-          span_peak(BRK_SR - 2205u, BRK_SR), p);
-    for (l = 0; l < KICK_LAYERS; l++) {  /* each layer alone sounds */
-        uint32_t o;
-        solo = k;
-        solo.intensity = 0.0f;
-        for (o = 0; o < KICK_LAYERS; o++)
-            solo.l[o].level = o == l ? 1.0f : 0.0f;
-        p = kick_run(&solo, n, 0u);
-        CHECK(p > 0.05f && p <= 1.0f, "kick: %s alone sounds (peak %.3f)", KICK_LAYER_NAME[l], p);
-        for (o = 0; o < KICK_FX; o++) {  /* and through each of its effects, bounded */
-            solo.l[l].fx = (uint8_t)o;
-            solo.l[l].fa = solo.l[l].fb = 0.8f;
-            p = kick_run(&solo, n / 4u, 0u);
-            if (!(p <= 1.0f) || (o != KFX_RING && p < 0.01f))
-                bounded = 0;
-        }
+    uint32_t l;
+    memset(s, 0, sizeof *s);
+    s->bars = (uint8_t)bars;
+    for (l = 0; l < MC_LANES; l++) {
+        mc_lane_t *L = &s->lane[l];
+        L->len = 16u;
+        L->rate = MCR_16;
+        L->prob = 100u;
+        L->ratchet = 1u;
+        L->gate = 100u;
+        L->level = 100u;
+        L->role = (uint8_t)l;
     }
-    CHECK(bounded, "kick: every layer through every effect sounds and stays in range");
-    /* SUB's pitch: 30 Hz at 0, 90 at 1; after its drop, the zero crossings say so */
-    solo = k;
-    solo.intensity = 0.0f;
-    for (l = 0; l < KICK_LAYERS; l++)
-        solo.l[l].level = l == KL_SUB ? 1.0f : 0.0f;
-    solo.l[KL_SUB].pitch = 0.5f;
-    solo.l[KL_SUB].decay = 1.0f;
-    solo.l[KL_SUB].tone = 0.0f;
-    kick_run(&solo, n, 0u);
-    for (i = BRK_SR / 10u; i < BRK_SR / 10u * 4u; i++)
-        if (kick_buf[i - 1] < 0.0f && kick_buf[i] >= 0.0f)
-            zc++;
+}
+static uint32_t mc_hits_total[MC_LANES];
+static uint8_t mc_hits_was[MC_LANES];
+static void mc_count(void)
+{
+    brk_status_t st;
+    uint32_t l;
+    brk_status(&st);
+    for (l = 0; l < MC_LANES; l++) {
+        mc_hits_total[l] += (uint8_t)(st.mc_hits[l] - mc_hits_was[l]);
+        mc_hits_was[l] = st.mc_hits[l];
+    }
+}
+static void mc_run_counting(uint32_t n, float *buf)
+{
+    static float o[BLOCK];
+    uint32_t i = 0;
+    brk_lanes_out(mc_lanes);
+    while (i < n) {
+        uint32_t m = n - i < BLOCK ? n - i : BLOCK;
+        brk_render(buf ? buf + i : o, m);
+        if (buf)
+            memcpy(buf + i, mc_lanes, m * sizeof(float));
+        mc_count();
+        i += m;
+    }
+}
+static void mc_zero_counts(void)
+{
+    brk_status_t st;
+    uint32_t l;
+    brk_status(&st);
+    for (l = 0; l < MC_LANES; l++) {
+        mc_hits_total[l] = 0u;
+        mc_hits_was[l] = st.mc_hits[l];
+    }
+}
+static void test_mc_lanes(void)
+{
+    static const uint8_t LEN[4] = {5u, 7u, 11u, 13u};
+    uint8_t r[BRK_MAX_SLICES];
+    uint32_t l, steps, sl;
+    brk_status_t st;
+    int ok = 1;
+    float po, pl;
+    mc_test_break("KHSHKHSHKHSHKHSP");
+    mc_auto_roles(&brk, r);
+    brk_roles(r, BRK_MAX_SLICES);
+    mc_scene_init(&mc_sc[0], 4u);
+    for (l = 0; l < MC_LANES; l++) {
+        mc_sc[0].lane[l].len = LEN[l];
+        mc_sc[0].lane[l].hits = 1u;      /* one hit a cycle: on its first event */
+        mc_sc[0].lane[l].flags = MCL_ON | MCL_FREE;   /* (counting from the start: no reset at each scene) */
+    }
+    brk_mc_scenes(mc_sc);
+    brk_mc_start(0);
+    brk_mc_next(0);                      /* A, round and round */
+    mc_zero_counts();
+    brk_play(1);
+    sl = brk_step_len_samples();
+    mc_run_counting(64u * 16u * sl + sl / 2u, 0);   /* 64 bars and half a step */
+    brk_status(&st);
+    steps = 64u * 16u + 1u;              /* (the 16ths begun: 1025) */
+    for (l = 0; l < MC_LANES; l++) {
+        uint32_t want = (steps + LEN[l] - 1u) / LEN[l];
+        if (mc_hits_total[l] != want || st.mc_pos[l] != (steps - 1u) % LEN[l])
+            ok = 0;
+        printf("  lane %u: %u hits (%u), at %u of %u (%u)\n", l, mc_hits_total[l], want, st.mc_pos[l], LEN[l],
+               (steps - 1u) % LEN[l]);
+    }
+    CHECK(ok, "lanes: 5, 7, 11 and 13 together for 64 bars, each hit and place where the master clock says");
+    CHECK(st.mc_adv == 16u, "lanes: a 4-bar scene, 16 boundaries in 64 bars (%u)", st.mc_adv);
+    {                                    /* the reset at a scene's start: a lane not FREE starts its cycle again */
+        uint32_t f = mc_sc[0].lane[0].flags;
+        mc_sc[0].lane[0].flags = MCL_ON;
+        mc_zero_counts();
+        mc_run_counting(67u * sl, 0);    /* 16th 1092 playing: the scene began on 1089 (17 x 64 + 1) */
+        mc_sc[0].lane[0].flags = (uint8_t)f;
+        brk_status(&st);
+        CHECK(st.mc_pos[0] == 3u, "a lane not FREE starts again with its scene (at %u, 3; FREE: %u)", st.mc_pos[0],
+              (1092u - 1u) % 5u);
+        steps += 67u;
+    }
+    /* mute: the lane quiet, its place running on */
+    brk_mc_mute(1u, 0u);
+    mc_zero_counts();
+    mc_run_counting(10u * sl, 0);
+    brk_status(&st);
+    CHECK(mc_hits_total[0] == 0u && mc_hits_total[1] >= 1u, "mute: the kick lane quiet (%u), the others on (%u)",
+          mc_hits_total[0], mc_hits_total[1]);
+    CHECK(st.mc_pos[0] == (steps + 10u - 1u) % 5u, "mute: its place runs on (%u, %u)", st.mc_pos[0],
+          (steps + 9u) % 5u);
+    brk_mc_mute(0u, 1u << 2);            /* solo the hat lane */
+    mc_zero_counts();
+    mc_run_counting(26u * sl, 0);
+    CHECK(mc_hits_total[2] >= 2u && !mc_hits_total[0] && !mc_hits_total[1] && !mc_hits_total[3],
+          "solo: only the hat lane (%u %u %u %u)", mc_hits_total[0], mc_hits_total[1], mc_hits_total[2],
+          mc_hits_total[3]);
+    brk_mc_mute(0u, 0u);
+    /* the break's own loop: quiet under a scene without it, playing under one with it */
+    mc_run(4u * sl, &po, &pl);
+    mc_run(8u * sl, &po, &pl);
+    CHECK(po < 0.02f && pl > 0.1f, "a scene without the break: the loop quiet (%.4f), the lanes playing (%.3f)", po, pl);
+    mc_sc[0].flags = MCS_BREAK;
+    mc_run(8u * sl, &po, &pl);
+    CHECK(po > 0.1f, "a scene with the break under it: the loop plays (%.3f)", po);
+    mc_sc[0].flags = 0u;
+    brk_play(0);
+    mc_run(BLOCK * 4u, 0, 0);
+    /* the seed: RANDOM with a chance, twice from the start: the same sound */
     {
-        float hz = (float)zc / 0.3f, want = 30.0f * powf(2.0f, 0.5f * 1.585f);
-        CHECK(fabsf(hz - want) < want * 0.1f, "kick: SUB at pitch 0.5 is %.1f Hz (%.1f)", hz, want);
-    }
-    /* decay longer, tail longer */
-    solo.l[KL_SUB].decay = 0.1f;
-    kick_run(&solo, n, 0u);
-    first = span_peak(BRK_SR / 5u, BRK_SR / 5u + 2205u);
-    solo.l[KL_SUB].decay = 0.9f;
-    kick_run(&solo, n, 0u);
-    CHECK(span_peak(BRK_SR / 5u, BRK_SR / 5u + 2205u) > first * 4.0f, "kick: DECAY lengthens the tail (%.3f vs %.3f)",
-          span_peak(BRK_SR / 5u, BRK_SR / 5u + 2205u), first);
-    /* INTENSITY: more drive, more of the tail held up near the peak */
-    {
-        float clean, hard;
-        k.intensity = 0.0f;
-        kick_run(&k, n, 0u);
-        clean = span_peak(BRK_SR / 10u, BRK_SR / 10u + 2205u);
-        k.intensity = 1.0f;
-        kick_run(&k, n, 0u);
-        hard = span_peak(BRK_SR / 10u, BRK_SR / 10u + 2205u);
-        CHECK(hard > clean * 1.5f, "kick: INTENSITY drives the body up (%.3f vs clean %.3f)", hard, clean);
-        kick_defaults(&k);
-    }
-    /* the presets: all bounded, all different */
-    for (l = 0; l < KICK_PRESETS; l++) {
-        float e = 0.0f;
-        char name[40];
-        kick_preset(&k, l);
-        p = kick_run(&k, n, 0u);
-        for (i = 0; i < n; i++)
-            e += kick_buf[i] * kick_buf[i];
-        if (!(p <= 1.0f && p > 0.3f))
-            bounded = 0;
-        if (prev_peak >= 0.0f && fabsf(e - prev_peak) > 1.0f)
-            differ++;
-        prev_peak = e;
-        snprintf(name, sizeof name, "kick_%u.wav", l);
-        wav(name, kick_buf, kick_buf, n);
-    }
-    CHECK(bounded && differ == (int)KICK_PRESETS - 1, "kick: %u presets, in range and each its own (%d differ)",
-          KICK_PRESETS, differ);
-    /* kick_hit (a MIDI note): at the next render */
-    kick_defaults(&k);
-    kick_set(&k);
-    kick_init();
-    kick_hit();
-    kick_render(kick_buf, BLOCK, 0, 0u);
-    CHECK(span_peak(0, BLOCK) > 0.3f, "kick: kick_hit sounds at the next render (%.3f)", span_peak(0, BLOCK));
-    /* a retrigger mid-kick: the kick sounding fades out under the new one, no step (SUB and PUNCH start at 0) */
-    {
-        uint16_t at = 100u;
-        solo = k;
-        solo.intensity = 0.0f;
-        solo.l[KL_GRIT].level = solo.l[KL_CLICK].level = 0.0f;
-        kick_run(&solo, BRK_SR / 5u, 0u);    /* 200 ms in */
-        kick_render(kick_buf, BLOCK, &at, 1u);
-        p = fabsf(kick_buf[100] - kick_buf[99]);
-        CHECK(p < 0.03f && fabsf(kick_buf[99]) > 0.05f, "kick: a retrigger doesn't click (step %.3f, at %.3f)", p,
-              kick_buf[99]);
-    }
-    /* the shape for the screen: loud first, quiet at the end */
-    {
-        uint8_t px[60];
-        kick_shape(&k, px, 60u, 1000u, 40u);
-        CHECK(px[1] > 20u && px[59] < px[1] / 2u, "kick shape: %u at the start, %u at the end", px[1], px[59]);
-    }
-    /* the steps' events: 16 a bar, their places 0..15, a step apart */
-    {
-        uint16_t off[8];
-        uint8_t idx[8];
-        uint32_t sl = brk_step_len_samples(), t, ne, total = 0, bad = 0, last = 0;
-        fresh(1);
+        static float a[44100], b2[44100];
+        mc_scene_init(&mc_sc[1], 2u);
+        mc_sc[1].lane[0].flags = MCL_ON;
+        mc_sc[1].lane[0].role = ROLE_HAT;
+        mc_sc[1].lane[0].hits = 0xFFFFu;
+        mc_sc[1].lane[0].mode = MCM_RANDOM;
+        mc_sc[1].lane[0].prob = 60u;
+        mc_sc[1].lane[0].seed = 42u;
+        brk_mc_start(1);
+        brk_mc_next(1);
         brk_play(1);
-        for (t = 0; t < sl * 16u; t += BLOCK) {
-            brk_render(buf, BLOCK);
-            ne = brk_step_events(off, idx, 8u);
-            for (i = 0; i < ne; i++) {
-                uint32_t at = t + off[i];
-                if (at >= sl * 16u)
-                    break;
-                if (idx[i] != (uint8_t)total || (total && (at - last + 2u < sl || at - last > sl + 2u)))
-                    bad++;
-                last = at;
-                total++;
-            }
-        }
-        CHECK(total == 16u && !bad, "step events: %u a bar (16), %u out of place", total, bad);
+        mc_run_counting(44100u, a);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(1);
+        brk_play(1);
+        mc_run_counting(44100u, b2);
+        CHECK(!memcmp(a, b2, sizeof a), "seed: RANDOM with a chance plays the same twice");
+        mc_sc[1].lane[0].seed = 43u;
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(1);
+        brk_play(1);
+        mc_run_counting(44100u, b2);
+        CHECK(memcmp(a, b2, sizeof a) != 0, "seed: another seed, other choices");
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
     }
+    /* bounded: every lane every 1/32T with ratchets 4: the hits counted stay what they should */
+    {
+        mc_scene_init(&mc_sc[2], 1u);
+        for (l = 0; l < MC_LANES; l++) {
+            mc_sc[2].lane[l].flags = MCL_ON;
+            mc_sc[2].lane[l].rate = MCR_32T;
+            mc_sc[2].lane[l].hits = 0xFFFFFFFFu;
+            mc_sc[2].lane[l].len = 32u;
+            mc_sc[2].lane[l].ratchet = 4u;
+            mc_sc[2].lane[l].role = ROLE_KICK;
+        }
+        brk_mc_start(2);
+        brk_mc_next(2);
+        mc_zero_counts();
+        brk_play(1);
+        mc_run(16u * sl, &po, &pl);
+        mc_count();
+        CHECK(pl < 4.0f && pl > 0.1f, "dense: four lanes of 1/32T x4 ratchets stay bounded (%.3f)", pl);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
+    brk_mc_scenes(0);
+    brk_lanes_out(0);
+}
+
+/* the queue (the main loop's, here the test's): A -> B -> C -> A; A alone round and round; a cleared queue ends at
+ * the boundary; keys played meanwhile don't move it */
+static void test_mc_queue(void)
+{
+    uint8_t r[BRK_MAX_SLICES], q[8];
+    uint32_t n, pos = 0u, k, sl, adv_seen, seen[12], ns = 0u;
+    brk_status_t st;
+    mc_test_break("KHSHKHSHKHSHKHSP");
+    mc_auto_roles(&brk, r);
+    brk_roles(r, BRK_MAX_SLICES);
+    for (k = 0; k < 3u; k++) {
+        mc_scene_init(&mc_sc[k], 1u);
+        mc_sc[k].lane[0].flags = MCL_ON;
+        mc_sc[k].lane[0].hits = 1u;
+    }
+    brk_mc_scenes(mc_sc);
+    q[0] = 0u; q[1] = 1u; q[2] = 2u;
+    n = 3u;
+    brk_mc_start(q[0]);
+    brk_mc_next(q[1]);
+    brk_play(1);
+    sl = brk_step_len_samples();
+    brk_status(&st);
+    adv_seen = st.mc_adv;
+    seen[ns++] = 0u;
+    for (k = 0; k < 6u * 16u; k++) {     /* six bars, a step at a time; the keys played in bar 3 */
+        if (k == 40u)
+            brk_key(5, 1);
+        if (k == 44u)
+            brk_key(5, 0);
+        mc_run(sl, 0, 0);
+        brk_status(&st);
+        if (st.mc_adv != adv_seen) {     /* a boundary: the entry after it to the engine */
+            adv_seen = st.mc_adv;
+            pos = (pos + 1u) % n;
+            if (ns < 12u)
+                seen[ns++] = (uint32_t)st.mc_scene;
+            brk_mc_next(q[(pos + 1u) % n]);
+        }
+    }
+    CHECK(ns >= 6u && seen[0] == 0u && seen[1] == 1u && seen[2] == 2u && seen[3] == 0u && seen[4] == 1u &&
+          seen[5] == 2u, "queue: A B C A B C (%u %u %u %u %u %u), the keys played meanwhile left it alone",
+          seen[0], seen[1], seen[2], seen[3], seen[4], seen[5]);
+    brk_play(0);
+    mc_run(BLOCK * 8u, 0, 0);
+    /* one entry: A, A, A */
+    brk_mc_start(0);
+    brk_mc_next(0);
+    brk_play(1);
+    mc_run(3u * 16u * sl + sl / 2u, 0, 0);
+    brk_status(&st);
+    CHECK(st.mc_scene == 0 && st.mc_adv - adv_seen == 3u, "queue: A alone repeats (%d, %u boundaries)", st.mc_scene,
+          st.mc_adv - adv_seen);
+    /* cleared: the scene playing finishes, then the lanes stop (and say so) */
+    {
+        uint32_t ended = st.mc_ended;
+        brk_mc_next(-1);
+        mc_run(8u * sl, 0, 0);
+        brk_status(&st);
+        CHECK(st.mc_scene == 0, "queue cleared: the scene playing isn't cut (%d)", st.mc_scene);
+        mc_run(9u * sl, 0, 0);
+        brk_status(&st);
+        CHECK(st.mc_scene == -1 && st.mc_ended == ended + 1u, "queue cleared: it ends at the boundary (%d, %u)",
+              st.mc_scene, st.mc_ended - ended);
+    }
+    brk_play(0);
+    mc_run(BLOCK * 8u, 0, 0);
+    brk_mc_scenes(0);
+    brk_lanes_out(0);
 }
 
 /* the overlay effects (ARP): nothing on passes the sound through as it is; each one changes it and stays bounded;
@@ -2071,8 +2222,10 @@ int main(int argc, char **argv)
     test_fx_extras();
     test_overload();
     test_dj_break();
-    test_kick();
-    test_perc();
+    test_mc_map();
+    test_mc_roles();
+    test_mc_lanes();
+    test_mc_queue();
     test_generator();
     test_pads();
     test_fx();

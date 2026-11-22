@@ -131,7 +131,78 @@ typedef struct {
     int32_t layer;                       /* the layer's key looping (its slice), -1 none (PRD S-032) */
     float layer_lo, layer_w, layer_phase;   /* its window and how far into this repeat, as the key's */
     float layer_pos;                     /* its playhead in the break's samples, -1 quiet */
+    /* MATHCORE (docs/PRD_MATHCORE.md) */
+    int8_t mc_scene;                     /* the scene playing, -1 none */
+    int8_t mc_next;                      /* the scene after it (as asked), -1 none: the lanes stop at the boundary */
+    uint16_t mc_step;                    /* 16ths into the scene */
+    uint32_t mc_adv;                     /* scene boundaries passed since the start (a count) */
+    uint32_t mc_ended;                   /* a count: the queue ran out at a boundary (the transport should stop) */
+    uint8_t mc_pos[4];                   /* each lane's place in its cycle (0..len-1) */
+    uint8_t mc_hits[4];                  /* each lane's hits (a count: the screen flashes on a change) */
+    uint8_t mc_missing;                  /* bit l: lane l (or the role hit) found no slice of its role: silent */
 } brk_status_t;
+
+/* ---------------------------------------------------------------- MATHCORE --- */
+/* The break's slices tagged with roles (the Slice Map), and sample lanes that play them: the pattern's own drum lanes
+ * (kick, snare, hat, 16 steps a bar) or the four polymetric lanes of a scene, scenes queued one after another
+ * (docs/PRD_MATHCORE.md). Every hit is a slice of the break playing: nothing is synthesised. All the lanes count from
+ * one master timeline (MC_TICKS ticks a 16th, counted from the transport's start), so cycles of 5, 7, 11 and 13 run
+ * together without drifting. */
+#define MC_LANES 4u
+#define MC_EVENTS 32u                    /* a lane's cycle: 1..32 events */
+#define MC_SCENES 16u                    /* scenes A..P */
+#define MC_TICKS 12u                     /* master ticks in a 16th: 1/32 is 6, 1/16T 8, 1/32T 4 */
+enum { ROLE_KICK, ROLE_SNARE, ROLE_HAT, ROLE_PERC, MC_ROLES };   /* bit 1 << role in a slice's role byte */
+enum { MCR_32, MCR_16, MCR_8, MCR_4, MCR_32T, MCR_16T, MCR_8T, MC_RATES };   /* a lane's event: 1/32 .. 1/4 */
+extern const uint8_t MC_RATE_TICKS[MC_RATES];
+extern const char *const MC_RATE_NAME[MC_RATES];
+/* how a lane picks among its role's slices: always one (FIXED), each in turn (ROUND), at random (RANDOM, the lane's
+ * seed: the same seed, the same choices), two in turn (ALT), or one for soft hits and the next for accents (ACCENT) */
+enum { MCM_FIXED, MCM_ROUND, MCM_RANDOM, MCM_ALT, MCM_ACCENT, MC_MODES };
+extern const char *const MC_MODE_NAME[MC_MODES];
+#define MCL_ON 1u                        /* the lane plays in its scene */
+#define MCL_REV 2u                       /* its slices backwards */
+#define MCL_FREE 4u                      /* it counts from the transport's start, not the scene's (no reset) */
+typedef struct {
+    uint32_t hits;                       /* bit e: an event at e */
+    uint32_t accent;                     /* bit e: e accented (no accents at all: every hit full) */
+    uint8_t len;                         /* events in the cycle, 1..MC_EVENTS */
+    uint8_t rate;                        /* MCR_* */
+    uint8_t phase;                       /* the cycle starts this many events in */
+    uint8_t prob;                        /* 0..100 %: the chance an event plays (deterministic: the seed) */
+    uint8_t ratchet;                     /* 1..4 hits an event */
+    int8_t pitch;                        /* -12..+12 semitones (as speed) */
+    uint8_t flags;                       /* MCL_* */
+    uint8_t mode;                        /* MCM_* */
+    uint8_t pick;                        /* which of the role's slices FIXED, ALT and ACCENT start from */
+    uint8_t gate;                        /* 5..100 % of each slice sounds */
+    uint8_t level;                       /* 0..100 % (unaccented hits of a lane with accents: 55 % of it) */
+    uint8_t role;                        /* ROLE_* */
+    uint8_t seed;
+    uint8_t rsv[3];
+} mc_lane_t;                             /* 24 bytes */
+#define MCS_BREAK 1u                     /* the break's own loop plays under the scene (else only keys and lanes) */
+typedef struct {
+    mc_lane_t lane[MC_LANES];
+    uint8_t bars;                        /* its phrase: 1, 2, 4 or 8 bars, then the next scene */
+    uint8_t flags;                       /* MCS_* */
+    uint8_t rsv[2];
+} mc_scene_t;                            /* 100 bytes */
+
+void brk_roles(const uint8_t *roles, uint32_t n);   /* slice i's role bits, for the break playing (main loop) */
+void mc_auto_roles(const brk_break_t *b, uint8_t *roles);   /* the Slice Map heard from b's audio (BRK_MAX_SLICES
+                                          * role bytes): KICK, SNARE and HAT each at least once (main loop) */
+void brk_drum_lanes(uint16_t kick, uint16_t snare, uint16_t hat);   /* the pattern's drum lanes: bit n, step n of
+                                          * each bar; each hit the role's first slice. Quiet while a scene plays */
+void brk_role_hit(uint32_t role);        /* one hit of the role's first slice, at the next render (MIDI notes) */
+void brk_lanes_out(float *out);          /* the render, before brk_render: where the lanes go (0: into the break's
+                                          * output) */
+void brk_mc_scenes(const mc_scene_t *s); /* the scene table (MC_SCENES), read by the render; edited in place */
+void brk_mc_start(int scene);            /* the scene to play from the next step (with brk_play: the first); -1 none */
+void brk_mc_next(int scene);             /* the scene after the one playing (-1: the lanes stop at its end) */
+void brk_mc_mute(uint32_t mute, uint32_t solo);   /* lanes muted (bit l) and soloed: their phase runs on */
+uint32_t mc_role_slices(const uint8_t *roles, uint32_t n, uint32_t role, uint8_t *list);   /* the slices of a role,
+                                          * in order, into list (MC_EVENTS); their count */
 
 void brk_init(void);
 void brk_set_break(const brk_break_t *b);   /* main loop; takes effect at once (call stopped, or at a bar) */

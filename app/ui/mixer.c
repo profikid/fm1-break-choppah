@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* CHOPPAH: the MIXER (LFO): the break, the kick, the snare and hat, FX; swing and the drums' route. (Part of
+/* CHOPPAH: the MIXER (LFO): the break, the lanes (their slices), FX; swing and the lanes' route. (Part of
  * app.c's unity: included there in order.) */
 
 /* the MIXER's knob i on half h, as the foot and the strip show it */
@@ -14,14 +14,14 @@ static void mix_value(uint32_t h, int i, char *t)
             text_cat(t, set.drums_chain ? "THRU FX" : "AROUND FX");
         return;
     }
-    if (i == 0) {
-        int_text(set.brk_level, t);
+    if (i < 2) {
+        int_text(i ? set.lane_level : set.brk_level, t);
         text_cat(t, "%");
-    } else
-        pct_text(i == 1 ? set.kick.volume : i == 2 ? set.perc.volume : set.fx.wet, t);
+    } else if (i == 3)
+        pct_text(set.fx.wet, t);
 }
 
-/* the MIXER's strip: four channels side by side (a fader, its value; BREAK and KICK with their level meters, FX with
+/* the MIXER's strip: channels side by side (a fader, its value; BREAK and LANES with their level meters, FX with
  * the chain's slots; their values are in the foot), drawn as one 240 x 104 picture in two 52-row strips. GROOVE:
  * swing, the drums' route */
 #define MX_Y 18                          /* the faders and meters: from row 18, 80 rows (the values are in the foot) */
@@ -48,7 +48,7 @@ static void mix_fader(int32_t x, float v, int on)   /* 0..1 from the bottom */
 }
 static void mix_picture(int32_t top)
 {
-    static const char *const NAME[2][4] = {{"BREAK", "KICK", "PERC", "FX"}, {"SWING", "DRUMS", "", ""}};
+    static const char *const NAME[2][4] = {{"BREAK", "LANES", "", "FX"}, {"SWING", "LANES", "", ""}};
     uint32_t c;
     cv_oy = -top;                        /* (this strip's rows of the picture) */
     for (c = 0; c < 4u; c++) {
@@ -72,10 +72,8 @@ static void mix_picture(int32_t top)
     }
     mix_fader(10, (float)set.brk_level * 0.01f, set.brk_level > 0u);
     mix_meter(30, meter_brk);
-    mix_fader(70, set.kick.volume, set.kick.volume > 0.0f);
-    mix_meter(90, meter_kick);
-    mix_fader(130, set.perc.volume, set.perc.volume > 0.0f);
-    mix_meter(150, meter_perc);
+    mix_fader(70, (float)set.lane_level * 0.01f, set.lane_level > 0u);
+    mix_meter(90, meter_lanes);
     mix_fader(190, set.fx.wet, set.fx.wet > 0.005f);
     for (c = 0; c < BRK_FX_SLOTS; c++) { /* the chain's four slots, lit while on */
         const brk_fxslot_t *sl = &set.fx.slot[c];

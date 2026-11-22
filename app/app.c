@@ -6,14 +6,12 @@
  * M1 scope (PRD 13): the built-in break, 16 slices on the white keys, the 11 pads on the black keys, play / reset,
  * tempo and tap tempo, pitch on OCT-/OCT+, the generator, the four FX and the DJ filter, settings kept by SAVE.
  * Breaks: the bank built into the image (app/bank_data.h, which ./build.sh generates from breaks/breaks.txt), chosen
- * on ALGORITHM; a build with no bank falls back to one synthesised break. */
+ * on ALGORITHM. Every sound is the break's: the drum lanes and MATHCORE's scenes play its slices (docs/PRD_MATHCORE.md);
+ * nothing is synthesised (a build with no bank is silent). */
 #include <stddef.h>
 #include "adpcm.h"
 #include "brk_bank.h"
 #include "brk_math.h"
-#include "brk_synth.h"
-#include "kick.h"
-#include "perc.h"
 #if defined(__has_include)
 #if __has_include("bank_data.h")
 #include "bank_data.h"
@@ -48,7 +46,8 @@ typedef struct {
     uint8_t gate;                        /* how much of each slice sounds, 5..100 % (100: off) */
     uint8_t snap;                        /* where a key lands while playing: SNAP_SL index + 1 */
     uint8_t brk_level;                   /* the MIXER's BREAK fader, 0..100 % */
-    uint8_t drums_chain;                 /* the drums (kick, snare, hat): 1 through the FX chain, 0 around it */
+    uint8_t drums_chain;                 /* the lanes (the drum lanes' and the scenes' slices): 1 through the FX
+                                          * chain, 0 around it */
     uint8_t pattern;                     /* the pattern playing, 0..NPAT-1 (patterns: their own store object) */
     uint8_t bta_on;                      /* (Bluetooth audio out's on byte, PRD A-72: gone 21 Nov 2026, kept so older
                                           * saves keep their size; unused) */
@@ -60,8 +59,9 @@ typedef struct {
     brk_padset_t pads;                   /* the pads' own settings (K1-K4 while a pad is held) */
     brk_keyset_t keys[BRK_KEYS];         /* each white key's loop: length, pitch, start, mode (K1-K4 while held) */
     brk_slicefx_t slx[BRK_KEYS];         /* each slice's own effect and level (a key held, FX: its other layer) */
-    kick_t kick;                         /* the kick (PRD K-*): its sound and level */
-    perc_t perc;                         /* the snare and the hat (PRD K-10): their sounds and level */
+    uint8_t rsv_kick[136];               /* (the synthesised kick's settings, PRD K-*: gone with MATHCORE M0, 22 Nov
+                                          * 2026; their bytes kept, older saves still load, never read) */
+    uint8_t rsv_perc[52];                /* (the synthesised snare's and hat's, PRD K-10: the same) */
     uint8_t rsv2[8];                     /* (v0.52's fills, gone; their bytes kept: older saves still load) */
     uint8_t rsv3[20];                    /* (3 Nov 2026's overlay effects, PRD B-52, gone 8 Nov 2026: their bytes kept) */
     /* (appended 4 Nov 2026: MB COMP's detail per FX slot, PRD A-49a; it moves with its slot) */
@@ -81,8 +81,13 @@ typedef struct {
     uint8_t split_b;                     /* break B: its number + 1 (0: the break after A) */
     uint8_t split_bars;                  /* bit 0: A's second bar, bit 1: B's second bar (0: their first) */
     uint8_t rsv5;
+    /* (appended 22 Nov 2026: MATHCORE, docs/PRD_MATHCORE.md) */
+    uint8_t lane_level;                  /* the MIXER's LANES fader: the lanes' slices, 0..100 % */
+    uint8_t mc_rsv[3];
 } settings_t;
 #define SET_SIZE_MIN offsetof(settings_t, rsv2)   /* the shortest save that loads: CHP7's first size */
+_Static_assert(offsetof(settings_t, rsv2) == 524u && offsetof(settings_t, mbc) == 552u,
+               "the drums' bytes keep their room: older saves load into the same places");
 _Static_assert(sizeof(settings_t) <= 3840u, "a store object holds 3840 bytes");
 static settings_t set;
 static uint8_t set_dirty;
@@ -108,13 +113,12 @@ static void settings_defaults(void)
     set.snap = 5u;                       /* 1 slice */
     set.brk_level = 100u;
     set.drums_chain = 1u;
+    set.lane_level = 100u;
     brk_padset_defaults(&set.pads);
     for (k = 0; k < BRK_KEYS; k++) {
         brk_keyset_defaults(&set.keys[k]);
         brk_slicefx_defaults(&set.slx[k]);
     }
-    kick_defaults(&set.kick);
-    perc_defaults(&set.perc);
     for (k = 0; k < BRK_FX_SLOTS; k++) {
         brk_mbc_defaults(&set.mbc[k]);
         brk_fxx_defaults(&set.fxx[k], set.fx.slot[k].type);
@@ -170,8 +174,6 @@ static void settings_apply(void)
     brk_pitch_mode(pitch_keeps(), (float)(set.grain_ms ? set.grain_ms : 30u));
     brk_gate((float)(set.gate ? set.gate : 100u) * 0.01f);
     brk_snap(SNAP_SL[snap_index()]);
-    kick_set(&set.kick);
-    perc_set(&set.perc);
     {
         uint32_t k;
         for (k = 0; k < BRK_KEYS; k++) {
@@ -208,7 +210,6 @@ static struct {
     pat_t p[NPAT];
 } pats;
 _Static_assert(sizeof pats <= 3840u, "a store object holds 3840 bytes");
-static volatile uint16_t lane_now[NLANES];   /* the pattern playing's lanes, for the render */
 static int8_t pat_next = -1;             /* a pattern picked while playing: it starts at the loop's end */
 
 static void pat_defaults(void)
@@ -238,11 +239,10 @@ static void pat_step_out(uint32_t k)     /* step k of the pattern playing, to th
     s.rsv[0] = s.rsv[1] = 0u;
     brk_step_set(k, &s);
 }
-static void pat_lanes_out(void)
+static void pat_lanes_out(void)          /* the pattern's drum lanes: the engine plays their roles' slices */
 {
-    uint32_t l;
-    for (l = 0; l < NLANES; l++)
-        lane_now[l] = pats.p[set.pattern % NPAT].lane[l];
+    const pat_t *p = &pats.p[set.pattern % NPAT];
+    brk_drum_lanes(p->lane[LANE_KICK], p->lane[LANE_SNARE], p->lane[LANE_HAT]);
 }
 static void pat_apply(void)              /* the pattern playing, all of it to the engine */
 {
@@ -264,16 +264,151 @@ static void pat_read_back(void)          /* the engine's steps into the pattern 
     }
 }
 
+/* ----------------------------------------------------------------- MATHCORE --- */
+/* the scenes (A..P: four sample lanes each, docs/PRD_MATHCORE.md 6.1) in their own store object; the queue and the
+ * black keys' shortcuts in another (the queue names scenes: one scene, queued as often as wanted) */
+#define MCS_MAGIC 0x3153434Du            /* "MCS1" */
+#define MQ_MAGIC 0x3151434Du             /* "MCQ1" */
+#define MC_QUEUE 64u
+#define MC_NOKEY 0xFFu                   /* a black key with no scene */
+static struct {
+    uint32_t magic;
+    mc_scene_t sc[MC_SCENES];
+} mcs;
+_Static_assert(sizeof mcs <= 3840u, "a store object holds 3840 bytes");
+static struct {
+    uint32_t magic;
+    uint8_t n;                           /* entries queued */
+    uint8_t rsv[3];
+    uint8_t q[MC_QUEUE];                 /* each a scene, 0..MC_SCENES-1, played in order and round again */
+    uint8_t key[NPFX];                   /* each black key's scene (MC_NOKEY none) */
+    uint8_t rsv2[5];
+} mq;
+_Static_assert(sizeof mq <= 3840u, "a store object holds 3840 bytes");
+static uint8_t roles_now[BRK_MAX_SLICES];   /* the Slice Map of the break playing (heard: mc_auto_roles) */
+
+static void mc_lane_defaults(mc_lane_t *l, uint32_t role)
+{
+    uint8_t *z = (uint8_t *)l;
+    uint32_t i;
+    for (i = 0; i < sizeof *l; i++)
+        z[i] = 0u;
+    l->len = 16u;
+    l->rate = MCR_16;
+    l->prob = 100u;
+    l->ratchet = 1u;
+    l->mode = MCM_FIXED;
+    l->gate = 100u;
+    l->level = 100u;
+    l->role = (uint8_t)role;
+    l->seed = (uint8_t)(role * 37u + 11u);
+}
+/* scene i's start: a groove to build on. A: a straight beat; B: its variation; C: the mathcore one (5, 7, 11 and
+ * 13 against the bar); the rest: kick and snare on the beat, the other lanes ready but off */
+static void mc_scene_defaults(mc_scene_t *s, uint32_t i)
+{
+    uint32_t l;
+    for (l = 0; l < MC_LANES; l++)
+        mc_lane_defaults(&s->lane[l], l);
+    s->bars = 2u;
+    s->flags = 0u;
+    s->rsv[0] = s->rsv[1] = 0u;
+    s->lane[ROLE_KICK].hits = 0x0101u;           /* 1 and 9 */
+    s->lane[ROLE_SNARE].hits = 0x1010u;          /* 5 and 13 */
+    s->lane[ROLE_HAT].hits = 0x5555u;            /* the 8ths */
+    s->lane[ROLE_PERC].hits = 0x8080u;
+    s->lane[ROLE_KICK].flags = s->lane[ROLE_SNARE].flags = MCL_ON;
+    if (i <= 2u)
+        s->lane[ROLE_HAT].flags = MCL_ON;
+    if (i == 1u) {                               /* B: kicks pushed, a ghost lane, the hats round-robin */
+        s->lane[ROLE_KICK].hits = 0x0425u;
+        s->lane[ROLE_SNARE].hits = 0x9010u;
+        s->lane[ROLE_SNARE].accent = 0x1010u;
+        s->lane[ROLE_HAT].mode = MCM_ROUND;
+        s->lane[ROLE_HAT].hits = 0xFFFFu;
+        s->lane[ROLE_HAT].accent = 0x4444u;
+        s->lane[ROLE_PERC].flags = MCL_ON;
+        s->lane[ROLE_PERC].prob = 60u;
+        s->lane[ROLE_PERC].hits = 0x2222u;
+    } else if (i == 2u) {                        /* C: 5 / 7 / 11 / 13 against the bar */
+        s->lane[ROLE_KICK].len = 5u;
+        s->lane[ROLE_KICK].hits = 0x09u;
+        s->lane[ROLE_SNARE].len = 7u;
+        s->lane[ROLE_SNARE].hits = 0x10u;
+        s->lane[ROLE_SNARE].ratchet = 1u;
+        s->lane[ROLE_HAT].len = 11u;
+        s->lane[ROLE_HAT].rate = MCR_32;
+        s->lane[ROLE_HAT].hits = 0x2DBu;
+        s->lane[ROLE_HAT].mode = MCM_RANDOM;
+        s->lane[ROLE_PERC].len = 13u;
+        s->lane[ROLE_PERC].hits = 0x0425u;
+        s->lane[ROLE_PERC].flags = MCL_ON;
+        s->lane[ROLE_PERC].mode = MCM_ROUND;
+        s->bars = 4u;
+    }
+}
+static void mc_defaults(void)
+{
+    uint32_t i;
+    mcs.magic = MCS_MAGIC;
+    for (i = 0; i < MC_SCENES; i++)
+        mc_scene_defaults(&mcs.sc[i], i);
+}
+static void mq_defaults(void)
+{
+    uint32_t i;
+    uint8_t *z = (uint8_t *)&mq;
+    for (i = 0; i < sizeof mq; i++)
+        z[i] = 0u;
+    mq.magic = MQ_MAGIC;
+    for (i = 0; i < NPFX; i++)           /* the first eleven scenes (PRD_MATHCORE 7.3) */
+        mq.key[i] = (uint8_t)i;
+}
+static uint32_t crc32_of(const uint8_t *p, uint32_t n);
+static uint32_t mcs_saved, mq_saved;     /* the CRCs of the scenes and the queue as saved: SAVE writes them when changed */
+static int mc_save(void)                 /* SAVE: the scenes and the queue, each only if it changed (0: done) */
+{
+    uint32_t a = crc32_of((const uint8_t *)&mcs, sizeof mcs), b = crc32_of((const uint8_t *)&mq, sizeof mq);
+    int rc = 0;
+    if (a != mcs_saved) {
+        rc |= plat_store_save(OBJ_MC, &mcs, sizeof mcs);
+        if (!rc)
+            mcs_saved = a;
+    }
+    if (b != mq_saved) {
+        int r2 = plat_store_save(OBJ_MQ, &mq, sizeof mq);
+        if (!r2)
+            mq_saved = b;
+        rc |= r2;
+    }
+    return rc;
+}
+static void mc_load(void)                /* boot: the saved scenes and queue, checked (else the defaults) */
+{
+    uint32_t i;
+    if (plat_store_load(OBJ_MC, &mcs, sizeof mcs) != (int)sizeof mcs || mcs.magic != MCS_MAGIC)
+        mc_defaults();
+    if (plat_store_load(OBJ_MQ, &mq, sizeof mq) != (int)sizeof mq || mq.magic != MQ_MAGIC || mq.n > MC_QUEUE)
+        mq_defaults();
+    for (i = 0; i < mq.n; i++)           /* (an entry out of range: the first scene) */
+        if (mq.q[i] >= MC_SCENES)
+            mq.q[i] = 0u;
+    for (i = 0; i < NPFX; i++)
+        if (mq.key[i] >= MC_SCENES)
+            mq.key[i] = MC_NOKEY;
+    mcs_saved = crc32_of((const uint8_t *)&mcs, sizeof mcs);   /* (as loaded, or the defaults: nothing to write yet) */
+    mq_saved = crc32_of((const uint8_t *)&mq, sizeof mq);
+    brk_mc_scenes(mcs.sc);
+}
+
 /* ------------------------------------------------------------------- engine --- */
 static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 #define CH_DUB_LEN 30720u                /* the dub delay's line: 0.70 s a side, 3/8 down to 97 BPM, 1/2 to 172 */
 static int16_t dub_line[CH_DUB_LEN] PLAT_POOL;
 static uint32_t pfx_mem[BRK_PAD_V * BRK_PAD_ST_BYTES / 4u] PLAT_POOL;   /* the ARP keys' voices (8.6 KB) */
-static brk_break_t brk0;
 static brk_break_t brk_cur[2];           /* the bank's break playing (pcm_a holds it), and the next one's: the render
                                           * keeps its own while the next is written */
-static uint32_t n_synth;                 /* 0; 1 in a build with no bank: a synthesised break (brk_synth.c) */
-static uint32_t n_breaks;                /* then the bank's valid slots */
+static uint32_t n_breaks;                /* the custom break, then the bank's valid slots */
 static int32_t brk_next = -1;            /* a break chosen, waiting for the next bar (break_ask), or -1 */
 static uint8_t wave_px[240];             /* the waveform's height per column, for the screen */
 #define BLK_N 16u                        /* the slicer view's blocks: one per white key */
@@ -281,8 +416,7 @@ static uint8_t wave_px[240];             /* the waveform's height per column, fo
 static uint8_t blk_px[BLK_N][BLK_W];     /* each slice's waveform, 0..19 */
 static uint8_t blk_n;                    /* blocks with a slice behind them */
 static volatile uint8_t muted;
-static volatile float meter_brk, meter_kick, meter_perc;   /* the MIXER's channels: the break, the kick, the snare
-                                                           * and hat, before the chain */
+static volatile float meter_brk, meter_lanes;   /* the MIXER's channels: the break, the lanes, before the chain */
 static volatile float meter_l, meter_r;  /* the output's peaks as it leaves (after MASTER: 1 = full scale), falling
                                           * ~20 dB a second: the render writes, the header's meter reads */
 static uint16_t click_at[4];             /* the render: this block's metronome clicks (their samples, the bar's first) */
@@ -367,24 +501,21 @@ static const bank_slot_t *slot_of(uint32_t i, const uint8_t **bank)
     }
     i -= n_user;
 #if CH_HAVE_BANK
-    if (i >= n_synth) {
-        *bank = CH_BANK;
-        return bank_check(CH_BANK, CH_BANK_SIZE, i - n_synth);
-    }
-#endif
+    *bank = CH_BANK;
+    return bank_check(CH_BANK, CH_BANK_SIZE, i);
+#else
     return 0;
+#endif
 }
 
-/* the breaks: the custom one, the bank's (or, without a bank, a synthesised Amen) */
+/* the breaks: the custom one, the bank's (no bank, no breaks: silence, nothing synthesised in their place) */
 static void breaks_count(void)
 {
     const uint8_t *bk;
     cu_scan();
-    n_synth = n_breaks = 0u;
+    n_breaks = 0u;
     while (n_breaks < BANK_SLOTS && slot_of(n_user + n_breaks, &bk))
         n_breaks++;
-    if (!n_breaks)
-        n_synth = n_breaks = 1u;
     n_breaks += n_user;
 }
 
@@ -398,14 +529,14 @@ static const char *break_name(uint32_t i)
     for (k = 0; k < 12u; k++)
         t[k] = s ? s->name[k] : 0;
     t[12] = 0;
-    return s ? t : brk0.name;
+    return s ? t : "NO BREAK";
 }
 
 /* the split (PRD S-030): break B's number */
 static uint32_t split_b_of(uint32_t a)
 {
     uint32_t b = set.split_b ? set.split_b - 1u : a + 1u;
-    return b < n_breaks ? b : n_user + n_synth < n_breaks ? n_user + n_synth : 0u;
+    return b < n_breaks ? b : n_user < n_breaks ? n_user : 0u;
 }
 
 /* bar `bar` of a slot (its first n samples, n = a bar) decoded into dst; the bars before it are decoded over dst and
@@ -510,11 +641,13 @@ static const brk_break_t *break_load(uint32_t i)
     const uint8_t *bk;
     const bank_slot_t *s = slot_of(i, &bk);
     brk_break_t *d = brk_get_break() == &brk_cur[0] ? &brk_cur[1] : &brk_cur[0];
-    const brk_break_t *b = &brk0;
+    const brk_break_t *b = 0;
     uint32_t k;
     if (s && set.split && split_load(i, split_b_of(i), d)) {
         set.brk = (uint8_t)i;
         wave_build(d);
+        mc_auto_roles(d, roles_now);     /* its Slice Map, heard */
+        brk_roles(roles_now, BRK_MAX_SLICES);
         return d;
     }
     if (s) {
@@ -533,16 +666,12 @@ static const brk_break_t *break_load(uint32_t i)
         d->name[12] = 0;
         d->split = 0u;
         b = d;
-    } else {                             /* a built-in style, played into RAM now */
-        if (i >= n_user + n_synth)
-            i = n_user;
-#if !CH_HAVE_BANK                        /* (a bank build has no synthesised breaks: their code stays out) */
-        if (brk_synth_style_len(i - n_user, CH_RATE) <= CH_PCM_MAX)
-            brk_synth_style(pcm_a, CH_RATE, i - n_user, &brk0);
-#endif
     }
     set.brk = (uint8_t)i;
-    wave_build(b);
+    if (b)
+        wave_build(b);
+    mc_auto_roles(b, roles_now);         /* the Slice Map: the kicks, snares, hats and the rest, heard */
+    brk_roles(roles_now, BRK_MAX_SLICES);
     return b;
 }
 
@@ -551,8 +680,6 @@ void app_init(void)
     brk_init();
     brk_fx_init();
     brk_fx_delay_buffer(dub_line, CH_DUB_LEN);
-    kick_init();
-    perc_init();
     brk_fx_pad_buffer(pfx_mem);
     breaks_count();                      /* the custom break, the bank's (breaks/breaks.txt) */
     settings_defaults();                 /* (what a shorter, older save doesn't reach keeps these) */
@@ -563,14 +690,13 @@ void app_init(void)
     }
     if (set.magic != SET_MAGIC || set.tempo_x10 < 400u || set.tempo_x10 > 3000u || set.swing < 50u ||
         set.swing > 75u) {
-        settings_defaults();
-        if (n_breaks > n_synth)
-            set.brk = (uint8_t)n_synth;  /* the bank's first break */
+        settings_defaults();         /* (the bank's first break) */
     }
     if (set.brk >= n_breaks || n_user)   /* a custom break: always the one at power-on */
         set.brk = 0u;
     if (plat_store_load(OBJ_PAT, &pats, sizeof pats) != (int)sizeof pats || pats.magic != PAT_MAGIC)
         pat_defaults();
+    mc_load();
     brk_set_break(break_load(set.brk));  /* boot: the audio isn't running yet */
     settings_apply();
     pat_apply();
@@ -630,7 +756,7 @@ static void midi_pc(uint32_t n)          /* program change in: 0..15 the pattern
         break_ask(n - 16u);
 }
 static void midi_slice(int s, int on);   /* (with the UI: they play as the keys, and REC records them) */
-static void midi_drum(uint32_t lane);
+static void midi_drum(uint32_t role);
 #define MS_PER_SAMPLE (1000.0f / (float)BRK_SR)
 #define CLKQ 64u
 /* (times in plat_ms: the 1 kHz tick sends at that grain anyway, a beat of ticks averages the tempo, and the host
@@ -689,8 +815,9 @@ void app_loop(void)
             midi_pc(d1);
         mo_quiet = 0u;
         if ((st & 0xE0u) == 0x80u) {     /* notes, on the channel: 48..63 (C3..D#4) the slices, held as the white keys;
-                                          * 64..74 (E4..D5) the black keys; 24..35 (C1..B1) the breaks; 36 the kick,
-                                          * 38 the snare, 42 / 44 / 46 the hat (a drum machine's) */
+                                          * 64..74 (E4..D5) the black keys; 24..35 (C1..B1) the breaks; 36 a KICK
+                                          * slice, 38 / 40 a SNARE, 42 / 44 / 46 a HAT, 37 / 39 a PERC one (a drum
+                                          * machine's notes: the Slice Map's slices) */
             uint32_t note = d1, on = (st & 0xF0u) == 0x90u && d2;
             mo_quiet = 1u;
             if (on && note >= MIDI_BRK0 && note < MIDI_BRK0 + 12u && note - MIDI_BRK0 < n_breaks)
@@ -707,8 +834,9 @@ void app_loop(void)
                 } else
                     midi_pad_held &= ~b;
             }
-            else if (on && (note == 36u || note == 38u || note == 42u || note == 44u || note == 46u))
-                midi_drum(note == 36u ? LANE_KICK : note == 38u ? LANE_SNARE : LANE_HAT);
+            else if (on && note >= 36u && note <= 46u && (0x55Fu >> (note - 36u) & 1u))   /* 36 37 38 39 40 42 44 46 */
+                midi_drum(note == 36u ? ROLE_KICK : note == 38u || note == 40u ? ROLE_SNARE
+                          : note == 37u || note == 39u ? ROLE_PERC : ROLE_HAT);
             continue;
         }
         if (!set.clk_in)
@@ -784,7 +912,7 @@ static float meter(const float *x, uint32_t n, float last)
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float mono[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK], echo[APP_BLOCK], verb[APP_BLOCK];
-    static float kick[APP_BLOCK], perc[APP_BLOCK];
+    static float lanes[APP_BLOCK];
     float gain = muted ? 0.0f : (float)master_q12 * (1.0f / 4096.0f) * 8300000.0f;
     brk_status_t st;
     uint32_t t0 = plat_ms(), done = 0u, total = n;
@@ -797,6 +925,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     while (n) {
         uint32_t m = n < APP_BLOCK ? n : APP_BLOCK, i;
         brk_sends(echo, verb);           /* the slices' throws into the delay and the reverb */
+        brk_lanes_out(lanes);            /* the lanes' slices: a channel of their own */
         brk_render(mono, m);
         {                                /* the MIXER's BREAK fader (eased: no zipper), on the break and its throws */
             static float lvl = 1.0f;
@@ -809,6 +938,15 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             }
             meter_brk = meter(mono, m, meter_brk);
         }
+        {                                /* the MIXER's LANES fader */
+            static float lvl = 1.0f;
+            float want = (float)set.lane_level * 0.01f;
+            for (i = 0; i < m; i++) {
+                lvl += (want - lvl) * 0.002f;
+                lanes[i] *= lvl;
+            }
+            meter_lanes = meter(lanes, m, meter_lanes);
+        }
         if (set.clk_out) {               /* clock out: each tick due as its sample plays (a block from now) */
             uint16_t off[16];
             uint32_t k, nt = brk_clock_ticks(off, 16u);
@@ -818,35 +956,20 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             }
         }
         done += m;
-        {                                /* the drums: on the steps of the bar their lanes have, at their samples */
-            uint16_t off[8], ka[8], pa[8];
-            uint8_t idx[8], who[8];
-            uint32_t k, ne = brk_step_events(off, idx, 8u), nk = 0u, np = 0u;
-            uint32_t lk = lane_now[LANE_KICK], ls = lane_now[LANE_SNARE], lh = lane_now[LANE_HAT];
+        {                                /* the metronome's clicks: on the beats begun, the bar's first higher */
+            uint16_t off[8];
+            uint8_t idx[8];
+            uint32_t k, ne = brk_step_events(off, idx, 8u);
             nclick = 0u;
-            for (k = 0; k < ne; k++) {
-                if (set.click && !(idx[k] & 3u) && nclick < 4u) {   /* the metronome: each beat, the bar's first higher */
+            for (k = 0; k < ne; k++)
+                if (set.click && !(idx[k] & 3u) && nclick < 4u) {
                     click_at[nclick] = off[k];
                     click_hi[nclick++] = idx[k] == 0u;
                 }
-                uint32_t w = (ls >> idx[k] & 1u) << PV_SNARE | (lh >> idx[k] & 1u) << PV_HAT;
-                if (lk >> idx[k] & 1u)
-                    ka[nk++] = off[k];
-                if (w) {
-                    pa[np] = off[k];
-                    who[np++] = (uint8_t)w;
-                }
-            }
-            kick_render(kick, m, ka, nk);
-            perc_render(perc, m, pa, who, np);
-            meter_kick = meter(kick, m, meter_kick);
-            meter_perc = meter(perc, m, meter_perc);
-            for (i = 0; i < m; i++)
-                kick[i] += perc[i];
         }
         brk_status(&st);
-        /* the break through the DJ filter, the drums joining it into the chain (or around it) */
-        brk_fx_process(mono, set.drums_chain ? kick : 0, echo, verb, set.drums_chain ? 0 : kick, l, r, m, st.pads);
+        /* the break through the DJ filter, the lanes joining it into the chain (or around it) */
+        brk_fx_process(mono, set.drums_chain ? lanes : 0, echo, verb, set.drums_chain ? 0 : lanes, l, r, m, st.pads);
         if (nclick || click_env > 1e-3f) {   /* the metronome's click: dry, over everything, both sides */
             uint32_t j = 0u;
             for (i = 0; i < m; i++) {
@@ -899,8 +1022,7 @@ void app_panic(void)
 #include "ui/global.c"
 #include "ui/arp.c"
 #include "ui/seq.c"
-#include "ui/kick.c"
-#include "ui/perc.c"
+#include "ui/mc.c"
 #include "ui/mixer.c"
 #include "ui/screen.c"
 #include "ui/demo.c"
