@@ -3,6 +3,8 @@
 **Product requirements document** · v2.0 · 21 Nov 2026 · Owner: Laurens (Sylverline)  
 Status: revised product direction · Repository: `profikid/fm1-break-choppah`
 
+**New feature roadmap:** [MATHCORE — Queue & Layered Sample Engine](PRD_MATHCORE.md) · v1.0 · 22 Nov 2026
+
 ---
 
 ## 1. Product definition
