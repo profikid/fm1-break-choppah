@@ -7,7 +7,8 @@
     tools/prep_breaks.py --header app/bank_data.h ...    # the bank as a C array, built into the firmware
     tools/prep_breaks.py --list breaks/breaks.txt --header app/bank_data.h   # what ./build.sh does
 
-Each input is FILE[:BPM[:BARS[:NAME]]]. Without a BPM, the tempo comes from the length and --bars (the file is taken to be
+Each input is FILE[:BPM[:BARS[:NAME]]]. BARS is a count (the file's first bars) or the bars to take, joined by "+": 1+4
+is the file's bar 1 then its bar 4 (a BPM needed). Without a BPM, the tempo comes from the length and --bars (the file is taken to be
 whole bars). Slices are an equal grid (--slices 16 a bar by default, at most 32 a break) or, with --transients,
 the grid's markers moved to the nearest drum hit. Python 3 standard library only.
 
@@ -250,17 +251,53 @@ def read_list(path):
     return specs
 
 
+def pick_bars(x, rate, bar_len, pick):
+    """the file's bars pick (from 1), one after another. Where a bar follows one that isn't before it in the file, its
+    first 1.5 ms fade in from what followed the bar before in the file, so the join doesn't click. A bar that ends the
+    file and ends in silence (the recording gated: the Amen's crash cut 71 ms before the bar's end) has its last 30 ms
+    of sound faded into the same moments of the first bar picked, which leads into a downbeat as the loop does"""
+    out = []
+    for j, b in enumerate(pick):
+        a, e = int(round((b - 1) * bar_len)), int(round(b * bar_len))
+        seg = list(x[a:e]) + [0.0] * max(0, e - len(x))
+        if j and pick[j - 1] + 1 != b:      # a join
+            p = int(round(pick[j - 1] * bar_len))
+            n = int(rate * 0.0015)
+            for i in range(min(n, len(x) - p)):
+                w = (i + 0.5) / n
+                seg[i] = x[p + i] * (1.0 - w) + seg[i] * w
+        last = len(seg) - 1
+        while last > 0 and abs(seg[last]) < 1e-5:
+            last -= 1
+        if e >= len(x) - rate * 0.01 and len(seg) - 1 - last > rate * 0.005:   # the file's last bar, its end gated
+            src = int(round((pick[0] - 1) * bar_len))
+            n = int(rate * 0.03)
+            for i in range(max(0, last - n), len(seg)):
+                w = min(1.0, (i - (last - n) + 0.5) / n)
+                seg[i] = seg[i] * (1.0 - w) + x[src + i] * w
+        out += seg
+    return out
+
+
 def prepare(spec, args, shown=None):
     parts = spec.split(":")
     path = Path(parts[0])
     bpm = float(parts[1]) if len(parts) > 1 and parts[1] else None
-    bars = int(parts[2]) if len(parts) > 2 and parts[2] else args.bars
+    pick = [int(b) for b in parts[2].split("+")] if len(parts) > 2 and "+" in parts[2] else None
+    bars = len(pick) if pick else int(parts[2]) if len(parts) > 2 and parts[2] else args.bars
     given = parts[3] if len(parts) > 3 else None
     x, rate = read_wav(path)
     if bpm is None:                          # the file is whole bars
+        if pick:
+            raise SystemExit(f"{path}: bars {parts[2]} need the loop's BPM")
         bpm = 240.0 * bars / (len(x) / rate)
     bar_len = rate * 240.0 / bpm
-    x = x[:int(round(bar_len * bars))]       # exactly the bars asked for
+    if pick:                                 # the bars asked for, in that order
+        if max(pick) * bar_len > len(x) + 2 or min(pick) < 1:
+            raise SystemExit(f"{path}: has no bar {max(pick)} at {bpm:.2f} BPM")
+        x = pick_bars(x, rate, bar_len, pick)
+    else:
+        x = x[:int(round(bar_len * bars))]   # exactly the bars asked for
     if len(x) < int(bar_len * bars) - 2:
         raise SystemExit(f"{path}: shorter than {bars} bar(s) at {bpm:.2f} BPM")
     if args.loudness:                        # every break as loud as the others (its peaks limited)
