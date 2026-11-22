@@ -635,13 +635,22 @@ and round while you edit it.
 | --- | --- | --- | --- | --- |
 | RHYTHM | LENGTH: 1–32 events in the cycle | RATE: 1/32, 1/16, 1/8, 1/4, 1/32T, 1/16T, 1/8T | ROTATE: the hits a step later (right) or earlier | PHASE: the cycle starts this many events in |
 | SOUND | MODE: which of the role's slices (below) | PICK: the slice FIXED, ALT and ACCENT start from | PITCH: −12 … +12 | LEVEL |
-| FEEL | CHANCE: each event plays this often (the seed decides, the same every time) | RATCHET: ×1–×4 hits an event | GATE: how much of the slice sounds | REVERSE |
-| MORE | ROLE: the slices it plays (KICK, SNARE, HAT, PERC) | SEED | RISE: a riser, the lane speeding up over the phrase and climbing this many semitones (OFF: none) | LANE: on or off |
+| FEEL | CHANCE: each event plays this often (the seed decides, the same every time) | RATCHET: ×1–×4 hits an event | GATE: how much of the slice sounds | VARY: how much the lane varies by itself (below) |
+| MORE | ROLE: the slices it plays (KICK, SNARE, HAT, PERC) | RISE: a riser, the lane speeding up over the phrase and climbing this many semitones (OFF: none) | REVERSE | LANE: on or off |
 
 **MODE**: FIXED always the PICKed slice; ROUND each of the role's slices in turn; RANDOM one at random (from the
 seed: the same seed, the same choices); ALT two in turn; ACCENT the PICKed slice for soft hits, the next for accents.
 A lane with accents plays its other hits at 55 %. A lane whose role has no slice in the break plays nothing and
 shows "!" at the end of its row.
+
+**VARY** makes a lane play like a drummer rather than a loop, by itself: on the **hats** every hit at its own
+velocity (the off-beat 16ths softer), the break's other hat hits in turn, now and then an off-beat left out or a
+little roll, the off-beats laid back a touch; on the **snares** ghost notes round the backbeat (a drag before a hit,
+a bounce after, soft and laid back), now and then a flam on an accent and the break's other snare hits; on the
+**kick** an occasional pickup before a kick. The last bar of a phrase varies more, as a fill would. A ghost never cuts
+a real hit. It all comes from the lane's seed, so a scene plays the same way each time you start it, but no two
+bars in a row alike. The scenes come with it set: hats 70 %, snares 60 %, perc 45 %, kick 20 % (fills half that,
+risers none).
 
 All lanes count on one clock (the transport's 16ths, twelve ticks each): a 5-event kick lane against a 7-event snare
 lane and an 11-event hat lane at 1/32 meet again exactly where they should, bar after bar, and follow MIDI clock.

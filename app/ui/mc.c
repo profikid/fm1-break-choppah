@@ -9,8 +9,8 @@ enum { MKS_RHYTHM, MKS_SOUND, MKS_FEEL, MKS_MORE, MKSETS };   /* LANE's knob set
 static const char *const MKS_NAME[MKSETS] = {"RHYTHM", "SOUND", "FEEL", "MORE"};
 static const char *const MC_KNOB[MKSETS][4] = {{"LENGTH", "RATE", "ROTATE", "PHASE"},
                                                {"MODE", "PICK", "PITCH", "LEVEL"},
-                                               {"CHANCE", "RATCHET", "GATE", "REVERSE"},
-                                               {"ROLE", "SEED", "RISE", "LANE"}};
+                                               {"CHANCE", "RATCHET", "GATE", "VARY"},
+                                               {"ROLE", "RISE", "REVERSE", "LANE"}};
 static const char *const MACRO_NAME[4] = {"DENSITY", "MATH", "SPEED", "CHAOS"};
 static const char *const ROLE_NAME[MC_ROLES] = {"KICK", "SNARE", "HAT", "PERC"};
 static const char ROLE_CH[MC_ROLES] = {'K', 'S', 'H', 'P'};
@@ -451,10 +451,9 @@ static void mc_value(int i, char *t)     /* MATHCORE's knob i, as the foot shows
     case 8: int_text(L->prob, t); text_cat(t, "%"); break;
     case 9: text_cat(t, "X"); int_text(L->ratchet ? L->ratchet : 1, t + 1); break;
     case 10: int_text(L->gate, t); text_cat(t, "%"); break;
-    case 11: text_cat(t, L->flags & MCL_REV ? "ON" : "OFF"); break;
+    case 11: int_text(L->vary, t); text_cat(t, "%"); break;
     case 12: text_cat(t, ROLE_NAME[L->role % MC_ROLES]); break;
-    case 13: int_text(L->seed, t); break;
-    case 14:
+    case 13:
         if (!L->rise)
             text_cat(t, "OFF");
         else {
@@ -462,6 +461,7 @@ static void mc_value(int i, char *t)     /* MATHCORE's knob i, as the foot shows
             text_cat(t, " ST");
         }
         break;
+    case 14: text_cat(t, L->flags & MCL_REV ? "ON" : "OFF"); break;
     default: text_cat(t, L->flags & MCL_ON ? "ON" : "OFF"); break;
     }
 }
@@ -553,10 +553,10 @@ static void mc_turn(int i, int32_t d)
         case 8: L->prob = (uint8_t)clamp((int32_t)L->prob + d * 5, 0, 100); break;
         case 9: L->ratchet = (uint8_t)clamp((int32_t)(L->ratchet ? L->ratchet : 1u) + (d > 0 ? 1 : -1), 1, 4); break;
         case 10: L->gate = (uint8_t)clamp((int32_t)L->gate + d * 5, 5, 100); break;
-        case 11: L->flags = (uint8_t)(d > 0 ? L->flags | MCL_REV : L->flags & ~MCL_REV); break;
+        case 11: L->vary = (uint8_t)clamp((int32_t)L->vary + d * 5, 0, 100); break;
         case 12: L->role = (uint8_t)((L->role + (d > 0 ? 1u : MC_ROLES - 1u)) % MC_ROLES); L->pick = 0u; break;
-        case 13: L->seed = (uint8_t)(L->seed + d); break;
-        case 14: L->rise = (int8_t)clamp(L->rise + d, -12, 24); break;
+        case 13: L->rise = (int8_t)clamp(L->rise + d, -12, 24); break;
+        case 14: L->flags = (uint8_t)(d > 0 ? L->flags | MCL_REV : L->flags & ~MCL_REV); break;
         default: L->flags = (uint8_t)(d > 0 ? L->flags | MCL_ON : L->flags & ~MCL_ON); break;
         }
     set_dirty = 1u;

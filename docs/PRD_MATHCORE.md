@@ -561,3 +561,15 @@ integrated, the sequencer too. Changed (same branch):
 | MM-V-004 | MIDI drum notes cut the break's voice to the role's slice | Done |
 | MM-V-005 | The MIXER's LANES fader and the lanes' route are gone (nothing to mix: one voice); their settings bytes stay reserved | Done |
 
+---
+
+## 17. Revision: natural variation (23 Nov 2026)
+
+Laurens: the patterns should sound more natural, more variation in the hats and the snares.
+
+| ID | Requirement | State |
+| --- | --- | --- |
+| MM-N-001 | **VARY** per lane (0–100, `mc_lane_t.vary`, LANE FEEL K4): hats: velocity per hit (off-beat 16ths softer), other hat slices, an off-beat left out, a little roll (×2), off-beats laid back up to a tenth of a 16th; snares and perc: ghost notes next to hits (a drag, a bounce) and on off-beats, soft (30 %) and laid back, a flam on an accent, other snare slices; kick: a pickup before a kick (60 %). Up by half plus 20 in a phrase's last bar. Seeded per event (`mc_hash`): the same start, the same variations; ghosts rank below every real hit for the one voice | Done; engine test: ghosts round 5 and 13, identical twice |
+| MM-N-002 | The presets: VARY by role (hat 70, snare 60, perc 45, kick 20; ONCE scenes half, risers 0); hat lines with accent shapes instead of flat 16ths, the AMEN hats round-robin instead of random, snares alternating between the break's snare hits. Store magic MCS4 | Done |
+| MM-N-003 | LANE MORE: ROLE, RISE, REVERSE, LANE (SEED left the panel; VARY's seed is the lane's own) | Done |
+

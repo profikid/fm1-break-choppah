@@ -183,7 +183,12 @@ typedef struct {
     int8_t rise;                         /* a riser: over the scene's phrase the lane speeds up (its rate halved each
                                           * quarter of the phrase, to 1/64), swells and climbs this many semitones
                                           * (0: none) */
-    uint8_t rsv[2];
+    uint8_t vary;                        /* 0..100: how much it varies by itself, as a drummer would: on the hats
+                                          * velocity, other hat slices, a skipped off-beat, a little roll, laid back
+                                          * a touch; on the snares ghost notes round the backbeat, flams, the other
+                                          * snare hits; a kick's pickup now and then. More in a phrase's last bar.
+                                          * From the seed: the same seed, the same variations */
+    uint8_t rsv;
 } mc_lane_t;                             /* 24 bytes */
 #define MCS_BREAK 1u                     /* RUN ON: a hit runs on into the break until the next (else dry chops) */
 #define MCS_ONCE 2u                      /* a fill, a riser, a drop: plays once, then back to the groove */

@@ -694,7 +694,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
     static const uint8_t PRIO[MC_ROLES] = {3u, 4u, 1u, 2u};   /* one voice: the snare, the kick, the perc, the hat */
     uint32_t l, k, solo = p_mc_solo, mute = p_mc_mute, mac = p_mc_macro, win_score = 0u, win_r = 12u;
     int32_t win = -1, win_s = 0;
-    float win_g = 1.0f, win_pt = 0.0f;
+    float win_g = 1.0f, win_pt = 0.0f, win_late = 0.0f;
     uint8_t win_fl = 0u, win_rat = 1u;
     uint32_t dens = mac & 0xFFu, math = mac >> 8 & 0xFFu, spd = mac >> 16 & 0xFFu, chaos = mac >> 24 & 0xFFu;
     const uint8_t *mlen = MC_MATH_LEN[(math > 100u ? 100u : math) * (MC_MATH_STEPS - 1u) / 100u];
@@ -705,6 +705,9 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
         const mc_lane_t *L = &sc->lane[l];
         uint8_t list[BRK_MAX_SLICES];
         uint32_t r, rel, e, pos, len = L->len < 1u ? 1u : L->len > MC_EVENTS ? MC_EVENTS : L->len, n, acc, hit;
+        uint32_t role = L->role % MC_ROLES, ll = L->len ? L->len : 1u, vary = L->vary > 100u ? 100u : L->vary;
+        uint32_t ghost = 0u;
+        float late = 0.0f;
         uint8_t rat, fl;
         int32_t s;
         float g, pt;
@@ -735,9 +738,22 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
             hit = 0u;                    /* DENSITY down: the off-beat, unaccented hits go (the same ones each cycle) */
         else if (!hit && dens > 50u && mc_hash(L->seed + 3u, l, pos) % 100u < (dens - 50u) * (l ? 14u : 6u) / 10u)
             hit = 1u;                    /* DENSITY up: hits added (fewer on the kick lane) */
+        if (vary && mc_steps > (bars_of(sc) - 1u) * BRK_STEPS_PER_BAR)   /* the phrase's last bar: more */
+            vary = vary * 3u / 2u + 20u > 100u ? 100u : vary * 3u / 2u + 20u;
+        if (vary) {                      /* VARY: a drummer's own variations (seeded: the same each time) */
+            uint32_t h = mc_hash(L->seed + 21u, l, e) % 100u;
+            uint32_t nb = (L->hits >> ((pos + 1u) % ll) | L->hits >> ((pos + ll - 1u) % ll)) & 1u;
+            if (!hit && (role == ROLE_SNARE || role == ROLE_PERC) && (nb || pos & 1u) &&
+                h < vary * (nb ? 40u : 12u) / 100u)
+                hit = ghost = 1u;        /* a ghost note: a drag before a hit, a bounce after it, an off-beat */
+            else if (!hit && role == ROLE_KICK && (L->hits >> ((pos + 1u) % ll) & 1u) && h < vary * 15u / 100u)
+                hit = ghost = 1u;        /* a pickup kick before a kick */
+            else if (hit && role == ROLE_HAT && !acc && (pos & 1u) && h < vary * 20u / 100u)
+                hit = 0u;                /* an off-beat hat left out */
+        }
         if (!hit || (mute >> l & 1u) || (solo && !(solo >> l & 1u)))
             continue;                    /* (muted: the cycle counts on) */
-        if (L->prob < 100u && mc_hash(L->seed, l, e) % 100u >= L->prob)
+        if (!ghost && L->prob < 100u && mc_hash(L->seed, l, e) % 100u >= L->prob)
             continue;
         n = mc_role_slices(p_roles, b->nslices, L->role % MC_ROLES, list);
         if (!n) {
@@ -754,6 +770,17 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
         }
         rat = L->ratchet;
         fl = L->flags;
+        if (vary) {                      /* another of the role's slices; a hat's little roll; a snare's flam */
+            uint32_t h = mc_hash(L->seed + 31u, l, e) % 100u;
+            if (n > 1u && h < vary / 2u)
+                k += 1u + h % (n - 1u);
+            if (role == ROLE_HAT && !acc && rat < 2u && r >= 12u && h % 5u == 2u && h < vary * 30u / 100u)
+                rat = 2u;
+            else if (role == ROLE_SNARE && acc && rat < 2u && h % 4u == 1u && h < vary * 25u / 100u)
+                rat = 2u;
+            if (ghost || (role == ROLE_HAT && (pos & 1u)))   /* laid back a touch: up to a tenth of a 16th */
+                late = (float)(mc_hash(L->seed + 51u, l, e) % 100u) * (float)vary * 1e-5f * sl;
+        }
         if (chaos) {                     /* CHAOS: a random slice, a ratchet, a reverse now and then */
             uint32_t h = mc_hash(L->seed + 5u, l, e) % 100u, c2 = mc_hash(L->seed + 9u, l, e) % 100u;
             if (h < chaos * 6u / 10u)
@@ -766,6 +793,14 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
         s = list[k % n];
         mc_n[l]++;
         g = (float)(L->level > 100u ? 100u : L->level) * 0.01f * (L->accent && !acc ? 0.55f : 1.0f);
+        if (ghost)
+            g *= role == ROLE_KICK ? 0.6f : 0.3f;
+        if (vary) {                      /* velocity: never twice the same, the off-beat hats softer */
+            float rnd = (float)(mc_hash(L->seed + 41u, l, e) & 1023u) * (1.0f / 1023.0f);
+            g *= 1.0f - (float)vary * 0.0035f * rnd;
+            if (role == ROLE_HAT && (pos & 1u))
+                g *= 1.0f - (float)vary * 0.003f;
+        }
         pt = (float)L->pitch;
         if (L->rise) {                   /* the riser climbs and swells over its phrase */
             float pr = (float)(mc_steps ? mc_steps - 1u : 0u) / (float)(bars_of(sc) * BRK_STEPS_PER_BAR);
@@ -774,7 +809,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
         }
         mc_hitc[l]++;                    /* (each lane's event counts; one of them is heard) */
         {
-            uint32_t sc_ = (acc ? 8u : 0u) + PRIO[L->role % MC_ROLES];
+            uint32_t sc_ = ghost ? 0u : (acc ? 8u : 0u) + PRIO[role];   /* (a ghost never cuts a real hit) */
             if (sc_ > win_score || win < 0) {
                 win = (int32_t)l;
                 win_score = sc_;
@@ -784,6 +819,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
                 win_fl = fl;
                 win_rat = rat;
                 win_r = r;
+                win_late = late;
             }
         }
     }
@@ -793,9 +829,16 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
     mr_flags[l] = win_fl;
     mr_gate[l] = (uint8_t)(sc->lane[l].gate ? sc->lane[l].gate : 100u);
     mr_pitch[l] = win_pt;
-    chop_hit(b, win_s, win_g, (win_fl & MCL_REV) != 0u, mr_gate[l], win_pt);
     for (k = 0; k < MC_LANES; k++)       /* (a new hit ends the ratchets before it) */
         mr_count[k] = 0u;
+    if (win_late >= 1.0f && win_rat < 2u) {   /* laid back: the hit a little later (the ratchet's timer) */
+        mr_count[l] = 1u;
+        mr_left[l] = mr_len[l] = win_late;
+        mr_slice[l] = win_s;
+        mr_gain[l] = win_g;
+        return;
+    }
+    chop_hit(b, win_s, win_g, (win_fl & MCL_REV) != 0u, mr_gate[l], win_pt);
     mr_count[l] = win_rat > 1u ? (win_rat > 4u ? 3u : win_rat - 1u) : 0u;
     if (mr_count[l]) {                   /* the event's other hits, evenly inside it */
         mr_len[l] = (float)win_r * (1.0f / (float)MC_TICKS) * sl / (float)(mr_count[l] + 1u);

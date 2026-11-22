@@ -274,7 +274,7 @@ static void pat_read_back(void)          /* the engine's steps into the pattern 
 /* ----------------------------------------------------------------- MATHCORE --- */
 /* the scenes (A..P: four sample lanes each, docs/PRD_MATHCORE.md 6.1) in their own store object; the queue and the
  * black keys' shortcuts in another (the queue names scenes: one scene, queued as often as wanted) */
-#define MCS_MAGIC 0x3353434Du            /* "MCS3" (the scenes re-cut the break, 22 Nov 2026: the presets again) */
+#define MCS_MAGIC 0x3453434Du            /* "MCS4" (the lanes vary by themselves, 23 Nov 2026: the presets again) */
 #define MQ_MAGIC 0x3151434Du             /* "MCQ1" */
 #define MC_QUEUE 64u
 #define MC_NOKEY 0xFFu                   /* a black key with no scene */
@@ -309,6 +309,10 @@ static void mc_lane_defaults(mc_lane_t *l, uint32_t role)
     l->level = 100u;
     l->role = (uint8_t)role;
     l->seed = (uint8_t)(role * 37u + 11u);
+    {                                    /* VARY: the hats and snares most, the kick a little */
+        static const uint8_t V[MC_ROLES] = {20u, 60u, 70u, 45u};
+        l->vary = V[role % MC_ROLES];
+    }
 }
 /* the scenes as they come (A..P): grooves, fills, a riser, a breakdown, a drop, of different lengths, ready to play
  * from the black keys. A lane is a string: x a hit, X an accented one, . none (its length the string's). They re-cut
@@ -331,15 +335,15 @@ typedef struct {
 #define OFF_ {0, MCR_16, 0, 100, 1, 100, 0, 0}
 static const mc_preset_t MC_PRESET[11] = {
     {1, 2, MCS_BREAK, {L_("X.........X.....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("....X.......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("x.X.x.X.x.X.x.X.", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0),
+               L_("....X.......X...", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
+               L_("X.xxX.x.X.xxX.xx", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0),
                L_("..............x.", MCR_16, MCM_ROUND, 60, 1, 70, 0, 0)}},
     {2, 2, MCS_BREAK, {L_("X.X.......XX....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("....X..x.x..X..x", MCR_16, MCM_ACCENT, 100, 1, 100, 0, 0),
-               L_("xxxxxxxxxxxxxxxx", MCR_16, MCM_RANDOM, 70, 1, 70, 0, 0), OFF_}},
+               L_("XxxxXxxxXxxxXxXx", MCR_16, MCM_ROUND, 90, 1, 75, 0, 0), OFF_}},
     {3, 2, MCS_BREAK, {L_("X.........X.....X.....X.........", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("........X...............X.......", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("x.x.x.x.x.x.x.x.", MCR_16, MCM_ROUND, 100, 1, 75, 0, 0),
+               L_("X.x.X.xxX.x.X.xx", MCR_16, MCM_ROUND, 100, 1, 75, 0, 0),
                L_("...x.......x..x.", MCR_16, MCM_RANDOM, 50, 1, 70, 0, 0)}},
     {4, 4, MCS_BREAK, {L_("X..x.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("....X..", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
@@ -359,8 +363,8 @@ static const mc_preset_t MC_PRESET[11] = {
                        L_("x..", MCR_8T, MCM_ROUND, 100, 1, 55, 0, 0),
                        L_("x....", MCR_8, MCM_RANDOM, 100, 1, 60, 0, 0)}},
     {9, 2, MCS_BREAK, {L_("X..X..X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("....X.......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("xXxxXxxXxxXxxXxx", MCR_32, MCM_ROUND, 100, 1, 70, 0, 0),
+               L_("....X..x....X.x.", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
+               L_("XxxxXxxXxxXxXxxx", MCR_32, MCM_ROUND, 100, 1, 70, 0, 0),
                L_("x.....", MCR_16T, MCM_ROUND, 100, 1, 75, 0, 0)}},
     {10, 2, MCS_BREAK, {L_("X..X.X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                 L_("...X......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
@@ -404,6 +408,10 @@ static void mc_scene_defaults(mc_scene_t *s, uint32_t i)
         L->level = p->l[l].level;
         L->rise = p->l[l].rise;
         L->seed = (uint8_t)(L->seed + i * 13u);
+        if (L->rise)
+            L->vary = 0u;                /* (a riser stays a riser) */
+        else if (p->flags & MCS_ONCE)
+            L->vary /= 2u;               /* (a fill is busy already) */
     }
 }
 static void mc_defaults(void)

@@ -2241,6 +2241,38 @@ static void test_mc_play(void)
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
+    /* VARY: a snare lane on 5 and 13 grows ghost notes round them, never the same bar twice, the same run twice */
+    {
+        static float a1[4u * 44100u], a2[4u * 44100u];
+        uint32_t plain, varied;
+        mc_scene_init(&mc_sc[4], 4u);
+        mc_sc[4].lane[1].flags = MCL_ON;
+        mc_sc[4].lane[1].hits = 0x1010u;
+        brk_mc_start(4);
+        brk_mc_next(4);
+        mc_zero_counts();
+        brk_play(1);
+        mc_run_counting(64u * sl, 0);
+        plain = mc_hits_total[1];
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        mc_sc[4].lane[1].vary = 80u;
+        brk_mc_start(4);
+        mc_zero_counts();
+        brk_play(1);
+        mc_run_counting(64u * sl, a1);
+        varied = mc_hits_total[1];
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(4);
+        brk_play(1);
+        mc_run_counting(64u * sl, a2);
+        CHECK(plain == 8u && varied > plain + 2u, "VARY: ghost notes round the backbeat (%u hits, %u plain)", varied,
+              plain);
+        CHECK(!memcmp(a1, a2, 64u * sl * sizeof(float)), "VARY: the same seed, the same variations");
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
     brk_mc_scenes(0);
 }
 
