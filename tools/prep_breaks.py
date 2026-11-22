@@ -8,7 +8,7 @@
     tools/prep_breaks.py --list breaks/breaks.txt --header app/bank_data.h   # what ./build.sh does
 
 Each input is FILE[:BPM[:BARS[:NAME]]]. BARS is a count (the file's first bars) or the bars to take, joined by "+": 3+4
-is the file's bars 3 and 4 (a BPM needed), cut where the drummer played the bar line. Without a BPM, the tempo comes from the length and --bars (the file is taken to be
+is the file's bars 3 and 4 (a BPM: the file's), cut where the drummer played the bar lines, at his tempo there. Without a BPM, the tempo comes from the length and --bars (the file is taken to be
 whole bars). Slices are an equal grid (--slices 16 a bar by default, at most 32 a break) or, with --transients,
 the grid's markers moved to the nearest drum hit. Python 3 standard library only.
 
@@ -319,12 +319,13 @@ def downbeat(x, rate, at, win):
 
 
 def pick_bars(x, rate, bar_len, pick):
-    """the file's bars pick (from 1), in that order, cut where the drummer played each bar line (downbeat: a live
-    recording drifts off an even grid by a 16th's third), each run of bars that follow in the file in one piece. Where
-    a run follows one that isn't before it in the file, its first 1.5 ms fade in from what followed that one, so the
-    join doesn't click. When the last run reaches the file's end and that ends in silence (the Amen's WAV is gated 71 ms
-    before the end of bar 4, its crash still ringing), the ring goes on to the loop's end: its last 35 ms mirrored back
-    and forth (no step where it joins, the same sound), dying away 6 dB in 200 ms"""
+    """the file's bars pick (from 1), in that order, each run of bars that follow in the file in one piece, from where
+    the drummer played its first bar line (downbeat) to where he played the bar line after it: a live recording drifts
+    off an even grid (the Amen's drummer speeds up, bars 3 and 4 at ~144.7 BPM in a file at 141.82), and a run cut to
+    the file's average tempo drags at its end. A run at the file's end ends where its sound does (the Amen's WAV goes
+    silent 71 ms before its end: where the next downbeat would come). Where a run follows one that isn't before it in
+    the file, its first 1.5 ms fade in from what followed that one, so the join doesn't click. Returns the samples and
+    the tempo they make (the bars picked, end to end)"""
     runs = []
     for b in pick:
         if runs and runs[-1][-1] + 1 == b:
@@ -332,32 +333,23 @@ def pick_bars(x, rate, bar_len, pick):
         else:
             runs.append([b])
     win = int(bar_len / 32)                          # half a 16th
-    starts = [downbeat(x, rate, int(round((r[0] - 1) * bar_len)), win) for r in runs]
+    sound = len(x)
+    while sound > 1 and abs(x[sound - 1]) < 1e-5:
+        sound -= 1
     out = []
     for j, r in enumerate(runs):
-        s = starts[j]
-        e = s + int(round(len(r) * bar_len))
-        seg = list(x[s:e]) + [0.0] * max(0, e - len(x))
+        s = downbeat(x, rate, int(round((r[0] - 1) * bar_len)), win)
+        nxt = int(round(r[-1] * bar_len))
+        e = sound if nxt >= sound - rate * 0.1 else downbeat(x, rate, nxt, win)
+        seg = list(x[s:e])
         if j:                                        # a join
-            p = starts[j - 1] + int(round(len(runs[j - 1]) * bar_len))
             n = int(rate * 0.0015)
-            for i in range(min(n, len(x) - p)):
+            for i in range(min(n, len(x) - prev_end, len(seg))):
                 w = (i + 0.5) / n
-                seg[i] = x[p + i] * (1.0 - w) + seg[i] * w
-        last = len(seg) - 1
-        while last > 0 and abs(seg[last]) < 1e-5:
-            last -= 1
-        if j == len(runs) - 1 and e >= len(x) - rate * 0.01 and len(seg) - 1 - last > rate * 0.005:   # gated
-            m = min(last, int(rate * 0.035))         # the ring goes on: its last 35 ms mirrored back and forth
-            fade = 0.5 ** (1.0 / (rate * 0.2))       # and still dying away, 6 dB in 200 ms
-            g = 1.0
-            for t in range(1, len(seg) - last):
-                c = (t - 1) % (2 * m)
-                g *= fade
-                seg[last + t] = seg[last - (c if c < m else 2 * m - 1 - c)] * g
+                seg[i] = x[prev_end + i] * (1.0 - w) + seg[i] * w
+        prev_end = e
         out += seg
-    n = int(round(len(pick) * bar_len))
-    return (out + [0.0] * n)[:n]
+    return out, 240.0 * len(pick) * rate / len(out)
 
 
 def prepare(spec, args, shown=None):
@@ -376,7 +368,8 @@ def prepare(spec, args, shown=None):
     if pick:                                 # the bars asked for, in that order
         if max(pick) * bar_len > len(x) + 2 or min(pick) < 1:
             raise SystemExit(f"{path}: has no bar {max(pick)} at {bpm:.2f} BPM")
-        x = pick_bars(x, rate, bar_len, pick)
+        x, bpm = pick_bars(x, rate, bar_len, pick)   # the drummer's own tempo in those bars
+        bar_len = rate * 240.0 / bpm
     else:
         x = x[:int(round(bar_len * bars))]   # exactly the bars asked for
     if len(x) < int(bar_len * bars) - 2:

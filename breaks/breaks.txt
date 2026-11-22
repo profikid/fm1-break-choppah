@@ -11,7 +11,7 @@
 # in  file                                        bpm     bars  of  name
 #
 # classics/: ten breaks from the records (32-bit float WAV, 4 bars each, tempos from their lengths). AMEN is bars 3 and
-# 4, the crash in bar 4, cut at bar 3's kick; the crash's ring, gated in the WAV, goes on to the loop's end (prep_breaks.py pick_bars)
+# 4, the crash in bar 4, from bar 3's kick to where the WAV goes silent (the next downbeat: the drummer's own ~144.7 BPM there; prep_breaks.py pick_bars)
 *   classics/the_winstons_amen_brother.wav      141.82  3+4   4   AMEN
 *   classics/james_brown_funky_drummer.wav      99.81   2     4   DRUMMER
 *   classics/jimmy_mcgriff_the_worm.wav         109.79  2     4   THE WORM

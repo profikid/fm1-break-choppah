@@ -1,7 +1,7 @@
 CHOPPAH 1.5.3: the Amen loops seamlessly.
 
-- **AMEN is now the record's bars 3 and 4**, cut in one piece where the drummer plays bar 3's kick. 1.5.2 joined bar 1 to bar 4, which the drummer never played one after the other, so the loop stumbled at the join.
-- **The crash rings to the end of the loop.** The recording cuts the crash dead just before the bar ends. Its ring now goes on, dying away, until the loop comes round.
-- **Every slice starts on its hit.** The drummer rushes bar 4, so 1.5.2's slices missed some hits, the crash among them. Now each slice starts 1 ms before its hit, so key 14 starts on the crash.
+- **AMEN is now the record's bars 3 and 4**, in one piece, from the drummer's kick on bar 3 to his next downbeat. 1.5.2 joined bar 1 to bar 4, which he never played one after the other, so the loop stumbled.
+- **No drag at the end.** The drummer speeds up in these bars (about 144.7 BPM, where the whole record averages 141.8), so 1.5.2's loop, cut at the average tempo, slowed down before coming round. Now AMEN is as long as he played it, and the crash rings right up to the downbeat.
+- **Every slice starts on its hit**, 1 ms before it, so key 14 starts right on the crash.
 
-Saved settings and patterns load as they were. A pattern that plays AMEN's slices plays bars 3 and 4 of the record now.
+Saved settings and patterns load as they were. A pattern that plays AMEN's slices now plays bars 3 and 4 of the record.
