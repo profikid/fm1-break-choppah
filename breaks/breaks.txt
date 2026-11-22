@@ -5,14 +5,14 @@
 # tools/prep_breaks.py --list ... --dry-run). A break is at most 106,496 samples (2 bars at 99.4 BPM and up).
 #
 #   file:  relative to this folder   bpm:   the loop's tempo   bars: how many bars go into the firmware (the first
-#                                                              ones), or which, as 1+4: bar 1, then bar 4
+#                                                              ones), or which, as 3+4: bars 3 and 4
 #   (the WAV holds 'of' bars)        name:  on the screen, up to 11 characters
 #
 # in  file                                        bpm     bars  of  name
 #
-# classics/: ten breaks from the records (32-bit float WAV, 4 bars each, tempos from their lengths). AMEN is bar 1 and
-# bar 4, the bar with the crash (its end, gated in the WAV, filled from bar 1's end: prep_breaks.py pick_bars)
-*   classics/the_winstons_amen_brother.wav      141.82  1+4   4   AMEN
+# classics/: ten breaks from the records (32-bit float WAV, 4 bars each, tempos from their lengths). AMEN is bars 3 and
+# 4, the crash in bar 4, cut at bar 3's kick; the crash's ring, gated in the WAV, goes on to the loop's end (prep_breaks.py pick_bars)
+*   classics/the_winstons_amen_brother.wav      141.82  3+4   4   AMEN
 *   classics/james_brown_funky_drummer.wav      99.81   2     4   DRUMMER
 *   classics/jimmy_mcgriff_the_worm.wav         109.79  2     4   THE WORM
 *   classics/lyn_collins_think_about_it.wav     113.78  2     4   THINK

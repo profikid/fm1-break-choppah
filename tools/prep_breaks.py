@@ -7,8 +7,8 @@
     tools/prep_breaks.py --header app/bank_data.h ...    # the bank as a C array, built into the firmware
     tools/prep_breaks.py --list breaks/breaks.txt --header app/bank_data.h   # what ./build.sh does
 
-Each input is FILE[:BPM[:BARS[:NAME]]]. BARS is a count (the file's first bars) or the bars to take, joined by "+": 1+4
-is the file's bar 1 then its bar 4 (a BPM needed). Without a BPM, the tempo comes from the length and --bars (the file is taken to be
+Each input is FILE[:BPM[:BARS[:NAME]]]. BARS is a count (the file's first bars) or the bars to take, joined by "+": 3+4
+is the file's bars 3 and 4 (a BPM needed), cut where the drummer played the bar line. Without a BPM, the tempo comes from the length and --bars (the file is taken to be
 whole bars). Slices are an equal grid (--slices 16 a bar by default, at most 32 a break) or, with --transients,
 the grid's markers moved to the nearest drum hit. Python 3 standard library only.
 
@@ -251,17 +251,95 @@ def read_list(path):
     return specs
 
 
+def played_slices(x, rate, nslices, steps):
+    """slice points for bars cut from a live recording (pick_bars): each one 1 ms before the attack of its hit, to the
+    sample. An attack: the next 5 ms at least twice as loud as the 5 ms before. Each slice's hit is sought around where
+    the drummer has got to (the drift of the hits before it, so a rushed crash is still its 8th's), half a 16th either
+    way: of the attacks there at least half as sharp as the sharpest, the first (a flam's first stroke, not its second
+    or a ring); where none stands out, the grid line moved by that drift"""
+    n, h, j = len(x), 32, int(rate * 0.005)
+    rms = lambda i, k: (sum(v * v for v in x[max(0, i):max(0, i) + k]) / max(1, k)) ** 0.5
+    pre = int(rate * 0.001)
+    cand = []
+    for i in range(j, n - 2 * j, h):
+        a, b = rms(i - j, j), rms(i, j)
+        if b > 2.0 * a + 1e-6:
+            cand.append((i, b - a))
+    hits = []                                        # each run of frames: its sharpest, the attack found in it
+    for i, jump in cand:
+        if hits and i - hits[-1][2] <= h:
+            if jump > hits[-1][1]:
+                hits[-1][0], hits[-1][1] = i, jump
+            hits[-1][2] = i
+        else:
+            hits.append([i, jump, i])
+    keep = []
+    for i, jump, _ in hits:
+        peak = max(abs(v) for v in x[i:i + 2 * j])
+        k = max(0, i - j)
+        while k < i + j and abs(x[k]) < 0.2 * peak:
+            k += 1
+        keep.append((k, jump))
+    floor = rms(0, n)
+    g, s16 = n / nslices, n / steps
+    pts, drift = [0], 0.0
+    for i in range(1, nslices):
+        pred = i * g + drift
+        near = [(k, l) for k, l in keep if abs(k - pred) <= 0.5 * s16 and l > 0.15 * floor]
+        if near:
+            top = max(l for k, l in near)
+            k = min(k for k, l in near if l >= 0.5 * top) - pre
+            drift = k - i * g
+        else:
+            k = int(round(pred))
+        pts.append(max(pts[-1] + int(s16 / 2), k))
+    return pts + [n]
+
+
+def downbeat(x, rate, at, win):
+    """where the drummer played the bar line near sample at: the strongest attack within win samples of it, 3 ms
+    before it so the attack is whole; at itself when nothing there stands out (a bar that starts without a hit)"""
+    h = 64
+    lo, hi = max(h, at - win), min(len(x) - 2 * h, at + win)
+    rms = lambda i, n: (sum(v * v for v in x[i:i + n]) / max(1, n)) ** 0.5
+    best, bi = 0.0, None
+    for i in range(lo, hi, h):
+        before, after = rms(i - h, h), rms(i, h)
+        if after > 4.0 * before + 1e-6:              # a rise of 6 dB+ in 1.5 ms: an attack
+            loud = rms(i, int(rate * 0.03))
+            if loud > best:
+                best, bi = loud, i
+    if bi is None or best < rms(0, len(x)):           # no hit louder than the break on average
+        return at
+    peak = max(abs(v) for v in x[bi:bi + int(rate * 0.01)])
+    k = bi - h
+    while k < bi + h and abs(x[k]) < 0.2 * peak:
+        k += 1
+    return max(0, k - int(rate * 0.003))
+
+
 def pick_bars(x, rate, bar_len, pick):
-    """the file's bars pick (from 1), one after another. Where a bar follows one that isn't before it in the file, its
-    first 1.5 ms fade in from what followed the bar before in the file, so the join doesn't click. A bar that ends the
-    file and ends in silence (the recording gated: the Amen's crash cut 71 ms before the bar's end) has its last 30 ms
-    of sound faded into the same moments of the first bar picked, which leads into a downbeat as the loop does"""
+    """the file's bars pick (from 1), in that order, cut where the drummer played each bar line (downbeat: a live
+    recording drifts off an even grid by a 16th's third), each run of bars that follow in the file in one piece. Where
+    a run follows one that isn't before it in the file, its first 1.5 ms fade in from what followed that one, so the
+    join doesn't click. When the last run reaches the file's end and that ends in silence (the Amen's WAV is gated 71 ms
+    before the end of bar 4, its crash still ringing), the ring goes on to the loop's end: its last 35 ms mirrored back
+    and forth (no step where it joins, the same sound), dying away 6 dB in 200 ms"""
+    runs = []
+    for b in pick:
+        if runs and runs[-1][-1] + 1 == b:
+            runs[-1].append(b)
+        else:
+            runs.append([b])
+    win = int(bar_len / 32)                          # half a 16th
+    starts = [downbeat(x, rate, int(round((r[0] - 1) * bar_len)), win) for r in runs]
     out = []
-    for j, b in enumerate(pick):
-        a, e = int(round((b - 1) * bar_len)), int(round(b * bar_len))
-        seg = list(x[a:e]) + [0.0] * max(0, e - len(x))
-        if j and pick[j - 1] + 1 != b:      # a join
-            p = int(round(pick[j - 1] * bar_len))
+    for j, r in enumerate(runs):
+        s = starts[j]
+        e = s + int(round(len(r) * bar_len))
+        seg = list(x[s:e]) + [0.0] * max(0, e - len(x))
+        if j:                                        # a join
+            p = starts[j - 1] + int(round(len(runs[j - 1]) * bar_len))
             n = int(rate * 0.0015)
             for i in range(min(n, len(x) - p)):
                 w = (i + 0.5) / n
@@ -269,14 +347,17 @@ def pick_bars(x, rate, bar_len, pick):
         last = len(seg) - 1
         while last > 0 and abs(seg[last]) < 1e-5:
             last -= 1
-        if e >= len(x) - rate * 0.01 and len(seg) - 1 - last > rate * 0.005:   # the file's last bar, its end gated
-            src = int(round((pick[0] - 1) * bar_len))
-            n = int(rate * 0.03)
-            for i in range(max(0, last - n), len(seg)):
-                w = min(1.0, (i - (last - n) + 0.5) / n)
-                seg[i] = seg[i] * (1.0 - w) + x[src + i] * w
+        if j == len(runs) - 1 and e >= len(x) - rate * 0.01 and len(seg) - 1 - last > rate * 0.005:   # gated
+            m = min(last, int(rate * 0.035))         # the ring goes on: its last 35 ms mirrored back and forth
+            fade = 0.5 ** (1.0 / (rate * 0.2))       # and still dying away, 6 dB in 200 ms
+            g = 1.0
+            for t in range(1, len(seg) - last):
+                c = (t - 1) % (2 * m)
+                g *= fade
+                seg[last + t] = seg[last - (c if c < m else 2 * m - 1 - c)] * g
         out += seg
-    return out
+    n = int(round(len(pick) * bar_len))
+    return (out + [0.0] * n)[:n]
 
 
 def prepare(spec, args, shown=None):
@@ -311,7 +392,10 @@ def prepare(spec, args, shown=None):
         raise SystemExit(f"{shown or path}: {bars} bar(s) at {bpm:.2f} BPM are {len(x)} samples, the firmware's buffer "
                          f"holds {BANK_MAX_LEN} (fewer bars)")
     nslices = min(BANK_SLICES, args.break_slices or args.slices * bars)
-    pts = slice_points(x, args.rate, nslices, args.transients, 16 * bars)
+    if pick:                                 # a live recording's bars: on its hits, to the sample
+        pts = played_slices(x, args.rate, nslices, 16 * bars)
+    else:
+        pts = slice_points(x, args.rate, nslices, args.transients, 16 * bars)
     data = adpcm_encode(x)
     name = (given or (args.name_prefix + path.stem)).upper()[:11]
     return {"name": name, "file": shown or str(path), "bpm": round(bpm, 2), "bars": bars, "rate": args.rate,

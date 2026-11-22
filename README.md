@@ -69,8 +69,8 @@ on the device. The looper and song mode are next: see the [PRD](docs/PRD.md) for
 
 CHOPPAH has 8 breaks on ALGORITHM, 2 bars each at 22.05 kHz, from the records: The Winstons "Amen, Brother", James
 Brown "Funky Drummer" and "Cold Sweat", Jimmy McGriff "The Worm", Lyn Collins "Think (About It)", Bobby Byrd "Hot
-Pants", the Incredible Bongo Band "Apache" and Lightnin' Rod "Sport". The Amen is the record's bar 1 and its bar 4, the
-one with the crash.
+Pants", the Incredible Bongo Band "Apache" and Lightnin' Rod "Sport". The Amen is the record's bars 3 and 4, the crash in
+the second.
 
 The recordings are in [`breaks/`](breaks/): those ten classic breaks (`classics/`, Rotary Connection and Skull Snaps
 too, left out for room) and 60 royalty-free Amen loops by Dmitriy "Cyberworm" Vasilyev (`cw/`, `huge/`).
