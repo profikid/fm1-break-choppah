@@ -33,13 +33,15 @@ MAP = {
     "screen-global": "m_clock_in",       # midi.txt
     "screen-held": "u6_held",            # ui.txt
     "screen-keyloop": "k_pingpong",      # keys.txt
-    "screen-kick": "k_playing",          # kick.txt
+    "screen-mc-lane": "m_lane_feel",     # mathcore.txt
+    "screen-mc-live": "m_live_a",        # mathcore.txt
+    "screen-mc-map": "m_map",            # mathcore.txt
+    "screen-mc-scene": "m_scene",        # mathcore.txt
     "screen-lobotomized": "r_lobotomized",   # reset.txt
     "screen-mbcomp-band": "c_mb_low",    # mbcomp.txt
     "screen-mbcomp-solo": "c_mb_solo",   # mbcomp.txt
     "screen-mbcomp": "c_mb_amount",      # mbcomp.txt
     "screen-mixer": "x_levels2",         # mixer.txt
-    "screen-perc": "p_playing",          # perc.txt
     "screen-roll": "u7_roll",            # ui.txt
     "screen-selhelp": "sel_help",        # controls.txt
     "screen-seq": "q_hat",               # seq.txt

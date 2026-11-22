@@ -1,0 +1,55 @@
+# CHOPPAH: the pattern's drum lanes (SEQ's KICK, SNARE and HAT) play slices of the break: each hit the first slice
+# the Slice Map heard as a kick, a snare or a hat (MATHCORE M2). The break turned down on the MIXER, the lanes alone
+# still sound; the LANES fader down, silence. MIDI 36 / 38 / 42 play the same slices
+#   app/build/host/choppah_host tests/scenarios/drumlanes.txt app/build/scenarios
+wait 2600
+tap LFO
+wait 100
+turn K1 -50 10
+wait 100
+tap SEQ
+tap SEQ
+tap SEQ
+wait 100
+expect seq_lane 2
+tapkey w0
+tapkey w8
+tap SEQ
+wait 100
+expect seq_lane 3
+tapkey w4
+tapkey w12
+tap SEQ
+wait 100
+expect seq_lane 4
+tapkey w2
+tapkey w6
+tapkey w10
+tapkey w14
+wait 200
+expect lane_hat 17476
+shot q_hat.png
+tap PLAY
+wait 400
+peakreset
+wait 1500
+expect peak_db_min -30
+# the LANES fader down: nothing left
+tap LFO
+wait 100
+turn K2 -50 10
+wait 400
+peakreset
+wait 1000
+expect peak_db_max -60
+turn K2 50 10
+wait 300
+tap PLAY
+wait 400
+# stopped: a drum note plays its role's slice
+peakreset
+midi USB 90 24 64
+wait 50
+midi USB 80 24 00
+wait 300
+expect peak_db_min -30

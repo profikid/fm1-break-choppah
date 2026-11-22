@@ -27,9 +27,11 @@ ENV TAP TEMPO	tap tempo page
 ARP PAD #	effect pad #
 FX SLOT #	effects slot #
 SLOT #	slot #
-EDIT KICK	edit, kick
-EDIT SNARE	edit, snare
-EDIT HAT	edit, hat
+EDIT LIVE	math core, live
+EDIT MAP	math core, slice map
+EDIT LANE	math core, lane
+EDIT SCENE	math core, scene
+MATHCORE	math core
 MORE	more settings
 MAIN	main settings
 # the black keys' pads
@@ -90,6 +92,7 @@ L / R	turn left or right
 CLR / 4X4	clear or four on the floor
 L CLR R 4X4	left clears, right four on the floor
 ROTATE < >	rotate, turn left or right
+NEW / COPY < >	new or copy, turn left or right
 REVERSE REVERSE	reverse on
 REVERSE FORWARD	reverse off
 HITS X#	hits #

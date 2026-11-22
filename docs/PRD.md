@@ -3,7 +3,8 @@
 **Product requirements document** · v2.0 · 21 Nov 2026 · Owner: Laurens (Sylverline)  
 Status: revised product direction · Repository: `profikid/fm1-break-choppah`
 
-**New feature roadmap:** [MATHCORE — Queue & Layered Sample Engine](PRD_MATHCORE.md) · v1.0 · 22 Nov 2026
+**New feature roadmap:** [MATHCORE — Queue & Layered Sample Engine](PRD_MATHCORE.md) · v1.0 · 22 Nov 2026 · built on
+the `mathcore` branch (22 Nov 2026), in device testing: see its §14
 
 ---
 
@@ -428,6 +429,12 @@ The following are outside the v2 product and must not be developed further:
 - Any future bass or synth layer.
 
 Existing code may be retained temporarily to keep builds working during refactoring, but it must be disabled from the user-facing product and removed in a deliberate cleanup after dependencies are understood. Do not delete code blindly before checking build, settings migration and memory effects.
+
+**Done on the `mathcore` branch (22 Nov 2026, MATHCORE M0):** the synthesised kick, snare and hat and their pages and
+presets are removed; their settings' bytes stay reserved so older saves load into the same places. The pattern's drum
+lanes and the drum MIDI notes were kept, as sample lanes: each hit is a slice the Slice Map heard as a kick, snare or
+hat (PRD_MATHCORE §14), so the old patterns still play, deterministically, from the break. The MIXER's KICK and PERC
+faders became one LANES fader; the route through or around the chain is the lanes'.
 
 ### 11.3 Memory and performance
 

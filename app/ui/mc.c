@@ -79,7 +79,7 @@ static int mc_play(void)
         return 1;
     if (mc.part == MCP_LIVE) {
         if (!mq.n) {
-            app_warn("QUEUE EMPTY", "TAP A BLACK KEY");
+            app_warn("QUEUE NOT STARTED", "ADD A SCENE FIRST");
             return 0;
         }
         mc.on = 1u;
@@ -150,11 +150,11 @@ static void mq_append(uint32_t key)
 {
     uint32_t s = mq.key[key % NPFX];
     if (s >= MC_SCENES) {
-        app_warn("NO SCENE", "ON THIS KEY");
+        app_warn("NOT QUEUED", "NO SCENE ON THIS KEY");
         return;
     }
     if (mq.n >= MC_QUEUE) {
-        app_warn("QUEUE FULL", "");
+        app_warn("NOT QUEUED", "THE QUEUE IS FULL");
         return;
     }
     mq.q[mq.n++] = (uint8_t)s;
@@ -194,7 +194,7 @@ static void mq_remove_last(uint32_t key)
             mq_said("REMOVED", s);
             return;
         }
-    app_warn("NOT QUEUED", "");
+    app_warn("NOT REMOVED", "NOT IN THE QUEUE");
 }
 static void mq_clear(void)
 {
@@ -204,7 +204,7 @@ static void mq_clear(void)
     if (mc.on == 1u)
         mc_push_next();                  /* (none: the scene playing ends the queue) */
     set_dirty = 1u;
-    app_say("QUEUE", mc.on == 1u ? "CLEARED: ENDS AFTER THIS" : "CLEARED");
+    app_say("QUEUE CLEARED", mc.on == 1u ? "THIS SCENE PLAYS OUT" : "");
     ui.redraw |= RG_BLOCKS | RG_FOOT;
 }
 static void mq_move(int32_t d)           /* the entry at the cursor a place later (right) or earlier (left) */
@@ -277,7 +277,7 @@ static void mc_white(uint32_t i, uint32_t btn)
     *m ^= 1u << e;
     set_dirty = 1u;
     if (e >= L->len)
-        app_warn("PAST THE CYCLE", "LENGTH: K1 ON RHYTHM");
+        app_warn("NOT IN THE CYCLE", "LONGER: RHYTHM K1");
     else
         say_int(mc.kset == MKS_FEEL ? (*m >> e & 1u ? "ACCENT" : "SOFT") : (*m >> e & 1u ? ROLE_NAME[L->role % MC_ROLES]
                 : "OFF"), (int32_t)e + 1, "");
@@ -312,7 +312,7 @@ static void mc_value(int i, char *t)     /* MATHCORE's knob i, as the foot shows
         } else if (i == 1)
             text_cat(t, S->flags & MCS_BREAK ? "ON" : "OFF");
         else if (i == 2)
-            text_cat(t, "L NEW R COPY");
+            text_cat(t, "< >");
         else {
             uint32_t l, n = 0u;
             for (l = 0; l < MC_LANES; l++)

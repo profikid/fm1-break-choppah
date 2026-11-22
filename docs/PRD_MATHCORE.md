@@ -3,7 +3,7 @@
 **Feature PRD and implementation roadmap** · v1.0 · 22 Nov 2026  
 **Parent product PRD:** [PRD.md](PRD.md)  
 **Repository:** `profikid/fm1-break-choppah`  
-**Status:** Proposed — design approved for planning; implementation not started
+**Status:** Built on the `mathcore` branch (22 Nov 2026), in device testing; not on main, not released. See §14
 
 ---
 
@@ -101,7 +101,9 @@ Therefore, the roadmap starts with **sample-only product cleanup**. Do not mark 
 6. Assign scenes to black-key shortcuts.
 7. Enter **MATHCORE LIVE** and build a queue by tapping the black keys.
 
-Manual role assignment is the first release requirement. Automatic transient classification may suggest assignments in a later desktop/browser preparation tool, but the FM-1 must not depend on machine learning or network access.
+~~Manual role assignment is the first release requirement.~~ **Changed 22 Nov 2026 (Laurens): the Slice Map is
+made automatically, nothing manual.** The FM-1 hears each slice's hit when the break loads (three filter bands, no
+machine learning, no network: §4.2a), so step 3 above happens by itself and SLICE MAP shows the result.
 
 ### 3.2 Live performance flow
 
@@ -145,6 +147,17 @@ A slice may have multiple role tags. For example, a noisy break hit may be usefu
 | MM-SM-006 | Provide a deterministic fallback for unassigned roles | P0 | Empty role produces silence and a visible warning; never synthesize a replacement |
 | MM-SM-007 | Preserve slice map across firmware restart | P0 | Save, reboot and reload yields identical assignments |
 | MM-SM-008 | Optional browser-side transient suggestions | P2 | Suggestions are editable and never silently overwrite manual tags |
+
+### 4.2a The map, heard (as built)
+
+`mc_auto_roles` (app/dsp/brk.c) runs in the main loop whenever a break is loaded (a bank break, the custom break, a
+split): the first 60 ms of each slice through one-pole filters into a low band (under ~120 Hz), a middle band (~250 Hz
+to 4 kHz) and a high band (over ~7 kHz). Normalised over the break's slices: loud low → KICK; loud middle, less low
+→ SNARE; a quiet, mostly high hit → HAT; other hits with some level → PERC. KICK, SNARE and HAT each get at least their
+likeliest slice; an empty PERC takes the quieter snares. Deterministic: the same audio gives the same map, every load
+and every boot (MM-SM-003 and MM-SM-007 hold without a store object; MM-SM-001, 002 and 008 are replaced by the
+read-only MAP page). On the eight bank breaks it finds the kicks on the downbeats and the snares on 2 and 4 (AMEN:
+K K S · H K H S | H P S · H K H S).
 
 ### 4.3 Slice selection modes
 
@@ -366,7 +379,7 @@ Detailed editing is allowed to use existing encoders and K1–K4. Normal queue p
 
 ## 10. Implementation roadmap
 
-All milestones below are **proposed / not started**. The current branch has not implemented these features.
+Built on the `mathcore` branch, 22 Nov 2026 (§14 has what is done and what is not).
 
 | Milestone | Scope | Exit criteria |
 | --- | --- | --- |
@@ -472,3 +485,43 @@ Demonstrate the following without a computer:
 - [Current kick voice interface](../app/dsp/kick.h)
 - [Current snare / hi-hat voice interface](../app/dsp/perc.h)
 - [Current manual](../app/docs/MANUAL.md)
+
+---
+
+## 14. Implementation status (22 Nov 2026, branch `mathcore`)
+
+| Milestone | State |
+| --- | --- |
+| M0 Sample-only cleanup | Done. `dsp/kick.*`, `dsp/perc.*`, `ui/kick.c`, `ui/perc.c` removed; `brk_synth` moved to `tests/engine/` (test material only); a build without a bank is silent. The settings keep the drums' 188 bytes as reserved (`rsv_kick`, `rsv_perc`; offsets asserted), so older saves load. The MIXER's KICK and PERC faders became one LANES fader (appended `lane_level`) |
+| M1 Slice Map | Done, automatic (§4.2a). MAP page read-only |
+| M2 Role-aware lanes | Done. The pattern's KICK / SNARE / HAT lanes (SEQ, unchanged data) play the role's first slice; MIDI 36 / 38, 40 / 42, 44, 46 / 37, 39 play a KICK / SNARE / HAT / PERC slice. An empty role: silence and `mc_missing` (a "!" on the lane rows) |
+| M3 Polymetric engine | Done. Four lanes a scene, 1–32 events, 1/32 … 1/4 and triplets, phase, rotate, chance (seeded), ratchet ×1–4, gate, level, accents, reverse, per-lane pitch (as speed), FIXED / ROUND / RANDOM / ALT / ACCENT, reset per scene or FREE, mute / solo. All from one integer timeline (12 ticks a 16th from the transport's start, the outside clock's when following): engine test 5/7/11/13 for 64 bars exact. Voices: two a lane (8), bounded by the lane count |
+| M4 Scenes | Done. 16 scenes (A–P), 100 B each, `OBJ_MC` at 0xD6000; phrase 1/2/4/8 bars; the break's own loop under the lanes or not (`MCS_BREAK`) |
+| M5 Queue | Done. Up to 64 entries, `OBJ_MQ` at 0xD8000 with the 11 shortcuts. Append, duplicates, remove last of a scene, clear (plays out, then stops), move at the cursor; edits never cut the scene playing; an empty queue doesn't start |
+| M6 FM-1 controls | Done. EDIT = MATHCORE: LIVE → MAP → LANE → SCENE (EDIT again). §14.1 |
+| M7 Persistence | Done. SAVE writes the two objects only when they changed; checked on load (magic, ranges) |
+| M8 Hardening | Partly: engine tests (159 checks), host scenario `tests/scenarios/mathcore.txt`, manual, control map. Not yet: device acceptance (§11.3), the one-hour soak, a release |
+
+Not built: hold a black key to preview its scene (P1), per-event pitch / reverse locks (per lane only), scene names
+and colours (letters A–P), lanes of more than four.
+
+### 14.1 The controls as built (§7.2 reconciled with the panel)
+
+| Where | Control | Does |
+| --- | --- | --- |
+| LIVE | Black key · SEL + black key | Append its scene · take its last entry out |
+| LIVE | PLAY (stopped) | Start the queue at entry 1 (empty: "QUEUE EMPTY", nothing starts) |
+| LIVE | K1–K4 | KICK / SNARE / HAT / PERC lane: left toward MUTE, right toward SOLO |
+| LIVE | ALGORITHM · PRESETS · SEL + REC | Queue cursor · move the entry at it · clear the queue |
+| MAP | White keys · ALGORITHM | Play and show a slice (its roles) |
+| LANE | ALGORITHM · PRESETS | The lane · its knob set (RHYTHM, SOUND, FEEL, MORE) |
+| LANE | White keys (SEL: 17–32) | Its events on / off; on FEEL its accents |
+| LANE, SCENE | PLAY (stopped) | The scene edited, round and round |
+| SCENE | ALGORITHM · K1–K4 | The scene · PHRASE, BREAK, NEW / COPY, LANES |
+| SCENE | Black key · SEL + black key | That key queues this scene · queues nothing |
+| Everywhere | — | The queue plays on across pages; the black keys are the pads everywhere but LIVE and SCENE (and ARP's effects) |
+
+The lanes are a channel of their own (`brk_lanes_out`): the MIXER's LANES fader and GROOVE's route (through the FX
+chain or around it), not the break's DJ filter, gate pad or tape stop. Flash: image 552 KB of 581.5 KB (+3.5 KB over
+v1.5.2 with the drums gone); RAM .data+.bss 91.2 of 98.3 KB.
+

@@ -4,8 +4,9 @@ CHOPPAH turns the [M-VAVE FM-1](https://www.m-vave.com/) into a breakbeat choppe
 on the white keys, momentary effect pads on the black keys, a generator that rearranges the break as it plays, and
 a master effects chain (four slots, any of filter, crunch, drive, punch, flanger, ring mod, tremolo, reverb,
 ping-pong delay, 3-band EQ, tape saturation, multiband compressor, clipper, in any order), effects per slice, a
-16 patterns with a step sequencer and recording, a synthesised four-layer gabber kick, a snare and a hi-hat on the
-patterns' drum lanes, MIDI notes for the slices and drums, a DJ filter on the break and a mixer. Built on
+16 patterns with a step sequencer and recording, **MATHCORE** (the break's own kicks, snares and hats found by ear,
+four polymetric sample lanes per scene, a queue of scenes built live on the black keys), MIDI notes for the slices
+and drums, a DJ filter on the break and a mixer. Every sound is the break's: nothing is synthesised. Built on
 [fm1-base](https://github.com/charlesvestal/fm1-base) (MPL-2.0).
 
 ![CHOPPAH's screens: the splash, the start screen, the slicer view, playing, a slice held, a roll](docs/img/screens.png)
@@ -21,8 +22,8 @@ Installing is at your own risk; the installer can put M-VAVE's own firmware back
 twice comes up in a safe mode the installer can still reach. If your FM-1 runs M-VAVE's FM1 Open firmware, restore
 M-VAVE's original firmware first ([docs/FLASHING.md](docs/FLASHING.md)).
 
-**Status: early (0.x).** The engine, the slicer, the pads, the generator, the effects, the patterns and the drums work
-on the device. The looper and song mode are next: see the [PRD](docs/PRD.md) for the whole plan.
+**Status: early (0.x).** The engine, the slicer, the pads, the generator, the effects and the patterns work on the
+device; MATHCORE ([its PRD](docs/PRD_MATHCORE.md)) is on the `mathcore` branch, being tested. The looper and song mode are next: see the [PRD](docs/PRD.md) for the whole plan.
 
 ## Where to find CHOPPAH
 
@@ -54,14 +55,14 @@ on the device. The looper and song mode are next: see the [PRD](docs/PRD.md) for
 | OCT− / OCT+ | Pitch in semitones (hold: faster) · both: 0 |
 | ALGORITHM | The next break, its name at once, the break itself at the next bar: AMEN, DRUMMER, THE WORM, THINK, COLD SWEAT, HOT PANTS, APACHE, SPORT |
 | PRESETS | The pattern, P1–P16 (playing: from the end of the loop) |
-| SEQ | **PATTERN SEQUENCER**: the pattern's 32 break steps (each LOOP, a slice of its own, or off; K1 slice · K2 pitch · K3 hits ×1–×4 · K4 reverse) and its kick, snare and hat lanes (16 steps each: the only place the drums are sequenced). ALGORITHM (or SEQ again) picks the lane, the white keys edit it; on a drum lane K1 FILL (Euclidean hits) · K2 ROTATE · K3 clear / four on the floor · K4 copy the previous pattern's lane |
+| SEQ | **PATTERN SEQUENCER**: the pattern's 32 break steps (each LOOP, a slice of its own, or off; K1 slice · K2 pitch · K3 hits ×1–×4 · K4 reverse) and its kick, snare and hat lanes (16 steps each, a hit the Slice Map's kick, snare or hat slice). ALGORITHM (or SEQ again) picks the lane, the white keys edit it; on a drum lane K1 FILL (Euclidean hits) · K2 ROTATE · K3 clear / four on the floor · K4 copy the previous pattern's lane |
 | REC | Record the white keys and MIDI notes into the pattern as the break plays · SEL + REC: clear (on SEQ the lane, else the pattern) |
-| MIDI notes | 48–63 (C3–D#4) play slices 1–16; 36 kick, 38 snare, 42 / 44 / 46 hat; any channel, recorded with REC |
+| MIDI notes | 48–63 (C3–D#4) play slices 1–16; 36 a kick slice, 38 a snare, 42 / 44 / 46 a hat, 37 / 39 a perc one; any channel, recorded with REC |
 | HOME | PERFORM: K1 **gate** (how much of every slice sounds: 100 % off, down to 5 % for tight, clipped chops) · K2 **DJ filter** on the break alone (left low-pass, right high-pass) · K3 FX · K4 complexity (mirrors of the MIXER's and the GENERATOR's) · **HOME again**: GENERATOR, K1 complexity · K2 anchor · K3 roll · K4 fill · **HOME a third time**: **the split**: bar 1 a bar of break A, bar 2 a bar of break B (B at A's tempo): K1 on / off, K2 break B, K3 / K4 which bar of each. Keys 1–8 are A's, 9–16 B's; a key latches its half (from the next bar line), SEL + key both again; a key of each half held plays both, layered; ALGORITHM turns the break of the bar latched (B with bar 2 latched, else A) |
-| LFO | **MIXER**: K1 break level · K2 kick level · K3 snare and hat level · K4 **FX** (the whole effects chain, dry to wet), with meters · **LFO again**: K1 swing · K2 the drums through the chain or around it |
+| LFO | **MIXER**: K1 break level · K2 lanes level (the drum lanes' and MATHCORE's slices) · K4 **FX** (the whole effects chain, dry to wet), with meters · **LFO again**: K1 swing · K2 the lanes through the chain or around it |
 | ARP | **EFFECT PADS**: the white keys play slices, each black key holds an effect of the FX library over everything (FILTER, CRUNCH, DRIVE, FLANGER, TREMOLO, TAPE, DELAY, REVERB …), on while held; **SEL + a black key** holds it on (any page). The key pressed last (or ALGORITHM) is shown in the FX page's view: PRESETS its effect, K1–K3 its settings, K4 its mix, ARP again its MORE and MOD parts; four sound at once · SEL + ARP: a random pattern |
 | FX | The **master FX chain**: four slots in series. ALGORITHM (or FX again) picks a slot, PRESETS puts an effect in it (FILTER, CRUNCH, DRIVE, PUNCH, FLANGER, RING MOD, TREMOLO, REVERB, DELAY, EQ, TAPE, MB COMP, CLIP, or EMPTY), K1–K3 its settings and K4 its mix, SEL + FX bypasses it, FX held + ALGORITHM moves it along the chain. Every effect shows itself live (its response, a tone through it, its decay or its echoes) with its level in and out, and FX again steps its parts: MORE (extra knobs of its own) and MOD (a tempo-synced or envelope modulator on any of its settings); MB COMP has six parts (amounts, each band's threshold, ratio, attack and release, gains and solo, the splits, knee and output) |
-| EDIT | **DRUM DESIGN**: the kick, the snare and the hat (EDIT again: the next drum; the tabs show which). **KICK**: four layers (SUB, PUNCH, GRIT, CLICK) into a clipper; ALGORITHM turns its parts: MIX (the layers' levels) → each layer (level, pitch, decay, tone) and its FX (drive, crunch, filter, ring mod) → MACRO (SUB, PUNCH, GRIT, INTENSITY) → OUT (volume); PRESETS six kicks (909 … ROTTERDAM … DISTORTO). **SNARE / HAT**: tuned body, band-passed noise and crack; six 808-ratio squares and noise; ALGORITHM SOUND (level, tune, decay, tone) / SHAPE (snap or cut, drive), PRESETS four each. Their steps are SEQ's lanes; MIDI 36 / 38 / 42 play them |
+| EDIT | **MATHCORE** (EDIT again: the next part). **LIVE**: the black keys queue scenes (SEL + one: take it out), PLAY plays the queue in order and round again, the white keys keep playing slices, K1–K4 mute / solo the lanes, SEL + REC clears the queue. **MAP**: the Slice Map, heard from the break when it loads (K kick, S snare, H hat, P the rest; nothing to set). **LANE**: one of a scene's four lanes, 1–32 events at 1/32 … 1/4 or triplets, its slices FIXED / ROUND / RANDOM / ALT / ACCENT, chance, ratchet, gate, phase, rotate (PRESETS: RHYTHM · SOUND · FEEL · MORE); the white keys set its events. **SCENE**: its phrase (1–8 bars), the break under it or not, the black key that queues it |
 | GLO | GLOBAL: K1 MIDI clock in (follow tempo and start / stop), K2 clock out (24 ppqn, start / stop), K3 Bluetooth MIDI on / off (shows up as "CHOPPAH XXXX" in a MIDI app's Bluetooth page), K4 where MIDI goes (USB, Bluetooth, both). **GLO again** (or ALGORITHM): K1 pitch KEEP LENGTH (the default: pitch without changing the slices' length) or SPEED (the classic repitch), K2 grain size, K3 **snap**: where a key pressed while playing lands (OFF, 1/8, 1/4, 1/2, 1, 2, 4 slices), K4 **RESET ALL** (turn twice: every setting and pattern back to the start, pairings kept). **GLO a third time**: CHANNEL, the MIDI channel and what goes out |
 | SAVE | Keep the settings and the 16 patterns (a newer version keeps them: new settings start at their defaults) |
 

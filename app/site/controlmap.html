@@ -149,7 +149,7 @@
     <h3>Who owns K1–K4</h3>
     <p>First match wins.</p>
     <div class="stack">
-      <div class="layer"><div class="rank">1</div><b>A white key held</b><ul><li>Anywhere but SEQ and ENV (tap tempo)</li><li>Its loop: LENGTH, PITCH, START, MODE</li><li>FX flips to its slice effect: EFFECT, AMOUNT, TONE, LEVEL</li><li>SEL resets the key</li></ul></div>
+      <div class="layer"><div class="rank">1</div><b>A white key held</b><ul><li>Anywhere but SEQ, ENV (tap tempo) and MATHCORE's LANE</li><li>Its loop: LENGTH, PITCH, START, MODE</li><li>FX flips to its slice effect: EFFECT, AMOUNT, TONE, LEVEL</li><li>SEL resets the key</li></ul></div>
       <div class="layer"><div class="rank">2</div><b>A pad held</b><ul><li>Any page; a pad pressed after the key wins</li><li>Rolls: RATE, DECAY, PITCH, LEVEL</li><li>FILTER: TARGET, RESO, SPEED</li><li>DUB: TIME, FEEDBACK, TONE, MIX</li></ul></div>
       <div class="layer"><div class="rank">3</div><b>The page</b><ul><li>What the explorer shows</li><li>SELECT is always the tempo, MASTER the volume</li><li>ALGORITHM and PRESETS follow the page</li></ul></div>
     </div>
@@ -188,19 +188,18 @@
       { n: "CHANNEL", k: ["CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"], strip: "CHANNEL · OUT · THE MIDI MAP", note: "OMNI or 1–16; each out off by default" } ],
       algo: "Part", presets: "Pattern P1–P16", keys: "slices", notes: [["K4 RESET ALL", "Turn twice within 3 s"],
         ["CC 20–23 · 24–39", "K1–K4 · the chain's slots"], ["PC 0–15 · 16–31", "Pattern · break"], ["Notes 24–35", "Breaks 1–12"]] },
-    { id: "edit", btn: "EDIT", name: "DRUM DESIGN", sub: "Kick, snare, hat sounds", again: "next drum (3)", part: true, subs: [
-      { n: "KICK · MIX", k: ["SUB", "PUNCH", "GRIT", "CLICK"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "ALGORITHM: MIX, SUB, SUB FX … CLICK FX, MACRO, OUT" },
-      { n: "KICK · LAYER", k: ["LEVEL", "PITCH", "DECAY", "TONE"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "SUB, PUNCH, GRIT, CLICK" },
-      { n: "KICK · LAYER FX", k: ["EFFECT", "A", "B", "WET"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "" },
-      { n: "KICK · MACRO", k: ["SUB", "PUNCH", "GRIT", "INTENSITY"], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "" },
-      { n: "KICK · OUT", k: ["VOLUME", "", "", ""], strip: "KICK SHAPE · LAYER LEVELS · THE 3 DRUMS", note: "" },
-      { n: "SNARE / HAT · SOUND", k: ["LEVEL", "TUNE", "DECAY", "TONE"], strip: "6 SETTINGS · THE 3 DRUMS", note: "EDIT again: the snare, then the hat" },
-      { n: "SNARE / HAT · SHAPE", k: ["SNAP / CUT", "DRIVE", "", ""], strip: "6 SETTINGS · THE 3 DRUMS", note: "" } ],
-      algo: "Part", presets: "Kick / sound", keys: "slices",
-      notes: [["Steps", "On SEQ's KICK, SNARE and HAT lanes"], ["MIDI 36 · 38 · 42", "Kick · snare · hat (C2 · D2 · F#2)"]] },
+    { id: "edit", btn: "EDIT", name: "MATHCORE", sub: "Slice Map, lanes, scenes, the queue", again: "next part (4)", part: true, subs: [
+      { n: "LIVE", k: ["KICK", "SNARE", "HAT", "PERC"], strip: "THE SCENE PLAYING · NEXT · THE QUEUE · ITS LANES", note: "K1–K4: a lane, left toward MUTE, right toward SOLO. Black keys queue their scenes; PLAY starts the queue" },
+      { n: "MAP", k: ["KICKS", "SNARES", "HATS", "PERCS"], strip: "16 SLICE BLOCKS WITH THEIR ROLES (K S H P)", note: "heard from the break when it loads: nothing to set" },
+      { n: "LANE", k: ["LENGTH · MODE · CHANCE · ROLE", "RATE · PICK · RATCHET · SEED", "ROTATE · PITCH · GATE · RESET", "PHASE · LEVEL · REVERSE · LANE"], strip: "THE LANE'S 32 EVENTS · THE SCENE'S 4 LANES", note: "PRESETS: RHYTHM · SOUND · FEEL · MORE; white keys: its events (SEL: 17–32; FEEL: accents)" },
+      { n: "SCENE", k: ["PHRASE", "BREAK", "NEW / COPY", "LANES"], strip: "THE SCENE · ITS BLACK KEYS · ITS 4 LANES", note: "a black key: it queues this scene" } ],
+      algo: "Queue entry · slice · lane · scene", presets: "Move entry · knob set (LANE)", keys: "slices", black: "scenes",
+      notes: [["Black key (LIVE)", "Queue its scene (again: another copy)"], ["SEL + black key (LIVE)", "Its last entry out"],
+              ["SEL + REC (LIVE)", "Clear the queue: the scene playing plays out"], ["Black key (SCENE)", "It queues this scene; SEL + it: nothing"],
+              ["PLAY on LANE / SCENE", "The scene edited, round and round"], ["MIDI 36 · 38 · 42 · 39", "A kick, snare, hat, perc slice"]] },
     { id: "lfo", btn: "LFO", name: "MIXER", sub: "Levels and groove", again: "next part (2)", subs: [
-      { n: "LEVELS", k: ["BREAK", "KICK", "PERC", "FX"], strip: "4 FADERS AND METERS", note: "FX shows the 4 slots" },
-      { n: "GROOVE", k: ["SWING", "DRUMS ROUTE", "", ""], strip: "SWING · THE DRUMS' ROUTE", note: "" } ],
+      { n: "LEVELS", k: ["BREAK", "LANES", "", "FX"], strip: "FADERS AND METERS", note: "FX shows the 4 slots" },
+      { n: "GROOVE", k: ["SWING", "LANES ROUTE", "", ""], strip: "SWING · THE LANES' ROUTE", note: "" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices", notes: [] },
     { id: "env", btn: "ENV", name: "TAP TEMPO", sub: "The whole screen", again: "a tap", subs: [
       { n: "TAP TEMPO", k: ["TEMPO", "FINE", "HALF / X2", "CLICK"], strip: "LED BPM · A METRONOME SWINGING IN TIME · TAPS", note: "the whole screen: no waveform, no tabs" } ],
@@ -237,10 +236,10 @@
     const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps" || p.keys === "taps";
     root.querySelectorAll(".pbtn").forEach((b, i) => b.setAttribute("aria-pressed", String(i === cur)));
     $("subs").innerHTML = p.subs.map((x, i) => '<button type="button" class="sub" data-i="' + i + '" aria-pressed="' + (i === sub) + '">' + x.n + "</button>").join("");
-    const tabs = p.id === "edit" ? ["KICK", "SNARE", "HAT"] : p.id === "fx" ? ["1", "2", "3", "4"] : p.id === "arp" ? ["PAD 1"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
-    const on = p.id === "edit" ? (sub < 5 ? 0 : 1) : p.id === "fx" || p.id === "arp" ? 0 : sub;
+    const tabs = p.id === "edit" ? ["LIVE", "MAP", "LANE", "SCENE"] : p.id === "fx" ? ["1", "2", "3", "4"] : p.id === "arp" ? ["PAD 1"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
+    const on = p.id === "fx" || p.id === "arp" ? 0 : sub;
     $("tabs").innerHTML = "<b>" + p.btn + "</b>" + tabs.map((t, i) => '<span class="' + (i === on ? "on" : "") + '">' + t + "</span>").join("") +
-      (p.part ? "<em>&lt; " + (p.id === "edit" ? s.n.split(" · ")[1] : (p.id === "arp" ? "FILTER" : "TREMOLO") + (sub ? " " + s.n : "")) + " &gt;</em>" : "");
+      (p.part && !(p.id === "edit" && sub !== 2 && sub !== 3) ? "<em>&lt; " + (p.id === "edit" ? (sub === 2 ? "RHYTHM" : "A") : (p.id === "arp" ? "FILTER" : "TREMOLO") + (sub ? " " + s.n : "")) + " &gt;</em>" : "");
     $("strip").innerHTML = s.strip + (s.note ? "<em>" + s.note + "</em>" : "");
     $("knobs").innerHTML = s.k.map((k, i) => k ? "<div>" + k + "<b>·····</b></div>" : '<div class="empty">K' + (i + 1) + "<b>&nbsp;</b></div>").join("");
     $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter, battery", 1], ["TABS", p.btn + " › " + tabs.join(" · "), 0], ["WAVEFORM", "The break, the slice lit, the playhead", 1],
@@ -256,8 +255,8 @@
     }
     [0, 1, 3, 4, 5, 7, 8, 10, 11, 12, 14].forEach((g, j) => { h += '<div class="bk" style="left:calc(' + (g + 1) + ' * 100% / 16 - 100% / 16 * .31)">' + PADS[j] + "</div>"; });
     $("kbd").innerHTML = h;
-    $("keyrole").innerHTML = "<span>White keys: <b>" + (p.keys === "taps" ? "EVERY KEY TAPS THE TEMPO" : steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : "SLICES 1–16 (hold to loop)") +
-      "</b></span><span>Black keys: <b>" + (p.black === "fx" ? "EFFECTS (held; SEL + key: hold on)" : "PADS (momentary, any page)") + "</b></span>";
+    $("keyrole").innerHTML = "<span>White keys: <b>" + (p.keys === "taps" ? "EVERY KEY TAPS THE TEMPO" : steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : p.id === "edit" && sub === 2 ? "THE LANE'S EVENTS (SEL: 17–32)" : "SLICES 1–16 (hold to loop)") +
+      "</b></span><span>Black keys: <b>" + (p.black === "fx" ? "EFFECTS (held; SEL + key: hold on)" : p.black === "scenes" && sub === 0 ? "QUEUE A SCENE (SEL: TAKE ONE OUT)" : p.black === "scenes" && sub === 3 ? "THIS KEY QUEUES THIS SCENE" : "PADS (momentary, any page)") + "</b></span>";
     $("notes").innerHTML = p.notes.map(([a, b]) => '<div class="note"><span>' + a + "</span>" + b + "</div>").join("") ||
       '<div class="note"><span>No combinations</span>Only the controls every page shares.</div>';
   }
@@ -266,7 +265,7 @@
     p.subs.map((s, i) => '<span class="chip' + (i ? "" : " first") + '">' + s.n + "</span>").join('<span class="arr">→</span>') +
     (p.subs.length > 1 ? '<span class="arr">↺</span>' : "") + '</div><span class="again' + (p.again === "nothing" ? " none" : "") + '">again: ' + p.again + "</span></div>").join("") +
     '<div class="navrow"><span class="cap">REC</span><div class="chain"><span class="chip">record on / off</span></div><span class="again">SEL + REC: clear</span></div>' +
-    '<div class="navrow"><span class="cap">SAVE</span><div class="chain"><span class="chip">settings and 16 patterns</span></div><span class="again">SEL + SAVE: undo</span></div>' +
+    '<div class="navrow"><span class="cap">SAVE</span><div class="chain"><span class="chip">settings, 16 patterns, scenes and the queue</span></div><span class="again">SEL + SAVE: undo</span></div>' +
     '<div class="navrow"><span class="cap">OCT ±</span><div class="chain"><span class="chip">pitch in semitones</span></div><span class="again">both: back to 0</span></div>';
 
   let m = "<thead><tr><th>Page</th><th>Part</th><th>White keys</th><th>ALGORITHM</th><th>PRESETS</th><th>K1</th><th>K2</th><th>K3</th><th>K4</th></tr></thead><tbody>";

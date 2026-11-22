@@ -16,7 +16,7 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 5. Patterns and the sequencer
 6. The FX chain
 7. GLOBAL: MIDI, Bluetooth, pitch, reset (and the MIDI map)
-8. The drums: kick, snare, hat
+8. MATHCORE: the Slice Map, lanes, scenes and the queue
 9. The mixer
 10. Pages and knobs
 11. The control map
@@ -62,10 +62,11 @@ The slicer view, top to bottom:
 - **Pads:** the eleven black-key pads, lit while held.
 - **Knobs:** the page's four knobs and their values.
 
-**The rules.** ALGORITHM picks what you edit on the page (an FX slot, a drum's part, a SEQ lane, GLOBAL's part); on HOME (both its parts) and the MIXER, where there is nothing to pick, it is the break. PRESETS picks what goes
-in (an effect, a kick, a snare or hat sound); elsewhere it is the pattern. **SEQ is where everything is sequenced**
-(the break's steps and the kick, snare and hat lanes), **EDIT where the drums' sounds are made** (kick, snare, hat);
-the white keys play slices everywhere but SEQ and ENV (tap tempo). **SEL + ALGORITHM is the break and SEL +
+**The rules.** ALGORITHM picks what you edit on the page (an FX slot, a SEQ lane, a MATHCORE lane or scene,
+GLOBAL's part); on HOME (both its parts) and the MIXER, where there is nothing to pick, it is the break. PRESETS picks
+what goes in (an effect, a lane's knob set); elsewhere it is the pattern. **SEQ is where the pattern is sequenced**
+(the break's steps and the kick, snare and hat lanes), **EDIT is MATHCORE** (the Slice Map, layered lanes, scenes and
+the queue); the white keys play slices everywhere but SEQ, MATHCORE's LANE and ENV (tap tempo). **SEL + ALGORITHM is the break and SEL +
 PRESETS the pattern on every page.** A page's button pressed again is its next part. **Press SEL** alone and the strip
 lists its combinations (SEL again, or any other button, key or knob, closes it). The control map (§11) shows all of it at once.
 
@@ -121,7 +122,7 @@ sixteenths); the list lives on this site and costs the FM-1 no space. The reader
 | OCT− / OCT+ | Pitch in semitones (hold to go faster). Both: back to 0 |
 | PRESETS | The pattern, P1–P16 (§5); while playing the new one starts at the end of the loop |
 | SEQ · REC | The sequencer; recording the keys into the pattern (§5). SEL + REC: clear the pattern (SEL + SAVE takes it back) |
-| MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 64–74 (E4–D5) press black keys 1–11 (on HOME the performance pads, on ARP the effect pads; SEL + the note holds an ARP pad); 24–35 (C1–B1) pick the break; 36 the kick, 38 the snare, 42 / 44 / 46 the hat (§8). Any channel, or the one set on GLOBAL's CHANNEL part: the whole map is in §7, [MIDI map](#midi-map) |
+| MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 64–74 (E4–D5) press black keys 1–11 (on HOME the performance pads, on ARP the effect pads; SEL + the note holds an ARP pad); 24–35 (C1–B1) pick the break; 36 a kick slice, 38 a snare, 42 / 44 / 46 a hat, 37 / 39 a perc one (the Slice Map's, §8). Any channel, or the one set on GLOBAL's CHANNEL part: the whole map is in §7, [MIDI map](#midi-map) |
 | ALGORITHM | (HOME, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each (AMEN: the record's bars 3 and 4, the crash in the second), played at the tempo you set. A break of your own, when there is one, comes first ([Your own break](#your-own-break)) |
 | MASTER | Volume |
 
@@ -274,7 +275,8 @@ animation of what it does, and **K1–K4 tune that pad** (the foot shows its set
 
 CHOPPAH holds **16 patterns**. Each is the break's 32 steps (2 bars), each step playing the loop's own slice (LOOP,
 where the generator can move it), a slice of its own, or nothing; and three drum lanes of 16 steps (kick, snare, hat)
-that repeat every bar. **PRESETS** picks the pattern on most pages; while playing, the next one starts when the loop
+that repeat every bar. A drum lane's hit is a slice of the break: the first one the [Slice Map](#mathcore) heard as
+a kick, a snare or a hat. Nothing is synthesised: a break without a hat plays the HAT lane silently. **PRESETS** picks the pattern on most pages; while playing, the next one starts when the loop
 comes round (the header shows "P2>").
 
 **SEQ** opens the sequencer. **ALGORITHM** (or **SEQ again**) picks what the white keys edit:
@@ -291,7 +293,7 @@ or reverse), the step playing lit; the lower strip all three drum lanes.
 
 **REC** records: while it is lit and the break plays, every white key you press (on HOME and the other pages where
 the keys play slices) is written into the pattern at the step it lands on, and so are MIDI notes: 48–63 as slices,
-36 / 38 / 42 into the kick, snare and hat lanes. REC again stops. **SEL + REC** clears: on SEQ the lane shown, on any
+36 / 38 / 42 into the kick, snare and hat lanes (37 and 39, PERC, play but aren't written). REC again stops. **SEL + REC** clears: on SEQ the lane shown, on any
 other page the whole pattern. SEL + ARP (a random pattern) writes into the pattern playing. **SEL + SAVE undoes**
 either (and FILL, CLR / 4X4 and COPY on a drum lane); press it again to redo. SAVE keeps all 16.
 
@@ -300,7 +302,7 @@ either (and FILL, CLR / 4X4 and COPY on a drum lane); press it again to redo. SA
 **ARP** turns the eleven black keys into effect pads. The white keys keep playing slices, as on HOME, so one hand
 chops while the other throws effects. Each black key holds an effect of the FX library (FILTER, CRUNCH, DRIVE, PUNCH,
 FLANGER, RING MOD, TREMOLO, REVERB, DELAY, EQ, TAPE, CLIP; MB COMP stays the chain's), over everything that plays (the
-break, the drums, the FX chain and its tails) before the limiter. Hold a key and its effect comes in (a 5 ms fade,
+break, the lanes, the FX chain and its tails) before the limiter. Hold a key and its effect comes in (a 5 ms fade,
 no click), let go and it goes; REVERB and DELAY stop taking sound in, so their tails ring out.
 
 **SEL + a black key holds it** (HOLD, an amber line under its pad): it stays on until SEL + the key again, also on
@@ -328,8 +330,8 @@ They follow the tempo playing (stopped, they keep time by themselves). SAVE keep
 
 ## 6. The FX chain
 
-**FX** opens the master effects chain: four slots in series, the break (through its DJ filter, with the kick when it
-goes through the chain) into slot 1, then 2, 3 and 4, then on to the drums when they go around the chain, the DUB
+**FX** opens the master effects chain: four slots in series, the break (through its DJ filter, with the lanes when
+they go through the chain) into slot 1, then 2, 3 and 4, then on to the lanes when they go around the chain, the DUB
 pad's delay and the limiter. Each slot holds any effect (two of one are fine), with
 three settings, a mix and a bypass, and more knobs on two more parts (MORE and MOD, below). The screen shows the
 effect you tune as a live picture; under it the chain in order (yours lit, the bypassed ones dim), its modulator and
@@ -496,7 +498,7 @@ connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings →
 | K1 PITCH | KEEP LENGTH (the default) · SPEED | KEEP LENGTH changes the pitch only: each slice keeps its length (a granular pitch shift), so a key pitched +7 still fills its loop. SPEED is the classic repitch: up plays faster and shorter, down slower and longer (K1 left) |
 | K2 GRAIN | 10 … 80 ms | KEEP LENGTH's grains: shorter keeps hits tight, longer sounds smoother on held sounds |
 | K3 SNAP | OFF · 1/8 · 1/4 · 1/2 · 1 (the default) · 2 · 4 slices | Where a white key pressed while playing lands: at once (OFF), or at the next point of a grid that many slices apart, counted from the top of the pattern. The panel says what it is in this break (on the 2-bar breaks 1 slice = 1/8, 1/2 slice = 1/16, 2 slices = 1/4). Stopped, keys always play at once |
-| K4 RESET ALL | Turn once ("RESET ALL?"), then again within 3 seconds | Clears everything back to how it came: tempo, generator, FX chain, kick, snare and hat, mixer, keys, slices, GLOBAL, the split, and all 16 patterns; the first break is chosen and it is saved at once. Bluetooth pairings are kept. The screen says so: LOBOTOMIZED, for 3 seconds (a key or button ends it sooner) |
+| K4 RESET ALL | Turn once ("RESET ALL?"), then again within 3 seconds | Clears everything back to how it came: tempo, generator, FX chain, mixer, keys, slices, GLOBAL, the split, all 16 patterns and MATHCORE's scenes and queue; the first break is chosen and it is saved at once. Bluetooth pairings are kept. The screen says so: LOBOTOMIZED, for 3 seconds (a key or button ends it sooner) |
 
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
 tempo's own repitch, HALF, REVERSE's speed and the tape stop stay speed effects.
@@ -529,9 +531,10 @@ is C4.
 | Notes | Do |
 | --- | --- |
 | 24–35 (C1–B1) | Pick break 1–12 (playing: at the next bar, as ALGORITHM does) |
-| 36 (C2) | The kick |
-| 38 (D2) | The snare |
-| 42, 44, 46 (F#2, G#2, A#2) | The hat |
+| 36 (C2) | A KICK slice (the first the Slice Map heard) |
+| 38, 40 (D2, E2) | A SNARE slice |
+| 42, 44, 46 (F#2, G#2, A#2) | A HAT slice |
+| 37, 39 (C#2, D#2) | A PERC slice |
 | 48–63 (C3–D#4) | Slices 1–16, held like the white keys |
 | 64–74 (E4–D5) | Black keys 1–11, held like the panel's: on HOME the performance pads, on ARP the effect pads, SEL + the note holds an ARP pad |
 
@@ -562,96 +565,110 @@ the slot holds.
 from the last SONG POSITION (counted from the top of the song, so bar 5 of a DAW's song is the loop's first step
 again), STOP stops. Out (CLOCK OUT on): 24 clocks a beat while playing, START with PLAY, STOP when it stops.
 
-## 8. The drums: kick, snare, hat
+## 8. MATHCORE
 
-Three synthesised drums play under the break, in time with it (swing included), on the pattern's drum lanes (§5):
-their steps are SEQ's KICK, SNARE and HAT lanes; their sounds are made on **EDIT**. They go through the FX chain or
-around it together (MIXER GROOVE K2).
+MATHCORE turns the break into a rhythm instrument made of its own hits. CHOPPAH listens to the break and knows which
+slices are kicks, snares, hats and the rest (the **Slice Map**); four **lanes** play those slices, each with a cycle
+of its own (5 against 7 against 11 against 13, on one clock); a **scene** is the four lanes and a phrase length; the
+**queue** plays scenes one after another and round again, and you build it live with the black keys. Every sound is
+the break's: nothing is synthesised.
 
-**EDIT** opens the drum edited last; **EDIT again** goes to the next: KICK → SNARE → HAT → KICK (the tabs show which).
-**ALGORITHM** turns through the drum's parts, **PRESETS** loads a built-in sound. The lower strip shows the three
-drums side by side, each with its waveform (one hit, drawn again as you change the sound), the one edited outlined,
-lit on its hits. The white keys keep playing slices.
+**EDIT** opens MATHCORE at the part used last; **EDIT again** goes to the next: LIVE → MAP → LANE → SCENE → LIVE.
 
-### The kick
+### LIVE: the queue
 
-A synthesised kick for gabber, hardcore and techno. ALGORITHM turns through its parts: MIX → SUB → SUB FX → PUNCH →
-PUNCH FX → GRIT → GRIT FX → CLICK → CLICK FX → MACRO → OUT (each layer's part is its LAYER knobs, its FX part its
-LAYER FX knobs).
-
-![EDIT on the kick: its part's settings as bars, the layers' levels, the three drums below](img/screen-kick.png "The kick on EDIT")
-
-The kick is four layers summed and pushed into a clipper:
-
-| Layer | Is | PITCH | DECAY |
-| --- | --- | --- | --- |
-| SUB | The low end: a sine dropping onto its pitch (TONE saturates it) | 30 – 90 Hz | 60 – 1500 ms |
-| PUNCH | The hit and the body: a sine swept down fast (TONE: how far it sweeps) | 50 – 200 Hz | 20 – 400 ms |
-| GRIT | The dirty mids: FM through a drive (TONE: more FM and noise) | 40 – 400 Hz | 20 – 800 ms |
-| CLICK | The attack: a click and noise (TONE: from click to noise) | 1 – 12 kHz | 1 – 40 ms |
+![LIVE: scene A playing, B next, the queue A B C, scene A's four lanes below](img/screen-mc-live.png "MATHCORE LIVE")
 
 | Control | Does |
 | --- | --- |
-| ALGORITHM | The part: MIX, a layer (SUB, PUNCH, GRIT, CLICK), its FX, MACRO, OUT |
-| PRESETS | A built-in kick: 909, TECHNO, EARLY HC, ROTTERDAM (the start), INDUSTRIAL, DISTORTO. The steps, routing and volume stay |
-| MIDI note 36 (C2) | Plays the kick, on the MIDI channel (§7, [MIDI map](#midi-map)), also while stopped |
+| Black key | Adds its scene to the end of the queue (again: another copy, it plays twice). The foot shows each key's scene letter |
+| SEL + black key | Takes that scene's last entry out of the queue |
+| PLAY | Starts the queue at its first entry (an empty queue doesn't start: tap a black key first); again: stop |
+| White keys | Slices, as on HOME: tap, hold to loop. They never move the queue |
+| K1–K4 | The KICK, SNARE, HAT and PERC lanes: left toward MUTE, right toward SOLO. A muted lane keeps counting, so it comes back in its place |
+| ALGORITHM | The cursor: an entry of the queue (outlined) |
+| PRESETS | Moves the entry at the cursor a place later (right) or earlier (left) |
+| SEL + REC | Clears the queue: the scene playing plays out, then the transport stops |
 
-| Part | K1 | K2 | K3 | K4 |
-| --- | --- | --- | --- | --- |
-| MIX | SUB level | PUNCH level | GRIT level | CLICK level |
-| SUB · PUNCH · GRIT · CLICK | Level | Pitch | Decay | Tone |
-| … FX | Effect: OFF · DRIVE · CRUNCH · FILTER · RING MOD | A (gain · bits · cutoff · frequency) | B (tone · rate · resonance) | Wet |
-| MACRO | SUB (level, tail, weight) | PUNCH (level, sweep, click) | GRIT (level, dirt, tail) | INTENSITY |
-| OUT | Volume | | | |
+The big letter is the scene playing (NEXT: the one after it; LAST when the queue has nothing after it), the boxes the
+queue (the one playing lit), the bar under them the phrase so far, the rows below the scene's four lanes with their
+place moving. Each scene plays for its phrase (1, 2, 4 or 8 bars), then the next starts on the bar; after the last
+entry the first plays again, so a queue of one scene loops it. Adding, moving and taking out entries while it plays
+never cuts the scene playing: the change shows at its end. Away from LIVE (and SCENE) the black keys are the pads
+again, and the queue keeps playing on every page until you stop.
 
-**INTENSITY** is the drive into the clipper: low is a clean, round kick; past half the clip turns hard, the tail
-flattens into the long, distorted gabber kick. The page is laid out as the snare's and the hat's: the part's four
-settings as bars, under them the four layers' levels (the layer edited lit, amber with an effect on); the kick's
-shape is its box in the strip below. Its steps: SEQ's KICK lane (empty to start).
+### MAP: the Slice Map
 
-### The snare and the hat
+![MAP: each slice with what it was heard as: K kick, S snare, H hat, P the rest](img/screen-mc-map.png "MATHCORE MAP")
 
-![EDIT on the hat: its six settings, the three drums below](img/screen-perc.png "The hat on EDIT")
+Every time a break loads (a bank break, your own, a split), CHOPPAH listens to the first 60 ms of each slice's hit in
+three bands: a low one (a kick's body), a middle one (a snare's body and crack) and a high one (hats and cymbals). A
+slice loud in the low band is a **KICK** (K), loud in the middle a **SNARE** (S), a quiet one mostly high a **HAT**
+(H), other hits **PERC** (P). Each of KICK, SNARE and HAT gets at least its likeliest slice. There is nothing to set:
+the same break always gives the same map. MAP shows it, a block per slice; the foot counts each role's slices. The
+white keys play the slices (the last one pressed outlined).
 
-**EDIT** again from the kick: the snare, then the hat. **ALGORITHM** turns between its SOUND and SHAPE knobs,
-**PRESETS** picks a built-in sound. Their steps: SEQ's SNARE and HAT lanes.
+### LANE: a lane of a scene
 
-| Voice | Is | Presets |
-| --- | --- | --- |
-| SNARE | Two tuned sines with a pitch drop (the body) and band-passed noise (the snares), with a crack on the hit | 909 · TIGHT · FAT · GABBER |
-| HAT | Six square waves at the 808's ratios and noise, through two high-passes | CLOSED · 808 · OPEN · TRASH |
+![LANE: scene A's kick lane, 16 events at 1/16, its hits amber; the four lanes below](img/screen-mc-lane.png "MATHCORE LANE")
+
+**ALGORITHM** picks the lane (KICK, SNARE, HAT, PERC), **PRESETS** its knob set. The **white keys** turn the lane's
+events on and off (SEL + a key: events 17–32); on FEEL they set accents instead. **PLAY** here plays the scene round
+and round while you edit it.
 
 | Knobs | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| SOUND | Level | Tune | Decay | Tone (the hat: METAL / NOISE) |
-| SHAPE | Snap (the hat: CUT, the high-pass) | Drive | | |
+| RHYTHM | LENGTH: 1–32 events in the cycle | RATE: 1/32, 1/16, 1/8, 1/4, 1/32T, 1/16T, 1/8T | ROTATE: the hits a step later (right) or earlier | PHASE: the cycle starts this many events in |
+| SOUND | MODE: which of the role's slices (below) | PICK: the slice FIXED, ALT and ACCENT start from | PITCH: −12 … +12 | LEVEL |
+| FEEL | CHANCE: each event plays this often (the seed decides, the same every time) | RATCHET: ×1–×4 hits an event | GATE: how much of the slice sounds | REVERSE |
+| MORE | ROLE: the slices it plays (KICK, SNARE, HAT, PERC) | SEED | RESET: SCENE (the cycle starts again with each scene) or FREE (it runs on from PLAY) | LANE: on or off |
 
-MIDI notes 38 (D2) play the snare, 42, 44 and 46 the hat, also while stopped. SAVE keeps the drums with the rest.
-(ENV, which used to open SNARE / HAT, is tap tempo now: §3.)
+**MODE**: FIXED always the PICKed slice; ROUND each of the role's slices in turn; RANDOM one at random (from the
+seed: the same seed, the same choices); ALT two in turn; ACCENT the PICKed slice for soft hits, the next for accents.
+A lane with accents plays its other hits at 55 %. A lane whose role has no slice in the break plays nothing and
+shows "!" at the end of its row.
+
+All lanes count on one clock (the transport's 16ths, twelve ticks each): a 5-event kick lane against a 7-event snare
+lane and an 11-event hat lane at 1/32 meet again exactly where they should, bar after bar, and follow MIDI clock.
+
+### SCENE: phrase, break, black key
+
+![SCENE: scene B, 4 bars with the break under it, black keys 2 and 5 queue it](img/screen-mc-scene.png "MATHCORE SCENE")
+
+**ALGORITHM** picks the scene (A–P). A **black key** makes that key queue this scene (SEL + a black key: that key
+queues nothing). The first eleven scenes start on the eleven black keys.
+
+| K1 | K2 | K3 | K4 |
+| --- | --- | --- | --- |
+| PHRASE: 1, 2, 4 or 8 bars | BREAK: the break's own loop under the lanes (ON) or the lanes alone (OFF) | NEW / COPY: left, the scene back to its start; right, a copy of the scene before it | LANES: right every lane on, left only the kick |
+
+Scenes A, B and C start as a groove to build on: A a straight beat, B a busier variation, C the mathcore one (5, 7,
+11 and 13 against the bar, over 4 bars). SAVE keeps the scenes, the queue and the black keys' scenes; they come back
+after a restart.
 
 ## 9. The mixer
 
-**LFO** opens the MIXER: four channels side by side, each a fader with a level meter (FX shows the chain's four
-slots, lit: on). **LFO again** turns to GROOVE.
+**LFO** opens the MIXER: channels side by side, each a fader with a level meter (FX shows the chain's four slots,
+lit: on). **LFO again** turns to GROOVE.
 
-![The MIXER: the break, the kick, the snare and hat, the FX chain](img/screen-mixer.png "The MIXER")
+![The MIXER: the break, the lanes, the FX chain](img/screen-mixer.png "The MIXER")
 
 | Half | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too) | KICK: the kick's level (the KICK page's VOLUME) | PERC: the snare and the hat together | FX: the master FX chain against the dry sound |
-| GROOVE | SWING (50–75 %) | DRUMS: through the FX chain or around it | | |
+| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too) | LANES: the drum lanes' and MATHCORE's slices | | FX: the master FX chain against the dry sound |
+| GROOVE | SWING (50–75 %) | LANES: through the FX chain or around it | | |
 
-FX is how much of the chain you hear (the drums routed around it stay dry). Bring BREAK down to drop the break and
-let the drums run alone, then up again for the drop. HOME keeps the gate, FX and COMPLEXITY to ride (K1, K3, K4) and the **DJ filter** (K2), which filters the
-break alone: sweep it down and the drums stay full on top. The FLT pad throws it the same way.
+FX is how much of the chain you hear (the lanes routed around it stay dry). Bring BREAK down to drop the break and
+let the lanes run alone, then up again for the drop. HOME keeps the gate, FX and COMPLEXITY to ride (K1, K3, K4) and the **DJ filter** (K2), which filters the
+break alone: sweep it down and the lanes stay full on top. The FLT pad throws it the same way.
 
 ## 10. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
 | HOME (perform) | Gate | DJ filter on the break (left low-pass, right high-pass) | FX (the MIXER's) | Complexity (the GENERATOR's) |
-| LFO (mixer) | Break level | Kick level | Snare and hat level | FX (the chain, dry to wet) |
-| LFO again (groove) | Swing | Drums: through the chain or around it | | |
+| LFO (mixer) | Break level | Lanes level | | FX (the chain, dry to wet) |
+| LFO again (groove) | Swing | Lanes: through the chain or around it | | |
 | HOME again (generator) | Complexity | Anchor | Roll | Fill |
 | HOME a third time (split) | Split on / off | Break B | A's bar | B's bar |
 | FX (the chain) | the focused slot's effect: its three settings (FX again: its MORE and MOD parts; an MB COMP its six, see §6) | | | Its mix |
@@ -662,8 +679,10 @@ break alone: sweep it down and the drums stay full on top. The FLT pad throws it
 | GLO a third time (channel) | MIDI channel (OMNI, 1–16) | Notes out | CC out | Program changes out |
 | ARP (black keys hold effects; ARP again: MORE, MOD) | the shown key's effect: setting 1 | Setting 2 | Setting 3 | Mix |
 | ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | Click level (0: off) |
-| EDIT (kick; ALGORITHM its part) | see §8: MIX, SUB … CLICK FX, MACRO, OUT | | | |
-| EDIT again (snare, then hat) | Level · Snap / cut | Tune · Drive | Decay | Tone |
+| EDIT (MATHCORE LIVE: black keys queue scenes) | Kick lane: mute ← play → solo | Snare lane | Hat lane | Perc lane |
+| EDIT again (MAP: the Slice Map, heard) | Kicks found | Snares | Hats | Percs |
+| EDIT a third time (LANE; PRESETS: RHYTHM, SOUND, FEEL, MORE) | see §8 | | | |
+| EDIT a fourth time (SCENE) | Phrase | Break under | New / copy | Lanes |
 
 **Gate** (HOME K1) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then
 quiet until the next; down to 5 % for clipped, staccato chops; 100 % is off. It follows the tempo and the pitch, and
@@ -683,8 +702,8 @@ owns K1–K4. Here, in short: §2 has the rules, §10 every page's knobs.
 
 ## 12. Saving
 
-SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop, the drums, the
-mixer, the GLOBAL settings and all 16 patterns; SAVE is lit when something changed. A new version keeps what an older
+SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop, the mixer, the
+GLOBAL settings, all 16 patterns and MATHCORE's 16 scenes, its queue and the black keys' scenes; SAVE is lit when something changed. A new version keeps what an older
 one saved: new settings start at their defaults. (Version 0.32 changed the layout: what 0.31 and older saved starts
 over at the defaults once; Bluetooth pairings stay.) GLOBAL's RESET ALL clears it all on purpose (§7).
 
