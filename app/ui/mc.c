@@ -422,7 +422,7 @@ static void mc_value(int i, char *t)     /* MATHCORE's knob i, as the foot shows
             int_text(S->bars, t);
             text_cat(t, S->bars == 1u ? " BAR" : " BARS");
         } else if (i == 1)
-            text_cat(t, S->flags & MCS_BREAK ? "ON" : "OFF");
+            text_cat(t, S->flags & MCS_BREAK ? "YES" : "DRY");
         else if (i == 2)
             text_cat(t, "< >");
         else

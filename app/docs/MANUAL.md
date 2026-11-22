@@ -655,7 +655,7 @@ plays nothing). The first eleven scenes start on the eleven black keys.
 
 | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- |
-| PHRASE: 1, 2, 4 or 8 bars | RUN ON: each hit runs on into the break until the next (ON), or stops with its slice (OFF: dry chops) | NEW / COPY: left, the scene back to how it came; right, a copy of the scene before it | PLAYS: LOOP (a groove) or ONCE (a fill: then back to the groove) |
+| PHRASE: 1, 2, 4 or 8 bars | RUN ON: each hit runs on into the break until the next (YES), or stops with its slice (DRY: dry chops) | NEW / COPY: left, the scene back to how it came; right, a copy of the scene before it | PLAYS: LOOP (a groove) or ONCE (a fill: then back to the groove) |
 
 SAVE keeps the scenes, the chain and the black keys' scenes; they come back after a restart.
 
