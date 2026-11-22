@@ -546,3 +546,18 @@ visual. What changed (on the same branch):
 
 Flash after the revision: image ~556 KB of 581.5 KB.
 
+---
+
+## 16. Revision: one voice, no overlay (22 Nov 2026, late)
+
+Laurens, after the played build: the lanes laid over the break playing were too messy; it should be better
+integrated, the sequencer too. Changed (same branch):
+
+| ID | Requirement | State |
+| --- | --- | --- |
+| MM-V-001 | **A scene re-cuts the break on its own voice.** The lanes no longer have voices of their own (`mv` gone, `brk_lanes_out` gone): each tick the lanes' events are weighed (an accent first, then the snare, the kick, the perc, the hat) and one cuts the break's voice to its slice (`chop_hit`). Pads, the gate, the DJ filter, KEEP LENGTH pitch and the key loops act on it as on the loop. A key held or a pad holding the voice keeps it | Done; engine test: only the roles' slices sound under a scene |
+| MM-V-002 | **RUN ON** (was BREAK, `MCS_BREAK`): a hit runs on into the break until the next (a re-cut break); off, each hit stops with its slice (dry chops). Grooves A-D, H, I, J run on; fills, riser, drop and L-P are dry. Store magic MCS3 | Done |
+| MM-V-003 | **The sequencer integrated**: SEQ's KICK / SNARE / HAT lanes put the role's slice in the loop's place on their steps (one voice: snare, then kick, then hat), instead of a voice on top. While a scene plays, the pattern rests | Done; engine test: step 7's own slice replaced by the kick, the loop's own after |
+| MM-V-004 | MIDI drum notes cut the break's voice to the role's slice | Done |
+| MM-V-005 | The MIXER's LANES fader and the lanes' route are gone (nothing to mix: one voice); their settings bytes stay reserved | Done |
+

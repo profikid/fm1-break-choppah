@@ -85,17 +85,10 @@ expect_bpm 169 171
 tap LFO
 tap LFO
 wait 100
-turn K2 1 10
-wait 100
-expect drums_chain 0
-turn K2 -1 10
-wait 100
-expect drums_chain 1
 press SEL
 tap EDIT
 release SEL
 wait 100
-expect drums_chain 1
 expect page 4
 tap FX
 wait 100

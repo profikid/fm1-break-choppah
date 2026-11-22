@@ -467,7 +467,7 @@ static void mc_value(int i, char *t)     /* MATHCORE's knob i, as the foot shows
 }
 static const char *mc_knob_name(uint32_t i)
 {
-    static const char *const SC[4] = {"PHRASE", "BREAK", "NEW / COPY", "PLAYS"};
+    static const char *const SC[4] = {"PHRASE", "RUN ON", "NEW / COPY", "PLAYS"};
     if (mc.part == MCP_LIVE)
         return ui.btn & 1u << B_SEL ? ROLE_NAME[i] : MACRO_NAME[i];
     if (mc.part == MCP_MAP)
@@ -873,7 +873,7 @@ static void mc_draw_scene(const brk_status_t *st)
     t[0] = 0;
     int_text(S->bars, t);
     text_cat(t, S->bars == 1u ? " BAR" : " BARS");
-    text_cat(t, S->flags & MCS_BREAK ? "  BREAK UNDER" : "  LANES ALONE");
+    text_cat(t, S->flags & MCS_BREAK ? "  RUNS ON" : "  DRY CHOPS");
     cv_text(54, 2, &FONT_XS, t, C_WHITE);
     t[0] = 0;
     text_cat(t, "KEYS:");

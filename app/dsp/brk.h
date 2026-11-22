@@ -143,9 +143,10 @@ typedef struct {
 } brk_status_t;
 
 /* ---------------------------------------------------------------- MATHCORE --- */
-/* The break's slices tagged with roles (the Slice Map), and sample lanes that play them: the pattern's own drum lanes
- * (kick, snare, hat, 16 steps a bar) or the four polymetric lanes of a scene, scenes queued one after another
- * (docs/PRD_MATHCORE.md). Every hit is a slice of the break playing: nothing is synthesised. All the lanes count from
+/* The break's slices tagged with roles (the Slice Map), and lanes that play them: the pattern's own drum lanes
+ * (kick, snare, hat, 16 steps a bar) or the four polymetric lanes of a scene, scenes launched and chained
+ * (docs/PRD_MATHCORE.md). Every hit is a slice of the break on the break's own voice, cutting the one before (a scene
+ * re-cuts the break; nothing is laid over it, nothing is synthesised). All the lanes count from
  * one master timeline (MC_TICKS ticks a 16th, counted from the transport's start), so cycles of 5, 7, 11 and 13 run
  * together without drifting. */
 #define MC_LANES 4u
@@ -184,7 +185,7 @@ typedef struct {
                                           * (0: none) */
     uint8_t rsv[2];
 } mc_lane_t;                             /* 24 bytes */
-#define MCS_BREAK 1u                     /* the break's own loop plays under the scene (else only keys and lanes) */
+#define MCS_BREAK 1u                     /* RUN ON: a hit runs on into the break until the next (else dry chops) */
 #define MCS_ONCE 2u                      /* a fill, a riser, a drop: plays once, then back to the groove */
 typedef struct {
     mc_lane_t lane[MC_LANES];
@@ -198,10 +199,10 @@ void brk_roles(const uint8_t *roles, uint32_t n);   /* slice i's role bits, for 
 void mc_auto_roles(const brk_break_t *b, uint8_t *roles);   /* the Slice Map heard from b's audio (BRK_MAX_SLICES
                                           * role bytes): KICK, SNARE and HAT each at least once (main loop) */
 void brk_drum_lanes(uint16_t kick, uint16_t snare, uint16_t hat);   /* the pattern's drum lanes: bit n, step n of
-                                          * each bar; each hit the role's first slice. Quiet while a scene plays */
-void brk_role_hit(uint32_t role);        /* one hit of the role's first slice, at the next render (MIDI notes) */
-void brk_lanes_out(float *out);          /* the render, before brk_render: where the lanes go (0: into the break's
-                                          * output) */
+                                          * each bar: the loop plays the role's first slice there instead of its own
+                                          * (one voice: the snare wins, then the kick, then the hat). A scene playing
+                                          * replaces the pattern */
+void brk_role_hit(uint32_t role);        /* the role's first slice on the break's voice, at the next render (MIDI) */
 void brk_mc_scenes(const mc_scene_t *s); /* the scene table (MC_SCENES), read by the render; edited in place */
 void brk_mc_start(int scene);            /* the scene to play from the next step (with brk_play: the first); -1 none */
 void brk_mc_next(int scene);             /* the scene after the one playing (-1: the lanes stop at its end) */

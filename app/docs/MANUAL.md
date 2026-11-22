@@ -65,7 +65,7 @@ The slicer view, top to bottom:
 **The rules.** ALGORITHM picks what you edit on the page (an FX slot, a SEQ lane, a MATHCORE lane or scene,
 GLOBAL's part); on HOME (both its parts) and the MIXER, where there is nothing to pick, it is the break. PRESETS picks
 what goes in (an effect, a lane's knob set); elsewhere it is the pattern. **SEQ is where the pattern is sequenced**
-(the break's steps and the kick, snare and hat lanes), **EDIT is MATHCORE** (the Slice Map, layered lanes, scenes and
+(the break's steps and the kick, snare and hat lanes), **EDIT is MATHCORE** (the Slice Map, scenes that re-cut the break and
 the black keys playing scenes); the white keys play slices everywhere but SEQ, MATHCORE's LANE and ENV (tap tempo). **SEL + ALGORITHM is the break and SEL +
 PRESETS the pattern on every page.** A page's button pressed again is its next part. **Press SEL** alone and the strip
 lists its combinations (SEL again, or any other button, key or knob, closes it). The control map (§11) shows all of it at once.
@@ -275,8 +275,10 @@ animation of what it does, and **K1–K4 tune that pad** (the foot shows its set
 
 CHOPPAH holds **16 patterns**. Each is the break's 32 steps (2 bars), each step playing the loop's own slice (LOOP,
 where the generator can move it), a slice of its own, or nothing; and three drum lanes of 16 steps (kick, snare, hat)
-that repeat every bar. A drum lane's hit is a slice of the break: the first one the [Slice Map](#mathcore) heard as
-a kick, a snare or a hat. Nothing is synthesised: a break without a hat plays the HAT lane silently. **PRESETS** picks the pattern on most pages; while playing, the next one starts when the loop
+that repeat every bar. A drum lane's hit puts a slice of the break in the loop's place on that step: the first one the
+[Slice Map](#mathcore) heard as a kick, a snare or a hat. The break has one voice, so nothing is laid over it: the
+hit cuts the loop there (a snare wins over a kick, a kick over a hat on the same step), and the loop goes on after it.
+A break without a hat leaves the loop's own slice on the HAT lane's steps. **PRESETS** picks the pattern on most pages; while playing, the next one starts when the loop
 comes round (the header shows "P2>").
 
 **SEQ** opens the sequencer. **ALGORITHM** (or **SEQ again**) picks what the white keys edit:
@@ -302,7 +304,7 @@ either (and FILL, CLR / 4X4 and COPY on a drum lane); press it again to redo. SA
 **ARP** turns the eleven black keys into effect pads. The white keys keep playing slices, as on HOME, so one hand
 chops while the other throws effects. Each black key holds an effect of the FX library (FILTER, CRUNCH, DRIVE, PUNCH,
 FLANGER, RING MOD, TREMOLO, REVERB, DELAY, EQ, TAPE, CLIP; MB COMP stays the chain's), over everything that plays (the
-break, the lanes, the FX chain and its tails) before the limiter. Hold a key and its effect comes in (a 5 ms fade,
+break, the FX chain and its tails) before the limiter. Hold a key and its effect comes in (a 5 ms fade,
 no click), let go and it goes; REVERB and DELAY stop taking sound in, so their tails ring out.
 
 **SEL + a black key holds it** (HOLD, an amber line under its pad): it stays on until SEL + the key again, also on
@@ -330,8 +332,8 @@ They follow the tempo playing (stopped, they keep time by themselves). SAVE keep
 
 ## 6. The FX chain
 
-**FX** opens the master effects chain: four slots in series, the break (through its DJ filter, with the lanes when
-they go through the chain) into slot 1, then 2, 3 and 4, then on to the lanes when they go around the chain, the DUB
+**FX** opens the master effects chain: four slots in series, the break (through its DJ filter) into slot 1, then 2,
+3 and 4, then on to the DUB
 pad's delay and the limiter. Each slot holds any effect (two of one are fine), with
 three settings, a mix and a bypass, and more knobs on two more parts (MORE and MOD, below). The screen shows the
 effect you tune as a live picture; under it the chain in order (yours lit, the bypassed ones dim), its modulator and
@@ -569,8 +571,11 @@ again), STOP stops. Out (CLOCK OUT on): 24 clocks a beat while playing, START wi
 
 MATHCORE turns the break into an instrument made of its own hits. CHOPPAH listens to the break and knows which
 slices are kicks, snares, hats and the rest (the **Slice Map**). Eleven ready scenes sit on the black keys: grooves,
-fills, a riser, a breakdown and a drop, of different lengths, each four **lanes** that play those slices, often in
-different cycles (5 against 7 against 11 against 13). You play them: tap a key and the scene comes in, hold it and it
+fills, a riser, a breakdown and a drop, of different lengths, each four **lanes** that pick those slices, often in
+different cycles (5 against 7 against 11 against 13). A scene doesn't play over the break: it **re-cuts** it, on the
+break's own voice, every hit cutting the one before, as a chopped break does. A groove's hits run on into the break
+until the next one; fills, the riser and the drop are dry chops. While a scene plays, the pattern (SEQ) rests: the
+scene is the beat. You play them: tap a key and the scene comes in, hold it and it
 plays while held, turn four knobs and the rhythm thins out, fills up, goes polyrhythmic, doubles or breaks apart.
 Nothing has to be programmed (LANE and SCENE are there if you want to). Every sound is the break's.
 
@@ -650,7 +655,7 @@ plays nothing). The first eleven scenes start on the eleven black keys.
 
 | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- |
-| PHRASE: 1, 2, 4 or 8 bars | BREAK: the break's own loop under the lanes (ON) or the lanes alone (OFF) | NEW / COPY: left, the scene back to how it came; right, a copy of the scene before it | PLAYS: LOOP (a groove) or ONCE (a fill: then back to the groove) |
+| PHRASE: 1, 2, 4 or 8 bars | RUN ON: each hit runs on into the break until the next (ON), or stops with its slice (OFF: dry chops) | NEW / COPY: left, the scene back to how it came; right, a copy of the scene before it | PLAYS: LOOP (a groove) or ONCE (a fill: then back to the groove) |
 
 SAVE keeps the scenes, the chain and the black keys' scenes; they come back after a restart.
 
@@ -659,24 +664,23 @@ SAVE keeps the scenes, the chain and the black keys' scenes; they come back afte
 **LFO** opens the MIXER: channels side by side, each a fader with a level meter (FX shows the chain's four slots,
 lit: on). **LFO again** turns to GROOVE.
 
-![The MIXER: the break, the lanes, the FX chain](img/screen-mixer.png "The MIXER")
+![The MIXER: the break, the FX chain](img/screen-mixer.png "The MIXER")
 
 | Half | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too) | LANES: the drum lanes' and MATHCORE's slices | | FX: the master FX chain against the dry sound |
-| GROOVE | SWING (50–75 %) | LANES: through the FX chain or around it | | |
+| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too; the drum lanes and MATHCORE play the break, so them too) | | | FX: the master FX chain against the dry sound |
+| GROOVE | SWING (50–75 %) | | | |
 
-FX is how much of the chain you hear (the lanes routed around it stay dry). Bring BREAK down to drop the break and
-let the lanes run alone, then up again for the drop. HOME keeps the gate, FX and COMPLEXITY to ride (K1, K3, K4) and the **DJ filter** (K2), which filters the
-break alone: sweep it down and the lanes stay full on top. The FLT pad throws it the same way.
+FX is how much of the chain you hear. HOME keeps the gate, FX and COMPLEXITY to ride (K1, K3, K4) and the **DJ filter** (K2), which filters the
+break (and so the drum lanes and the scenes) as a DJ mixer's filter does. The FLT pad throws it the same way.
 
 ## 10. Pages and knobs
 
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
 | HOME (perform) | Gate | DJ filter on the break (left low-pass, right high-pass) | FX (the MIXER's) | Complexity (the GENERATOR's) |
-| LFO (mixer) | Break level | Lanes level | | FX (the chain, dry to wet) |
-| LFO again (groove) | Swing | Lanes: through the chain or around it | | |
+| LFO (mixer) | Break level | | | FX (the chain, dry to wet) |
+| LFO again (groove) | Swing | | | |
 | HOME again (generator) | Complexity | Anchor | Roll | Fill |
 | HOME a third time (split) | Split on / off | Break B | A's bar | B's bar |
 | FX (the chain) | the focused slot's effect: its three settings (FX again: its MORE and MOD parts; an MB COMP its six, see §6) | | | Its mix |

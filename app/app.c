@@ -46,8 +46,8 @@ typedef struct {
     uint8_t gate;                        /* how much of each slice sounds, 5..100 % (100: off) */
     uint8_t snap;                        /* where a key lands while playing: SNAP_SL index + 1 */
     uint8_t brk_level;                   /* the MIXER's BREAK fader, 0..100 % */
-    uint8_t drums_chain;                 /* the lanes (the drum lanes' and the scenes' slices): 1 through the FX
-                                          * chain, 0 around it */
+    uint8_t drums_chain;                 /* (the drums' route through the FX chain or around it: gone with them, the
+                                          * lanes playing the break itself; unused) */
     uint8_t pattern;                     /* the pattern playing, 0..NPAT-1 (patterns: their own store object) */
     uint8_t bta_on;                      /* (Bluetooth audio out's on byte, PRD A-72: gone 21 Nov 2026, kept so older
                                           * saves keep their size; unused) */
@@ -82,7 +82,8 @@ typedef struct {
     uint8_t split_bars;                  /* bit 0: A's second bar, bit 1: B's second bar (0: their first) */
     uint8_t rsv5;
     /* (appended 22 Nov 2026: MATHCORE, docs/PRD_MATHCORE.md) */
-    uint8_t lane_level;                  /* the MIXER's LANES fader: the lanes' slices, 0..100 % */
+    uint8_t lane_level;                  /* (the MIXER's LANES fader of the first MATHCORE build: unused since the
+                                          * lanes play the break itself) */
     uint8_t mc_rsv[3];
     uint8_t mc_macro[4];                 /* MATHCORE LIVE's K1-K4: DENSITY, MATH, SPEED, CHAOS (0..100) */
 } settings_t;
@@ -273,7 +274,7 @@ static void pat_read_back(void)          /* the engine's steps into the pattern 
 /* ----------------------------------------------------------------- MATHCORE --- */
 /* the scenes (A..P: four sample lanes each, docs/PRD_MATHCORE.md 6.1) in their own store object; the queue and the
  * black keys' shortcuts in another (the queue names scenes: one scene, queued as often as wanted) */
-#define MCS_MAGIC 0x3253434Du            /* "MCS2" (the scenes as they come: A..P filled, 22 Nov 2026) */
+#define MCS_MAGIC 0x3353434Du            /* "MCS3" (the scenes re-cut the break, 22 Nov 2026: the presets again) */
 #define MQ_MAGIC 0x3151434Du             /* "MCQ1" */
 #define MC_QUEUE 64u
 #define MC_NOKEY 0xFFu                   /* a black key with no scene */
@@ -310,10 +311,12 @@ static void mc_lane_defaults(mc_lane_t *l, uint32_t role)
     l->seed = (uint8_t)(role * 37u + 11u);
 }
 /* the scenes as they come (A..P): grooves, fills, a riser, a breakdown, a drop, of different lengths, ready to play
- * from the black keys. A lane is a string: x a hit, X an accented one, . none (its length the string's) */
+ * from the black keys. A lane is a string: x a hit, X an accented one, . none (its length the string's). They re-cut
+ * the break on its own voice: the grooves run on into the break between their hits (MCS_BREAK), the fills, the riser
+ * and the drop are dry chops; L..P are the grooves dry */
 static const char *const MC_NAME[] = {"", "ROLLER", "AMEN", "STEPPER", "MATH 5/7", "FILL", "CHOP FILL", "RISER",
-                                      "BREAKDOWN", "DOUBLE", "7/8 BOUNCE", "DROP", "ROLLER+BRK", "AMEN+BRK",
-                                      "MATH+BRK", "DOUBLE+BRK", "BOUNCE+BRK"};
+                                      "BREAKDOWN", "DOUBLE", "7/8 BOUNCE", "DROP", "ROLLER CHOP", "AMEN CHOP",
+                                      "MATH CHOP", "DOUBLE CHOP", "BOUNCE CHOP"};
 #define MC_NNAMES (sizeof MC_NAME / sizeof MC_NAME[0])
 typedef struct {
     uint8_t name, bars, flags;
@@ -327,18 +330,18 @@ typedef struct {
 #define L_(p, r, m, pr, ra, lv, ri, rv) {p, r, m, pr, ra, lv, ri, rv}
 #define OFF_ {0, MCR_16, 0, 100, 1, 100, 0, 0}
 static const mc_preset_t MC_PRESET[11] = {
-    {1, 2, 0, {L_("X.........X.....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+    {1, 2, MCS_BREAK, {L_("X.........X.....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("....X.......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("x.X.x.X.x.X.x.X.", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0),
                L_("..............x.", MCR_16, MCM_ROUND, 60, 1, 70, 0, 0)}},
-    {2, 2, 0, {L_("X.X.......XX....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+    {2, 2, MCS_BREAK, {L_("X.X.......XX....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("....X..x.x..X..x", MCR_16, MCM_ACCENT, 100, 1, 100, 0, 0),
                L_("xxxxxxxxxxxxxxxx", MCR_16, MCM_RANDOM, 70, 1, 70, 0, 0), OFF_}},
-    {3, 2, 0, {L_("X.........X.....X.....X.........", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+    {3, 2, MCS_BREAK, {L_("X.........X.....X.....X.........", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("........X...............X.......", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("x.x.x.x.x.x.x.x.", MCR_16, MCM_ROUND, 100, 1, 75, 0, 0),
                L_("...x.......x..x.", MCR_16, MCM_RANDOM, 50, 1, 70, 0, 0)}},
-    {4, 4, 0, {L_("X..x.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+    {4, 4, MCS_BREAK, {L_("X..x.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("....X..", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
                L_("x.xx.x.xx.x", MCR_32, MCM_RANDOM, 100, 1, 65, 0, 0),
                L_("x..x..x..x.x.", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0)}},
@@ -355,11 +358,11 @@ static const mc_preset_t MC_PRESET[11] = {
     {8, 4, MCS_BREAK, {L_("X...............X...............", MCR_8, MCM_FIXED, 100, 1, 100, 0, 0), OFF_,
                        L_("x..", MCR_8T, MCM_ROUND, 100, 1, 55, 0, 0),
                        L_("x....", MCR_8, MCM_RANDOM, 100, 1, 60, 0, 0)}},
-    {9, 2, 0, {L_("X..X..X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+    {9, 2, MCS_BREAK, {L_("X..X..X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("....X.......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                L_("xXxxXxxXxxXxxXxx", MCR_32, MCM_ROUND, 100, 1, 70, 0, 0),
                L_("x.....", MCR_16T, MCM_ROUND, 100, 1, 75, 0, 0)}},
-    {10, 2, 0, {L_("X..X.X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+    {10, 2, MCS_BREAK, {L_("X..X.X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                 L_("...X......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
                 L_("x.xx.xx.xx.x", MCR_16T, MCM_RANDOM, 100, 1, 70, 0, 0),
                 L_("x...x.x..", MCR_16, MCM_ROUND, 70, 1, 75, 0, 0)}},
@@ -384,7 +387,7 @@ static void mc_scene_defaults(mc_scene_t *s, uint32_t i)
     const mc_preset_t *p = &MC_PRESET[i < 11u ? i : i == 11u ? 0u : i == 12u ? 1u : i == 13u ? 3u : i == 14u ? 8u : 9u];
     uint32_t l;
     s->bars = p->bars;
-    s->flags = (uint8_t)(p->flags | (i >= 11u ? MCS_BREAK : 0u));   /* L..P: grooves with the break under them */
+    s->flags = (uint8_t)(i >= 11u ? p->flags & ~MCS_BREAK : p->flags);   /* L..P: the grooves, dry chops */
     s->name = (uint8_t)(i < 11u ? p->name : 12u + (i - 11u));
     s->rsv = 0u;
     for (l = 0; l < MC_LANES; l++) {
@@ -472,7 +475,7 @@ static uint8_t wave_px[240];             /* the waveform's height per column, fo
 static uint8_t blk_px[BLK_N][BLK_W];     /* each slice's waveform, 0..19 */
 static uint8_t blk_n;                    /* blocks with a slice behind them */
 static volatile uint8_t muted;
-static volatile float meter_brk, meter_lanes;   /* the MIXER's channels: the break, the lanes, before the chain */
+static volatile float meter_brk;         /* the MIXER's channel: the break, before the chain */
 static volatile float meter_l, meter_r;  /* the output's peaks as it leaves (after MASTER: 1 = full scale), falling
                                           * ~20 dB a second: the render writes, the header's meter reads */
 static uint16_t click_at[4];             /* the render: this block's metronome clicks (their samples, the bar's first) */
@@ -968,7 +971,7 @@ static float meter(const float *x, uint32_t n, float last)
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
     static float mono[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK], echo[APP_BLOCK], verb[APP_BLOCK];
-    static float lanes[APP_BLOCK];
+
     float gain = muted ? 0.0f : (float)master_q12 * (1.0f / 4096.0f) * 8300000.0f;
     brk_status_t st;
     uint32_t t0 = plat_ms(), done = 0u, total = n;
@@ -981,7 +984,6 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     while (n) {
         uint32_t m = n < APP_BLOCK ? n : APP_BLOCK, i;
         brk_sends(echo, verb);           /* the slices' throws into the delay and the reverb */
-        brk_lanes_out(lanes);            /* the lanes' slices: a channel of their own */
         brk_render(mono, m);
         {                                /* the MIXER's BREAK fader (eased: no zipper), on the break and its throws */
             static float lvl = 1.0f;
@@ -993,15 +995,6 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
                 verb[i] *= lvl;
             }
             meter_brk = meter(mono, m, meter_brk);
-        }
-        {                                /* the MIXER's LANES fader */
-            static float lvl = 1.0f;
-            float want = (float)set.lane_level * 0.01f;
-            for (i = 0; i < m; i++) {
-                lvl += (want - lvl) * 0.002f;
-                lanes[i] *= lvl;
-            }
-            meter_lanes = meter(lanes, m, meter_lanes);
         }
         if (set.clk_out) {               /* clock out: each tick due as its sample plays (a block from now) */
             uint16_t off[16];
@@ -1024,8 +1017,8 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
                 }
         }
         brk_status(&st);
-        /* the break through the DJ filter, the lanes joining it into the chain (or around it) */
-        brk_fx_process(mono, set.drums_chain ? lanes : 0, echo, verb, set.drums_chain ? 0 : lanes, l, r, m, st.pads);
+        /* the break through the DJ filter into the chain (the drum lanes and MATHCORE play the break itself) */
+        brk_fx_process(mono, 0, echo, verb, 0, l, r, m, st.pads);
         if (nclick || click_env > 1e-3f) {   /* the metronome's click: dry, over everything, both sides */
             uint32_t j = 0u;
             for (i = 0; i < m; i++) {

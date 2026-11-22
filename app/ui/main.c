@@ -67,24 +67,18 @@ static void knob_turn(int k, int32_t d)
         seq_turn(k - EN_K1, d);
         return;
     }
-    if (ui.page == PG_MIX) {             /* LEVELS: break, lanes, FX; GROOVE: swing, the lanes' route */
+    if (ui.page == PG_MIX) {             /* LEVELS: the break, FX; GROOVE: swing */
         char t[16];
         if (ui.mpage) {
             if (k == EN_K1) {
                 set.swing = (uint8_t)clamp((int32_t)set.swing + d, 50, 75);
                 say_int("SWING", set.swing, "%");
-            } else if (k == EN_K2) {
-                set.drums_chain = d > 0 ? 0u : 1u;   /* right: around the chain, left: through it */
-                app_say("LANES", set.drums_chain ? "THRU FX" : "AROUND FX");
             } else
                 return;
         } else if (k == EN_K1) {
             set.brk_level = (uint8_t)clamp((int32_t)set.brk_level + d * 2, 0, 100);
             say_int("BREAK", set.brk_level, "%");
-        } else if (k == EN_K2) {         /* LANES: the drum lanes' and the scenes' slices */
-            set.lane_level = (uint8_t)clamp((int32_t)set.lane_level + d * 2, 0, 100);
-            say_int("LANES", set.lane_level, "%");
-        } else if (k == EN_K3) {
+        } else if (k != EN_K4) {         /* (K2, K3: nothing: the lanes play the break itself) */
             (void)t;
             return;
         } else {                         /* FX: the whole chain against the dry sound */
@@ -870,14 +864,14 @@ static const char *foot_knob(uint32_t i, char *t)
                                               {"P1", "P2", "P3", "MIX"},
                                               {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"},
                                               {"", "", "", ""},
-                                              {"BREAK", "LANES", "", "FX"},
+                                              {"BREAK", "", "", "FX"},
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
                                               {"", "", "", ""},
                                               {"TEMPO", "FINE", "HALF / X2", "CLICK"},
                                               {"P1", "P2", "P3", "MIX"},
                                               {"SPLIT", "BREAK B", "BAR A", "BAR B"}};
     static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
-    static const char *const KN_GROOVE[4] = {"SWING", "LANES", "", ""};
+    static const char *const KN_GROOVE[4] = {"SWING", "", "", ""};
     static const char *const KN_CHAN[4] = {"CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"};
     static const char *const KN_LANE[4] = {"FILL", "ROTATE", "CLR / 4X4", "COPY"};
     const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_CHAN[i] : ui.page == PG_GLOBAL && ui.gpage

@@ -1794,25 +1794,22 @@ static void test_mc_map(void)
     }
 }
 
-/* role lookup; multiple roles on a slice; an empty role is silent and says so; the pattern's drum lanes play roles */
-static float mc_lanes[BLOCK];
+/* role lookup; multiple roles on a slice; an empty role says so; the pattern's drum lanes put their slices in the
+ * loop's place; everything on the break's one voice */
 static float mc_run(uint32_t n, float *peak_out, float *peak_lanes)
 {
     static float o[BLOCK];
     uint32_t i = 0, j;
-    float po = 0.0f, pl = 0.0f;
-    brk_lanes_out(mc_lanes);
+    float po = 0.0f, pl;
     while (i < n) {
         uint32_t m = n - i < BLOCK ? n - i : BLOCK;
         brk_render(o, m);
-        for (j = 0; j < m; j++) {
+        for (j = 0; j < m; j++)
             if (fabsf(o[j]) > po)
                 po = fabsf(o[j]);
-            if (fabsf(mc_lanes[j]) > pl)
-                pl = fabsf(mc_lanes[j]);
-        }
         i += m;
     }
+    pl = po;
     if (peak_out)
         *peak_out = po;
     if (peak_lanes)
@@ -1834,25 +1831,33 @@ static void test_mc_roles(void)
     CHECK(mc_role_slices(r, 16u, ROLE_HAT, list) == 0u, "roles: HAT has none");
     mc_test_break("KHSHKHSHKHSHKHSP");
     brk_roles(r, BRK_MAX_SLICES);
-    brk_drum_lanes(0x0001u, 0u, 0u);     /* the pattern's kick on step 1: its KICK slice */
+    brk_drum_lanes(0x0040u, 0u, 0u);     /* the pattern's kick on step 7: its KICK slice (1) in the loop's place */
     brk_play(1);
-    mc_run(brk.len, 0, &pl);
-    CHECK(pl > 0.2f, "drum lanes: the kick lane plays a KICK slice (%.3f)", pl);
-    brk_drum_lanes(0u, 0u, 0x0001u);     /* the hat lane: no HAT slice: silent, and said */
+    {
+        uint32_t sl = brk_step_len_samples();
+        mc_run(6u * sl + sl / 2u, 0, &pl);
+        brk_status(&st);
+        CHECK(st.step == 6 && st.slice == 0, "drum lanes: step 7 plays the KICK slice, not its own (%d, slice %d)",
+              st.step, st.slice + 1);
+        mc_run(sl, 0, &pl);
+        brk_status(&st);
+        CHECK(st.slice == 7, "drum lanes: the loop its own again after it (slice %d)", st.slice + 1);
+    }
+    brk_drum_lanes(0u, 0u, 0x0001u);     /* the hat lane: no HAT slice: the loop's own slice, and said */
     brk_play(0);
     mc_run(BLOCK * 4u, 0, 0);
     brk_play(1);
     mc_run(brk.len, 0, &pl);
     brk_status(&st);
-    CHECK(pl < 1e-6f && (st.mc_missing >> ROLE_HAT & 1u), "drum lanes: an empty role is silent (%.4f) and missing (%x)",
+    CHECK(pl > 0.1f && (st.mc_missing >> ROLE_HAT & 1u), "drum lanes: an empty role leaves the loop (%.3f), missing (%x)",
           pl, st.mc_missing);
     brk_play(0);
     brk_drum_lanes(0u, 0u, 0u);
     mc_run(BLOCK * 4u, 0, 0);
     brk_role_hit(ROLE_SNARE);            /* MIDI's drum note: now, stopped too */
     mc_run(BLOCK * 8u, 0, &pl);
-    CHECK(pl > 0.1f, "role hit: a SNARE slice at once (%.3f)", pl);
-    brk_lanes_out(0);
+    brk_status(&st);
+    CHECK(pl > 0.1f && st.slice == 4, "role hit: the SNARE slice at once (%.3f, slice %d)", pl, st.slice + 1);
 }
 
 /* the scenes' lanes: four at once, of 5, 7, 11 and 13 events, on one clock for 64 bars (their places always where the
@@ -1890,12 +1895,9 @@ static void mc_run_counting(uint32_t n, float *buf)
 {
     static float o[BLOCK];
     uint32_t i = 0;
-    brk_lanes_out(mc_lanes);
     while (i < n) {
         uint32_t m = n - i < BLOCK ? n - i : BLOCK;
         brk_render(buf ? buf + i : o, m);
-        if (buf)
-            memcpy(buf + i, mc_lanes, m * sizeof(float));
         mc_count();
         i += m;
     }
@@ -1972,14 +1974,30 @@ static void test_mc_lanes(void)
           "solo: only the hat lane (%u %u %u %u)", mc_hits_total[0], mc_hits_total[1], mc_hits_total[2],
           mc_hits_total[3]);
     brk_mc_mute(0u, 0u);
-    /* the break's own loop: quiet under a scene without it, playing under one with it */
-    mc_run(4u * sl, &po, &pl);
-    mc_run(8u * sl, &po, &pl);
-    CHECK(po < 0.02f && pl > 0.1f, "a scene without the break: the loop quiet (%.4f), the lanes playing (%.3f)", po, pl);
-    mc_sc[0].flags = MCS_BREAK;
-    mc_run(8u * sl, &po, &pl);
-    CHECK(po > 0.1f, "a scene with the break under it: the loop plays (%.3f)", po);
-    mc_sc[0].flags = 0u;
+    /* the scene plays the break itself: only its roles' slices sound (the loop's own don't), dry or running on */
+    {
+        int only_roles = 1, seen = 0;
+        uint32_t k2;
+        float pmax = 0.0f;
+        for (k2 = 0; k2 < 64u; k2++) {
+            mc_run(sl / 2u, &po, &pl);
+            pmax = po > pmax ? po : pmax;
+            brk_status(&st);
+            if (st.slice >= 0) {
+                seen++;
+                if (!r[st.slice]) {
+                    only_roles = 0;
+                    printf("  not a role's: slice %d (step %d)\n", st.slice + 1, st.step);
+                }
+            }
+        }
+        CHECK(seen && only_roles && pmax > 0.05f, "a scene: the break's voice on its roles' slices alone (%d seen, %.3f)",
+              seen, pmax);
+        mc_sc[0].flags = MCS_BREAK;
+        mc_run(8u * sl, &po, &pl);
+        CHECK(po > 0.1f, "a scene running on: it plays (%.3f)", po);
+        mc_sc[0].flags = 0u;
+    }
     brk_play(0);
     mc_run(BLOCK * 4u, 0, 0);
     /* the seed: RANDOM with a chance, twice from the start: the same sound */
@@ -2034,7 +2052,6 @@ static void test_mc_lanes(void)
         mc_run(BLOCK * 8u, 0, 0);
     }
     brk_mc_scenes(0);
-    brk_lanes_out(0);
 }
 
 /* the queue (the main loop's, here the test's): A -> B -> C -> A; A alone round and round; a cleared queue ends at
@@ -2105,7 +2122,6 @@ static void test_mc_queue(void)
     brk_play(0);
     mc_run(BLOCK * 8u, 0, 0);
     brk_mc_scenes(0);
-    brk_lanes_out(0);
 }
 
 /* playing it: a launch lands on its beat or bar (counted from the bar: a fill on beat 3 ends on the bar line), MATH
@@ -2226,7 +2242,6 @@ static void test_mc_play(void)
         mc_run(BLOCK * 8u, 0, 0);
     }
     brk_mc_scenes(0);
-    brk_lanes_out(0);
 }
 
 /* the overlay effects (ARP): nothing on passes the sound through as it is; each one changes it and stays bounded;

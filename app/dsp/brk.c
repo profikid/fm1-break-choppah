@@ -133,7 +133,6 @@ static uint8_t p_roles[BRK_MAX_SLICES];      /* slice i's role bits */
 static volatile uint16_t p_dl[3];        /* the pattern's drum lanes (kick, snare, hat) */
 static volatile uint32_t p_rhit[MC_ROLES];   /* role hits asked (counts) */
 static uint32_t rhit_seen[MC_ROLES];
-static float *lanes_out;                 /* where the lanes go (brk_lanes_out) */
 static const mc_scene_t *volatile p_scenes;
 static volatile int32_t p_mc_start = -1; /* the scene a start asks for (-1 none): brk_mc_start */
 static volatile int32_t p_mc_next = -1;
@@ -145,8 +144,6 @@ static uint32_t mc_jn_seen;
 const uint8_t MC_MATH_LEN[MC_MATH_STEPS][4] = {{0u, 0u, 0u, 0u}, {0u, 0u, 0u, 12u}, {16u, 0u, 12u, 10u},
                                                {15u, 0u, 12u, 7u}, {14u, 16u, 11u, 7u}, {10u, 14u, 11u, 13u},
                                                {7u, 12u, 9u, 5u}, {5u, 7u, 11u, 13u}};
-static voice_t mv[MC_LANES][2];          /* each lane's two voices (a hit fades the last out) */
-static int mvc[MC_LANES];
 static int32_t mc_cur = -1;              /* the scene playing */
 static uint32_t mc_base;                 /* the step (steps_total) it began on */
 static uint32_t mc_steps;                /* 16ths of it played */
@@ -566,43 +563,66 @@ static uint32_t mc_hash(uint32_t seed, uint32_t lane, uint32_t e)   /* the same 
     return x ^ x >> 15;
 }
 
-/* the scene's break: its own loop sounds under it only if the scene asks (MCS_BREAK) */
+/* a scene plays the break itself: its hits are the break's voice, each cutting the last (nothing laid over the
+ * loop). MCS_BREAK: a hit runs on into the break after it until the next one (a re-cut break); without it each hit
+ * stops at its slice's end (dry chops). Without a scene the loop runs on as ever */
 static int loop_sounds(void)
 {
     const mc_scene_t *sc = p_scenes;
     return mc_cur < 0 || !sc || (sc[mc_cur].flags & MCS_BREAK);
 }
 
-static float mc_pf[MC_LANES];            /* each lane's pitch factor (its hit's) */
 static uint8_t mr_flags[MC_LANES], mr_gate[MC_LANES];
-/* lane l plays slice s: a one shot to the slice's end (gate: its share of it), its two voices crossfading */
-static void lane_hit(const brk_break_t *b, uint32_t l, int32_t s, float gain, int rev, uint32_t gate)
+static float mr_pitch[MC_LANES];
+/* slice s on the break's voice (the one sound playing, its fade the cut): at gain, backwards, gate % of it, at pitch
+ * semitones; it runs on into the break when the scene asks (loop_sounds), else it ends with its slice. A key looping
+ * or a pad holding the voice (a roll, a freeze, the tape stop) keeps it: the hit is counted, not heard */
+static void chop_hit(const brk_break_t *b, int32_t s, float gain, int rev, uint32_t gate, float pitch)
 {
     voice_t *n;
-    if (s < 0 || (uint32_t)s >= b->nslices)
+    if (s < 0 || (uint32_t)s >= b->nslices || K0->slice >= 0 || suppressed())
         return;
-    voice_start_in(mv[l], &mvc[l], b, s, rev, -1.0f, gain);
-    n = &mv[l][mvc[l]];
-    n->hi = (float)b->slice[s + 1];
-    n->wrap = 0u;
-    n->loop = 0u;
+    voice_start(b, s, rev, -1.0f, gain);
+    n = &v[cur];
+    if (!loop_sounds() || !p_playing) {  /* (dry: to the slice's end) */
+        n->hi = (float)b->slice[s + 1];
+        n->wrap = 0u;
+    }
     if (gate < 100u)
         n->gate_left = (float)gate * 0.01f * (float)(b->slice[s + 1] - b->slice[s]);
-    mc_hitc[l]++;
+    K0->pitch = 0.0f;
+    step_pitch = pitch;
 }
 
-/* a role's first slice, at full (the pattern's drum lanes, MIDI's drum notes): on lane `role`'s voices */
-static void role_hit(const brk_break_t *b, uint32_t role)
+/* a role's first slice (MIDI's drum notes): on the break's voice, at once */
+static int32_t role_first(const brk_break_t *b, uint32_t role)
 {
     uint8_t list[BRK_MAX_SLICES];
     uint32_t n = mc_role_slices(p_roles, b->nslices, role, list);
     if (!n) {
         mc_miss |= (uint8_t)(1u << role);
-        return;
+        return -1;
     }
     mc_miss &= (uint8_t)~(1u << role);
-    mc_pf[role] = brk_exp2f(p_pitch * (1.0f / 12.0f));
-    lane_hit(b, role, list[0], 1.0f, 0, 100u);
+    return list[0];
+}
+static void role_hit(const brk_break_t *b, uint32_t role)
+{
+    chop_hit(b, role_first(b, role), 1.0f, 0, 100u, 0.0f);
+}
+/* the pattern's drum lanes at this step (bit at, the bar's 16th): the slice they put in the loop's place, -1 none.
+ * One voice, so one wins: the snare, then the kick, then the hat */
+static int32_t drum_slice(const brk_break_t *b, uint32_t at)
+{
+    static const uint8_t ORDER[3] = {1u, 0u, 2u};
+    uint32_t k;
+    for (k = 0; k < 3u; k++)
+        if (p_dl[ORDER[k]] >> at & 1u) {
+            int32_t s = role_first(b, ORDER[k]);
+            if (s >= 0)
+                return s;
+        }
+    return -1;
 }
 
 static void mc_begin(int32_t s)          /* scene s from this step */
@@ -610,6 +630,16 @@ static void mc_begin(int32_t s)          /* scene s from this step */
     uint32_t l;
     mc_cur = s >= 0 && s < (int32_t)MC_SCENES ? s : -1;
     mc_base = steps_total;
+    if (!loop_sounds()) {                /* a dry scene: the sound running on into the break ends with its slice */
+        voice_t *c = &v[cur];
+        const brk_break_t *b = brk_now;
+        if (b && c->active && c->wrap && c->slice >= 0 && K0->slice < 0) {
+            c->hi = (float)b->slice[c->slice + 1];
+            c->wrap = 0u;
+            if (c->pos >= c->hi)
+                c->amp_to = 0.0f;
+        }
+    }
     mc_steps = 0u;
     mc_last_t = 0xFFFFFFFFu;
     for (l = 0; l < MC_LANES; l++) {
@@ -661,7 +691,11 @@ static uint32_t bars_of(const mc_scene_t *sc)
 static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
 {
     const mc_scene_t *sc = p_scenes;
-    uint32_t l, solo = p_mc_solo, mute = p_mc_mute, mac = p_mc_macro;
+    static const uint8_t PRIO[MC_ROLES] = {3u, 4u, 1u, 2u};   /* one voice: the snare, the kick, the perc, the hat */
+    uint32_t l, k, solo = p_mc_solo, mute = p_mc_mute, mac = p_mc_macro, win_score = 0u, win_r = 12u;
+    int32_t win = -1, win_s = 0;
+    float win_g = 1.0f, win_pt = 0.0f;
+    uint8_t win_fl = 0u, win_rat = 1u;
     uint32_t dens = mac & 0xFFu, math = mac >> 8 & 0xFFu, spd = mac >> 16 & 0xFFu, chaos = mac >> 24 & 0xFFu;
     const uint8_t *mlen = MC_MATH_LEN[(math > 100u ? 100u : math) * (MC_MATH_STEPS - 1u) / 100u];
     if (!sc || mc_cur < 0)
@@ -670,7 +704,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
     for (l = 0; l < MC_LANES; l++) {
         const mc_lane_t *L = &sc->lane[l];
         uint8_t list[BRK_MAX_SLICES];
-        uint32_t r, rel, e, pos, len = L->len < 1u ? 1u : L->len > MC_EVENTS ? MC_EVENTS : L->len, n, acc, k, hit;
+        uint32_t r, rel, e, pos, len = L->len < 1u ? 1u : L->len > MC_EVENTS ? MC_EVENTS : L->len, n, acc, hit;
         uint8_t rat, fl;
         int32_t s;
         float g, pt;
@@ -738,17 +772,36 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
             pt += (float)L->rise * pr;
             g *= 0.35f + 0.65f * pr;
         }
-        mc_pf[l] = brk_exp2f((p_pitch + pt) * (1.0f / 12.0f));
-        mr_flags[l] = fl;
-        mr_gate[l] = (uint8_t)(L->gate ? L->gate : 100u);
-        lane_hit(b, l, s, g, (fl & MCL_REV) != 0u, mr_gate[l]);
-        mr_count[l] = rat > 1u ? (rat > 4u ? 3u : rat - 1u) : 0u;
-        if (mr_count[l]) {               /* the event's other hits, evenly inside it */
-            mr_len[l] = (float)r * (1.0f / (float)MC_TICKS) * sl / (float)(mr_count[l] + 1u);
-            mr_left[l] = mr_len[l];
-            mr_slice[l] = s;
-            mr_gain[l] = g;
+        mc_hitc[l]++;                    /* (each lane's event counts; one of them is heard) */
+        {
+            uint32_t sc_ = (acc ? 8u : 0u) + PRIO[L->role % MC_ROLES];
+            if (sc_ > win_score || win < 0) {
+                win = (int32_t)l;
+                win_score = sc_;
+                win_s = s;
+                win_g = g;
+                win_pt = pt;
+                win_fl = fl;
+                win_rat = rat;
+                win_r = r;
+            }
         }
+    }
+    if (win < 0)
+        return;
+    l = (uint32_t)win;                   /* the one heard: the break's voice cut to it */
+    mr_flags[l] = win_fl;
+    mr_gate[l] = (uint8_t)(sc->lane[l].gate ? sc->lane[l].gate : 100u);
+    mr_pitch[l] = win_pt;
+    chop_hit(b, win_s, win_g, (win_fl & MCL_REV) != 0u, mr_gate[l], win_pt);
+    for (k = 0; k < MC_LANES; k++)       /* (a new hit ends the ratchets before it) */
+        mr_count[k] = 0u;
+    mr_count[l] = win_rat > 1u ? (win_rat > 4u ? 3u : win_rat - 1u) : 0u;
+    if (mr_count[l]) {                   /* the event's other hits, evenly inside it */
+        mr_len[l] = (float)win_r * (1.0f / (float)MC_TICKS) * sl / (float)(mr_count[l] + 1u);
+        mr_left[l] = mr_len[l];
+        mr_slice[l] = win_s;
+        mr_gain[l] = win_g;
     }
 }
 
@@ -768,7 +821,8 @@ static void on_step(const brk_break_t *b)
         bar++;
     step_age = 0.0f;
     rat_count = 0u;
-    step_pitch = 0.0f;
+    if (mc_cur < 0)
+        step_pitch = 0.0f;               /* (a scene's hit keeps its pitch until the next) */
     if (p_ps.gate_div != 0u || !(step & 1))
         gate_pos = 0.0f;                 /* the gate starts with the step (1/8: every other step) */
     if (K1->pending != BRK_NO_SLICE && K1->pending_wait < 0.0f && steps_total >= K1->pending_at)
@@ -787,15 +841,14 @@ static void on_step(const brk_break_t *b)
             roll_begin(b);
         return;
     }
-    if (!loop_sounds()) {                /* a scene without the break's loop: only the keys and the lanes */
-        voice_t *c = &v[cur];
-        if (c->active && c->wrap && c->amp_to > 0.0f) {   /* (the loop's sound running on: out) */
-            c->amp_to = 0.0f;
-            c->amp_step = c->amp / FADE_OUT + 1e-6f;
-        }
+    if (mc_cur >= 0) {                   /* a scene plays the break: its hits cut the voice (mc_tick), not the loop */
+        if (roll_arm)
+            roll_begin(b);
         return;
     }
-    if (((pads_now >> PAD_RANDOM) & 1u) && brk_randf(&rng) < p_ps.rnd_amount) {
+    if ((s = drum_slice(b, steps_total & 15u)) >= 0) {   /* the pattern's drum lanes: their slice in the loop's place */
+        step_pitch = 0.0f;
+    } else if (((pads_now >> PAD_RANDOM) & 1u) && brk_randf(&rng) < p_ps.rnd_amount) {
         s = fold(b, (int32_t)(brk_rand(&rng) % b->nslices));   /* a random slice, and a random pitch for it */
         step_pitch = (float)(int32_t)((brk_randf(&rng) * 2.0f - 1.0f) * p_ps.rnd_pitch);
     } else {
@@ -976,8 +1029,6 @@ void brk_render(float *out, uint32_t n)
                 send_echo[i] = 0.0f;
             if (send_verb)
                 send_verb[i] = 0.0f;
-            if (lanes_out)
-                lanes_out[i] = 0.0f;
         }
         return;
     }
@@ -1003,15 +1054,9 @@ void brk_render(float *out, uint32_t n)
         roll_slice = -1;
         roll_arm = 0u;
         rat_count = 0u;
-        mc_cur = -1;                     /* the scenes stop with the transport, their hits fade */
-        for (j = 0; j < MC_LANES; j++) {
+        mc_cur = -1;                     /* the scenes stop with the transport */
+        for (j = 0; j < MC_LANES; j++)
             mr_count[j] = 0u;
-            for (k = 0; k < 2u; k++)
-                if (mv[j][k].active) {
-                    mv[j][k].amp_to = 0.0f;
-                    mv[j][k].amp_step = mv[j][k].amp / FADE_OUT + 1e-6f;
-                }
-        }
         for (j = 0; j < 2u; j++) {
             kl[j].pending = BRK_NO_SLICE;
             if (kl[j].slice < 0)
@@ -1078,7 +1123,7 @@ void brk_render(float *out, uint32_t n)
         half *= brk_clampf(p_ps.rev_speed, 0.5f, 2.0f);
     ratio = (float)b->rate / (float)BRK_SR * (p_tempo * 100.0f / (float)b->bpm_x100);
     for (i = 0; i < n; i++) {
-        float acc = 0.0f, ea = 0.0f, va = 0.0f, la, g;
+        float acc = 0.0f, ea = 0.0f, va = 0.0f, g;
         if (playing) {
             to_next -= 1.0f;
             if (to_next <= 0.0f) {
@@ -1092,12 +1137,6 @@ void brk_render(float *out, uint32_t n)
                 tick_k = (float)MC_TICKS / (len > 1.0f ? len : 1.0f);
                 mc_step();               /* (the scene first: it says whether the loop sounds) */
                 on_step(b);
-                if (mc_cur < 0) {        /* the pattern's drum lanes: their roles' slices (a scene owns the lanes) */
-                    uint32_t r, at = steps_total & 15u;
-                    for (r = 0; r < 3u; r++)
-                        if (p_dl[r] >> at & 1u)
-                            role_hit(b, r);
-                }
                 if (ev_cnt < EV_MAX) {
                     ev_off[ev_cnt] = (uint16_t)i;
                     ev_idx[ev_cnt++] = (uint8_t)(steps_total & 15u);
@@ -1131,7 +1170,8 @@ void brk_render(float *out, uint32_t n)
                         if (mr_left[l] <= 0.0f) {
                             mr_left[l] += mr_len[l];
                             mr_count[l]--;
-                            lane_hit(b, l, mr_slice[l], mr_gain[l], (mr_flags[l] & MCL_REV) != 0u, mr_gate[l]);
+                            chop_hit(b, mr_slice[l], mr_gain[l], (mr_flags[l] & MCL_REV) != 0u, mr_gate[l],
+                                     mr_pitch[l]);
                         }
                     }
             }
@@ -1220,16 +1260,6 @@ void brk_render(float *out, uint32_t n)
             voice_tick(b, &lv[0], linc, lpf, &acc, &ea, &va);
             voice_tick(b, &lv[1], linc, lpf, &acc, &ea, &va);
         }
-        {                                /* the lanes: their slices at the tempo's speed and their own pitch */
-            uint32_t l;
-            la = 0.0f;
-            for (l = 0; l < MC_LANES; l++)
-                if (mv[l][0].active | mv[l][1].active) {
-                    float li = ratio * mc_pf[l];
-                    voice_tick(b, &mv[l][0], li, 1.0f, &la, &ea, &va);
-                    voice_tick(b, &mv[l][1], li, 1.0f, &la, &ea, &va);
-                }
-        }
         /* the gate pad: open for gate_len of each 1/8, 1/16 or 1/32 */
         g = 1.0f;
         gate_pos += 1.0f;
@@ -1243,12 +1273,7 @@ void brk_render(float *out, uint32_t n)
         mute_amp += ((p_mute ? 0.0f : 1.0f) - mute_amp) * 0.02f;   /* (-60 dB in 8 ms) */
         {
             float k = (1.0f / 32768.0f) * gate_amp * mute_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
-            float kl = (1.0f / 32768.0f) * mute_amp;   /* (the lanes: not the pads' gate or tape) */
             out[i] = acc * k;
-            if (lanes_out)
-                lanes_out[i] = la * kl;
-            else
-                out[i] += la * kl;
             if (send_echo)               /* the slices' throws, for the effects' delay and reverb */
                 send_echo[i] = ea * k;
             if (send_verb)
@@ -1317,11 +1342,9 @@ BRK_COLD void brk_init(void)
     {
         uint32_t l;
         for (l = 0; l < MC_LANES; l++) {
-            mv[l][0].active = mv[l][1].active = 0u;
             mr_count[l] = 0u;
             mc_n[l] = 0u;
             mc_pos[l] = 0u;
-            mc_pf[l] = 1.0f;
         }
         for (l = 0; l < BRK_MAX_SLICES; l++)
             p_roles[l] = 0u;
@@ -1457,11 +1480,6 @@ static const brk_break_t *swap_now(void)
     brk_now = p_swap;
     p_swap = 0;
     v[0].active = v[1].active = lv[0].active = lv[1].active = 0u;
-    {
-        uint32_t l;
-        for (l = 0; l < MC_LANES; l++)
-            mv[l][0].active = mv[l][1].active = 0u;
-    }
     p_mute = 0;
     mute_amp = 1.0f;
     return brk_now;
@@ -1651,7 +1669,6 @@ BRK_COLD void brk_role_hit(uint32_t role)
     if (role < MC_ROLES)
         p_rhit[role]++;
 }
-void brk_lanes_out(float *out) { lanes_out = out; }
 BRK_COLD void brk_mc_scenes(const mc_scene_t *s) { p_scenes = s; }
 BRK_COLD void brk_mc_start(int scene)
 {
