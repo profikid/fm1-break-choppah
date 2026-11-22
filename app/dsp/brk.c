@@ -572,7 +572,8 @@ static int loop_sounds(void)
     return mc_cur < 0 || !sc || (sc[mc_cur].flags & MCS_BREAK);
 }
 
-static uint8_t mr_flags[MC_LANES], mr_gate[MC_LANES];
+static uint8_t mr_flags[MC_LANES], mr_gate[MC_LANES], mr_score[MC_LANES];
+static uint32_t mr_hold[MC_LANES];       /* a roll (a ratchet) owns the voice until this master tick */
 static float mr_pitch[MC_LANES];
 /* slice s on the break's voice (the one sound playing, its fade the cut): at gain, backwards, gate % of it, at pitch
  * semitones; it runs on into the break when the scene asks (loop_sounds), else it ends with its slice. A key looping
@@ -647,6 +648,7 @@ static void mc_begin(int32_t s)          /* scene s from this step */
         if (!sc || mc_cur < 0 || !(sc[mc_cur].lane[l].flags & MCL_FREE))
             mc_n[l] = 0u;
         mr_count[l] = 0u;
+        mr_hold[l] = 0u;
     }
 }
 
@@ -718,7 +720,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
             r *= 2u;
         else if (spd > 66u && r > 4u)
             r /= 2u;
-        if (L->rise) {                   /* a riser: faster each quarter of the phrase */
+        if (L->rise && !(L->flags & MCL_SWELL)) {   /* a riser: faster each quarter of the phrase */
             uint32_t q = (mc_steps ? mc_steps - 1u : 0u) * 4u / (bars_of(sc) * BRK_STEPS_PER_BAR);
             r >>= q > 3u ? 3u : q;
             if (r < 3u)
@@ -809,7 +811,8 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
         }
         mc_hitc[l]++;                    /* (each lane's event counts; one of them is heard) */
         {
-            uint32_t sc_ = ghost ? 0u : (acc ? 8u : 0u) + PRIO[role];   /* (a ghost never cuts a real hit) */
+            uint32_t sc_ = ghost ? 0u : (acc ? 16u : 0u) + PRIO[role] * 2u + (rat > 1u);   /* (a ghost never cuts
+                                          * a real hit; a roll wins over a single hit of the same weight) */
             if (sc_ > win_score || win < 0) {
                 win = (int32_t)l;
                 win_score = sc_;
@@ -825,7 +828,11 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
     }
     if (win < 0)
         return;
+    for (k = 0; k < MC_LANES; k++)       /* a roll (a ratchet) under way outranks a lighter hit: it rolls on */
+        if (mr_hold[k] > t && mr_score[k] > win_score)
+            return;
     l = (uint32_t)win;                   /* the one heard: the break's voice cut to it */
+    mr_score[l] = (uint8_t)win_score;
     mr_flags[l] = win_fl;
     mr_gate[l] = (uint8_t)(sc->lane[l].gate ? sc->lane[l].gate : 100u);
     mr_pitch[l] = win_pt;
@@ -833,6 +840,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
         mr_count[k] = 0u;
     if (win_late >= 1.0f && win_rat < 2u) {   /* laid back: the hit a little later (the ratchet's timer) */
         mr_count[l] = 1u;
+        mr_hold[l] = 0u;
         mr_left[l] = mr_len[l] = win_late;
         mr_slice[l] = win_s;
         mr_gain[l] = win_g;
@@ -840,6 +848,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
     }
     chop_hit(b, win_s, win_g, (win_fl & MCL_REV) != 0u, mr_gate[l], win_pt);
     mr_count[l] = win_rat > 1u ? (win_rat > 4u ? 3u : win_rat - 1u) : 0u;
+    mr_hold[l] = mr_count[l] ? t + win_r : 0u;
     if (mr_count[l]) {                   /* the event's other hits, evenly inside it */
         mr_len[l] = (float)win_r * (1.0f / (float)MC_TICKS) * sl / (float)(mr_count[l] + 1u);
         mr_left[l] = mr_len[l];
@@ -1386,6 +1395,7 @@ BRK_COLD void brk_init(void)
         uint32_t l;
         for (l = 0; l < MC_LANES; l++) {
             mr_count[l] = 0u;
+            mr_hold[l] = 0u;
             mc_n[l] = 0u;
             mc_pos[l] = 0u;
         }

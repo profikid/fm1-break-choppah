@@ -274,7 +274,7 @@ static void pat_read_back(void)          /* the engine's steps into the pattern 
 /* ----------------------------------------------------------------- MATHCORE --- */
 /* the scenes (A..P: four sample lanes each, docs/PRD_MATHCORE.md 6.1) in their own store object; the queue and the
  * black keys' shortcuts in another (the queue names scenes: one scene, queued as often as wanted) */
-#define MCS_MAGIC 0x3453434Du            /* "MCS4" (the lanes vary by themselves, 23 Nov 2026: the presets again) */
+#define MCS_MAGIC 0x3553434Du            /* "MCS5" (more fills, triplet snare rolls, 23 Nov 2026: the presets again) */
 #define MQ_MAGIC 0x3151434Du             /* "MCQ1" */
 #define MC_QUEUE 64u
 #define MC_NOKEY 0xFFu                   /* a black key with no scene */
@@ -318,62 +318,103 @@ static void mc_lane_defaults(mc_lane_t *l, uint32_t role)
  * from the black keys. A lane is a string: x a hit, X an accented one, . none (its length the string's). They re-cut
  * the break on its own voice: the grooves run on into the break between their hits (MCS_BREAK), the fills, the riser
  * and the drop are dry chops; L..P are the grooves dry */
-static const char *const MC_NAME[] = {"", "ROLLER", "AMEN", "STEPPER", "MATH 5/7", "FILL", "CHOP FILL", "RISER",
-                                      "BREAKDOWN", "DOUBLE", "7/8 BOUNCE", "DROP", "ROLLER CHOP", "AMEN CHOP",
-                                      "MATH CHOP", "DOUBLE CHOP", "BOUNCE CHOP"};
+static const char *const MC_NAME[] = {"", "ROLLER", "AMEN", "SNARE ROLLER", "SNARES", "MATH 5/7", "FILL",
+                                      "TRIPLET ROLL", "SNARE RUSH", "CHOP FILL", "RISER", "DROP", "STEPPER",
+                                      "DOUBLE", "7/8 BOUNCE", "BREAKDOWN", "TRIPLET ROLLER"};
 #define MC_NNAMES (sizeof MC_NAME / sizeof MC_NAME[0])
 typedef struct {
-    uint8_t name, bars, flags;
+    uint8_t bars, flags;
+    uint8_t prole;                       /* the PERC lane's role + 1 (0: PERC): a second snare lane for the rolls */
     struct {
         const char *p;                   /* 0: the lane off */
         uint8_t rate, mode, prob, ratchet, level;
         int8_t rise;
-        uint8_t rev;
+        uint8_t fl;                      /* MCL_REV, MCL_SWELL */
     } l[MC_LANES];
 } mc_preset_t;
-#define L_(p, r, m, pr, ra, lv, ri, rv) {p, r, m, pr, ra, lv, ri, rv}
+#define L_(p, r, m, pr, ra, lv, ri, f) {p, r, m, pr, ra, lv, ri, f}
 #define OFF_ {0, MCR_16, 0, 100, 1, 100, 0, 0}
-static const mc_preset_t MC_PRESET[11] = {
-    {1, 2, MCS_BREAK, {L_("X.........X.....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("....X.......X...", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
-               L_("X.xxX.x.X.xxX.xx", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0),
-               L_("..............x.", MCR_16, MCM_ROUND, 60, 1, 70, 0, 0)}},
-    {2, 2, MCS_BREAK, {L_("X.X.......XX....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("....X..x.x..X..x", MCR_16, MCM_ACCENT, 100, 1, 100, 0, 0),
-               L_("XxxxXxxxXxxxXxXx", MCR_16, MCM_ROUND, 90, 1, 75, 0, 0), OFF_}},
-    {3, 2, MCS_BREAK, {L_("X.........X.....X.....X.........", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("........X...............X.......", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("X.x.X.xxX.x.X.xx", MCR_16, MCM_ROUND, 100, 1, 75, 0, 0),
-               L_("...x.......x..x.", MCR_16, MCM_RANDOM, 50, 1, 70, 0, 0)}},
-    {4, 4, MCS_BREAK, {L_("X..x.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("....X..", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
-               L_("x.xx.x.xx.x", MCR_32, MCM_RANDOM, 100, 1, 65, 0, 0),
-               L_("x..x..x..x.x.", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0)}},
-    {5, 1, MCS_ONCE, {L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-                      L_("x.x.x.x.x.x.x.x.xxxxxxxxXXXXXXXX", MCR_32, MCM_ACCENT, 100, 1, 100, 3, 0),
-                      OFF_,
-                      L_("........x.x.xxxx", MCR_16, MCM_ROUND, 100, 2, 80, 0, 0)}},
-    {6, 1, MCS_ONCE, {L_("X..X..X..X..X.X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-                      L_("..X..X..X..X.XXX", MCR_16, MCM_RANDOM, 85, 2, 100, 0, 0),
-                      L_("xxxxxxxxxxxxxxxxxxxxxxxx", MCR_32T, MCM_RANDOM, 60, 1, 70, 0, 0), OFF_}},
-    {7, 4, MCS_ONCE, {L_("X...X...X.X.XXXX", MCR_4, MCM_FIXED, 100, 1, 100, 0, 0),
-                      L_("X", MCR_8, MCM_ROUND, 100, 1, 100, 12, 0),
-                      L_("x", MCR_8, MCM_ROUND, 100, 1, 60, 7, 0), OFF_}},
-    {8, 4, MCS_BREAK, {L_("X...............X...............", MCR_8, MCM_FIXED, 100, 1, 100, 0, 0), OFF_,
-                       L_("x..", MCR_8T, MCM_ROUND, 100, 1, 55, 0, 0),
-                       L_("x....", MCR_8, MCM_RANDOM, 100, 1, 60, 0, 0)}},
-    {9, 2, MCS_BREAK, {L_("X..X..X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-               L_("....X..x....X.x.", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
-               L_("XxxxXxxXxxXxXxxx", MCR_32, MCM_ROUND, 100, 1, 70, 0, 0),
-               L_("x.....", MCR_16T, MCM_ROUND, 100, 1, 75, 0, 0)}},
-    {10, 2, MCS_BREAK, {L_("X..X.X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-                L_("...X......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-                L_("x.xx.xx.xx.x", MCR_16T, MCM_RANDOM, 100, 1, 70, 0, 0),
-                L_("x...x.x..", MCR_16, MCM_ROUND, 70, 1, 75, 0, 0)}},
-    {11, 1, MCS_ONCE, {L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
-                       L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0), OFF_,
-                       L_("........X.......", MCR_16, MCM_FIXED, 100, 1, 100, 0, 1)}},
+#define SN_ (ROLE_SNARE + 1u)
+#define RUN MCS_BREAK
+#define ONCE MCS_ONCE
+/* A..K on the black keys: five grooves, four fills, the riser, the drop; L..P more grooves (SCENE puts them on a
+ * key). The triplet rolls are a snare lane at 1/8 with ratchet x3: each of its hits three 1/16T snares. A fill keeps
+ * its climax in its second half: launched late in a bar (it plays from where the bar is) it still lands */
+static const mc_preset_t MC_PRESET[MC_SCENES] = {
+    /* A ROLLER */
+    {2, RUN, 0, {L_("X.........X.....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                 L_("....X.......X...", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
+                 L_("X.xxX.x.X.xxX.xx", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0),
+                 L_("..............x.", MCR_16, MCM_ROUND, 60, 1, 70, 0, 0)}},
+    /* B AMEN */
+    {2, RUN, 0, {L_("X.X.......XX....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                 L_("....X..x.x..X..x", MCR_16, MCM_ACCENT, 100, 1, 100, 0, 0),
+                 L_("XxxxXxxxXxxxXxXx", MCR_16, MCM_ROUND, 90, 1, 75, 0, 0), OFF_}},
+    /* C SNARE ROLLER: a shuffling roller, a triplet snare roll closing every second bar (and a pickup roll) */
+    {2, RUN, SN_, {L_("X.........X.....X.........X.x...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                   L_("....X.......X...", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
+                   L_("X.xX.xX.xX.xX.xX.xX.xX.x", MCR_16T, MCM_ROUND, 100, 1, 70, 0, 0),
+                   L_("...........x..XX", MCR_8, MCM_ROUND, 100, 3, 85, 0, 0)}},
+    /* D SNARES: snares everywhere, round all the break's snare hits, a triplet roll every bar's end */
+    {2, RUN, SN_, {L_("X.........X.....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                   L_("..x.X.xx.xx.X.xx", MCR_16, MCM_ROUND, 100, 1, 100, 0, 0),
+                   L_("X...x...X...x...", MCR_16, MCM_ROUND, 100, 1, 60, 0, 0),
+                   L_("......xX", MCR_8, MCM_ACCENT, 100, 3, 90, 0, 0)}},
+    /* E MATH 5/7 */
+    {4, RUN, 0, {L_("X..x.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                 L_("....X..", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
+                 L_("x.xx.x.xx.x", MCR_32, MCM_RANDOM, 100, 1, 65, 0, 0),
+                 L_("x..x..x..x.x.", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0)}},
+    /* F FILL: two beats of groove, a beat building in triplets, a beat of full triplet snares, climbing */
+    {1, ONCE, 0, {L_("X.......X.......", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                  L_("x..x..X..x.xx.xXxxXxXXXX", MCR_16T, MCM_ACCENT, 100, 1, 100, 4, MCL_SWELL),
+                  OFF_,
+                  L_("........x.x..x.x", MCR_16, MCM_ROUND, 100, 1, 70, 0, 0)}},
+    /* G TRIPLET ROLL: a bar of triplet snares, swelling and climbing a fourth */
+    {1, ONCE, 0, {L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                  L_("xxxxXXXX", MCR_8, MCM_ACCENT, 100, 3, 100, 5, MCL_SWELL), OFF_, OFF_}},
+    /* H SNARE RUSH: one snare an 8th, then 16ths, 32nds, 64ths: the classic roll into the drop */
+    {1, ONCE, 0, {L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                  L_("X", MCR_8, MCM_ROUND, 100, 1, 100, 7, 0), OFF_, OFF_}},
+    /* I CHOP FILL: 3-3-3-3-2-2 cuts, snares answering with flams */
+    {1, ONCE, 0, {L_("X..X..X..X..X.X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                  L_("..X..X..X..X.XXX", MCR_16, MCM_ROUND, 100, 2, 100, 0, 0),
+                  L_("x.x.x.x.x.x.x.x.x.x.x.x.", MCR_16T, MCM_RANDOM, 60, 1, 60, 0, 0), OFF_}},
+    /* J RISER: 4 bars, the snares from 1/8 to 1/64, the hats behind them */
+    {4, ONCE, 0, {L_("X...X...X.X.XXXX", MCR_4, MCM_FIXED, 100, 1, 100, 0, 0),
+                  L_("X", MCR_8, MCM_ROUND, 100, 1, 100, 12, 0),
+                  L_("x", MCR_8, MCM_ROUND, 100, 1, 60, 7, 0), OFF_}},
+    /* K DROP: one hit, a slice backwards into the space */
+    {1, ONCE, 0, {L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                  L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0), OFF_,
+                  L_("........X.......", MCR_16, MCM_FIXED, 100, 1, 100, 0, MCL_REV)}},
+    /* L STEPPER (half time) */
+    {2, RUN, 0, {L_("X.........X.....X.....X.........", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                 L_("........X...............X.......", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                 L_("X.x.X.xxX.x.X.xx", MCR_16, MCM_ROUND, 100, 1, 75, 0, 0),
+                 L_("...x.......x..x.", MCR_16, MCM_RANDOM, 50, 1, 70, 0, 0)}},
+    /* M DOUBLE: 3-3-2 kicks, 1/32 hats */
+    {2, RUN, 0, {L_("X..X..X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                 L_("....X..x....X.x.", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
+                 L_("XxxxXxxXxxXxXxxx", MCR_32, MCM_ROUND, 100, 1, 70, 0, 0),
+                 L_("x.....", MCR_16T, MCM_ROUND, 100, 1, 75, 0, 0)}},
+    /* N 7/8 BOUNCE */
+    {2, RUN, 0, {L_("X..X.X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                 L_("...X......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                 L_("x.xx.xx.xx.x", MCR_16T, MCM_RANDOM, 100, 1, 70, 0, 0),
+                 L_("x...x.x..", MCR_16, MCM_ROUND, 70, 1, 75, 0, 0)}},
+    /* O BREAKDOWN: a sparse pulse, the break running on between */
+    {4, RUN, 0, {L_("X...............X...............", MCR_8, MCM_FIXED, 100, 1, 100, 0, 0), OFF_,
+                 L_("x..", MCR_8T, MCM_ROUND, 100, 1, 55, 0, 0),
+                 L_("x....", MCR_8, MCM_RANDOM, 100, 1, 60, 0, 0)}},
+    /* P TRIPLET ROLLER: all in triplets, a triplet snare roll every second bar */
+    {2, RUN, SN_, {L_("X.....X..X..X.....X.X...", MCR_8T, MCM_FIXED, 100, 1, 100, 0, 0),
+                   L_("...X.....X..", MCR_8T, MCM_ALT, 100, 1, 100, 0, 0),
+                   L_("X.xX.xX.xX.xX.xX.xX.xX.x", MCR_16T, MCM_ROUND, 100, 1, 70, 0, 0),
+                   L_("..............XX", MCR_8, MCM_ACCENT, 100, 3, 90, 0, 0)}},
 };
+#undef RUN
+#undef ONCE
 static void mc_lane_from(mc_lane_t *L, const char *p)   /* a lane's hits and accents from its string */
 {
     uint32_t e;
@@ -388,19 +429,19 @@ static void mc_lane_from(mc_lane_t *L, const char *p)   /* a lane's hits and acc
 }
 static void mc_scene_defaults(mc_scene_t *s, uint32_t i)
 {
-    const mc_preset_t *p = &MC_PRESET[i < 11u ? i : i == 11u ? 0u : i == 12u ? 1u : i == 13u ? 3u : i == 14u ? 8u : 9u];
+    const mc_preset_t *p = &MC_PRESET[i % MC_SCENES];
     uint32_t l;
     s->bars = p->bars;
-    s->flags = (uint8_t)(i >= 11u ? p->flags & ~MCS_BREAK : p->flags);   /* L..P: the grooves, dry chops */
-    s->name = (uint8_t)(i < 11u ? p->name : 12u + (i - 11u));
+    s->flags = p->flags;
+    s->name = (uint8_t)(i % MC_SCENES + 1u);
     s->rsv = 0u;
     for (l = 0; l < MC_LANES; l++) {
         mc_lane_t *L = &s->lane[l];
-        mc_lane_defaults(L, l);
+        mc_lane_defaults(L, l == 3u && p->prole ? p->prole - 1u : l);
         if (!p->l[l].p)
             continue;
         mc_lane_from(L, p->l[l].p);
-        L->flags = (uint8_t)(MCL_ON | (p->l[l].rev ? MCL_REV : 0u));
+        L->flags = (uint8_t)(MCL_ON | p->l[l].fl);
         L->rate = p->l[l].rate;
         L->mode = p->l[l].mode;
         L->prob = p->l[l].prob;
@@ -408,12 +449,13 @@ static void mc_scene_defaults(mc_scene_t *s, uint32_t i)
         L->level = p->l[l].level;
         L->rise = p->l[l].rise;
         L->seed = (uint8_t)(L->seed + i * 13u);
-        if (L->rise)
-            L->vary = 0u;                /* (a riser stays a riser) */
+        if (L->rise || L->ratchet > 2u)
+            L->vary /= 3u;               /* (a roll or a riser stays one: a touch of velocity only) */
         else if (p->flags & MCS_ONCE)
             L->vary /= 2u;               /* (a fill is busy already) */
     }
 }
+
 static void mc_defaults(void)
 {
     uint32_t i;

@@ -29,14 +29,14 @@ expect mc_next 1
 wait 1500
 expect mc_scene 1
 expect mc_base 1
-# E (FILL), once: on the next beat, then B again
-tapkey b4
+# F (FILL), once: on the next beat, then B again
+tapkey b5
 wait 450
-expect mc_scene 4
+expect mc_scene 5
 shot m_live_fill.png
 wait 1500
 expect mc_scene 1
-# G (RISER) held: plays while held, B back on the next beat after
+# G (TRIPLET ROLL) held: rolls on while held, B back on the next beat after
 key b6 down
 wait 1500
 expect mc_scene 6

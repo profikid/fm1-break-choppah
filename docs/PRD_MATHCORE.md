@@ -573,3 +573,16 @@ Laurens: the patterns should sound more natural, more variation in the hats and 
 | MM-N-002 | The presets: VARY by role (hat 70, snare 60, perc 45, kick 20; ONCE scenes half, risers 0); hat lines with accent shapes instead of flat 16ths, the AMEN hats round-robin instead of random, snares alternating between the break's snare hits. Store magic MCS4 | Done |
 | MM-N-003 | LANE MORE: ROLE, RISE, REVERSE, LANE (SEED left the panel; VARY's seed is the lane's own) | Done |
 
+---
+
+## 18. Revision: fills and triplet snare rolls (23 Nov 2026)
+
+Laurens: better fills, rollers with triplet snares, and one with more snares.
+
+| ID | Requirement | State |
+| --- | --- | --- |
+| MM-F-001 | **The scenes reworked** (`MC_PRESET`, one per scene, store magic MCS5). On the keys: A ROLLER, B AMEN, C SNARE ROLLER (triplet hats, a triplet snare roll closing every second bar, a pickup roll), D SNARES (snares on most 16ths round all the break's snare slices, a triplet roll every bar), E MATH 5/7, F FILL, G TRIPLET ROLL, H SNARE RUSH, I CHOP FILL, J RISER, K DROP; L STEPPER, M DOUBLE, N 7/8 BOUNCE, O BREAKDOWN, P TRIPLET ROLLER (all triplets) | Done |
+| MM-F-002 | **Triplet rolls**: a SNARE lane at 1/8 with ratchet ×3 (each hit three 1/16T snares); the PERC lane can take another role (`prole`) so a scene has two snare lanes | Done |
+| MM-F-003 | **A roll owns the voice** until its event ends (`mr_hold`): a lighter hit (the hats) at the ratchet's ticks is dropped, not cutting the roll; a roll beats a single hit of the same weight | Done; engine test: hats at 1/16T never cut a bar of triplet snares |
+| MM-F-004 | **SWELL** (`MCL_SWELL`): a lane's RISE climbs and swells over the phrase without speeding up (F FILL, G TRIPLET ROLL); the fills keep their climax in their second half so a late launch still lands; rolls and risers keep a third of their VARY | Done |
+

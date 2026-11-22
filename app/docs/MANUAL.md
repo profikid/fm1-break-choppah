@@ -606,11 +606,16 @@ it plays once), the scene's name, what comes next, the phrase so far and the cha
 | SEL + REC | Clears the chain (the groove plays on) |
 | ALGORITHM · PRESETS | The chain's entry pointed at · moved a place later or earlier |
 
-The scenes as they come: **A** ROLLER, **B** AMEN, **C** STEPPER (half time, 2 bars), **D** MATH 5/7 (5, 7, 11, 13
-against the bar, 4 bars), **E** FILL (a snare roll that climbs), **F** CHOP FILL, **G** RISER (4 bars: the snares
-speed up from 1/8 to 1/64 and climb an octave), **H** BREAKDOWN (the break under a sparse pulse, 4 bars), **I**
-DOUBLE (3-3-2 kicks, 1/32 hats), **J** 7/8 BOUNCE, **K** DROP (one hit, a reversed slice, space). L–P are grooves with
-the break under them. E, F, G and K play once; the others loop. The macros are kept with SAVE.
+The scenes as they come, on the black keys: **A** ROLLER, **B** AMEN, **C** SNARE ROLLER (a shuffling roller with
+triplet hats, a triplet snare roll closing every second bar), **D** SNARES (snares everywhere, round all the break's
+snare hits, a triplet roll at every bar's end), **E** MATH 5/7 (5, 7, 11, 13 against the bar, 4 bars); the fills
+**F** FILL (two beats of groove, a beat building in triplets, a beat of triplet snares, climbing), **G** TRIPLET ROLL
+(a bar of triplet snares swelling up a fourth), **H** SNARE RUSH (8ths, 16ths, 32nds, 64ths: the roll into the
+drop), **I** CHOP FILL (3-3-3-3-2-2 cuts, flammed snares); **J** RISER (4 bars) and **K** DROP. On SCENE you can put
+the others on a key: **L** STEPPER (half time), **M** DOUBLE, **N** 7/8 BOUNCE, **O** BREAKDOWN, **P** TRIPLET ROLLER
+(all in triplets, a roll every second bar). F–K play once; the others loop. The fills keep their climax in their
+second half, so one launched late in a bar (it comes in on the next beat, where the bar is) still lands. A roll owns
+the break's voice until it's done: hats under it never cut it short. The macros are kept with SAVE.
 
 ### MAP: the Slice Map
 

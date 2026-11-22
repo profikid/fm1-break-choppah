@@ -2241,6 +2241,38 @@ static void test_mc_play(void)
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
+    /* a triplet roll: a snare lane at 1/8 with ratchet x3 under hats at 1/16T: 24 snare hits a bar, the hats
+     * between never cutting it short; SWELL climbs without speeding up */
+    {
+        uint32_t snares = 0u, last = 0u, t2, rolls;
+        mc_scene_init(&mc_sc[5], 1u);
+        mc_sc[5].lane[1].flags = MCL_ON | MCL_SWELL;
+        mc_sc[5].lane[1].hits = 0xFFu;
+        mc_sc[5].lane[1].len = 8u;
+        mc_sc[5].lane[1].rate = MCR_8;
+        mc_sc[5].lane[1].ratchet = 3u;
+        mc_sc[5].lane[1].rise = 5;
+        mc_sc[5].lane[2].flags = MCL_ON;
+        mc_sc[5].lane[2].hits = 0xFFFFFFu;
+        mc_sc[5].lane[2].len = 24u;
+        mc_sc[5].lane[2].rate = MCR_16T;
+        brk_mc_start(5);
+        brk_mc_next(5);
+        mc_zero_counts();
+        brk_play(1);
+        for (t2 = 0; t2 < 16u * sl; t2 += 64u) {   /* the voice's slice every 64 samples: a snare's */
+            mc_run(64u, 0, 0);
+            brk_status(&st);
+            snares += st.slice >= 0 && (r[st.slice] >> ROLE_SNARE & 1u);
+            last++;
+        }
+        CHECK(snares * 100u >= last * 97u, "triplet roll: the hats never cut it (%u of %u looks a snare)", snares, last);
+        mc_count();
+        rolls = mc_hits_total[1];
+        CHECK(rolls == 8u, "triplet roll: 8 events a bar (x3: 24 triplet snares), SWELL not speeding up (%u)", rolls);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
     /* VARY: a snare lane on 5 and 13 grows ghost notes round them, never the same bar twice, the same run twice */
     {
         static float a1[4u * 44100u], a2[4u * 44100u];

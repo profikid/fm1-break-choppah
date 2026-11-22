@@ -164,6 +164,8 @@ extern const char *const MC_MODE_NAME[MC_MODES];
 #define MCL_ON 1u                        /* the lane plays in its scene */
 #define MCL_REV 2u                       /* its slices backwards */
 #define MCL_FREE 4u                      /* it counts from the transport's start, not the scene's (no reset) */
+#define MCL_SWELL 8u                     /* its RISE climbs and swells over the phrase without speeding up (a roll
+                                          * that builds) */
 typedef struct {
     uint32_t hits;                       /* bit e: an event at e */
     uint32_t accent;                     /* bit e: e accented (no accents at all: every hit full) */
