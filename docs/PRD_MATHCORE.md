@@ -3,7 +3,8 @@
 **Feature PRD and implementation roadmap** · v1.0 · 22 Nov 2026  
 **Parent product PRD:** [PRD.md](PRD.md)  
 **Repository:** `profikid/fm1-break-choppah`  
-**Status:** Built on the `mathcore` branch (22 Nov 2026), in device testing; not on main, not released. See §14
+**Status:** Built on the `mathcore` branch (22 Nov 2026), in device testing; not on main, not released. See §14,
+and §15 for the revision to a played instrument (the same evening)
 
 ---
 
@@ -524,4 +525,24 @@ and colours (letters A–P), lanes of more than four.
 The lanes are a channel of their own (`brk_lanes_out`): the MIXER's LANES fader and GROOVE's route (through the FX
 chain or around it), not the break's DJ filter, gate pad or tape stop. Flash: image 552 KB of 581.5 KB (+3.5 KB over
 v1.5.2 with the drums gone); RAM .data+.bss 91.2 of 98.3 KB.
+
+---
+
+## 15. Revision: an instrument, not a programmer (22 Nov 2026, evening)
+
+Laurens, after the first build: too much programming. Every scene should already be there (beats, risers, fills, of
+different lengths), and complex polyrhythms should be playable without programming, as an instrument, and look more
+visual. What changed (on the same branch):
+
+| ID | Requirement | State |
+| --- | --- | --- |
+| MM-P-001 | **Scenes come filled**: A ROLLER, B AMEN, C STEPPER, D MATH 5/7, E FILL, F CHOP FILL, G RISER, H BREAKDOWN, I DOUBLE, J 7/8 BOUNCE, K DROP; L–P grooves with the break under them. Phrases of 1, 2 and 4 bars; lanes of 1–32 events at 1/32 … 1/4 and triplets (`MC_PRESET`, app.c: each lane written as a step string). Store magic MCS2: the first build's scenes give way to these | Done |
+| MM-P-002 | **Black keys launch** (replacing append-to-queue): a tap plays the scene (stopped: at once; a groove on the next bar, the groove from then on; a ONCE scene on the next beat, counted from its bar so it ends on the bar line, then the groove by itself). Held past 350 ms: momentary, the groove back on the next beat after. `brk_mc_jump(scene, quant)`; `MCS_ONCE` | Done; engine test test_mc_play |
+| MM-P-003 | **Four macros on LIVE's K1–K4**, over every lane: DENSITY (fewer hits, the off-beats first; more, the added hits fixed per cycle position so they groove), MATH (seven steps from the lanes' own lengths to 5 / 7 / 11 / 13, `MC_MATH_LEN`), SPEED (half / normal / double), CHAOS (random slices, ratchets, reversals, seeded). Saved in the settings (`mc_macro`, appended). Mute / solo moved to SEL + K1–K4 | Done |
+| MM-P-004 | **Risers**: a lane's RISE (LANE MORE K3): over the scene's phrase its rate halves each quarter (to 1/64), it swells from 35 % and climbs RISE semitones | Done; 8, 16, 32, 64 hits a bar in the engine test |
+| MM-P-005 | **The wheel**: LIVE draws a ring per lane (kick inside, hat outside), its cycle's steps round it, the hits lit, the step playing white, turning at ~25 frames a second; the scene in the middle; the 11 scenes as a grid (playing lit, next outlined, ONCE marked), the name, what's next, the phrase, the chain. The black keys glow where they have a scene, the playing one lit, the next blinking | Done |
+| MM-P-006 | The queue becomes the **chain**: SEL + a black key adds, REC + a black key takes the last of it out, SEL + REC clears (the groove plays on), ALGORITHM / PRESETS point and move. PLAY never refuses: an empty chain plays the groove | Done (replaces MM-Q-001 and MM-Q-010's "empty queue doesn't start") |
+| MM-P-007 | SCENE K4 is PLAYS (LOOP / ONCE); LANE MORE K3 is RISE (RESET / FREE left the panel, kept in the engine) | Done |
+
+Flash after the revision: image ~556 KB of 581.5 KB.
 

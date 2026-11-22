@@ -16,7 +16,7 @@ plays in time while you rearrange it, roll it, reverse it, stop it like a tape a
 5. Patterns and the sequencer
 6. The FX chain
 7. GLOBAL: MIDI, Bluetooth, pitch, reset (and the MIDI map)
-8. MATHCORE: the Slice Map, lanes, scenes and the queue
+8. MATHCORE: play the break as an instrument (scenes, macros, the Slice Map)
 9. The mixer
 10. Pages and knobs
 11. The control map
@@ -66,7 +66,7 @@ The slicer view, top to bottom:
 GLOBAL's part); on HOME (both its parts) and the MIXER, where there is nothing to pick, it is the break. PRESETS picks
 what goes in (an effect, a lane's knob set); elsewhere it is the pattern. **SEQ is where the pattern is sequenced**
 (the break's steps and the kick, snare and hat lanes), **EDIT is MATHCORE** (the Slice Map, layered lanes, scenes and
-the queue); the white keys play slices everywhere but SEQ, MATHCORE's LANE and ENV (tap tempo). **SEL + ALGORITHM is the break and SEL +
+the black keys playing scenes); the white keys play slices everywhere but SEQ, MATHCORE's LANE and ENV (tap tempo). **SEL + ALGORITHM is the break and SEL +
 PRESETS the pattern on every page.** A page's button pressed again is its next part. **Press SEL** alone and the strip
 lists its combinations (SEL again, or any other button, key or knob, closes it). The control map (§11) shows all of it at once.
 
@@ -498,7 +498,7 @@ connect from a MIDI app's Bluetooth MIDI page (GarageBand: a song's Settings →
 | K1 PITCH | KEEP LENGTH (the default) · SPEED | KEEP LENGTH changes the pitch only: each slice keeps its length (a granular pitch shift), so a key pitched +7 still fills its loop. SPEED is the classic repitch: up plays faster and shorter, down slower and longer (K1 left) |
 | K2 GRAIN | 10 … 80 ms | KEEP LENGTH's grains: shorter keeps hits tight, longer sounds smoother on held sounds |
 | K3 SNAP | OFF · 1/8 · 1/4 · 1/2 · 1 (the default) · 2 · 4 slices | Where a white key pressed while playing lands: at once (OFF), or at the next point of a grid that many slices apart, counted from the top of the pattern. The panel says what it is in this break (on the 2-bar breaks 1 slice = 1/8, 1/2 slice = 1/16, 2 slices = 1/4). Stopped, keys always play at once |
-| K4 RESET ALL | Turn once ("RESET ALL?"), then again within 3 seconds | Clears everything back to how it came: tempo, generator, FX chain, mixer, keys, slices, GLOBAL, the split, all 16 patterns and MATHCORE's scenes and queue; the first break is chosen and it is saved at once. Bluetooth pairings are kept. The screen says so: LOBOTOMIZED, for 3 seconds (a key or button ends it sooner) |
+| K4 RESET ALL | Turn once ("RESET ALL?"), then again within 3 seconds | Clears everything back to how it came: tempo, generator, FX chain, mixer, keys, slices, GLOBAL, the split, all 16 patterns and MATHCORE's scenes and chain; the first break is chosen and it is saved at once. Bluetooth pairings are kept. The screen says so: LOBOTOMIZED, for 3 seconds (a key or button ends it sooner) |
 
 It covers every pitch in semitones: OCT, a key's pitch, the roll's pitch a repeat, the freeze's pitch, steps. The
 tempo's own repitch, HALF, REVERSE's speed and the tape stop stay speed effects.
@@ -567,35 +567,45 @@ again), STOP stops. Out (CLOCK OUT on): 24 clocks a beat while playing, START wi
 
 ## 8. MATHCORE
 
-MATHCORE turns the break into a rhythm instrument made of its own hits. CHOPPAH listens to the break and knows which
-slices are kicks, snares, hats and the rest (the **Slice Map**); four **lanes** play those slices, each with a cycle
-of its own (5 against 7 against 11 against 13, on one clock); a **scene** is the four lanes and a phrase length; the
-**queue** plays scenes one after another and round again, and you build it live with the black keys. Every sound is
-the break's: nothing is synthesised.
+MATHCORE turns the break into an instrument made of its own hits. CHOPPAH listens to the break and knows which
+slices are kicks, snares, hats and the rest (the **Slice Map**). Eleven ready scenes sit on the black keys: grooves,
+fills, a riser, a breakdown and a drop, of different lengths, each four **lanes** that play those slices, often in
+different cycles (5 against 7 against 11 against 13). You play them: tap a key and the scene comes in, hold it and it
+plays while held, turn four knobs and the rhythm thins out, fills up, goes polyrhythmic, doubles or breaks apart.
+Nothing has to be programmed (LANE and SCENE are there if you want to). Every sound is the break's.
 
 **EDIT** opens MATHCORE at the part used last; **EDIT again** goes to the next: LIVE → MAP → LANE → SCENE → LIVE.
 
-### LIVE: the queue
+### LIVE: play it
 
-![LIVE: scene A playing, B next, the queue A B C, scene A's four lanes below](img/screen-mc-live.png "MATHCORE LIVE")
+![LIVE: scene B (AMEN) with MATH all the way: the rings turn in 5, 7, 11 and 13](img/screen-mc-live.png "MATHCORE LIVE")
+
+The wheel is the scene playing: a ring per lane (the kick inside, then the snare, the perc, the hat outside), its
+cycle's steps round it, the hits lit, the step playing white. Rings of different lengths turn at different speeds:
+that is the polyrhythm, seen. On the right the eleven black keys' scenes (playing lit, coming next outlined, a dash:
+it plays once), the scene's name, what comes next, the phrase so far and the chain.
 
 | Control | Does |
 | --- | --- |
-| Black key | Adds its scene to the end of the queue (again: another copy, it plays twice). The foot shows each key's scene letter |
-| SEL + black key | Takes that scene's last entry out of the queue |
-| PLAY | Starts the queue at its first entry (an empty queue doesn't start: tap a black key first); again: stop |
-| White keys | Slices, as on HOME: tap, hold to loop. They never move the queue |
-| K1–K4 | The KICK, SNARE, HAT and PERC lanes: left toward MUTE, right toward SOLO. A muted lane keeps counting, so it comes back in its place |
-| ALGORITHM | The cursor: an entry of the queue (outlined) |
-| PRESETS | Moves the entry at the cursor a place later (right) or earlier (left) |
-| SEL + REC | Clears the queue: the scene playing plays out, then the transport stops |
+| Black key, tapped | Its scene. Stopped: it plays at once. Playing: a **groove** comes in on the next bar and stays; a **fill, riser or drop** (a dash on its box) comes in on the next beat, plays to its bar line, then your groove is back by itself |
+| Black key, held | Momentary: its scene plays while you hold it (a fill rolls on, a groove takes over), and your groove comes back on the next beat after you let go |
+| PLAY | Starts the groove (or the chain); again: stop |
+| K1 DENSITY | Left: fewer hits (the off-beats go first, the downbeats stay); right: more (the extra hits are the same each cycle, so it still grooves) |
+| K2 MATH | From the scenes' own lengths to cycles of 5, 7, 11 and 13 in seven steps: turn it up and straight beats become polyrhythms. The foot shows the lengths |
+| K3 SPEED | HALF, NORMAL, DOUBLE: every lane half time or double time |
+| K4 CHAOS | Random slices, ratchets and reversals, more as you turn |
+| SEL + K1–K4 | The KICK, SNARE, HAT and PERC lanes: left MUTE, right SOLO (a muted lane keeps counting: it comes back in place) |
+| White keys | Slices, as on HOME: tap, hold to loop, over everything |
+| SEL + black key | Chains its scene (a song of scenes: after each phrase the next, round again) |
+| REC + black key | Takes that scene's last entry out of the chain |
+| SEL + REC | Clears the chain (the groove plays on) |
+| ALGORITHM · PRESETS | The chain's entry pointed at · moved a place later or earlier |
 
-The big letter is the scene playing (NEXT: the one after it; LAST when the queue has nothing after it), the boxes the
-queue (the one playing lit), the bar under them the phrase so far, the rows below the scene's four lanes with their
-place moving. Each scene plays for its phrase (1, 2, 4 or 8 bars), then the next starts on the bar; after the last
-entry the first plays again, so a queue of one scene loops it. Adding, moving and taking out entries while it plays
-never cuts the scene playing: the change shows at its end. Away from LIVE (and SCENE) the black keys are the pads
-again, and the queue keeps playing on every page until you stop.
+The scenes as they come: **A** ROLLER, **B** AMEN, **C** STEPPER (half time, 2 bars), **D** MATH 5/7 (5, 7, 11, 13
+against the bar, 4 bars), **E** FILL (a snare roll that climbs), **F** CHOP FILL, **G** RISER (4 bars: the snares
+speed up from 1/8 to 1/64 and climb an octave), **H** BREAKDOWN (the break under a sparse pulse, 4 bars), **I**
+DOUBLE (3-3-2 kicks, 1/32 hats), **J** 7/8 BOUNCE, **K** DROP (one hit, a reversed slice, space). L–P are grooves with
+the break under them. E, F, G and K play once; the others loop. The macros are kept with SAVE.
 
 ### MAP: the Slice Map
 
@@ -621,7 +631,7 @@ and round while you edit it.
 | RHYTHM | LENGTH: 1–32 events in the cycle | RATE: 1/32, 1/16, 1/8, 1/4, 1/32T, 1/16T, 1/8T | ROTATE: the hits a step later (right) or earlier | PHASE: the cycle starts this many events in |
 | SOUND | MODE: which of the role's slices (below) | PICK: the slice FIXED, ALT and ACCENT start from | PITCH: −12 … +12 | LEVEL |
 | FEEL | CHANCE: each event plays this often (the seed decides, the same every time) | RATCHET: ×1–×4 hits an event | GATE: how much of the slice sounds | REVERSE |
-| MORE | ROLE: the slices it plays (KICK, SNARE, HAT, PERC) | SEED | RESET: SCENE (the cycle starts again with each scene) or FREE (it runs on from PLAY) | LANE: on or off |
+| MORE | ROLE: the slices it plays (KICK, SNARE, HAT, PERC) | SEED | RISE: a riser, the lane speeding up over the phrase and climbing this many semitones (OFF: none) | LANE: on or off |
 
 **MODE**: FIXED always the PICKed slice; ROUND each of the role's slices in turn; RANDOM one at random (from the
 seed: the same seed, the same choices); ALT two in turn; ACCENT the PICKed slice for soft hits, the next for accents.
@@ -633,18 +643,16 @@ lane and an 11-event hat lane at 1/32 meet again exactly where they should, bar 
 
 ### SCENE: phrase, break, black key
 
-![SCENE: scene B, 4 bars with the break under it, black keys 2 and 5 queue it](img/screen-mc-scene.png "MATHCORE SCENE")
+![SCENE: scene B, its phrase, the black keys that play it, its four lanes](img/screen-mc-scene.png "MATHCORE SCENE")
 
-**ALGORITHM** picks the scene (A–P). A **black key** makes that key queue this scene (SEL + a black key: that key
-queues nothing). The first eleven scenes start on the eleven black keys.
+**ALGORITHM** picks the scene (A–P). A **black key** makes that key play this scene (SEL + a black key: that key
+plays nothing). The first eleven scenes start on the eleven black keys.
 
 | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- |
-| PHRASE: 1, 2, 4 or 8 bars | BREAK: the break's own loop under the lanes (ON) or the lanes alone (OFF) | NEW / COPY: left, the scene back to its start; right, a copy of the scene before it | LANES: right every lane on, left only the kick |
+| PHRASE: 1, 2, 4 or 8 bars | BREAK: the break's own loop under the lanes (ON) or the lanes alone (OFF) | NEW / COPY: left, the scene back to how it came; right, a copy of the scene before it | PLAYS: LOOP (a groove) or ONCE (a fill: then back to the groove) |
 
-Scenes A, B and C start as a groove to build on: A a straight beat, B a busier variation, C the mathcore one (5, 7,
-11 and 13 against the bar, over 4 bars). SAVE keeps the scenes, the queue and the black keys' scenes; they come back
-after a restart.
+SAVE keeps the scenes, the chain and the black keys' scenes; they come back after a restart.
 
 ## 9. The mixer
 
@@ -679,10 +687,10 @@ break alone: sweep it down and the lanes stay full on top. The FLT pad throws it
 | GLO a third time (channel) | MIDI channel (OMNI, 1–16) | Notes out | CC out | Program changes out |
 | ARP (black keys hold effects; ARP again: MORE, MOD) | the shown key's effect: setting 1 | Setting 2 | Setting 3 | Mix |
 | ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | Click level (0: off) |
-| EDIT (MATHCORE LIVE: black keys queue scenes) | Kick lane: mute ← play → solo | Snare lane | Hat lane | Perc lane |
+| EDIT (MATHCORE LIVE: the black keys play scenes) | Density | Math (5 / 7 / 11 / 13) | Speed (half / double) | Chaos |
 | EDIT again (MAP: the Slice Map, heard) | Kicks found | Snares | Hats | Percs |
 | EDIT a third time (LANE; PRESETS: RHYTHM, SOUND, FEEL, MORE) | see §8 | | | |
-| EDIT a fourth time (SCENE) | Phrase | Break under | New / copy | Lanes |
+| EDIT a fourth time (SCENE) | Phrase | Break under | New / copy | Plays: loop / once |
 
 **Gate** (HOME K1) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then
 quiet until the next; down to 5 % for clipped, staccato chops; 100 % is off. It follows the tempo and the pitch, and
@@ -703,7 +711,7 @@ owns K1–K4. Here, in short: §2 has the rules, §10 every page's knobs.
 ## 12. Saving
 
 SAVE keeps the tempo, pitch, swing, generator, the FX chain, the break chosen, each key's loop, the mixer, the
-GLOBAL settings, all 16 patterns and MATHCORE's 16 scenes, its queue and the black keys' scenes; SAVE is lit when something changed. A new version keeps what an older
+GLOBAL settings, all 16 patterns and MATHCORE's 16 scenes, its chain, its macros and the black keys' scenes; SAVE is lit when something changed. A new version keeps what an older
 one saved: new settings start at their defaults. (Version 0.32 changed the layout: what 0.31 and older saved starts
 over at the defaults once; Bluetooth pairings stay.) GLOBAL's RESET ALL clears it all on purpose (§7).
 

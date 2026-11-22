@@ -138,6 +138,13 @@ static const mc_scene_t *volatile p_scenes;
 static volatile int32_t p_mc_start = -1; /* the scene a start asks for (-1 none): brk_mc_start */
 static volatile int32_t p_mc_next = -1;
 static volatile uint32_t p_mc_mute, p_mc_solo;
+static volatile uint32_t p_mc_macro = 50u | 0u << 8 | 50u << 16 | 0u << 24;   /* density, math, speed, chaos */
+static volatile int32_t p_mc_jump;      /* a launch: the scene, every p_mc_jq 16ths, its count p_mc_jn */
+static volatile uint32_t p_mc_jq = 16u, p_mc_jn;
+static uint32_t mc_jn_seen;
+const uint8_t MC_MATH_LEN[MC_MATH_STEPS][4] = {{0u, 0u, 0u, 0u}, {0u, 0u, 0u, 12u}, {16u, 0u, 12u, 10u},
+                                               {15u, 0u, 12u, 7u}, {14u, 16u, 11u, 7u}, {10u, 14u, 11u, 13u},
+                                               {7u, 12u, 9u, 5u}, {5u, 7u, 11u, 13u}};
 static voice_t mv[MC_LANES][2];          /* each lane's two voices (a hit fades the last out) */
 static int mvc[MC_LANES];
 static int32_t mc_cur = -1;              /* the scene playing */
@@ -621,7 +628,14 @@ static void mc_step(void)
     const mc_scene_t *sc = p_scenes;
     if (p_mc_go != mc_go_seen) {
         mc_go_seen = p_mc_go;
+        mc_jn_seen = p_mc_jn;            /* (a start overrules a launch asked before it) */
         mc_begin(p_mc_start);
+    } else if (p_mc_jn != mc_jn_seen && !(steps_total % (p_mc_jq ? p_mc_jq : 16u))) {
+        mc_jn_seen = p_mc_jn;            /* a launch on its beat or bar: counted from the bar it lands in */
+        mc_begin(p_mc_jump);
+        mc_base = steps_total - steps_total % 16u;
+        mc_steps = steps_total % 16u;
+        mc_adv++;
     } else if (mc_cur >= 0 && sc) {
         uint32_t bars = sc[mc_cur].bars;
         bars = bars < 1u ? 1u : bars > 16u ? 16u : bars;
@@ -640,29 +654,54 @@ static void mc_step(void)
 }
 
 /* master tick t (MC_TICKS a 16th since the start): every lane of the scene whose event falls on it */
+static uint32_t bars_of(const mc_scene_t *sc)
+{
+    return sc->bars < 1u ? 1u : sc->bars > 16u ? 16u : sc->bars;
+}
 static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
 {
     const mc_scene_t *sc = p_scenes;
-    uint32_t l, solo = p_mc_solo, mute = p_mc_mute;
+    uint32_t l, solo = p_mc_solo, mute = p_mc_mute, mac = p_mc_macro;
+    uint32_t dens = mac & 0xFFu, math = mac >> 8 & 0xFFu, spd = mac >> 16 & 0xFFu, chaos = mac >> 24 & 0xFFu;
+    const uint8_t *mlen = MC_MATH_LEN[(math > 100u ? 100u : math) * (MC_MATH_STEPS - 1u) / 100u];
     if (!sc || mc_cur < 0)
         return;
     sc += mc_cur;
     for (l = 0; l < MC_LANES; l++) {
         const mc_lane_t *L = &sc->lane[l];
         uint8_t list[BRK_MAX_SLICES];
-        uint32_t r, rel, e, pos, len = L->len < 1u ? 1u : L->len > MC_EVENTS ? MC_EVENTS : L->len, n, acc, k;
+        uint32_t r, rel, e, pos, len = L->len < 1u ? 1u : L->len > MC_EVENTS ? MC_EVENTS : L->len, n, acc, k, hit;
+        uint8_t rat, fl;
         int32_t s;
-        float g;
+        float g, pt;
         if (!(L->flags & MCL_ON))
             continue;
         r = MC_RATE_TICKS[L->rate < MC_RATES ? L->rate : MCR_16];
+        if (spd < 34u)                   /* SPEED: half time, double time */
+            r *= 2u;
+        else if (spd > 66u && r > 4u)
+            r /= 2u;
+        if (L->rise) {                   /* a riser: faster each quarter of the phrase */
+            uint32_t q = (mc_steps ? mc_steps - 1u : 0u) * 4u / (bars_of(sc) * BRK_STEPS_PER_BAR);
+            r >>= q > 3u ? 3u : q;
+            if (r < 3u)
+                r = 3u;
+        }
         rel = L->flags & MCL_FREE ? t : t - mc_base * MC_TICKS;
         if (rel % r)
             continue;
         e = rel / r;
+        if (mlen[l])                     /* MATH: another length (the pattern read round its own) */
+            len = mlen[l];
         pos = (e + L->phase) % len;
         mc_pos[l] = (uint8_t)pos;
-        if (!(L->hits >> pos & 1u) || (mute >> l & 1u) || (solo && !(solo >> l & 1u)))
+        hit = L->hits >> (pos % (L->len ? L->len : 1u)) & 1u;
+        acc = L->accent >> (pos % (L->len ? L->len : 1u)) & 1u;
+        if (hit && dens < 50u && pos && !acc && mc_hash(L->seed + 7u, l, pos) % 50u >= dens)
+            hit = 0u;                    /* DENSITY down: the off-beat, unaccented hits go (the same ones each cycle) */
+        else if (!hit && dens > 50u && mc_hash(L->seed + 3u, l, pos) % 100u < (dens - 50u) * (l ? 14u : 6u) / 10u)
+            hit = 1u;                    /* DENSITY up: hits added (fewer on the kick lane) */
+        if (!hit || (mute >> l & 1u) || (solo && !(solo >> l & 1u)))
             continue;                    /* (muted: the cycle counts on) */
         if (L->prob < 100u && mc_hash(L->seed, l, e) % 100u >= L->prob)
             continue;
@@ -672,7 +711,6 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
             continue;
         }
         mc_miss &= (uint8_t)~(1u << l);
-        acc = L->accent >> pos & 1u;
         switch (L->mode) {
         case MCM_ROUND: k = L->pick + mc_n[l]; break;
         case MCM_RANDOM: k = mc_hash(L->seed + 101u, l, e); break;
@@ -680,14 +718,31 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
         case MCM_ACCENT: k = L->pick + acc; break;
         default: k = L->pick; break;
         }
+        rat = L->ratchet;
+        fl = L->flags;
+        if (chaos) {                     /* CHAOS: a random slice, a ratchet, a reverse now and then */
+            uint32_t h = mc_hash(L->seed + 5u, l, e) % 100u, c2 = mc_hash(L->seed + 9u, l, e) % 100u;
+            if (h < chaos * 6u / 10u)
+                k = mc_hash(L->seed + 11u, l, e);
+            if (c2 < chaos * 3u / 10u)
+                rat = (uint8_t)(2u + c2 % 2u);
+            if (h % 7u == 3u && c2 < chaos * 15u / 100u)
+                fl ^= MCL_REV;
+        }
         s = list[k % n];
         mc_n[l]++;
         g = (float)(L->level > 100u ? 100u : L->level) * 0.01f * (L->accent && !acc ? 0.55f : 1.0f);
-        mc_pf[l] = brk_exp2f((p_pitch + (float)L->pitch) * (1.0f / 12.0f));
-        mr_flags[l] = L->flags;
+        pt = (float)L->pitch;
+        if (L->rise) {                   /* the riser climbs and swells over its phrase */
+            float pr = (float)(mc_steps ? mc_steps - 1u : 0u) / (float)(bars_of(sc) * BRK_STEPS_PER_BAR);
+            pt += (float)L->rise * pr;
+            g *= 0.35f + 0.65f * pr;
+        }
+        mc_pf[l] = brk_exp2f((p_pitch + pt) * (1.0f / 12.0f));
+        mr_flags[l] = fl;
         mr_gate[l] = (uint8_t)(L->gate ? L->gate : 100u);
-        lane_hit(b, l, s, g, (L->flags & MCL_REV) != 0u, mr_gate[l]);
-        mr_count[l] = L->ratchet > 1u ? (L->ratchet > 4u ? 3u : L->ratchet - 1u) : 0u;
+        lane_hit(b, l, s, g, (fl & MCL_REV) != 0u, mr_gate[l]);
+        mr_count[l] = rat > 1u ? (rat > 4u ? 3u : rat - 1u) : 0u;
         if (mr_count[l]) {               /* the event's other hits, evenly inside it */
             mr_len[l] = (float)r * (1.0f / (float)MC_TICKS) * sl / (float)(mr_count[l] + 1u);
             mr_left[l] = mr_len[l];
@@ -1228,7 +1283,7 @@ void brk_render(float *out, uint32_t n)
     status.key_rev = (uint8_t)(v[cur].dir < 0.0f);
     status.bar16 = steps_total ? (int8_t)((steps_total - 1u) & 15u) : (int8_t)-1;
     status.mc_scene = (int8_t)mc_cur;
-    status.mc_next = (int8_t)p_mc_next;
+    status.mc_next = (int8_t)(p_mc_jn != mc_jn_seen ? p_mc_jump : p_mc_next);   /* (a launch waiting: that) */
     status.mc_step = (uint16_t)mc_steps;
     status.mc_adv = mc_adv;
     status.mc_ended = mc_ended;
@@ -1273,6 +1328,7 @@ BRK_COLD void brk_init(void)
         p_dl[0] = p_dl[1] = p_dl[2] = 0u;
         mc_cur = -1;
         mc_go_seen = p_mc_go;
+        mc_jn_seen = p_mc_jn;
         p_mc_next = -1;
         p_mc_mute = p_mc_solo = 0u;
         mc_miss = 0u;
@@ -1604,6 +1660,18 @@ BRK_COLD void brk_mc_start(int scene)
     p_mc_go++;
 }
 BRK_COLD void brk_mc_next(int scene) { p_mc_next = scene; }
+BRK_COLD void brk_mc_jump(int scene, uint32_t quant)
+{
+    p_mc_jump = scene;
+    p_mc_jq = quant ? quant : 16u;
+    __asm__ volatile("" ::: "memory");   /* (the scene before the count) */
+    p_mc_jn++;
+}
+BRK_COLD void brk_mc_macro(uint32_t density, uint32_t math, uint32_t speed, uint32_t chaos)
+{
+    p_mc_macro = (density > 100u ? 100u : density) | (math > 100u ? 100u : math) << 8 |
+                 (speed > 100u ? 100u : speed) << 16 | (chaos > 100u ? 100u : chaos) << 24;
+}
 BRK_COLD void brk_mc_mute(uint32_t mute, uint32_t solo)
 {
     p_mc_mute = mute;

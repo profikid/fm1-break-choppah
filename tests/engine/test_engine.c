@@ -2108,6 +2108,127 @@ static void test_mc_queue(void)
     brk_lanes_out(0);
 }
 
+/* playing it: a launch lands on its beat or bar (counted from the bar: a fill on beat 3 ends on the bar line), MATH
+ * turns the lanes' lengths to 5 / 7 / 11 / 13 with nothing programmed, SPEED doubles, DENSITY adds hits (the same each
+ * cycle), CHAOS stays bounded, a riser speeds up over its phrase */
+static void test_mc_play(void)
+{
+    uint8_t r[BRK_MAX_SLICES];
+    uint32_t l, sl, k;
+    brk_status_t st;
+    float pl;
+    mc_test_break("KHSHKHSHKHSHKHSP");
+    mc_auto_roles(&brk, r);
+    brk_roles(r, BRK_MAX_SLICES);
+    for (k = 0; k < 3u; k++) {
+        mc_scene_init(&mc_sc[k], k == 1u ? 1u : 2u);
+        for (l = 0; l < MC_LANES; l++) {
+            mc_sc[k].lane[l].flags = MCL_ON;
+            mc_sc[k].lane[l].hits = 0x1111u;
+        }
+    }
+    brk_mc_scenes(mc_sc);
+    brk_mc_macro(50u, 0u, 50u, 0u);
+    brk_mc_start(0);
+    brk_mc_next(0);
+    brk_play(1);
+    sl = brk_step_len_samples();
+    mc_run(16u * sl + 5u * sl + sl / 2u, 0, 0);   /* bar 2, its 6th 16th */
+    brk_mc_jump(1, 4u);                  /* a fill on the next beat (the 9th 16th) */
+    brk_mc_next(0);
+    mc_run(2u * sl, 0, 0);
+    brk_status(&st);
+    CHECK(st.mc_scene == 0, "launch: not before its beat (%d)", st.mc_scene);
+    mc_run(2u * sl, 0, 0);
+    brk_status(&st);
+    CHECK(st.mc_scene == 1 && st.mc_step == 10u, "launch: on the beat, counted from the bar (scene %d, 16th %u)",
+          st.mc_scene, st.mc_step);
+    mc_run(7u * sl, 0, 0);               /* its bar line: the groove again */
+    brk_status(&st);
+    CHECK(st.mc_scene == 0 && st.mc_step == 1u, "launch: the fill ends on the bar line, the groove back (%d, %u)",
+          st.mc_scene, st.mc_step);
+    brk_mc_jump(2, 16u);                 /* a groove on the next bar */
+    brk_mc_next(2);
+    mc_run(10u * sl, 0, 0);
+    brk_status(&st);
+    CHECK(st.mc_scene == 0, "launch: a groove waits for the bar (%d)", st.mc_scene);
+    mc_run(6u * sl, 0, 0);
+    brk_status(&st);
+    CHECK(st.mc_scene == 2 && st.mc_step == 1u, "launch: the groove on the bar (%d, %u)", st.mc_scene, st.mc_step);
+    /* MATH at full: the lanes' cycles are 5, 7, 11 and 13 */
+    brk_mc_macro(50u, 100u, 50u, 0u);
+    mc_zero_counts();
+    mc_run_counting(31u * 16u * sl, 0);  /* (31 bars of scene C, round: its phrase restarts each 2 bars) */
+    brk_status(&st);
+    {
+        int ok = 1;
+        for (l = 0; l < MC_LANES; l++)
+            if (st.mc_pos[l] >= MC_MATH_LEN[MC_MATH_STEPS - 1u][l])
+                ok = 0;
+        CHECK(ok && MC_MATH_LEN[MC_MATH_STEPS - 1u][0] == 5u && MC_MATH_LEN[MC_MATH_STEPS - 1u][3] == 13u,
+              "MATH: the lanes cycle in 5, 7, 11 and 13 (%u %u %u %u)", st.mc_pos[0], st.mc_pos[1], st.mc_pos[2],
+              st.mc_pos[3]);
+    }
+    /* SPEED double: twice the hits; DENSITY up: more, the same twice */
+    {
+        uint32_t base[MC_LANES], dbl[MC_LANES], dense[2];
+        brk_mc_macro(50u, 0u, 50u, 0u);
+        mc_zero_counts();
+        mc_run_counting(32u * sl, 0);
+        memcpy(base, mc_hits_total, sizeof base);
+        brk_mc_macro(50u, 0u, 100u, 0u);
+        mc_zero_counts();
+        mc_run_counting(32u * sl, 0);
+        memcpy(dbl, mc_hits_total, sizeof dbl);
+        CHECK(dbl[1] >= 2u * base[1] - 1u && dbl[1] <= 2u * base[1] + 1u, "SPEED double: twice the hits (%u, %u)",
+              dbl[1], base[1]);
+        brk_mc_macro(100u, 0u, 50u, 0u);
+        mc_zero_counts();
+        mc_run_counting(32u * sl, 0);
+        dense[0] = mc_hits_total[2];
+        mc_zero_counts();
+        mc_run_counting(32u * sl, 0);
+        dense[1] = mc_hits_total[2];
+        CHECK(dense[0] > base[2] && dense[0] == dense[1], "DENSITY up: more hits (%u, %u), the same each time (%u)",
+              dense[0], base[2], dense[1]);
+        brk_mc_macro(0u, 0u, 50u, 0u);
+        mc_zero_counts();
+        mc_run_counting(32u * sl, 0);
+        CHECK(mc_hits_total[2] < base[2] && mc_hits_total[2] > 0u, "DENSITY down: fewer hits, the downbeats stay (%u)",
+              mc_hits_total[2]);
+        brk_mc_macro(100u, 100u, 100u, 100u);   /* everything up at once: bounded */
+        mc_run(64u * sl, 0, &pl);
+        CHECK(pl > 0.05f && pl < 4.0f, "macros all up: bounded (%.3f)", pl);
+        brk_mc_macro(50u, 0u, 50u, 0u);
+    }
+    brk_play(0);
+    mc_run(BLOCK * 8u, 0, 0);
+    /* a riser: one hit an 1/8, then faster each quarter of a 4-bar phrase */
+    {
+        uint32_t q[4];
+        mc_scene_init(&mc_sc[3], 4u);
+        mc_sc[3].lane[1].flags = MCL_ON;
+        mc_sc[3].lane[1].hits = 1u;
+        mc_sc[3].lane[1].len = 1u;
+        mc_sc[3].lane[1].rate = MCR_8;
+        mc_sc[3].lane[1].rise = 12;
+        brk_mc_start(3);
+        brk_mc_next(3);
+        brk_play(1);
+        for (k = 0; k < 4u; k++) {
+            mc_zero_counts();
+            mc_run_counting(16u * sl, 0);
+            q[k] = mc_hits_total[1];
+        }
+        CHECK(q[0] == 8u && q[1] == 16u && q[2] == 32u && q[3] >= 60u, "riser: 8, 16, 32, 64 hits a bar (%u %u %u %u)",
+              q[0], q[1], q[2], q[3]);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
+    brk_mc_scenes(0);
+    brk_lanes_out(0);
+}
+
 /* the overlay effects (ARP): nothing on passes the sound through as it is; each one changes it and stays bounded;
  * CUT silences, DIVE darkens over its sweep, RISE thins; let go, it fades back to the dry sound */
 /* the ARP page's black-key effects (PRD B-55): pad voices after the chain, on the whole mix */
@@ -2226,6 +2347,7 @@ int main(int argc, char **argv)
     test_mc_roles();
     test_mc_lanes();
     test_mc_queue();
+    test_mc_play();
     test_generator();
     test_pads();
     test_fx();

@@ -282,7 +282,7 @@ static void input(void)
         return;
     }
     arp_keys(kdn, kup, btn, now);        /* the ARP page's black keys (and the latched ones, any page) */
-    if (mc_black(kdn, btn))              /* MATHCORE's LIVE and SCENE: the black keys queue and assign scenes */
+    if (mc_black(kdn, kup, btn, now))    /* MATHCORE's LIVE and SCENE: the black keys play and assign scenes */
         for (i = 0; i < 11u; i++)
             kdn &= ~(1u << BK[i]);
     for (i = 0; i < 16u; i++) {          /* white keys: slices, or a page's own */
@@ -411,10 +411,11 @@ static void input(void)
     }
     if (bdn & 1u << B_REC && btn & 1u << B_SEL && ui.page == PG_MC && mc.part == MCP_LIVE) {
         ui.tap_combo = 1u;
-        mq_clear();                      /* SEL + REC on LIVE: the queue cleared (the scene playing plays out) */
+        mq_clear();                      /* SEL + REC on LIVE: the chain cleared (the groove plays on) */
     } else if (bdn & 1u << B_REC && btn & 1u << B_SEL) {   /* SEL + REC: clear (on SEQ its lane; else the pattern) */
         seq_clear(ui.page == PG_SEQ);
-    } else if (bdn & 1u << B_REC) {      /* REC: record the keys and MIDI notes into the pattern while playing */
+    } else if (bdn & 1u << B_REC && !(ui.page == PG_MC && mc.part == MCP_LIVE)) {   /* REC: record the keys and MIDI
+                                          * notes into the pattern while playing (LIVE: REC + a black key unchains) */
         ui.rec ^= 1u;
         app_say("REC", ui.rec ? "ON" : "OFF");
         ui.redraw |= RG_HEAD;
@@ -629,6 +630,13 @@ static void leds(void)
     for (i = 0; i < 11u; i++)            /* (ARP: the keys' effects on; MATHCORE's LIVE and SCENE: their scenes) */
         if ((ui.page == PG_ARP ? pfx_on() : !pads_page() ? mc_black_lit(&st) : st.pads) >> i & 1u)
             k |= 1u << BK[i];
+    {                                    /* MATHCORE's LIVE and SCENE: the keys with a scene glow */
+        static uint32_t mid_was;
+        uint32_t mid = ui.page == PG_MC && !pads_page() ? mc_black_mid() : 0u;
+        if (mid != mid_was)
+            plat_lights_mid(0u, mid);
+        mid_was = mid;
+    }
     plat_glow(1);
     plat_leds(b, k);
 }
@@ -1132,6 +1140,10 @@ void app_frame(void)
         ui.redraw |= RG_BLOCKS;
     if (ui.page == PG_MIX && now - ui.mix_drawn >= 33u)   /* the MIXER's meters: about 30 times a second */
         ui.redraw |= RG_BLOCKS;
+    if (ui.page == PG_MC && st.playing && now - ui.panel_drawn >= 40u) {   /* MATHCORE: the wheel turns (25 a second) */
+        ui.redraw |= RG_BLOCKS;
+        ui.panel_drawn = now;
+    }
     brk_fx_watch(ui.page == PG_FX || ui.page == PG_ARP ? eng_slot(fxk()) : BRK_FX_ALL);   /* (the engine meters it alone) */
     {                                    /* ARP: a key on or let go, a voice quiet: its view and the foot */
         static uint32_t pfx_seen;
@@ -1409,8 +1421,8 @@ int app_expect(const char *what, int *got)
                                     "split", "split_at", "half", "half_ask", "layer", "split_b",
                                     "mc_on", "mq_n", "mc_scene", "mc_qpos", "mc_edit", "mc_kicks", "mc_snares",
                                     "mc_hats", "mc_percs", "mc_missing", "mc_adv", "mc_hits", "mq_key0", "mc_state0",
-                                    "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next"};
-    int v[64];
+                                    "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next", "mc_math", "mc_base"};
+    int v[66];
     uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
@@ -1479,7 +1491,9 @@ int app_expect(const char *what, int *got)
     v[61] = mq.n ? mq.q[mq.n - 1u] : -1;
     v[62] = set.lane_level;
     v[63] = st.mc_next;
-    for (i = 0; i < 64u; i++)
+    v[64] = set.mc_macro[1];
+    v[65] = mc.base;
+    for (i = 0; i < 66u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

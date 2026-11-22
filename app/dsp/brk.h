@@ -179,14 +179,19 @@ typedef struct {
     uint8_t level;                       /* 0..100 % (unaccented hits of a lane with accents: 55 % of it) */
     uint8_t role;                        /* ROLE_* */
     uint8_t seed;
-    uint8_t rsv[3];
+    int8_t rise;                         /* a riser: over the scene's phrase the lane speeds up (its rate halved each
+                                          * quarter of the phrase, to 1/64), swells and climbs this many semitones
+                                          * (0: none) */
+    uint8_t rsv[2];
 } mc_lane_t;                             /* 24 bytes */
 #define MCS_BREAK 1u                     /* the break's own loop plays under the scene (else only keys and lanes) */
+#define MCS_ONCE 2u                      /* a fill, a riser, a drop: plays once, then back to the groove */
 typedef struct {
     mc_lane_t lane[MC_LANES];
     uint8_t bars;                        /* its phrase: 1, 2, 4 or 8 bars, then the next scene */
     uint8_t flags;                       /* MCS_* */
-    uint8_t rsv[2];
+    uint8_t name;                        /* its name (MC_NAME), 0 none */
+    uint8_t rsv;
 } mc_scene_t;                            /* 100 bytes */
 
 void brk_roles(const uint8_t *roles, uint32_t n);   /* slice i's role bits, for the break playing (main loop) */
@@ -201,6 +206,16 @@ void brk_mc_scenes(const mc_scene_t *s); /* the scene table (MC_SCENES), read by
 void brk_mc_start(int scene);            /* the scene to play from the next step (with brk_play: the first); -1 none */
 void brk_mc_next(int scene);             /* the scene after the one playing (-1: the lanes stop at its end) */
 void brk_mc_mute(uint32_t mute, uint32_t solo);   /* lanes muted (bit l) and soloed: their phase runs on */
+/* a launch while playing: scene from the next step on a multiple of quant 16ths (4 a beat, 16 a bar), counted as
+ * if it had begun with the bar it lands in (a fill launched on beat 3 plays its last half and ends on the bar line;
+ * a groove taken back on a beat rejoins in phase) */
+void brk_mc_jump(int scene, uint32_t quant);
+/* the performance macros, over every lane of every scene (0..100, 50 as written): DENSITY (fewer hits .. more, the
+ * extra ones the same each cycle), MATH (0 the lanes' own lengths .. 100 cycles of 5, 7, 11, 13), SPEED (< 34 half,
+ * > 66 double), CHAOS (random slices, ratchets, reverses) */
+void brk_mc_macro(uint32_t density, uint32_t math, uint32_t speed, uint32_t chaos);
+#define MC_MATH_STEPS 8u
+extern const uint8_t MC_MATH_LEN[MC_MATH_STEPS][4];   /* MATH's lane lengths at each of its steps (0: the lane's own) */
 uint32_t mc_role_slices(const uint8_t *roles, uint32_t n, uint32_t role, uint8_t *list);   /* the slices of a role,
                                           * in order, into list (MC_EVENTS); their count */
 

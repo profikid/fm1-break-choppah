@@ -84,6 +84,7 @@ typedef struct {
     /* (appended 22 Nov 2026: MATHCORE, docs/PRD_MATHCORE.md) */
     uint8_t lane_level;                  /* the MIXER's LANES fader: the lanes' slices, 0..100 % */
     uint8_t mc_rsv[3];
+    uint8_t mc_macro[4];                 /* MATHCORE LIVE's K1-K4: DENSITY, MATH, SPEED, CHAOS (0..100) */
 } settings_t;
 #define SET_SIZE_MIN offsetof(settings_t, rsv2)   /* the shortest save that loads: CHP7's first size */
 _Static_assert(offsetof(settings_t, rsv2) == 524u && offsetof(settings_t, mbc) == 552u,
@@ -114,6 +115,10 @@ static void settings_defaults(void)
     set.brk_level = 100u;
     set.drums_chain = 1u;
     set.lane_level = 100u;
+    set.mc_macro[0] = 50u;               /* DENSITY as written, MATH off, SPEED as written, no CHAOS */
+    set.mc_macro[1] = 0u;
+    set.mc_macro[2] = 50u;
+    set.mc_macro[3] = 0u;
     brk_padset_defaults(&set.pads);
     for (k = 0; k < BRK_KEYS; k++) {
         brk_keyset_defaults(&set.keys[k]);
@@ -174,6 +179,7 @@ static void settings_apply(void)
     brk_pitch_mode(pitch_keeps(), (float)(set.grain_ms ? set.grain_ms : 30u));
     brk_gate((float)(set.gate ? set.gate : 100u) * 0.01f);
     brk_snap(SNAP_SL[snap_index()]);
+    brk_mc_macro(set.mc_macro[0], set.mc_macro[1], set.mc_macro[2], set.mc_macro[3]);
     {
         uint32_t k;
         for (k = 0; k < BRK_KEYS; k++) {
@@ -267,7 +273,7 @@ static void pat_read_back(void)          /* the engine's steps into the pattern 
 /* ----------------------------------------------------------------- MATHCORE --- */
 /* the scenes (A..P: four sample lanes each, docs/PRD_MATHCORE.md 6.1) in their own store object; the queue and the
  * black keys' shortcuts in another (the queue names scenes: one scene, queued as often as wanted) */
-#define MCS_MAGIC 0x3153434Du            /* "MCS1" */
+#define MCS_MAGIC 0x3253434Du            /* "MCS2" (the scenes as they come: A..P filled, 22 Nov 2026) */
 #define MQ_MAGIC 0x3151434Du             /* "MCQ1" */
 #define MC_QUEUE 64u
 #define MC_NOKEY 0xFFu                   /* a black key with no scene */
@@ -303,48 +309,98 @@ static void mc_lane_defaults(mc_lane_t *l, uint32_t role)
     l->role = (uint8_t)role;
     l->seed = (uint8_t)(role * 37u + 11u);
 }
-/* scene i's start: a groove to build on. A: a straight beat; B: its variation; C: the mathcore one (5, 7, 11 and
- * 13 against the bar); the rest: kick and snare on the beat, the other lanes ready but off */
+/* the scenes as they come (A..P): grooves, fills, a riser, a breakdown, a drop, of different lengths, ready to play
+ * from the black keys. A lane is a string: x a hit, X an accented one, . none (its length the string's) */
+static const char *const MC_NAME[] = {"", "ROLLER", "AMEN", "STEPPER", "MATH 5/7", "FILL", "CHOP FILL", "RISER",
+                                      "BREAKDOWN", "DOUBLE", "7/8 BOUNCE", "DROP", "ROLLER+BRK", "AMEN+BRK",
+                                      "MATH+BRK", "DOUBLE+BRK", "BOUNCE+BRK"};
+#define MC_NNAMES (sizeof MC_NAME / sizeof MC_NAME[0])
+typedef struct {
+    uint8_t name, bars, flags;
+    struct {
+        const char *p;                   /* 0: the lane off */
+        uint8_t rate, mode, prob, ratchet, level;
+        int8_t rise;
+        uint8_t rev;
+    } l[MC_LANES];
+} mc_preset_t;
+#define L_(p, r, m, pr, ra, lv, ri, rv) {p, r, m, pr, ra, lv, ri, rv}
+#define OFF_ {0, MCR_16, 0, 100, 1, 100, 0, 0}
+static const mc_preset_t MC_PRESET[11] = {
+    {1, 2, 0, {L_("X.........X.....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+               L_("....X.......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+               L_("x.X.x.X.x.X.x.X.", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0),
+               L_("..............x.", MCR_16, MCM_ROUND, 60, 1, 70, 0, 0)}},
+    {2, 2, 0, {L_("X.X.......XX....", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+               L_("....X..x.x..X..x", MCR_16, MCM_ACCENT, 100, 1, 100, 0, 0),
+               L_("xxxxxxxxxxxxxxxx", MCR_16, MCM_RANDOM, 70, 1, 70, 0, 0), OFF_}},
+    {3, 2, 0, {L_("X.........X.....X.....X.........", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+               L_("........X...............X.......", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+               L_("x.x.x.x.x.x.x.x.", MCR_16, MCM_ROUND, 100, 1, 75, 0, 0),
+               L_("...x.......x..x.", MCR_16, MCM_RANDOM, 50, 1, 70, 0, 0)}},
+    {4, 4, 0, {L_("X..x.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+               L_("....X..", MCR_16, MCM_ALT, 100, 1, 100, 0, 0),
+               L_("x.xx.x.xx.x", MCR_32, MCM_RANDOM, 100, 1, 65, 0, 0),
+               L_("x..x..x..x.x.", MCR_16, MCM_ROUND, 100, 1, 80, 0, 0)}},
+    {5, 1, MCS_ONCE, {L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                      L_("x.x.x.x.x.x.x.x.xxxxxxxxXXXXXXXX", MCR_32, MCM_ACCENT, 100, 1, 100, 3, 0),
+                      OFF_,
+                      L_("........x.x.xxxx", MCR_16, MCM_ROUND, 100, 2, 80, 0, 0)}},
+    {6, 1, MCS_ONCE, {L_("X..X..X..X..X.X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                      L_("..X..X..X..X.XXX", MCR_16, MCM_RANDOM, 85, 2, 100, 0, 0),
+                      L_("xxxxxxxxxxxxxxxxxxxxxxxx", MCR_32T, MCM_RANDOM, 60, 1, 70, 0, 0), OFF_}},
+    {7, 4, MCS_ONCE, {L_("X...X...X.X.XXXX", MCR_4, MCM_FIXED, 100, 1, 100, 0, 0),
+                      L_("X", MCR_8, MCM_ROUND, 100, 1, 100, 12, 0),
+                      L_("x", MCR_8, MCM_ROUND, 100, 1, 60, 7, 0), OFF_}},
+    {8, 4, MCS_BREAK, {L_("X...............X...............", MCR_8, MCM_FIXED, 100, 1, 100, 0, 0), OFF_,
+                       L_("x..", MCR_8T, MCM_ROUND, 100, 1, 55, 0, 0),
+                       L_("x....", MCR_8, MCM_RANDOM, 100, 1, 60, 0, 0)}},
+    {9, 2, 0, {L_("X..X..X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+               L_("....X.......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+               L_("xXxxXxxXxxXxxXxx", MCR_32, MCM_ROUND, 100, 1, 70, 0, 0),
+               L_("x.....", MCR_16T, MCM_ROUND, 100, 1, 75, 0, 0)}},
+    {10, 2, 0, {L_("X..X.X.", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                L_("...X......X...", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                L_("x.xx.xx.xx.x", MCR_16T, MCM_RANDOM, 100, 1, 70, 0, 0),
+                L_("x...x.x..", MCR_16, MCM_ROUND, 70, 1, 75, 0, 0)}},
+    {11, 1, MCS_ONCE, {L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0),
+                       L_("X...............", MCR_16, MCM_FIXED, 100, 1, 100, 0, 0), OFF_,
+                       L_("........X.......", MCR_16, MCM_FIXED, 100, 1, 100, 0, 1)}},
+};
+static void mc_lane_from(mc_lane_t *L, const char *p)   /* a lane's hits and accents from its string */
+{
+    uint32_t e;
+    L->hits = L->accent = 0u;
+    for (e = 0; p[e] && e < MC_EVENTS; e++) {
+        if (p[e] != '.')
+            L->hits |= 1u << e;
+        if (p[e] == 'X')
+            L->accent |= 1u << e;
+    }
+    L->len = (uint8_t)(e ? e : 1u);
+}
 static void mc_scene_defaults(mc_scene_t *s, uint32_t i)
 {
+    const mc_preset_t *p = &MC_PRESET[i < 11u ? i : i == 11u ? 0u : i == 12u ? 1u : i == 13u ? 3u : i == 14u ? 8u : 9u];
     uint32_t l;
-    for (l = 0; l < MC_LANES; l++)
-        mc_lane_defaults(&s->lane[l], l);
-    s->bars = 2u;
-    s->flags = 0u;
-    s->rsv[0] = s->rsv[1] = 0u;
-    s->lane[ROLE_KICK].hits = 0x0101u;           /* 1 and 9 */
-    s->lane[ROLE_SNARE].hits = 0x1010u;          /* 5 and 13 */
-    s->lane[ROLE_HAT].hits = 0x5555u;            /* the 8ths */
-    s->lane[ROLE_PERC].hits = 0x8080u;
-    s->lane[ROLE_KICK].flags = s->lane[ROLE_SNARE].flags = MCL_ON;
-    if (i <= 2u)
-        s->lane[ROLE_HAT].flags = MCL_ON;
-    if (i == 1u) {                               /* B: kicks pushed, a ghost lane, the hats round-robin */
-        s->lane[ROLE_KICK].hits = 0x0425u;
-        s->lane[ROLE_SNARE].hits = 0x9010u;
-        s->lane[ROLE_SNARE].accent = 0x1010u;
-        s->lane[ROLE_HAT].mode = MCM_ROUND;
-        s->lane[ROLE_HAT].hits = 0xFFFFu;
-        s->lane[ROLE_HAT].accent = 0x4444u;
-        s->lane[ROLE_PERC].flags = MCL_ON;
-        s->lane[ROLE_PERC].prob = 60u;
-        s->lane[ROLE_PERC].hits = 0x2222u;
-    } else if (i == 2u) {                        /* C: 5 / 7 / 11 / 13 against the bar */
-        s->lane[ROLE_KICK].len = 5u;
-        s->lane[ROLE_KICK].hits = 0x09u;
-        s->lane[ROLE_SNARE].len = 7u;
-        s->lane[ROLE_SNARE].hits = 0x10u;
-        s->lane[ROLE_SNARE].ratchet = 1u;
-        s->lane[ROLE_HAT].len = 11u;
-        s->lane[ROLE_HAT].rate = MCR_32;
-        s->lane[ROLE_HAT].hits = 0x2DBu;
-        s->lane[ROLE_HAT].mode = MCM_RANDOM;
-        s->lane[ROLE_PERC].len = 13u;
-        s->lane[ROLE_PERC].hits = 0x0425u;
-        s->lane[ROLE_PERC].flags = MCL_ON;
-        s->lane[ROLE_PERC].mode = MCM_ROUND;
-        s->bars = 4u;
+    s->bars = p->bars;
+    s->flags = (uint8_t)(p->flags | (i >= 11u ? MCS_BREAK : 0u));   /* L..P: grooves with the break under them */
+    s->name = (uint8_t)(i < 11u ? p->name : 12u + (i - 11u));
+    s->rsv = 0u;
+    for (l = 0; l < MC_LANES; l++) {
+        mc_lane_t *L = &s->lane[l];
+        mc_lane_defaults(L, l);
+        if (!p->l[l].p)
+            continue;
+        mc_lane_from(L, p->l[l].p);
+        L->flags = (uint8_t)(MCL_ON | (p->l[l].rev ? MCL_REV : 0u));
+        L->rate = p->l[l].rate;
+        L->mode = p->l[l].mode;
+        L->prob = p->l[l].prob;
+        L->ratchet = p->l[l].ratchet;
+        L->level = p->l[l].level;
+        L->rise = p->l[l].rise;
+        L->seed = (uint8_t)(L->seed + i * 13u);
     }
 }
 static void mc_defaults(void)

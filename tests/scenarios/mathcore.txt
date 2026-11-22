@@ -1,7 +1,7 @@
-# CHOPPAH: MATHCORE (docs/PRD_MATHCORE.md). EDIT opens it: LIVE (the queue), MAP (the Slice Map, heard), LANE (a lane of
-# a scene), SCENE. On LIVE the black keys queue their scenes (SEL + one: its last entry out), PLAY starts the queue
-# (an empty one doesn't start), it plays in order and round again, the white keys play slices all the while, K1-K4
-# mute and solo the lanes, SEL + REC clears the queue (the scene playing plays out, then the transport stops)
+# CHOPPAH: MATHCORE played (docs/PRD_MATHCORE.md §15). EDIT opens it at LIVE. A black key plays its scene: stopped, at
+# once; playing, a groove on the next bar, a fill, riser or drop on the next beat (then back to the groove); held, any
+# scene while held. K1-K4 are DENSITY, MATH, SPEED, CHAOS (SEL + them: the lanes' mute / solo). SEL + a black key
+# chains its scene, REC + one unchains it, SEL + REC clears the chain. Then MAP, LANE, SCENE, SAVE and a reboot
 #   app/build/host/choppah_host tests/scenarios/mathcore.txt app/build/scenarios
 wait 2600
 expect mc_kicks >0
@@ -11,83 +11,99 @@ tap EDIT
 wait 150
 expect page 4
 expect mc_part 0
-shot m_live_empty.png
-# an empty queue: PLAY doesn't start
-tap PLAY
-wait 200
-expect mc_on 0
-expect mq_n 0
-# the black keys: A, B, C, A; SEL + the first: the last A out again
+shot m_live_stopped.png
+# a black key while stopped: its scene plays at once
 tapkey b0
-wait 60
-tapkey b1
-wait 60
-tapkey b2
-wait 60
-tapkey b0
-wait 100
-expect mq_n 4
-expect mq_first 0
-expect mq_last 0
-press SEL
-tapkey b0
-release SEL
-wait 100
-expect mq_n 3
-expect mq_last 2
-shot m_live_queue.png
-# PLAY: A (2 bars at 170: 2.82 s), B (2 bars), C (4 bars), A again
-tap PLAY
 wait 300
 expect mc_on 1
 expect mc_scene 0
-expect mc_next 1
 peakreset
 wait 1200
 expect peak_db_min -40
 shot m_live_a.png
+# B (AMEN), a groove: on the next bar, the groove from then on
+tapkey b1
+wait 100
+expect mc_scene 0
+expect mc_next 1
 wait 1500
 expect mc_scene 1
-expect mc_next 2
-shot m_live_b.png
-# the white keys meanwhile: a slice held loops, the queue goes on
-key w5 down
-wait 700
-expect key 5
-key w5 up
-wait 2300
-expect mc_scene 2
-expect mc_next 0
-shot m_live_c.png
-wait 5700
-expect mc_scene 0
-expect mc_adv 3
-# K1 left: the kick lane muted (its cycle runs on), right again: playing; K2 right: the snare soloed
+expect mc_base 1
+# E (FILL), once: on the next beat, then B again
+tapkey b4
+wait 450
+expect mc_scene 4
+shot m_live_fill.png
+wait 1500
+expect mc_scene 1
+# G (RISER) held: plays while held, B back on the next beat after
+key b6 down
+wait 1500
+expect mc_scene 6
+shot m_live_riser.png
+key b6 up
+wait 600
+expect mc_scene 1
+expect mc_base 1
+# the macros: MATH all the way (5 / 7 / 11 / 13), SPEED double, CHAOS a bit
+turn K2 25 10
+wait 100
+expect mc_math 100
+turn K3 1 10
+turn K4 8 10
+wait 1200
+shot m_live_math.png
+turn K3 -1 10
+turn K4 -8 10
+turn K2 -25 10
+# SEL + K1: the kick lane muted, then back
+press SEL
 turn K1 -1 10
+release SEL
 wait 100
 expect mc_state0 -1
-shot m_live_mute.png
+press SEL
 turn K1 1 10
-turn K2 1 10
-wait 100
+release SEL
 expect mc_state0 0
-turn K2 -1 10
-# PRESETS: the entry at the cursor (the last, C) a place earlier
-turn PRESET -1 10
+# the chain: SEL + C, D; REC + C takes it out; SEL + REC clears; the groove plays on
+press SEL
+tapkey b2
+tapkey b3
+release SEL
 wait 100
-expect mq_last 1
-expect mc_cursor 1
-# SEL + REC: the queue cleared; the scene playing plays out, then the transport stops
+expect mq_n 2
+expect mq_first 2
+press REC
+tapkey b2
+release REC
+wait 100
+expect mq_n 1
+expect mq_first 3
 press SEL
 tap REC
 release SEL
 wait 100
 expect mq_n 0
 expect mc_on 1
-wait 3200
+# white keys meanwhile: a slice held loops, the scenes go on
+key w5 down
+wait 500
+expect key 5
+key w5 up
+wait 200
+expect mc_on 1
+tap PLAY
+wait 300
 expect mc_on 0
-expect mc_scene -1
-# MAP: the Slice Map, heard (nothing to set): the slices with their roles
+# PLAY on LIVE: the groove again
+tap PLAY
+wait 300
+expect mc_on 1
+expect mc_scene >-1
+tap PLAY
+wait 300
+# MAP: the Slice Map, heard (nothing to set)
 tap EDIT
 wait 150
 expect mc_part 1
@@ -103,36 +119,26 @@ tapkey w4
 wait 60
 turn K1 -3 10
 wait 100
-turn PRESET 1 10
-wait 100
-shot m_lane_sound.png
-turn PRESET 1 10
+turn PRESET 2 10
 wait 100
 tapkey w0
 wait 100
 shot m_lane_feel.png
-turn ALGO 1 10
-wait 100
-# PLAY here: scene A round and round
 tap PLAY
 wait 300
 expect mc_on 2
 expect mc_scene 0
 wait 3000
 expect mc_scene 0
-shot m_lane_play.png
 tap PLAY
 wait 300
-expect mc_on 0
-# SCENE: scene B's phrase, the break under it, black key 5 queues it
+# SCENE: scene B, black key 5 plays it
 tap EDIT
 wait 150
 expect mc_part 3
 turn ALGO 1 10
 wait 100
 expect mc_edit 1
-turn K1 1 10
-turn K2 1 10
 tapkey b4
 wait 150
 shot m_scene.png
@@ -141,11 +147,13 @@ midi USB 90 24 64
 wait 50
 midi USB 80 24 00
 wait 200
-# SAVE, a reboot: the scenes and the queue as they were
+# SAVE, a reboot: the chain and the black keys as they were
 tap EDIT
 wait 100
+press SEL
 tapkey b0
 tapkey b4
+release SEL
 wait 100
 expect mq_n 2
 tap SAVE
@@ -154,9 +162,6 @@ reboot
 wait 2600
 expect mq_n 2
 expect mq_last 1
-tap EDIT
-wait 150
-expect page 4
 # the black keys away from LIVE and SCENE are the pads again (HOME: ROLL 1/8 held)
 tap HOME
 wait 150
