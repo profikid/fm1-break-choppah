@@ -91,7 +91,7 @@ wait 300
 sysex_out
 sysex $AT
 wait 50
-expect_sysex F0 7D 43 48 53 02 F7
+expect_sysex F0 7D 43 48 53 02 00 00 0F 00 00 F7
 sysex F0 7D 43 48 16 F7
 wait 300
 expect n_user 3

@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import prep_breaks as pb  # noqa: E402
 
-CHUNK = 512
+CHUNK = 448  # as the page (breaks.html CHUNK): 521 bytes a frame on the wire
 
 
 def pack7(b):

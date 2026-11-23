@@ -1263,9 +1263,10 @@ void app_frame(void)
  * sector's 0xF06), 3 flash, 4 the bank as written doesn't check. Commands: 1 INFO -> {version 2, playing, the pack's
  * breaks, bank 1's sectors, bank 1's capacity u32, its size u32 (0: empty), banks | bank 1's breaks << 8 | bank 2's
  * << 16 u32, bank 2's capacity u32, its size u32, 0 u32} (1.4-1.5 answered the first 12 bytes, version 1); 2 BEGIN
- * {size u32}: the bank's sectors erased, its breaks gone; 3 DATA {offset u32 (16 on: the header comes last), bytes};
- * 4 COMMIT {the 16-byte header}: written last, the bank checked, the pack's first break loaded; 5 READ {offset u32,
- * count u32 (256 at most)} -> {offset u32, bytes}; 6 DELETE: the bank's breaks gone. Writes only while stopped (they
+ * {size u32}: the bank's sectors erased, its breaks gone; 3 DATA {offset u32 (16 on: the header comes last), bytes}
+ * -> {offset u32} (1.6 on: a frame sent again tells its answer from a late one); 4 COMMIT {the 16-byte header}:
+ * written last, the bank checked, the pack's first break loaded; 5 READ {offset u32, count u32 (256 at most)} ->
+ * {offset u32, bytes}; 6 DELETE: the bank's breaks gone. Writes only while stopped (they
  * stall the sound). The split's B goes back to "the break after A" when the pack changes. The scratch is the demo's
  * stars (the demo ends) */
 static uint32_t cu_size, cu_bank;        /* the bytes BEGIN made room for, in which bank */
@@ -1390,7 +1391,9 @@ int app_sysex(const uint8_t *p, uint32_t n)
         break_ask(0u);
         if (cmd == 2u)
             app_say("RECEIVING", "A BREAK");
-    } else if (cmd == 3u) {              /* DATA: after the header, into what BEGIN erased */
+    } else if (cmd == 3u) {              /* DATA: after the header, into what BEGIN erased; answered with its offset (the
+                                          * page sends a frame again when its answer is lost, and must tell a late answer
+                                          * to an earlier try from this one's) */
         off = rd32(u);
         len -= 4u;
         if (bank != cu_bank || len > 600u || off < 16u || off > cu_size || len > cu_size - off ||
@@ -1398,6 +1401,12 @@ int app_sysex(const uint8_t *p, uint32_t n)
             code = 2u;
         else if (plat_data_write(PK_BASE[bank] + off, u + 4, len))
             code = 3u;
+        for (i = 0; i < 4u; i++)         /* (u is cu_reply's buffer too: the offset copied out first) */
+            a[i] = u[i];
+        if (code > 1u)
+            app_warn("BREAK NOT LOADED", "FLASH OR SIZE");
+        cu_reply(p[3], code, a, 4u);
+        return 1;
     } else if (cmd == 4u) {              /* COMMIT: the header last, then the whole checked */
         if (bank != cu_bank || len < 16u || plat_data_write(PK_BASE[bank], u, 16u))
             code = 3u;

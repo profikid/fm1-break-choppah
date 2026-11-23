@@ -68,7 +68,11 @@ settings bytes reserved).
   region can't hold it (it only takes the build's own payload). Tests: `tests/pack.sh` (both banks: order, play,
   reboot, read back, "AT" refused, delete), `tests/custom_break.sh` (a break of one, the 1.5 page's way),
   `tests/page_parity.sh` (the page's conversion and a bank of three = prep_breaks.py, byte for byte; the AT nudge =
-  cu_frames.py's), `tests/page_warp.sh` (the page's groove warp: hits onto the grid sample for sample). The page's library is Cyberworm's Amens from breaks/
+  cu_frames.py's), `tests/page_warp.sh` (the page's groove warp: hits onto the grid sample for sample), `tests/page_send.sh` (Send
+  in Chrome over a bad link: frames and answers lost, late, a restart; the pack must still arrive byte for byte). The
+  send never trusts the link: every command is sent again when its answer is lost (`must`, 8 tries; all are safe twice),
+  DATA is 448 bytes a frame (521 on the wire, inside the 594 felucca-bsp always takes) and answers with its offset
+  (1.6), and a bank that doesn't check at COMMIT, or an FM-1 that restarted, is sent again from BEGIN (`sendBank`). The page's library is Cyberworm's Amens from breaks/
   (tools/site_style.py converts them at site build); a page-only change goes live by running pages.yml (version: the
   latest release, package-from: release), no firmware release needed.
 - **Releases are tags, not merges** (since 6 Nov 2026): `scripts/release.sh` tags vX.Y and pushes it; the shared
