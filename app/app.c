@@ -517,7 +517,7 @@ static int16_t dub_line[CH_DUB_LEN] PLAT_POOL;
 static uint32_t pfx_mem[BRK_PAD_V * BRK_PAD_ST_BYTES / 4u] PLAT_POOL;   /* the ARP keys' voices (8.6 KB) */
 static brk_break_t brk_cur[2];           /* the bank's break playing (pcm_a holds it), and the next one's: the render
                                           * keeps its own while the next is written */
-static uint32_t n_breaks;                /* the custom break, then the bank's valid slots */
+static uint32_t n_breaks;                /* the pack's breaks, then the bank's valid slots */
 static int32_t brk_next = -1;            /* a break chosen, waiting for the next bar (break_ask), or -1 */
 static uint8_t wave_px[240];             /* the waveform's height per column, for the screen */
 #define BLK_N 16u                        /* the slicer view's blocks: one per white key */
@@ -575,12 +575,18 @@ static const bank_slot_t *bank_check(const uint8_t *bank, uint32_t size, uint32_
     return s;
 }
 
-/* the custom break (PRD A-60): one break of the player's, a bank of one slot in the flash's data area, written over
- * USB from the site's break manager (app_sysex, ui/main.c). Present, it is break 1, loaded at power-on */
-#define CU_BASE 0x97000u                 /* the data area's start, below the store objects (0xDA000 on) */
-#define CU_SECTORS 14u                   /* 56 KB: a slot and CH_PCM_MAX samples of ADPCM */
-#define CU_CAP (CU_SECTORS * 4096u)
-static uint32_t n_user;                  /* 1: break 0 is the custom one (checked whole: cu_scan) */
+/* the pack (PRD A-61, v1.6; A-60's custom break was a pack of one): breaks of the player's in two banks of the built-in
+ * bank's format, written over USB from the site's break manager (app_sysex, ui/main.c). Bank 1 is the data area below
+ * the store objects (0xD6000 on), where the custom break lived (a 1.4-1.5 custom break reads as a pack of one); bank 2
+ * is PLAT_XDATA1, where the update loader looks for a record at bytes 0xF00..0xF07 of each sector: "AT" never stands at
+ * 0xF06 there (app_sysex refuses a write that would put it there; the page nudges such a byte). The pack's breaks come
+ * first, bank 1's then bank 2's, then the built-in ones; the first is the break at power-on */
+#define PK_BANKS 2u
+static const uint32_t PK_BASE[PK_BANKS] = {0x97000u, PLAT_XDATA1_LO};
+static const uint32_t PK_SECT[PK_BANKS] = {63u, 23u};      /* 252 KB, 92 KB */
+#define PK_CAP(k) (PK_SECT[k] * 4096u)
+static uint32_t pk_n[PK_BANKS];          /* each bank's breaks (checked whole: pk_scan) */
+static uint32_t n_user;                  /* the pack's breaks, both banks: breaks 0 .. n_user - 1 */
 
 static uint32_t crc32_of(const uint8_t *p, uint32_t n)   /* zlib's */
 {
@@ -592,23 +598,36 @@ static uint32_t crc32_of(const uint8_t *p, uint32_t n)   /* zlib's */
     }
     return ~c;
 }
-static void cu_scan(void)
+static void pk_scan(void)
 {
-    const uint8_t *p = plat_data(CU_BASE);
-    const bank_header_t *h = (const bank_header_t *)p;
-    n_user = p && h->nslots == 1u && h->data_size <= CU_CAP - 16u && bank_check(p, CU_CAP, 0u) &&
-             crc32_of(p + 16, h->data_size) == h->crc32 ? 1u : 0u;
+    uint32_t k, i;
+    n_user = 0u;
+    for (k = 0; k < PK_BANKS; k++) {
+        const uint8_t *p = plat_data(PK_BASE[k]);
+        const bank_header_t *h = (const bank_header_t *)p;
+        pk_n[k] = 0u;
+        if (!p || !h->nslots || h->nslots > BANK_SLOTS || h->data_size > PK_CAP(k) - 16u ||
+            crc32_of(p + 16, h->data_size) != h->crc32)
+            continue;
+        for (i = 0; i < h->nslots && bank_check(p, 16u + h->data_size, i); i++)
+            ;
+        pk_n[k] = i == h->nslots ? i : 0u;
+        n_user += pk_n[k];
+    }
 }
 
-/* break i's slot and its bank: the custom break first, then the bank built into the image */
+/* break i's slot and its bank: the pack first, then the bank built into the image */
 static const bank_slot_t *slot_of(uint32_t i, const uint8_t **bank)
 {
+    uint32_t k;
     *bank = 0;
-    if (i < n_user) {
-        *bank = plat_data(CU_BASE);
-        return bank_check(*bank, CU_CAP, 0u);
+    for (k = 0; k < PK_BANKS; k++) {
+        if (i < pk_n[k]) {
+            *bank = plat_data(PK_BASE[k]);
+            return bank_check(*bank, PK_CAP(k), i);
+        }
+        i -= pk_n[k];
     }
-    i -= n_user;
 #if CH_HAVE_BANK
     *bank = CH_BANK;
     return bank_check(CH_BANK, CH_BANK_SIZE, i);
@@ -617,11 +636,11 @@ static const bank_slot_t *slot_of(uint32_t i, const uint8_t **bank)
 #endif
 }
 
-/* the breaks: the custom one, the bank's (no bank, no breaks: silence, nothing synthesised in their place) */
+/* the breaks: the pack's, the bank's (no bank, no breaks: silence, nothing synthesised in their place) */
 static void breaks_count(void)
 {
     const uint8_t *bk;
-    cu_scan();
+    pk_scan();
     n_breaks = 0u;
     while (n_breaks < BANK_SLOTS && slot_of(n_user + n_breaks, &bk))
         n_breaks++;
@@ -790,7 +809,7 @@ void app_init(void)
     brk_fx_init();
     brk_fx_delay_buffer(dub_line, CH_DUB_LEN);
     brk_fx_pad_buffer(pfx_mem);
-    breaks_count();                      /* the custom break, the bank's (breaks/breaks.txt) */
+    breaks_count();                      /* the pack, the bank's (breaks/breaks.txt) */
     settings_defaults();                 /* (what a shorter, older save doesn't reach keeps these) */
     {
         int sz = plat_store_size(OBJ_SETTINGS);
@@ -801,7 +820,7 @@ void app_init(void)
         set.swing > 75u) {
         settings_defaults();         /* (the bank's first break) */
     }
-    if (set.brk >= n_breaks || n_user)   /* a custom break: always the one at power-on */
+    if (set.brk >= n_breaks || n_user)   /* a pack: its first break, always the one at power-on */
         set.brk = 0u;
     if (plat_store_load(OBJ_PAT, &pats, sizeof pats) != (int)sizeof pats || pats.magic != PAT_MAGIC)
         pat_defaults();

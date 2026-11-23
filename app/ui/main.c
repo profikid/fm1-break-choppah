@@ -1256,15 +1256,19 @@ void app_frame(void)
     ui.redraw = 0u;
 }
 
-/* the break manager (the site's breaks/ page; PRD A-60): the custom break over USB SysEx, F0 7D 43 48 CMD DATA F7
- * (7D: non-commercial; "CH"), DATA 7-bit packed (each 7 bytes after a byte of their top bits). Answers: F0 7D 43 48
- * 0x40|CMD CODE DATA F7, CODE 0 done, 1 playing (stop first), 2 too big or out of place, 3 flash, 4 the break as
- * written doesn't check. Commands: 1 INFO -> {version 1, playing, present, sectors, capacity u32, size u32};
- * 2 BEGIN {size u32}: the sectors erased, the custom break gone; 3 DATA {offset u32 (16 on: the header comes last),
- * bytes}; 4 COMMIT {the 16-byte header}: written last, the break checked and loaded; 5 READ {offset u32, count u32
- * (256 at most)} -> {offset u32, bytes}; 6 DELETE. Writes only while stopped (they stall the sound). The scratch is the
- * demo's stars (the demo ends) */
-static uint32_t cu_size;                 /* the bytes BEGIN made room for */
+/* the break manager (the site's breaks/ page; PRD A-60, A-61): the pack over USB SysEx, F0 7D 43 48 CMD DATA F7
+ * (7D: non-commercial; "CH"), DATA 7-bit packed (each 7 bytes after a byte of their top bits). CMD: the command in bits
+ * 0-3, the pack's bank in bits 4-5 (0: bank 1, where 1.4-1.5's custom break was, so their page still works). Answers:
+ * F0 7D 43 48 0x40|CMD CODE DATA F7, CODE 0 done, 1 playing (stop first), 2 too big or out of place (bank 2: "AT" at a
+ * sector's 0xF06), 3 flash, 4 the bank as written doesn't check. Commands: 1 INFO -> {version 2, playing, the pack's
+ * breaks, bank 1's sectors, bank 1's capacity u32, its size u32 (0: empty), banks | bank 1's breaks << 8 | bank 2's
+ * << 16 u32, bank 2's capacity u32, its size u32, 0 u32} (1.4-1.5 answered the first 12 bytes, version 1); 2 BEGIN
+ * {size u32}: the bank's sectors erased, its breaks gone; 3 DATA {offset u32 (16 on: the header comes last), bytes};
+ * 4 COMMIT {the 16-byte header}: written last, the bank checked, the pack's first break loaded; 5 READ {offset u32,
+ * count u32 (256 at most)} -> {offset u32, bytes}; 6 DELETE: the bank's breaks gone. Writes only while stopped (they
+ * stall the sound). The split's B goes back to "the break after A" when the pack changes. The scratch is the demo's
+ * stars (the demo ends) */
+static uint32_t cu_size, cu_bank;        /* the bytes BEGIN made room for, in which bank */
 static uint32_t pack7(const uint8_t *s, uint32_t n, uint8_t *d)
 {
     uint32_t i, k = 0, j;
@@ -1301,38 +1305,58 @@ static void cu_reply(uint32_t cmd, uint32_t code, const uint8_t *d, uint32_t n)
     (void)plat_sysex_send(f, k);
 }
 static uint32_t rd32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
+/* bank 2 (PLAT_XDATA1): would writing d[0..n) at off put "AT" at a sector's 0xF06 (the update loader's record)? */
+static int pk_at(uint32_t bank, uint32_t off, const uint8_t *d, uint32_t n)
+{
+    const uint8_t *f = plat_data(PK_BASE[bank]);
+    uint32_t q;
+    if (!bank)
+        return 0;
+    for (q = (off & ~4095u) + 0xF06u; q < off + n; q += 4096u) {
+        uint8_t b0 = q >= off && q < off + n ? d[q - off] : f[q];
+        uint8_t b1 = q + 1u >= off && q + 1u < off + n ? d[q + 1u - off] : f[q + 1u];
+        if (b0 == 'A' && b1 == 'T')
+            return 1;
+    }
+    return 0;
+}
 int app_sysex(const uint8_t *p, uint32_t n)
 {
     uint8_t *u = (uint8_t *)&demo_sky, a[16];
-    uint32_t cmd, len, off, i, code = 0u;
+    uint32_t cmd, bank, len, off, i, code = 0u;
     if (n < 4u || p[0] != 0x7Du || p[1] != 0x43u || p[2] != 0x48u)
         return 0;
-    cmd = p[3];
+    cmd = p[3] & 15u;
+    bank = p[3] >> 4 & 3u;
+    if (bank >= PK_BANKS || !cmd || cmd > 6u)
+        return 0;
     if (demo.on)
         demo_end();
     ui.idle_t = plat_ms();
     len = unpack7(p + 4, n - 4u > 600u ? 600u : n - 4u, u);
     if (cmd == 1u || cmd == 5u) {        /* INFO, READ: any time */
         if (cmd == 1u) {
-            const bank_header_t *h = (const bank_header_t *)plat_data(CU_BASE);
-            uint32_t v[4] = {1u | (uint32_t)playing_now() << 8 | n_user << 16 | CU_SECTORS << 24, CU_CAP,
-                             n_user ? 16u + h->data_size : 0u, 0u};
-            cu_reply(cmd, 0u, (const uint8_t *)v, 12u);
+            const bank_header_t *h0 = (const bank_header_t *)plat_data(PK_BASE[0]);
+            const bank_header_t *h1 = (const bank_header_t *)plat_data(PK_BASE[1]);
+            uint32_t v[6] = {2u | (uint32_t)playing_now() << 8 | n_user << 16 | PK_SECT[0] << 24, PK_CAP(0),
+                             pk_n[0] ? 16u + h0->data_size : 0u, PK_BANKS | pk_n[0] << 8 | pk_n[1] << 16, PK_CAP(1),
+                             pk_n[1] ? 16u + h1->data_size : 0u};
+            cu_reply(p[3], 0u, (const uint8_t *)v, 24u);
             return 1;
         }
         off = rd32(u);
         len = rd32(u + 4);
-        if (len > 256u || off > CU_CAP || len > CU_CAP - off) {
-            cu_reply(cmd, 2u, 0, 0u);
+        if (len > 256u || off > PK_CAP(bank) || len > PK_CAP(bank) - off) {
+            cu_reply(p[3], 2u, 0, 0u);
             return 1;
         }
         for (i = 0; i < 4u; i++)
             a[i] = u[i];
         {                                /* {offset, bytes}: packed straight from the flash (a, then the bytes) */
-            const uint8_t *src = plat_data(CU_BASE + off);
+            const uint8_t *src = plat_data(PK_BASE[bank] + off);
             uint8_t *f = u;
             uint32_t k;
-            f[0] = 0xF0; f[1] = 0x7D; f[2] = 0x43; f[3] = 0x48; f[4] = 0x45u; f[5] = 0u;
+            f[0] = 0xF0; f[1] = 0x7D; f[2] = 0x43; f[3] = 0x48; f[4] = (uint8_t)(0x40u | p[3]); f[5] = 0u;
             k = 6u;
             for (i = 0; i < 4u + len; i += 7u) {   /* (the groups of 7 cross from the offset into the bytes) */
                 uint8_t g[7];
@@ -1348,39 +1372,45 @@ int app_sysex(const uint8_t *p, uint32_t n)
     }
     if (playing_now()) {                 /* the writes stall the sound: stopped only */
         app_warn("STOP FIRST", "TO LOAD A BREAK");
-        cu_reply(cmd, 1u, 0, 0u);
+        cu_reply(p[3], 1u, 0, 0u);
         return 1;
     }
-    if (cmd == 2u || cmd == 6u) {        /* BEGIN, DELETE: room made, the custom break gone */
+    if (cmd == 2u || cmd == 6u) {        /* BEGIN, DELETE: room made, the bank's breaks gone */
         cu_size = cmd == 2u ? rd32(u) : 1u;
+        cu_bank = bank;
         if (cu_size < 16u + 168u && cmd == 2u)
             code = 2u;
         for (i = 0; !code && i < (cu_size + 4095u) / 4096u; i++)
-            if (i >= CU_SECTORS || plat_data_erase(CU_BASE + i * 4096u))
-                code = i >= CU_SECTORS ? 2u : 3u;
+            if (i >= PK_SECT[bank] || plat_data_erase(PK_BASE[bank] + i * 4096u))
+                code = i >= PK_SECT[bank] ? 2u : 3u;
+        if (cmd == 6u)
+            cu_size = 0u;
         breaks_count();
+        set.split_b = 0u;
         break_ask(0u);
         if (cmd == 2u)
             app_say("RECEIVING", "A BREAK");
     } else if (cmd == 3u) {              /* DATA: after the header, into what BEGIN erased */
         off = rd32(u);
         len -= 4u;
-        if (len > 600u || off < 16u || off > cu_size || len > cu_size - off)
+        if (bank != cu_bank || len > 600u || off < 16u || off > cu_size || len > cu_size - off ||
+            pk_at(bank, off, u + 4, len))
             code = 2u;
-        else if (plat_data_write(CU_BASE + off, u + 4, len))
+        else if (plat_data_write(PK_BASE[bank] + off, u + 4, len))
             code = 3u;
     } else if (cmd == 4u) {              /* COMMIT: the header last, then the whole checked */
-        if (len < 16u || plat_data_write(CU_BASE, u, 16u))
+        if (bank != cu_bank || len < 16u || plat_data_write(PK_BASE[bank], u, 16u))
             code = 3u;
         breaks_count();
-        if (!code && !n_user)
+        if (!code && !pk_n[bank])
             code = 4u;
-        break_ask(0u);                   /* (the custom break, or the first of the bank) */
+        set.split_b = 0u;
+        break_ask(0u);                   /* (the pack's first break, or the first of the bank) */
     } else
         return 0;
     if (code > 1u)
         app_warn("BREAK NOT LOADED", code == 4u ? "IT DOESN'T CHECK" : "FLASH OR SIZE");
-    cu_reply(cmd, code, 0, 0u);
+    cu_reply(p[3], code, 0, 0u);
     return 1;
 }
 
