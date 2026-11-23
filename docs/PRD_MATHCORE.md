@@ -3,7 +3,7 @@
 **Feature PRD and implementation roadmap** · v1.0 · 22 Nov 2026  
 **Parent product PRD:** [PRD.md](PRD.md)  
 **Repository:** `profikid/fm1-break-choppah`  
-**Status:** Released in v1.5.4 (23 Nov 2026, Laurens's call), built on the `mathcore` branch. See §14,
+**Status:** Released in v1.5.5 (23 Nov 2026, Laurens's call), built on the `mathcore` branch. See §14,
 and §15 for the revision to a played instrument (the same evening)
 
 ---
@@ -380,7 +380,7 @@ Detailed editing is allowed to use existing encoders and K1–K4. Normal queue p
 
 ## 10. Implementation roadmap
 
-Built on the `mathcore` branch, 22 Nov 2026, released in v1.5.4 (§14 has what is done and what is not).
+Built on the `mathcore` branch, 22 Nov 2026, released in v1.5.5 (§14 has what is done and what is not).
 
 | Milestone | Scope | Exit criteria |
 | --- | --- | --- |

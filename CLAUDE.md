@@ -9,7 +9,7 @@ E-*, N-*; milestones M0–M8). Keep the PRD in step when scope changes.
 fx, pads, keys, bta, global, arp, seq, mc, mixer, screen, demo, main): one unity build, so a page file sees what the
 files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, adpcm, brk_math).
 
-**MATHCORE** (v1.5.4, docs/PRD_MATHCORE.md §14–19; EDIT: LIVE, LANE, SCENE in `app/ui/mc.c`): the Slice Map is heard
+**MATHCORE** (v1.5.5, docs/PRD_MATHCORE.md §14–19; EDIT: LIVE, LANE, SCENE in `app/ui/mc.c`): the Slice Map is heard
 when a break loads (`mc_auto_roles`, brk.c), shown as K S H P on the slice blocks; 16 scenes (`MC_PRESET` in app.c,
 `OBJ_MC` 0xD6000, magic MCS5: change the presets, bump it) of four lanes each, played from the black keys
 (`brk_mc_jump`: a groove on the bar, a ONCE scene on the beat), the chain and the keys' scenes in `OBJ_MQ` 0xD8000;
