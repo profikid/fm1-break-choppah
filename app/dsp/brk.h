@@ -222,6 +222,8 @@ void brk_mc_jump(int scene, uint32_t quant);
  * extra ones the same each cycle), MATH (0 the lanes' own lengths .. 100 cycles of 5, 7, 11, 13), SPEED (< 34 half,
  * > 66 double), CHAOS (random slices, ratchets, reverses) */
 void brk_mc_macro(uint32_t density, uint32_t math, uint32_t speed, uint32_t chaos);
+enum { MCE_NONE, MCE_HIT, MCE_ACCENT, MCE_ADDED, MCE_DROPPED };
+uint32_t mc_event_kind(const mc_lane_t *L, uint32_t lane, uint32_t pos, uint32_t density);   /* (the screen's too) */
 #define MC_MATH_STEPS 8u
 extern const uint8_t MC_MATH_LEN[MC_MATH_STEPS][4];   /* MATH's lane lengths at each of its steps (0: the lane's own) */
 uint32_t mc_role_slices(const uint8_t *roles, uint32_t n, uint32_t role, uint8_t *list);   /* the slices of a role,

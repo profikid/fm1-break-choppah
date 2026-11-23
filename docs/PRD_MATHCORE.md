@@ -586,3 +586,17 @@ Laurens: better fills, rollers with triplet snares, and one with more snares.
 | MM-F-003 | **A roll owns the voice** until its event ends (`mr_hold`): a lighter hit (the hats) at the ratchet's ticks is dropped, not cutting the roll; a roll beats a single hit of the same weight | Done; engine test: hats at 1/16T never cut a bar of triplet snares |
 | MM-F-004 | **SWELL** (`MCL_SWELL`): a lane's RISE climbs and swells over the phrase without speeding up (F FILL, G TRIPLET ROLL); the fills keep their climax in their second half so a late launch still lands; rolls and risers keep a third of their VARY | Done |
 
+---
+
+## 19. Revision: no MAP page, LIVE redesigned (23 Nov 2026)
+
+Laurens: remove the MAP page (it's automatic anyway) and put the K S H P letters on the home screen; redesign LIVE
+(the scene letters only once, below, with all the interaction); visual feedback when turning DENSITY, MATH and CHAOS.
+
+| ID | Requirement | State |
+| --- | --- | --- |
+| MM-L-001 | MAP removed: EDIT cycles LIVE, LANE, SCENE. The Slice Map's letters (K white, S amber, H and P grey) are at the top of each slice block on HOME and every page with the blocks (`draw_blocks`, screen.c) | Done |
+| MM-L-002 | The black keys' scenes only in the foot's pads row (`mc_draw_pad`): the scene letter, playing lit, held white, next outlined and blinking on the beat, ONCE marked underneath; the right-hand grid removed | Done |
+| MM-L-003 | The right side: the scene and its name, the phrase, what's next, the four macros' gauges (DENSITY from the middle, MATH's seven steps, SPEED's three boxes, CHAOS a jagged bar; the one turned lit for 1.5 s), the chain | Done |
+| MM-L-004 | The macros on the wheel: DENSITY's added hits white (flashing while turned) and dropped ones outlined, through `mc_event_kind` (dsp: the same decision as the render); MATH's ring lengths; CHAOS shakes the rings and throws sparks; SPEED's trail and an x2 / 1/2 badge. The wheel redraws at 25 fps while playing, while CHAOS is up, and while a gauge is lit | Done |
+

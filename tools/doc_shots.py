@@ -34,9 +34,9 @@ MAP = {
     "screen-held": "u6_held",            # ui.txt
     "screen-keyloop": "k_pingpong",      # keys.txt
     "screen-mc-lane": "m_lane_feel",     # mathcore.txt
-    "screen-mc-live": "m_live_math",        # mathcore.txt
+    "screen-mc-live": "m_live_chaos",        # mathcore.txt
     "screen-mc-fill": "m_live_fill",     # mathcore.txt
-    "screen-mc-map": "m_map",            # mathcore.txt
+    "screen-mc-roles": "m_home_roles",   # mathcore.txt
     "screen-mc-scene": "m_scene",        # mathcore.txt
     "screen-lobotomized": "r_lobotomized",   # reset.txt
     "screen-mbcomp-band": "c_mb_low",    # mbcomp.txt

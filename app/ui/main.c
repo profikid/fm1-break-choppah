@@ -295,10 +295,6 @@ static void input(void)
                 mc_white(i, btn);
             continue;
         }
-        if (kdn >> WK[i] & 1u && ui.page == PG_MC && mc.part == MCP_MAP) {
-            mc.slice = (uint8_t)i;       /* MAP: the slice shown (and played) */
-            ui.redraw |= RG_BLOCKS | RG_FOOT;
-        }
         if (kdn >> WK[i] & 1u) {
             if (ui.rec && playing_now())
                 rec_slice(i);            /* REC: into the pattern too */
@@ -914,10 +910,13 @@ static void draw_foot(const brk_status_t *st)
     for (i = 0; i < 11u; i++) {          /* the pads; on ARP the keys' effects (latched: amber below, shown: white);
                                           * MATHCORE's LIVE and SCENE: the keys' scenes */
         int arp = ui.page == PG_ARP, scn = !arp && !pads_page();
-        int on = arp ? (int)(pfx_on() >> i & 1u) : scn ? mc_pad_on(i, st) : (int)(st->pads >> i & 1u);
-        char lt[2];
-        const char *nm = arp ? pfx_short(i) : scn ? mc_pad_label(i, lt) : PAD_NAME[i];
+        int on = arp ? (int)(pfx_on() >> i & 1u) : (int)(st->pads >> i & 1u);
+        const char *nm = arp ? pfx_short(i) : PAD_NAME[i];
         int32_t x = 2 + (int32_t)i * 21;
+        if (scn) {                       /* MATHCORE: the keys' scenes, their states */
+            mc_draw_pad(i, st, x);
+            continue;
+        }
         cv_rect(x, 0, 20, 14, on ? C_HI : C_BLOCK);
         cv_text(x + (20 - text_w(&FONT_T, nm)) / 2, 1, &FONT_T, nm, on ? C_BLACK : arp && i == pfx_sel ? C_WHITE : C_GRAY);
         if (arp && pfx_latched >> i & 1u)
@@ -1134,7 +1133,8 @@ void app_frame(void)
         ui.redraw |= RG_BLOCKS;
     if (ui.page == PG_MIX && now - ui.mix_drawn >= 33u)   /* the MIXER's meters: about 30 times a second */
         ui.redraw |= RG_BLOCKS;
-    if (ui.page == PG_MC && st.playing && now - ui.panel_drawn >= 40u) {   /* MATHCORE: the wheel turns (25 a second) */
+    if (ui.page == PG_MC && (st.playing || (mc.part == MCP_LIVE && mc_animating(now))) &&
+        now - ui.panel_drawn >= 40u) {   /* MATHCORE: the wheel turns (25 a second), shakes, the gauges light */
         ui.redraw |= RG_BLOCKS;
         ui.panel_drawn = now;
     }

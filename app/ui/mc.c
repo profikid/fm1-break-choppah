@@ -1,10 +1,11 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* CHOPPAH: MATHCORE (EDIT): LIVE (the queue, the black keys append scenes), MAP (the Slice Map, heard: which slices
- * are kicks, snares, hats, the rest), LANE (one lane of a scene: its rhythm, its slices, its feel) and SCENE (its
- * phrase, the break under it, its black key). docs/PRD_MATHCORE.md. (Part of app.c's unity: included there in order.) */
+/* CHOPPAH: MATHCORE (EDIT): LIVE (the black keys play scenes, K1-K4 the macros, the wheel), LANE (one lane of a
+ * scene: its rhythm, its slices, its feel) and SCENE (its phrase, run on or dry, its black key). The Slice Map is
+ * heard, not set: its K S H P letters are on the slice blocks (screen.c). docs/PRD_MATHCORE.md. (Part of app.c's
+ * unity: included there in order.) */
 
-enum { MCP_LIVE, MCP_MAP, MCP_LANE, MCP_SCENE, MCPARTS };
-static const char *const MCPART_NAME[MCPARTS] = {"LIVE", "MAP", "LANE", "SCENE"};
+enum { MCP_LIVE, MCP_LANE, MCP_SCENE, MCPARTS };
+static const char *const MCPART_NAME[MCPARTS] = {"LIVE", "LANE", "SCENE"};
 enum { MKS_RHYTHM, MKS_SOUND, MKS_FEEL, MKS_MORE, MKSETS };   /* LANE's knob sets (PRESETS turns them) */
 static const char *const MKS_NAME[MKSETS] = {"RHYTHM", "SOUND", "FEEL", "MORE"};
 static const char *const MC_KNOB[MKSETS][4] = {{"LENGTH", "RATE", "ROTATE", "PHASE"},
@@ -21,7 +22,6 @@ static struct {
     uint8_t scene;                       /* the scene LANE and SCENE edit (and play, from there) */
     uint8_t lane;                        /* the lane LANE edits */
     uint8_t kset;                        /* LANE's knob set */
-    uint8_t slice;                       /* MAP: the slice shown (the white key pressed last) */
     uint8_t cursor;                      /* LIVE: the chain's entry ALGORITHM points at (PRESETS moves it) */
     uint8_t on;                          /* the scenes play: 1 live (the black keys, the chain), 2 the scene edited */
     uint8_t base;                        /* LIVE: the groove the fills, risers and drops come back to */
@@ -35,7 +35,9 @@ static struct {
     uint8_t seen_play;                   /* the transport seen playing since the scenes started (a stop ends them) */
     int8_t state[MC_LANES];              /* each lane: -1 muted, 0 playing, 1 soloed (SEL + K1-K4 on LIVE) */
     uint32_t adv_seen, end_seen;         /* the engine's counts, as last seen */
-} mc = {MCP_LIVE, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -2, 0, {0, 0, 0, 0}, 0, 0};
+    uint32_t touch_t[4];                 /* LIVE: when each macro was turned (its gauge lights, the wheel shows it) */
+} mc = {MCP_LIVE, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, 0, 0, 0, -2, 0, {0, 0, 0, 0}, 0, 0, {0, 0, 0, 0}};
+#define MC_TOUCH_MS 1500u
 #define MC_HOLD_MS 350u                  /* a black key held longer: momentary (back to the groove on release) */
 
 static mc_scene_t *mc_edit(void) { return &mcs.sc[mc.scene % MC_SCENES]; }
@@ -97,12 +99,10 @@ static void mc_push_next(const brk_status_t *st)
 }
 
 /* PLAY on a MATHCORE page, stopped: LIVE starts the chain at its first entry, or the groove; LANE and SCENE play the
- * scene edited round and round, MAP the break as it is. 0: not started */
+ * scene edited round and round. 0: not started */
 static int mc_play(void)
 {
     brk_status_t st;
-    if (mc.part == MCP_MAP)
-        return 1;
     if (mc.part == MCP_LIVE) {
         mc.on = 1u;
         mc.qpos = 0u;
@@ -412,11 +412,6 @@ static void mc_value(int i, char *t)     /* MATHCORE's knob i, as the foot shows
         }
         return;
     }
-    if (mc.part == MCP_MAP) {            /* the role's slices: how many the break has */
-        uint8_t list[BRK_MAX_SLICES];
-        int_text((int32_t)mc_role_list((uint32_t)i, list), t);
-        return;
-    }
     if (mc.part == MCP_SCENE) {
         if (i == 0) {
             int_text(S->bars, t);
@@ -470,8 +465,6 @@ static const char *mc_knob_name(uint32_t i)
     static const char *const SC[4] = {"PHRASE", "RUN ON", "NEW / COPY", "PLAYS"};
     if (mc.part == MCP_LIVE)
         return ui.btn & 1u << B_SEL ? ROLE_NAME[i] : MACRO_NAME[i];
-    if (mc.part == MCP_MAP)
-        return ROLE_NAME[i];
     return mc.part == MCP_SCENE ? SC[i] : MC_KNOB[mc.kset % MKSETS][i];
 }
 
@@ -496,13 +489,10 @@ static void mc_turn(int i, int32_t d)
         else
             *v = (uint8_t)clamp((int32_t)*v + d * 4, 0, 100);
         changed();
+        mc.touch_t[i] = plat_ms() | 1u;
         mc_value(i, t);
         app_say(MACRO_NAME[i], t);
         ui.redraw |= RG_BLOCKS | RG_FOOT;
-        return;
-    }
-    if (mc.part == MCP_MAP) {            /* (heard from the break: nothing to set) */
-        app_say("SLICE MAP", "AUTOMATIC");
         return;
     }
     if (mc.part == MCP_SCENE) {
@@ -565,7 +555,7 @@ static void mc_turn(int i, int32_t d)
     ui.redraw |= RG_BLOCKS | RG_FOOT;
 }
 
-static void mc_algo(int32_t d)           /* ALGORITHM: LIVE the queue's cursor, MAP the slice, LANE the lane, SCENE the scene */
+static void mc_algo(int32_t d)           /* ALGORITHM: LIVE the chain's cursor, LANE the lane, SCENE the scene */
 {
     char t[16];
     if (mc.part == MCP_LIVE) {
@@ -576,11 +566,6 @@ static void mc_algo(int32_t d)           /* ALGORITHM: LIVE the queue's cursor, 
         t[1] = 0;
         say_int("CHAIN", mc.cursor + 1, "");
         app_say(ui.msg[0], t);
-    } else if (mc.part == MCP_MAP) {
-        const brk_break_t *b = brk_get_break();
-        uint32_t n = b && b->nslices < 16u ? b->nslices : 16u;
-        mc.slice = (uint8_t)((mc.slice + (d > 0 ? 1u : n - 1u)) % n);
-        say_int("SLICE", mc.slice + 1, "");
     } else if (mc.part == MCP_LANE) {
         mc.lane = (uint8_t)((mc.lane + (d > 0 ? 1u : MC_LANES - 1u)) % MC_LANES);
         app_say("LANE", ROLE_NAME[mc_lane()->role % MC_ROLES]);
@@ -638,16 +623,30 @@ static uint32_t mc_black_mid(void)
             m |= 1u << BK[i];
     return m;
 }
-static const char *mc_pad_label(uint32_t i, char *t)   /* the foot's pad i on LIVE and SCENE: its scene's letter */
-{
-    t[0] = mq.key[i] < MC_SCENES ? scene_ch(mq.key[i]) : '-';
-    t[1] = 0;
-    return t;
-}
-static int mc_pad_on(uint32_t i, const brk_status_t *st)
+/* the foot's pad i on LIVE and SCENE (x: its box, 20 x 14): the key's scene letter. LIVE: playing lit, held white,
+ * coming next outlined and blinking on the beat, a fill / riser / drop (ONCE) marked underneath; SCENE: the keys of
+ * the scene edited lit */
+static void mc_draw_pad(uint32_t i, const brk_status_t *st, int32_t x)
 {
     uint32_t s = mq.key[i];
-    return s < MC_SCENES && (mc.part == MCP_SCENE ? s == mc.scene : st->playing && st->mc_scene == (int8_t)s);
+    int have = s < MC_SCENES, run = st->playing && st->mc_scene >= 0;
+    int now = have && (mc.part == MCP_SCENE ? s == mc.scene : run && (uint32_t)st->mc_scene == s);
+    int held = mc.part == MCP_LIVE && mc.held == (int8_t)i;
+    int nx = mc.part == MCP_LIVE && have && run && !now && st->mc_next == (int8_t)s;
+    int blink = st->bar16 >= 0 && !(st->bar16 & 2);
+    uint16_t fill = held ? C_WHITE : now ? C_HI : C_BLOCK, ink = held || now ? C_BLACK : have ? C_HI : C_LINE;
+    char t[2];
+    if (nx) {                            /* next: a white frame, its inside lit on the beat */
+        cv_rect(x, 0, 20, 14, C_WHITE);
+        cv_rect(x + 1, 1, 18, 12, blink ? C_BLOCK_HI : C_BLOCK);
+        ink = blink ? C_BLACK : C_WHITE;
+    } else
+        cv_rect(x, 0, 20, 14, fill);
+    t[0] = have ? scene_ch(s) : '-';
+    t[1] = 0;
+    cv_text(x + (20 - text_w(&FONT_T, t)) / 2, 1, &FONT_T, t, ink);
+    if (have && mc_once(s))
+        cv_rect(x + 6, 12, 8, 2, held || now ? C_BLACK : C_GRAY);
 }
 
 /* ------------------------------------------------------------------ drawing --- */
@@ -690,24 +689,81 @@ static void mc_rows(const brk_status_t *st, uint32_t s, int32_t y, int sel)
     }
 }
 
-/* LIVE's picture (240 x 104, drawn in two strips: top is the strip's first row): on the left the wheel, a ring per
- * lane (hat outside, kick inside), each its cycle's events round it, the hits lit, the event playing white, so the
- * polyrhythm is seen turning; the scene in the middle. On the right the eleven black keys' scenes (playing lit, next
- * outlined, a fill's marked), the scene's name and what comes next, the phrase, the chain */
+/* LIVE's picture (240 x 104, drawn in two strips: top is the strip's first row). On the left the wheel: a ring per
+ * lane (the kick inside, the hat outside), its cycle's steps round it, the hits lit, the step playing white with a
+ * trail, so the polyrhythm is seen turning, and the macros on it: DENSITY's added hits sparkle white and its dropped
+ * ones fade, MATH re-divides the rings, CHAOS shakes them and throws sparks, SPEED leaves a longer trail (x2, 1/2 in
+ * the middle). On the right the scene playing, what comes next, its phrase, the four macros' gauges (the one turned
+ * lit) and the chain. The black keys' scenes are the foot's pads (mc_draw_pad) */
 #define WH_X 54
 #define WH_Y 52
 static const uint8_t WH_R[MC_LANES] = {27u, 35u, 50u, 43u};   /* the rings: kick, snare, hat, perc */
+static int mc_touched(uint32_t i, uint32_t now) { return mc.touch_t[i] && now - mc.touch_t[i] < MC_TOUCH_MS; }
+static int mc_animating(uint32_t now)    /* stopped, LIVE still moves: CHAOS shaking, a gauge lit (and once more after) */
+{
+    uint32_t i;
+    if (set.mc_macro[3])
+        return 1;
+    for (i = 0; i < 4u; i++)
+        if (mc.touch_t[i] && now - mc.touch_t[i] < MC_TOUCH_MS + 120u)
+            return 1;
+    return 0;
+}
+static uint32_t mc_shake(uint32_t a, uint32_t b, uint32_t c)  /* a cheap hash for CHAOS's shake */
+{
+    uint32_t x = a * 0x9E3779B1u ^ b * 0x85EBCA6Bu ^ c * 0xC2B2AE35u;
+    x ^= x >> 15;
+    x *= 0x2C1B3C6Du;
+    return x ^ x >> 13;
+}
+static void mc_gauge(int32_t y, uint32_t i, uint32_t now)   /* macro i's row: its name and its gauge */
+{
+    uint32_t v = set.mc_macro[i], k;
+    int hot = mc_touched(i, now);
+    uint16_t on = hot ? C_WHITE : C_HI, off = hot ? C_LINE : C_BLOCK;
+    if (hot)
+        cv_rect(110, y - 1, 130, 12, C_BLOCK);
+    cv_text(112, y - 2, &FONT_T, MACRO_NAME[i], hot ? C_WHITE : C_GRAY);
+    if (i == 0u) {                       /* DENSITY: from the middle, left fewer, right more */
+        int32_t w = ((int32_t)v - 50) * 36 / 50;
+        cv_rect(162, y + 3, 74, 4, off);
+        cv_rect(w < 0 ? 199 + w : 199, y + 2, w < 0 ? -w : w, 6, on);
+        cv_rect(198, y, 2, 10, hot ? C_WHITE : C_GRAY);
+    } else if (i == 1u) {                /* MATH: its seven steps */
+        uint32_t st = v * (MC_MATH_STEPS - 1u) / 100u;
+        for (k = 0; k < MC_MATH_STEPS - 1u; k++)
+            cv_rect(162 + (int32_t)k * 11, y + 2, 9, 6, k < st ? on : off);
+    } else if (i == 2u) {                /* SPEED: HALF, NORMAL, DOUBLE */
+        static const char *const SP[3] = {"1/2", "x1", "x2"};
+        uint32_t st = v < 34u ? 0u : v > 66u ? 2u : 1u;
+        for (k = 0; k < 3u; k++) {
+            cv_rect(162 + (int32_t)k * 25, y, 23, 10, k == st ? on : off);
+            cv_text(165 + (int32_t)k * 25, y - 2, &FONT_T, SP[k], k == st ? C_BLACK : C_GRAY);
+        }
+    } else {                             /* CHAOS: a jagged bar, the more the wilder */
+        uint32_t w = v * 74u / 100u, f = now / 70u;
+        cv_rect(162, y + 3, 74, 4, off);
+        for (k = 0; k < w; k += 2u) {
+            int32_t h = 2 + (int32_t)(mc_shake(k, f, 7u) % (2u + v / 12u));
+            cv_rect(162 + (int32_t)k, y + 5 - h / 2, 2, h, on);
+        }
+    }
+}
 static void mc_live_picture(const brk_status_t *st, int32_t top)
 {
     int run = st->playing && st->mc_scene >= 0;
-    uint32_t sc = run ? (uint32_t)st->mc_scene : mc.base, l, e, i;
+    uint32_t sc = run ? (uint32_t)st->mc_scene : mc.base, l, e, i, now = plat_ms();
     const mc_scene_t *S = &mcs.sc[sc % MC_SCENES];
+    uint32_t dens = set.mc_macro[0], chaos = set.mc_macro[3], spd = set.mc_macro[2];
     const uint8_t *ml = MC_MATH_LEN[set.mc_macro[1] * (MC_MATH_STEPS - 1u) / 100u];
+    int32_t jit = (int32_t)(chaos * 4u / 100u);
+    uint32_t frame = now / 80u, flash = mc_touched(0u, now) && (now / 120u & 1u);
     char t[24];
     cv_oy = -top;
     for (l = 0; l < MC_LANES; l++) {     /* the rings */
         const mc_lane_t *L = &S->lane[l];
         uint32_t len = ml[l] ? ml[l] : L->len < 1u ? 1u : L->len, r = WH_R[l];
+        uint32_t trail = spd > 66u ? 3u : spd < 34u ? 1u : 2u, p = run ? st->mc_pos[l] : 0xFFu;
         int on = (L->flags & MCL_ON) != 0u, quiet = mc.state[l] < 0 || (!mc.state[l] && (mc.state[0] > 0 ||
                                      mc.state[1] > 0 || mc.state[2] > 0 || mc.state[3] > 0));
         if (!on)
@@ -716,36 +772,54 @@ static void mc_live_picture(const brk_status_t *st, int32_t top)
             float a = (float)e / (float)len;
             int32_t x = WH_X + (int32_t)((float)r * brk_sin_turns(a) + (a < 0.5f ? 0.5f : -0.5f));
             int32_t y = WH_Y - (int32_t)((float)r * brk_sin_turns(a + 0.25f) + 0.5f);
-            uint32_t k = e % (L->len ? L->len : 1u);
-            int hit = L->hits >> k & 1u, acc = L->accent >> k & 1u, now = run && st->mc_pos[l] == e;
-            if (now)
+            uint32_t kind = mc_event_kind(L, l, e, dens), back = (p + len - e) % len;
+            if (jit) {                   /* CHAOS: the ring shakes */
+                uint32_t h = mc_shake(e, l, frame);
+                x += (int32_t)(h % (uint32_t)(2 * jit + 1)) - jit;
+                y += (int32_t)(h >> 8 & 0xFFu) % (2 * jit + 1) - jit;
+            }
+            if (p == e)
                 cv_rect(x - 3, y - 3, 7, 7, C_WHITE);
-            else if (hit)
-                cv_rect(x - 2, y - 2, acc ? 5 : 4, acc ? 5 : 4, quiet ? C_DIM : acc ? C_BLOCK_HI : C_AMB);
+            else if (p != 0xFFu && back < trail && (kind == MCE_HIT || kind == MCE_ACCENT || kind == MCE_ADDED))
+                cv_rect(x - 2, y - 2, 5, 5, C_GRAY);   /* (the trail: where it just was) */
+            else if (kind == MCE_ADDED)  /* DENSITY up: an added hit, white, flashing while it is turned */
+                cv_rect(x - 1 - (int32_t)flash, y - 1 - (int32_t)flash, 3 + 2 * (int32_t)flash, 3 + 2 * (int32_t)flash,
+                        quiet ? C_GRAY : C_WHITE);
+            else if (kind == MCE_DROPPED) {   /* DENSITY down: a hit left out, its outline only */
+                cv_rect(x - 2, y - 2, 4, 1, C_LINE);
+                cv_rect(x - 2, y + 1, 4, 1, C_LINE);
+            } else if (kind)
+                cv_rect(x - 2, y - 2, kind == MCE_ACCENT ? 5 : 4, kind == MCE_ACCENT ? 5 : 4,
+                        quiet ? C_DIM : kind == MCE_ACCENT ? C_BLOCK_HI : C_AMB);
             else
                 cv_rect(x, y, 2, 2, quiet ? C_LINE : C_DIM);
         }
     }
-    t[0] = scene_ch(sc);                 /* the scene, in the middle */
-    t[1] = 0;
-    cv_text2(WH_X - text2_w(&FONT_B, t) / 2, WH_Y - 17, &FONT_B, t, run ? C_HI : C_GRAY);
-    for (i = 0; i < NPFX; i++) {         /* the black keys' scenes: 4 x 3 */
-        int32_t x = 112 + (int32_t)(i % 4u) * 32, y = 2 + (int32_t)(i / 4u) * 19;
-        uint32_t s = mq.key[i];
-        int have = s < MC_SCENES, now = have && run && (uint32_t)st->mc_scene == s, held = mc.held == (int8_t)i;
-        int nx = have && run && !now && st->mc_next == (int8_t)s;
-        cv_rect(x, y, 30, 17, held ? C_WHITE : now ? C_BLOCK_HI : nx ? C_WHITE : C_BLOCK);
-        if (nx && !held)
-            cv_rect(x + 1, y + 1, 28, 15, C_BLOCK);
-        t[0] = have ? scene_ch(s) : '-';
-        t[1] = 0;
-        cv_text(x + 4, y + 1, &FONT_XS, t, now || held ? C_BLACK : have ? C_HI : C_LINE);
-        if (have && mc_once(s))          /* a fill: a mark */
-            cv_rect(x + 18, y + 7, 7, 3, now || held ? C_BLACK : C_GRAY);
+    for (i = 0; i < chaos / 8u; i++) {   /* CHAOS: sparks */
+        uint32_t h = mc_shake(i, frame, 99u), r = 14u + h % 40u;
+        float a = (float)(h >> 8 & 1023u) * (1.0f / 1024.0f);
+        cv_rect(WH_X + (int32_t)((float)r * brk_sin_turns(a)), WH_Y - (int32_t)((float)r * brk_sin_turns(a + 0.25f)),
+                1, 1, h & 0x10000u ? C_WHITE : C_HI);
     }
-    t[0] = 0;                            /* the scene's name, and what comes next */
+    t[0] = scene_ch(sc);                 /* the scene, in the middle; SPEED's badge under it */
+    t[1] = 0;
+    cv_text2(WH_X - text2_w(&FONT_B, t) / 2, WH_Y - 19, &FONT_B, t, run ? C_HI : C_GRAY);
+    if (spd < 34u || spd > 66u) {
+        const char *b = spd > 66u ? "x2" : "1/2";
+        cv_text(WH_X - text_w(&FONT_T, b) / 2, WH_Y + 11, &FONT_T, b, mc_touched(2u, now) ? C_WHITE : C_AMB);
+    }
+    t[0] = scene_ch(sc);                 /* the scene's name, its phrase so far, what comes next */
+    t[1] = ' ';
+    t[2] = 0;
     text_cat(t, mc_name(sc));
-    cv_text(112, 60, &FONT_XS, t, run ? C_WHITE : C_GRAY);
+    cv_text(112, -1, &FONT_XS, t, run ? C_WHITE : C_GRAY);
+    if (run) {
+        uint32_t bars = S->bars ? S->bars : 1u, w = (uint32_t)st->mc_step * 124u / (bars * 16u);
+        cv_rect(112, 15, 124, 3, C_BLOCK);
+        cv_rect(112, 15, (int32_t)(w > 124u ? 124u : w), 3, C_HI);
+        for (i = 1; i < bars; i++)
+            cv_rect(112 + (int32_t)(i * 124u / bars), 13, 1, 7, C_LINE);
+    }
     if (run && st->mc_next >= 0 && st->mc_next != st->mc_scene) {
         t[0] = '>';
         t[1] = ' ';
@@ -753,26 +827,22 @@ static void mc_live_picture(const brk_status_t *st, int32_t top)
         t[3] = ' ';
         t[4] = 0;
         text_cat(t, mc_name((uint32_t)st->mc_next));
-        cv_text(112, 74, &FONT_XS, t, C_HI);
+        cv_text(112, 20, &FONT_T, t, C_HI);
     } else
-        cv_text(112, 74, &FONT_XS, run ? "> AGAIN" : "PLAY OR A BLACK KEY", C_DIM);
-    if (run) {                           /* the phrase so far */
-        uint32_t bars = S->bars ? S->bars : 1u, w = (uint32_t)st->mc_step * 124u / (bars * 16u);
-        cv_rect(112, 90, 124, 3, C_BLOCK);
-        cv_rect(112, 90, (int32_t)(w > 124u ? 124u : w), 3, C_HI);
-        for (i = 1; i < bars; i++)
-            cv_rect(112 + (int32_t)(i * 124u / bars), 88, 1, 7, C_LINE);
-    }
+        cv_text(112, 20, &FONT_T, run ? "> AGAIN" : "PLAY OR A BLACK KEY", C_DIM);
+    for (i = 0; i < 4u; i++)             /* the macros */
+        mc_gauge(38 + (int32_t)i * 14, i, now);
     if (mq.n) {                          /* the chain */
         uint32_t first = mc.cursor > 9u ? mc.cursor - 9u : 0u;
-        for (i = first; i < mq.n && i < first + 12u; i++) {
-            int32_t x = 112 + (int32_t)(i - first) * 10;
-            int now = run && mc.qled && i == mc.qpos && !mc.qgone;
+        cv_text(112, 92, &FONT_T, ">>", C_DIM);
+        for (i = first; i < mq.n && i < first + 10u; i++) {
+            int32_t x = 126 + (int32_t)(i - first) * 11;
+            int nw = run && mc.qled && i == mc.qpos && !mc.qgone;
             t[0] = scene_ch(mq.q[i]);
             t[1] = 0;
             if (i == mc.cursor)
-                cv_rect(x - 1, 95, 10, 9, C_LINE);
-            cv_text(x, 94, &FONT_T, t, now ? C_WHITE : C_AMB);
+                cv_rect(x - 1, 93, 10, 11, C_LINE);
+            cv_text(x, 92, &FONT_T, t, nw ? C_WHITE : C_AMB);
         }
     }
     cv_oy = 0;
@@ -786,38 +856,6 @@ static void mc_draw_live(const brk_status_t *st)
     cv_begin(240, 52, C_BLACK);
     mc_live_picture(st, 52);
     cv_blit(0, 140);
-}
-
-static void mc_draw_map(const brk_status_t *st)
-{
-    const brk_break_t *b = brk_get_break();
-    uint32_t row, k, r, c, n = b && b->nslices < 16u ? b->nslices : 16u;
-    char t[4];
-    for (row = 0; row < 2u; row++) {
-        cv_begin(240, 52, C_BLACK);
-        for (k = row * 8u; k < row * 8u + 8u; k++) {
-            int32_t x = 1 + (int32_t)(k % 8u) * 30;
-            int on = st->slice == (int32_t)k, have = b && k < n, sel = k == mc.slice;
-            cv_rect(x, 0, 28, 50, sel ? C_WHITE : on ? C_BLOCK_HI : C_BLOCK);
-            if (sel)
-                cv_rect(x + 1, 1, 26, 48, on ? C_BLOCK_HI : C_BLOCK);
-            if (!have)
-                continue;
-            for (c = 0; c < BLK_W - 4u; c++) {
-                int32_t h = blk_px[k][c * BLK_W / (BLK_W - 4u)] * 3 / 4;
-                cv_rect(x + 3 + (int32_t)c, 14 - h / 2, 1, h + 1, on ? C_BLACK : C_DIM);
-            }
-            int_text((int32_t)k + 1, t);
-            cv_text(x + 3, 24, &FONT_XS, t, on ? C_BLACK : C_GRAY);
-            for (r = 0; r < MC_ROLES; r++)   /* its roles: K S H P, lit where heard */
-                if (roles_now[k] >> r & 1u) {
-                    t[0] = ROLE_CH[r];
-                    t[1] = 0;
-                    cv_text(x + 2 + (int32_t)r * 6, 36, &FONT_XS, t, on ? C_BLACK : r == 0u ? C_WHITE : C_HI);
-                }
-        }
-        cv_blit(0, 88u + row * 52u);
-    }
 }
 
 static void mc_draw_lane(const brk_status_t *st)
@@ -903,8 +941,6 @@ static void draw_mc(const brk_status_t *st)
 {
     if (mc.part == MCP_LIVE)
         mc_draw_live(st);
-    else if (mc.part == MCP_MAP)
-        mc_draw_map(st);
     else if (mc.part == MCP_LANE)
         mc_draw_lane(st);
     else

@@ -541,11 +541,20 @@ static void draw_blocks(const brk_status_t *st, uint32_t keys)
             cv_rect(x, 0, 28, 50, held ? C_WHITE : ground);
             if (held)
                 cv_rect(x + 2, 2, 24, 46, ground);
-            if (have)
-                for (c = 0; c < BLK_W - 4u; c++) {   /* the slice's shape, 22 columns of its 26 */
-                    int32_t h = blk_px[k][c * BLK_W / (BLK_W - 4u)];
-                    cv_rect(x + 3 + (int32_t)c, 19 - h / 2, 1, h + 1, ink);
+            if (have) {
+                uint32_t r, nr = 0u;
+                for (c = 0; c < BLK_W - 4u; c++) {   /* the slice's shape, 22 columns of its 26 (under its roles) */
+                    int32_t h = blk_px[k][c * BLK_W / (BLK_W - 4u)] * 2 / 3;
+                    cv_rect(x + 3 + (int32_t)c, 22 - h / 2, 1, h + 1, ink);
                 }
+                for (r = 0; r < MC_ROLES; r++)   /* the Slice Map: what the slice was heard as, K S H P */
+                    if (roles_now[k] >> r & 1u) {
+                        t[0] = "KSHP"[r];
+                        t[1] = 0;
+                        cv_text(x + 3 + (int32_t)nr++ * 6, 0, &FONT_T, t,
+                                on ? C_BLACK : r == ROLE_KICK ? C_WHITE : r == ROLE_SNARE ? C_AMB : C_GRAY);
+                    }
+            }
             int_text((int32_t)k + 1, t);
             cv_text(x + 3, 35, &FONT_T, t, on ? C_BLACK : have ? C_AMB : C_LINE);
             if (have && key_custom((int)k))  /* a loop of its own: a dot */

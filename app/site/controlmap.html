@@ -188,12 +188,11 @@
       { n: "CHANNEL", k: ["CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"], strip: "CHANNEL · OUT · THE MIDI MAP", note: "OMNI or 1–16; each out off by default" } ],
       algo: "Part", presets: "Pattern P1–P16", keys: "slices", notes: [["K4 RESET ALL", "Turn twice within 3 s"],
         ["CC 20–23 · 24–39", "K1–K4 · the chain's slots"], ["PC 0–15 · 16–31", "Pattern · break"], ["Notes 24–35", "Breaks 1–12"]] },
-    { id: "edit", btn: "EDIT", name: "MATHCORE", sub: "Play scenes that re-cut the break", again: "next part (4)", part: true, subs: [
-      { n: "LIVE", k: ["DENSITY", "MATH", "SPEED", "CHAOS"], strip: "THE WHEEL: A RING PER LANE, TURNING · THE 11 SCENES · NEXT · THE CHAIN", note: "a black key plays its scene (a groove on the next bar, a fill on the next beat, then back); held: while held. SEL + K1–K4: mute / solo" },
-      { n: "MAP", k: ["KICKS", "SNARES", "HATS", "PERCS"], strip: "16 SLICE BLOCKS WITH THEIR ROLES (K S H P)", note: "heard from the break when it loads: nothing to set" },
+    { id: "edit", btn: "EDIT", name: "MATHCORE", sub: "Play scenes that re-cut the break", again: "next part (3)", part: true, subs: [
+      { n: "LIVE", k: ["DENSITY", "MATH", "SPEED", "CHAOS"], strip: "THE WHEEL: A RING PER LANE, TURNING, THE MACROS ON IT · THE SCENE · NEXT · THE MACROS' GAUGES · THE CHAIN; THE PADS ROW: THE 11 SCENES", note: "a black key plays its scene (a groove on the next bar, a fill on the next beat, then back); held: while held. SEL + K1–K4: mute / solo" },
       { n: "LANE", k: ["LENGTH · MODE · CHANCE · ROLE", "RATE · PICK · RATCHET · RISE", "ROTATE · PITCH · GATE · REVERSE", "PHASE · LEVEL · VARY · LANE"], strip: "THE LANE'S 32 EVENTS · THE SCENE'S 4 LANES", note: "PRESETS: RHYTHM · SOUND · FEEL · MORE; white keys: its events (SEL: 17–32; FEEL: accents)" },
       { n: "SCENE", k: ["PHRASE", "RUN ON", "NEW / COPY", "PLAYS"], strip: "THE SCENE · ITS BLACK KEYS · ITS 4 LANES", note: "a black key: it plays this scene; PLAYS: LOOP (groove) or ONCE (fill)" } ],
-      algo: "Chain entry · slice · lane · scene", presets: "Move entry · knob set (LANE)", keys: "slices", black: "scenes",
+      algo: "Chain entry · lane · scene", presets: "Move entry · knob set (LANE)", keys: "slices", black: "scenes",
       notes: [["Black key (LIVE)", "Play its scene: groove on the bar, fill on the beat"], ["Black key held (LIVE)", "Its scene while held, then the groove"],
               ["SEL + black key (LIVE)", "Chain its scene"], ["REC + black key (LIVE)", "Its last entry out of the chain"],
               ["SEL + REC (LIVE)", "Clear the chain (the groove plays on)"], ["Black key (SCENE)", "It plays this scene; SEL + it: nothing"],
@@ -237,10 +236,10 @@
     const p = PAGES[cur], s = p.subs[sub], steps = p.keys === "steps" || p.keys === "taps";
     root.querySelectorAll(".pbtn").forEach((b, i) => b.setAttribute("aria-pressed", String(i === cur)));
     $("subs").innerHTML = p.subs.map((x, i) => '<button type="button" class="sub" data-i="' + i + '" aria-pressed="' + (i === sub) + '">' + x.n + "</button>").join("");
-    const tabs = p.id === "edit" ? ["LIVE", "MAP", "LANE", "SCENE"] : p.id === "fx" ? ["1", "2", "3", "4"] : p.id === "arp" ? ["PAD 1"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
+    const tabs = p.id === "edit" ? ["LIVE", "LANE", "SCENE"] : p.id === "fx" ? ["1", "2", "3", "4"] : p.id === "arp" ? ["PAD 1"] : p.subs.length > 1 ? p.subs.map(x => x.n.replace("SLOT ", "")) : [p.name];
     const on = p.id === "fx" || p.id === "arp" ? 0 : sub;
     $("tabs").innerHTML = "<b>" + p.btn + "</b>" + tabs.map((t, i) => '<span class="' + (i === on ? "on" : "") + '">' + t + "</span>").join("") +
-      (p.part && !(p.id === "edit" && sub !== 2 && sub !== 3) ? "<em>&lt; " + (p.id === "edit" ? (sub === 2 ? "RHYTHM" : "A") : (p.id === "arp" ? "FILTER" : "TREMOLO") + (sub ? " " + s.n : "")) + " &gt;</em>" : "");
+      (p.part && !(p.id === "edit" && sub === 0) ? "<em>&lt; " + (p.id === "edit" ? (sub === 1 ? "RHYTHM" : "A") : (p.id === "arp" ? "FILTER" : "TREMOLO") + (sub ? " " + s.n : "")) + " &gt;</em>" : "");
     $("strip").innerHTML = s.strip + (s.note ? "<em>" + s.note + "</em>" : "");
     $("knobs").innerHTML = s.k.map((k, i) => k ? "<div>" + k + "<b>·····</b></div>" : '<div class="empty">K' + (i + 1) + "<b>&nbsp;</b></div>").join("");
     $("zones").innerHTML = [["HEADER", "Break, pattern, REC, tempo, meter, battery", 1], ["TABS", p.btn + " › " + tabs.join(" · "), 0], ["WAVEFORM", "The break, the slice lit, the playhead", 1],
@@ -256,8 +255,8 @@
     }
     [0, 1, 3, 4, 5, 7, 8, 10, 11, 12, 14].forEach((g, j) => { h += '<div class="bk" style="left:calc(' + (g + 1) + ' * 100% / 16 - 100% / 16 * .31)">' + PADS[j] + "</div>"; });
     $("kbd").innerHTML = h;
-    $("keyrole").innerHTML = "<span>White keys: <b>" + (p.keys === "taps" ? "EVERY KEY TAPS THE TEMPO" : steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : p.id === "edit" && sub === 2 ? "THE LANE'S EVENTS (SEL: 17–32)" : "SLICES 1–16 (hold to loop)") +
-      "</b></span><span>Black keys: <b>" + (p.black === "fx" ? "EFFECTS (held; SEL + key: hold on)" : p.black === "scenes" && sub === 0 ? "PLAY A SCENE (HOLD: WHILE HELD; SEL: CHAIN IT)" : p.black === "scenes" && sub === 3 ? "THIS KEY PLAYS THIS SCENE" : "PADS (momentary, any page)") + "</b></span>";
+    $("keyrole").innerHTML = "<span>White keys: <b>" + (p.keys === "taps" ? "EVERY KEY TAPS THE TEMPO" : steps ? (sub < 2 ? "PICK THE STEP TO EDIT" : "THIS LANE'S 16 STEPS") : p.id === "edit" && sub === 1 ? "THE LANE'S EVENTS (SEL: 17–32)" : "SLICES 1–16 (hold to loop)") +
+      "</b></span><span>Black keys: <b>" + (p.black === "fx" ? "EFFECTS (held; SEL + key: hold on)" : p.black === "scenes" && sub === 0 ? "PLAY A SCENE (HOLD: WHILE HELD; SEL: CHAIN IT)" : p.black === "scenes" && sub === 2 ? "THIS KEY PLAYS THIS SCENE" : "PADS (momentary, any page)") + "</b></span>";
     $("notes").innerHTML = p.notes.map(([a, b]) => '<div class="note"><span>' + a + "</span>" + b + "</div>").join("") ||
       '<div class="note"><span>No combinations</span>Only the controls every page shares.</div>';
   }

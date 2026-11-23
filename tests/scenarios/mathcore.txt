@@ -7,6 +7,8 @@ wait 2600
 expect mc_kicks >0
 expect mc_snares >0
 expect mc_hats >0
+# HOME: the slice blocks with what the Slice Map heard (K S H P)
+shot m_home_roles.png
 tap EDIT
 wait 150
 expect page 4
@@ -45,16 +47,27 @@ key b6 up
 wait 600
 expect mc_scene 1
 expect mc_base 1
-# the macros: MATH all the way (5 / 7 / 11 / 13), SPEED double, CHAOS a bit
+# the macros: DENSITY up (added hits sparkle), MATH all the way (5 / 7 / 11 / 13), SPEED double, CHAOS a bit
+turn K1 8 10
+wait 200
+shot m_live_dense.png
+turn K1 -16 10
+wait 200
+shot m_live_sparse.png
+turn K1 8 10
 turn K2 25 10
 wait 100
 expect mc_math 100
 turn K3 1 10
-turn K4 8 10
-wait 1200
+wait 300
 shot m_live_math.png
+turn K4 12 10
+wait 300
+shot m_live_chaos.png
+wait 1600
+shot m_live_math2.png
 turn K3 -1 10
-turn K4 -8 10
+turn K4 -12 10
 turn K2 -25 10
 # SEL + K1: the kick lane muted, then back
 press SEL
@@ -103,17 +116,10 @@ expect mc_on 1
 expect mc_scene >-1
 tap PLAY
 wait 300
-# MAP: the Slice Map, heard (nothing to set)
-tap EDIT
-wait 150
-expect mc_part 1
-tapkey w2
-wait 150
-shot m_map.png
 # LANE: scene A's kick lane; a key toggles an event, K1 the length, PRESETS the knob sets
 tap EDIT
 wait 150
-expect mc_part 2
+expect mc_part 1
 shot m_lane.png
 tapkey w4
 wait 60
@@ -135,7 +141,7 @@ wait 300
 # SCENE: scene B, black key 5 plays it
 tap EDIT
 wait 150
-expect mc_part 3
+expect mc_part 2
 turn ALGO 1 10
 wait 100
 expect mc_edit 1

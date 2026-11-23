@@ -686,6 +686,18 @@ static void mc_step(void)
 }
 
 /* master tick t (MC_TICKS a 16th since the start): every lane of the scene whose event falls on it */
+/* event pos of lane l under DENSITY dens: as written, an accent, added (DENSITY up: fewer on the kick lane), dropped
+ * (DENSITY down: off-beat, unaccented hits go first), or none. The same each cycle: the render and the screen agree */
+uint32_t mc_event_kind(const mc_lane_t *L, uint32_t l, uint32_t pos, uint32_t dens)
+{
+    uint32_t ll = L->len ? L->len : 1u, hit = L->hits >> (pos % ll) & 1u, acc = L->accent >> (pos % ll) & 1u;
+    if (hit && dens < 50u && pos && !acc && mc_hash(L->seed + 7u, l, pos) % 50u >= dens)
+        return MCE_DROPPED;
+    if (!hit && dens > 50u && mc_hash(L->seed + 3u, l, pos) % 100u < (dens - 50u) * (l ? 14u : 6u) / 10u)
+        return MCE_ADDED;
+    return !hit ? MCE_NONE : acc ? MCE_ACCENT : MCE_HIT;
+}
+
 static uint32_t bars_of(const mc_scene_t *sc)
 {
     return sc->bars < 1u ? 1u : sc->bars > 16u ? 16u : sc->bars;
@@ -734,12 +746,11 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
             len = mlen[l];
         pos = (e + L->phase) % len;
         mc_pos[l] = (uint8_t)pos;
-        hit = L->hits >> (pos % (L->len ? L->len : 1u)) & 1u;
         acc = L->accent >> (pos % (L->len ? L->len : 1u)) & 1u;
-        if (hit && dens < 50u && pos && !acc && mc_hash(L->seed + 7u, l, pos) % 50u >= dens)
-            hit = 0u;                    /* DENSITY down: the off-beat, unaccented hits go (the same ones each cycle) */
-        else if (!hit && dens > 50u && mc_hash(L->seed + 3u, l, pos) % 100u < (dens - 50u) * (l ? 14u : 6u) / 10u)
-            hit = 1u;                    /* DENSITY up: hits added (fewer on the kick lane) */
+        {
+            uint32_t kind = mc_event_kind(L, l, pos, dens);
+            hit = kind == MCE_HIT || kind == MCE_ACCENT || kind == MCE_ADDED;
+        }
         if (vary && mc_steps > (bars_of(sc) - 1u) * BRK_STEPS_PER_BAR)   /* the phrase's last bar: more */
             vary = vary * 3u / 2u + 20u > 100u ? 100u : vary * 3u / 2u + 20u;
         if (vary) {                      /* VARY: a drummer's own variations (seeded: the same each time) */

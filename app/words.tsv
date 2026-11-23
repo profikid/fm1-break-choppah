@@ -28,7 +28,6 @@ ARP PAD #	effect pad #
 FX SLOT #	effects slot #
 SLOT #	slot #
 EDIT LIVE	math core, live
-EDIT MAP	math core, slice map
 EDIT LANE	math core, lane
 EDIT SCENE	math core, scene
 MATHCORE	math core

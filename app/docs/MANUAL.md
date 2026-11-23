@@ -579,16 +579,20 @@ scene is the beat. You play them: tap a key and the scene comes in, hold it and 
 plays while held, turn four knobs and the rhythm thins out, fills up, goes polyrhythmic, doubles or breaks apart.
 Nothing has to be programmed (LANE and SCENE are there if you want to). Every sound is the break's.
 
-**EDIT** opens MATHCORE at the part used last; **EDIT again** goes to the next: LIVE → MAP → LANE → SCENE → LIVE.
+**EDIT** opens MATHCORE at the part used last; **EDIT again** goes to the next: LIVE → LANE → SCENE → LIVE.
 
 ### LIVE: play it
 
-![LIVE: scene B (AMEN) with MATH all the way: the rings turn in 5, 7, 11 and 13](img/screen-mc-live.png "MATHCORE LIVE")
+![LIVE: scene B (AMEN), MATH all the way, SPEED double, CHAOS turned: the rings in 5, 7, 11 and 13, shaking](img/screen-mc-live.png "MATHCORE LIVE")
 
-The wheel is the scene playing: a ring per lane (the kick inside, then the snare, the perc, the hat outside), its
-cycle's steps round it, the hits lit, the step playing white. Rings of different lengths turn at different speeds:
-that is the polyrhythm, seen. On the right the eleven black keys' scenes (playing lit, coming next outlined, a dash:
-it plays once), the scene's name, what comes next, the phrase so far and the chain.
+The **wheel** is the scene playing: a ring per lane (the kick inside, then the snare, the perc, the hat outside), its
+cycle's steps round it, the hits lit, the step playing white with a short trail. Rings of different lengths turn at
+different speeds: that is the polyrhythm, seen. The macros show on it as you turn them: **DENSITY**'s added hits
+sparkle white and the hits it leaves out turn to outlines; **MATH** re-divides the rings; **CHAOS** shakes them and
+throws sparks; **SPEED** leaves a longer trail and puts x2 or 1/2 under the scene's letter. On the right: the scene
+and its name, its phrase so far, what comes next, the four macros' gauges (the one you turn lights up) and the
+chain. The **pads row at the bottom** is the black keys: each key's scene letter, the one playing lit, the one coming
+next outlined and blinking on the beat, the one held white, a dash under the ones that play once.
 
 | Control | Does |
 | --- | --- |
@@ -617,16 +621,16 @@ the others on a key: **L** STEPPER (half time), **M** DOUBLE, **N** 7/8 BOUNCE, 
 second half, so one launched late in a bar (it comes in on the next beat, where the bar is) still lands. A roll owns
 the break's voice until it's done: hats under it never cut it short. The macros are kept with SAVE.
 
-### MAP: the Slice Map
+### The Slice Map, on HOME
 
-![MAP: each slice with what it was heard as: K kick, S snare, H hat, P the rest](img/screen-mc-map.png "MATHCORE MAP")
+![HOME: each slice block with what it was heard as: K kick, S snare, H hat, P the rest](img/screen-mc-roles.png "The Slice Map on HOME")
 
 Every time a break loads (a bank break, your own, a split), CHOPPAH listens to the first 60 ms of each slice's hit in
 three bands: a low one (a kick's body), a middle one (a snare's body and crack) and a high one (hats and cymbals). A
 slice loud in the low band is a **KICK** (K), loud in the middle a **SNARE** (S), a quiet one mostly high a **HAT**
 (H), other hits **PERC** (P). Each of KICK, SNARE and HAT gets at least its likeliest slice. There is nothing to set:
-the same break always gives the same map. MAP shows it, a block per slice; the foot counts each role's slices. The
-white keys play the slices (the last one pressed outlined).
+the same break always gives the same map. The letters sit at the top of each slice block on HOME (and wherever the
+slice blocks show).
 
 ### LANE: a lane of a scene
 
@@ -706,9 +710,8 @@ break (and so the drum lanes and the scenes) as a DJ mixer's filter does. The FL
 | ARP (black keys hold effects; ARP again: MORE, MOD) | the shown key's effect: setting 1 | Setting 2 | Setting 3 | Mix |
 | ENV (tap tempo; ENV again or a white key: a tap) | Tempo | Fine (0.1) | Half / double | Click level (0: off) |
 | EDIT (MATHCORE LIVE: the black keys play scenes) | Density | Math (5 / 7 / 11 / 13) | Speed (half / double) | Chaos |
-| EDIT again (MAP: the Slice Map, heard) | Kicks found | Snares | Hats | Percs |
-| EDIT a third time (LANE; PRESETS: RHYTHM, SOUND, FEEL, MORE) | see §8 | | | |
-| EDIT a fourth time (SCENE) | Phrase | Break under | New / copy | Plays: loop / once |
+| EDIT again (LANE; PRESETS: RHYTHM, SOUND, FEEL, MORE) | see §8 | | | |
+| EDIT a third time (SCENE) | Phrase | Run on | New / copy | Plays: loop / once |
 
 **Gate** (HOME K1) cuts every slice the loop plays short: at 50 % each slice sounds for half its length, then
 quiet until the next; down to 5 % for clipped, staccato chops; 100 % is off. It follows the tempo and the pitch, and
