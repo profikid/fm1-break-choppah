@@ -799,7 +799,7 @@ static void mc_live_picture(const brk_status_t *st, int32_t top)
         uint32_t h = mc_shake(i, frame, 99u), r = 14u + h % 40u;
         float a = (float)(h >> 8 & 1023u) * (1.0f / 1024.0f);
         cv_rect(WH_X + (int32_t)((float)r * brk_sin_turns(a)), WH_Y - (int32_t)((float)r * brk_sin_turns(a + 0.25f)),
-                1, 1, h & 0x10000u ? C_WHITE : C_HI);
+                1, 1, (h >> 16 & 1u) ? C_WHITE : C_HI);
     }
     t[0] = scene_ch(sc);                 /* the scene, in the middle; SPEED's badge under it */
     t[1] = 0;
