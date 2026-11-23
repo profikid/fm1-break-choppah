@@ -23,7 +23,7 @@ twice comes up in a safe mode the installer can still reach. If your FM-1 runs M
 M-VAVE's original firmware first ([docs/FLASHING.md](docs/FLASHING.md)).
 
 **Status: early (0.x).** The engine, the slicer, the pads, the generator, the effects and the patterns work on the
-device; MATHCORE ([its PRD](docs/PRD_MATHCORE.md)) is on the `mathcore` branch, being tested. The looper and song mode are next: see the [PRD](docs/PRD.md) for the whole plan.
+device, and so does MATHCORE since v1.5.4 ([its PRD](docs/PRD_MATHCORE.md)). The looper and song mode are next: see the [PRD](docs/PRD.md) for the whole plan.
 
 ## Where to find CHOPPAH
 

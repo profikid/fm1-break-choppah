@@ -6,8 +6,17 @@ E-*, N-*; milestones M0–M8). Keep the PRD in step when scope changes.
 ## Layout
 
 `app/app.c` is the core (settings, patterns, MIDI, the render); it ends by including `app/ui/*.c` in order (common,
-fx, pads, keys, bta, global, arp, seq, kick, perc, mixer, screen, demo, main): one unity build, so a page file sees what the
-files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick, perc, …).
+fx, pads, keys, bta, global, arp, seq, mc, mixer, screen, demo, main): one unity build, so a page file sees what the
+files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, adpcm, brk_math).
+
+**MATHCORE** (v1.5.4, docs/PRD_MATHCORE.md §14–19; EDIT: LIVE, LANE, SCENE in `app/ui/mc.c`): the Slice Map is heard
+when a break loads (`mc_auto_roles`, brk.c), shown as K S H P on the slice blocks; 16 scenes (`MC_PRESET` in app.c,
+`OBJ_MC` 0xD6000, magic MCS5: change the presets, bump it) of four lanes each, played from the black keys
+(`brk_mc_jump`: a groove on the bar, a ONCE scene on the beat), the chain and the keys' scenes in `OBJ_MQ` 0xD8000;
+LIVE's macros DENSITY / MATH / SPEED / CHAOS (`brk_mc_macro`, settings `mc_macro`). Every hit is a slice on the
+break's own voice (`chop_hit`: no voices of their own, nothing laid over the loop); SEQ's drum lanes put their role's
+slice in the loop's place (`drum_slice`). Nothing is synthesised: the kick and snare/hat engines are gone (their
+settings bytes reserved).
 
 ## Hard rules
 
@@ -47,8 +56,8 @@ files before it define. `app/dsp/*.c` are separate `o2` units (brk, brk_fx, kick
   GENERATOR, SPLIT; `split_value` / `split_turn` / `draw_split` in ui/global.c), since v1.5.1 (it was GLOBAL's).
 - Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;
   `./build.sh` regenerates `app/bank_data.h` (never commit it, never edit it). The bank has 400 KB (`IMAGE_CAPACITY`
-  in `tools/prep_breaks.py`) and 16 slots, a break at most `CH_PCM_MAX` 106,496 samples (pool ~326 of 344 KB). The breaks are the bank's only: brk_synth is the no-bank fallback (and
-  the tests'). The breaks stay 2 bars (32 steps). One **custom break** of the player's (PRD A-60, v1.4): a bank of one slot in
+  in `tools/prep_breaks.py`) and 16 slots, a break at most `CH_PCM_MAX` 106,496 samples (pool ~326 of 344 KB). The breaks are the bank's only (no bank: silence; brk_synth is test material only,
+  `tests/engine/`). The breaks stay 2 bars (32 steps). One **custom break** of the player's (PRD A-60, v1.4): a bank of one slot in
   the data area at 0x97000 (14 sectors, `CU_BASE`), written over USB SysEx by the site's break manager
   (`app/site/breaks.html` -> site `breaks/`; `app_sysex` in ui/main.c: F0 7D 43 48 CMD 7-bit-packed DATA F7); present,
   it is break 1 (`n_user`, `slot_of`) and always the break at power-on. fm1-base's resource region can't hold it (it
