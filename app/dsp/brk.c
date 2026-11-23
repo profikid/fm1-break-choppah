@@ -575,8 +575,8 @@ static int loop_sounds(void)
 static uint8_t mr_flags[MC_LANES], mr_gate[MC_LANES], mr_score[MC_LANES];
 static uint32_t mr_hold[MC_LANES];       /* a roll (a ratchet) owns the voice until this master tick */
 static float mr_pitch[MC_LANES];
-/* slice s on the break's voice (the one sound playing, its fade the cut): at gain, backwards, gate % of it, at pitch
- * semitones; it runs on into the break when the scene asks (loop_sounds), else it ends with its slice. A key looping
+/* slice s on the break's voice (the one sound playing, its fade the cut): at gain, backwards, gate % of it (and of
+ * HOME's GATE, as the loop's slices), at pitch semitones; it runs on into the break when the scene asks (loop_sounds), else it ends with its slice. A key looping
  * or a pad holding the voice (a roll, a freeze, the tape stop) keeps it: the hit is counted, not heard */
 static void chop_hit(const brk_break_t *b, int32_t s, float gain, int rev, uint32_t gate, float pitch)
 {
@@ -589,8 +589,11 @@ static void chop_hit(const brk_break_t *b, int32_t s, float gain, int rev, uint3
         n->hi = (float)b->slice[s + 1];
         n->wrap = 0u;
     }
-    if (gate < 100u)
-        n->gate_left = (float)gate * 0.01f * (float)(b->slice[s + 1] - b->slice[s]);
+    {                                    /* the lane's gate times HOME's GATE (the loop's): this much, then a fade */
+        float gl = (gate < 100u ? (float)gate * 0.01f : 1.0f) * p_gate;
+        if (gl < 0.999f)
+            n->gate_left = gl * (float)(b->slice[s + 1] - b->slice[s]);
+    }
     K0->pitch = 0.0f;
     step_pitch = pitch;
 }

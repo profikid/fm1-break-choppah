@@ -168,6 +168,34 @@ reboot
 wait 2600
 expect mq_n 2
 expect mq_last 1
+# the pages carry the music: playing on HOME, EDIT brings the scenes in on the next bar, HOME the loop back on the
+# next bar; never a stop
+tap HOME
+wait 150
+tap PLAY
+wait 600
+expect mc_on 0
+expect mc_scene -1
+tap EDIT
+wait 100
+expect mc_on 1
+expect mc_scene -1
+wait 1600
+expect mc_scene >-1
+expect playing 1
+tap FX
+wait 800
+expect mc_on 1
+expect mc_scene >-1
+tap HOME
+wait 100
+expect mc_on 0
+expect mc_scene >-1
+wait 1600
+expect mc_scene -1
+expect playing 1
+tap PLAY
+wait 300
 # the black keys away from LIVE and SCENE are the pads again (HOME: ROLL 1/8 held)
 tap HOME
 wait 150

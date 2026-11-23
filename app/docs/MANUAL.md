@@ -581,6 +581,12 @@ Nothing has to be programmed (LANE and SCENE are there if you want to). Every so
 
 **EDIT** opens MATHCORE at the part used last; **EDIT again** goes to the next: LIVE → LANE → SCENE → LIVE.
 
+**Nothing to stop or start between them.** While playing, EDIT brings MATHCORE in on the next bar (LIVE: your groove,
+or the chain from its top; LANE and SCENE: the scene you edit), and HOME (or SEQ) brings the break's own loop and the
+pattern back on the next bar. FX, the MIXER, ARP, GLOBAL and TAP leave whatever plays playing, so you can work the
+effects over a scene. HOME's **GATE** shapes MATHCORE's hits as it does the loop's slices, and the DJ filter, the
+pads and the FX chain work on them the same way: it is one break, one voice.
+
 ### LIVE: play it
 
 ![LIVE: scene B (AMEN), MATH all the way, SPEED double, CHAOS turned: the rings in 5, 7, 11 and 13, shaking](img/screen-mc-live.png "MATHCORE LIVE")

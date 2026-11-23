@@ -2273,6 +2273,32 @@ static void test_mc_play(void)
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
+    /* HOME's GATE on a scene's hits: at 25 % each hit's slice is silent after its first quarter */
+    {
+        uint32_t k3, quiet = 0u, loud = 0u;
+        float p1;
+        mc_scene_init(&mc_sc[6], 1u);
+        mc_sc[6].flags = MCS_BREAK;
+        mc_sc[6].lane[0].flags = MCL_ON;
+        mc_sc[6].lane[0].hits = 0x1111u;
+        brk_gate(0.25f);
+        brk_mc_start(6);
+        brk_mc_next(6);
+        brk_play(1);
+        mc_run(16u * sl, 0, 0);
+        for (k3 = 0; k3 < 16u; k3++) {   /* each 16th: its first quarter, then the rest */
+            mc_run(sl / 2u, &p1, 0);
+            if (k3 % 4u == 0u)
+                loud += p1 > 0.05f;
+            mc_run(sl - sl / 2u, &p1, 0);
+            quiet += p1 < 0.01f;
+        }
+        CHECK(loud >= 3u && quiet >= 14u, "GATE: a scene's hits gated as the loop's (%u loud starts, %u quiet tails)",
+              loud, quiet);
+        brk_gate(1.0f);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
     /* VARY: a snare lane on 5 and 13 grows ghost notes round them, never the same bar twice, the same run twice */
     {
         static float a1[4u * 44100u], a2[4u * 44100u];

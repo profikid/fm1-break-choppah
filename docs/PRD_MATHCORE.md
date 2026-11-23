@@ -600,3 +600,15 @@ Laurens: remove the MAP page (it's automatic anyway) and put the K S H P letters
 | MM-L-003 | The right side: the scene and its name, the phrase, what's next, the four macros' gauges (DENSITY from the middle, MATH's seven steps, SPEED's three boxes, CHAOS a jagged bar; the one turned lit for 1.5 s), the chain | Done |
 | MM-L-004 | The macros on the wheel: DENSITY's added hits white (flashing while turned) and dropped ones outlined, through `mc_event_kind` (dsp: the same decision as the render); MATH's ring lengths; CHAOS shakes the rings and throws sparks; SPEED's trail and an x2 / 1/2 badge. The wheel redraws at 25 fps while playing, while CHAOS is up, and while a gauge is lit | Done |
 
+---
+
+## 20. Revision: the pages carry the music; the gate (23 Nov 2026)
+
+Laurens: switching between HOME and EDIT needs a stop and a start; it should go by itself, smoothly. And the gate
+doesn't work with MATHCORE: everything should work together.
+
+| ID | Requirement | State |
+| --- | --- | --- |
+| MM-T-001 | While playing, EDIT (from any page, MATHCORE not playing) brings the scenes in on the next bar: LIVE the chain from its top or the groove, LANE / SCENE the scene edited (`mc_follow_page`, ui/mc.c; `brk_mc_jump`). HOME (PERFORM, GENERATOR, SPLIT) and SEQ bring the loop and the pattern back on the next bar (`brk_mc_jump(-1, 16)`). FX, MIXER, ARP, GLOBAL, TAP keep what plays. Never a stop | Done; scenario mathcore.txt; no silent 16th across the switches (simulator) |
+| MM-T-002 | HOME's GATE (`p_gate`) applies to a scene's hits as to the loop's slices, times the lane's own GATE (`chop_hit`) | Done; engine test: at 25 % each hit's tail silent |
+

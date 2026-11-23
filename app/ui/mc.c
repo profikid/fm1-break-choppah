@@ -166,6 +166,48 @@ static void mc_frame(const brk_status_t *st)
     mc_push_next(st);
 }
 
+/* the pages carry the music, while playing, with nothing to stop or start: into MATHCORE (EDIT) its scenes come in on
+ * the next bar (LIVE: the chain from its top, or the groove; LANE, SCENE: the scene edited), back on HOME (any of its
+ * parts) or SEQ the break's own loop and the pattern come back on the next bar. Elsewhere (FX, the MIXER, ARP,
+ * GLOBAL, TAP) whatever plays plays on */
+static void mc_follow_page(const brk_status_t *st)
+{
+    static uint8_t last = 0xFFu;
+    uint32_t was = last, pg = ui.page;
+    if (pg == was)
+        return;
+    last = (uint8_t)pg;
+    if (was == 0xFFu || !st->playing)
+        return;
+    if (pg == PG_MC && !mc.on) {
+        uint32_t to;
+        if (mc.part == MCP_LIVE) {
+            mc.on = 1u;
+            mc.qpos = 0u;
+            mc.qgone = 0u;
+            mc.qled = mq.n != 0u;
+            if (mq.n && !mc_once(mq.q[0]))
+                mc.base = mq.q[0];
+            to = mq.n ? mq.q[0] : mc.base;
+        } else {
+            mc.on = 2u;
+            to = mc.scene;
+        }
+        mc.seen_play = 1u;
+        mc.next_sent = -2;
+        mc.adv_seen = st->mc_adv;
+        mc.end_seen = st->mc_ended;
+        brk_mc_jump((int)to, 16u);
+        mc_mute_out();
+        app_say("MATHCORE", "NEXT BAR");
+    } else if ((pg == PG_HOME || pg == PG_GEN || pg == PG_SPLIT || pg == PG_SEQ) && mc.on) {
+        mc.on = 0u;
+        mc.held = -1;
+        brk_mc_jump(-1, 16u);            /* (the loop again, on the bar) */
+        app_say("THE LOOP", "NEXT BAR");
+    }
+}
+
 /* a black key on LIVE: its scene now. Stopped, it starts there and then. Playing, a groove comes in on the next bar
  * and is the groove from then on; a fill, riser or drop on the next beat, played to its bar line, then the groove
  * again. Held past MC_HOLD_MS, any scene is momentary: it plays while held, the groove back on the next beat after */

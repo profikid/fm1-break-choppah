@@ -1107,7 +1107,8 @@ void app_frame(void)
     }
     ui.touched = 0u;
     brk_status(&st);
-    mc_frame(&st);                       /* MATHCORE: the queue's next entry, its end */
+    mc_follow_page(&st);                 /* MATHCORE in and out with the pages, on the bar */
+    mc_frame(&st);                       /* MATHCORE: the chain's next entry, its end */
     b = brk_get_break();
     if (pat_next >= 0 && (!st.playing || (st.step >= 0 && (st.half >= 0 ? st.step % 16 == 15   /* (a half alone) */
                                                           : (uint32_t)st.step + 1u >= pat_len())))) {
@@ -1415,8 +1416,8 @@ int app_expect(const char *what, int *got)
                                     "split", "split_at", "half", "half_ask", "layer", "split_b",
                                     "mc_on", "mq_n", "mc_scene", "mc_qpos", "mc_edit", "mc_kicks", "mc_snares",
                                     "mc_hats", "mc_percs", "mc_missing", "mc_adv", "mc_hits", "mq_key0", "mc_state0",
-                                    "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next", "mc_math", "mc_base"};
-    int v[66];
+                                    "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next", "mc_math", "mc_base", "playing"};
+    int v[67];
     uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
@@ -1487,7 +1488,8 @@ int app_expect(const char *what, int *got)
     v[63] = st.mc_next;
     v[64] = set.mc_macro[1];
     v[65] = mc.base;
-    for (i = 0; i < 66u; i++)
+    v[66] = st.playing;
+    for (i = 0; i < 67u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;
