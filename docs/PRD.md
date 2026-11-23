@@ -135,7 +135,7 @@ HOME is the live instrument view:
 | --- | --- | --- | --- |
 | S-001 | Play a selected break as a tempo-locked loop | P0 | Stable loop timing at supported BPM range |
 | S-002 | Built-in break library from the existing approved bank | P0 | Break selection is quantised to bar boundary while playing |
-| S-003 | One user break slot via the existing browser break manager / SysEx workflow | P0 | Upload, verify, read back, play and delete |
+| S-003 | User breaks via the browser break manager / SysEx workflow: since v1.6 a **pack** of up to 16, in two banks (bank 1 the data area 0x97000–0xD5FFF, 252 KB, where 1.4–1.5's one break lived; bank 2 XDATA1 0xE5000–0xFBFFF, 92 KB), listed first, the first the break at power-on | P0 | Upload, verify, read back, play and delete; *v1.6: tests/pack.sh (two banks: order, play, power-on, read back, "AT" refused at XDATA1's 0xF06s, delete), tests/custom_break.sh (a 1.5-style break still works), tests/page_parity.sh (the page's bank of three = prep_breaks.py's)* |
 | S-004 | Slice counts of 8, 16 and 32 | P0 | Slice map persists per break |
 | S-005 | Equal-grid slicing and manually adjusted slice markers | P0 | Marker edits are saved and survive reboot |
 | S-006 | Trigger slices from 16 white keys | P0 | Immediate while stopped; quantised when transport is running |
@@ -375,7 +375,10 @@ Keep the existing desktop preparation tool and browser break manager as the sour
 - Equal-grid or transient-assisted slice markers.
 - Encode to IMA ADPCM using the existing bank format.
 - Preview the encoded / decoded result before upload.
-- Upload, verify CRC, read back and delete user break.
+- Upload, verify CRC, read back and delete user breaks: a pack of up to 16 (v1.6), each bank written whole and
+  checked whole (header, CRC-32, every slot); one quality for the pack (22.05, 16 or 11.025 kHz); kept in the browser
+  (IndexedDB), exported and imported as one bank file (.chb). The SysEx command's bits 4–5 pick the bank (0: bank 1,
+  so the 1.4–1.5 page still writes a break of one); INFO answers version 2 (24 bytes, the first 12 as version 1).
 - Preserve the existing safe commit order: data first, bank header last.
 
 The first release continues to target the existing bank architecture. Multi-break simultaneous streaming is not assumed.

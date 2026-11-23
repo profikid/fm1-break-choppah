@@ -10,7 +10,7 @@
   panel's printed labels), the site's
   header and an introduction in place of its title, and a "where to start" row under the panel; its panel, markup
   and script stay as they are;
-- breaks/index.html: the break manager (app/site/breaks.html: a pack of breaks of your own over Web MIDI, PRD A-60, A-61) with
+- breaks/index.html: the break manager (app/site/breaks.html: a pack of breaks of your own over Web MIDI, PRD S-003) with
   site.css and the site's header;
 - index.html and manual/index.html: app/site/site.css (with its fonts) in place of fm1-base's style, a class on
   <body> for each page, and a "Controls" link in the site's header (to the manual's control map);

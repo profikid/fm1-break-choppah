@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: MPL-2.0
-# The pack (PRD A-61) end to end in the host simulator: three breaks into bank 1 (the data area) and two into bank 2
+# The pack (PRD S-003) end to end in the host simulator: three breaks into bank 1 (the data area) and two into bank 2
 # (PLAT_XDATA1) as the break manager page sends them (tools/cu_frames.py, prep_breaks.py's way), INFO's answer, the
 # pack first in the break list (bank 1's, then bank 2's, then the built-in eight), a break of bank 2 played, both kept at
 # power-on, bank 2 read back byte for byte, a write that would put "AT" at a sector's 0xF06 refused (the update

@@ -57,13 +57,18 @@ settings bytes reserved).
 - Breaks: `breaks/breaks.txt` (paths relative to `breaks/`) marks with `*` the WAVs built into the firmware;
   `./build.sh` regenerates `app/bank_data.h` (never commit it, never edit it). The bank has 400 KB (`IMAGE_CAPACITY`
   in `tools/prep_breaks.py`) and 16 slots, a break at most `CH_PCM_MAX` 106,496 samples (pool ~326 of 344 KB). The breaks are the bank's only (no bank: silence; brk_synth is test material only,
-  `tests/engine/`). The breaks stay 2 bars (32 steps). One **custom break** of the player's (PRD A-60, v1.4): a bank of one slot in
-  the data area at 0x97000 (14 sectors, `CU_BASE`), written over USB SysEx by the site's break manager
-  (`app/site/breaks.html` -> site `breaks/`; `app_sysex` in ui/main.c: F0 7D 43 48 CMD 7-bit-packed DATA F7); present,
-  it is break 1 (`n_user`, `slot_of`) and always the break at power-on. fm1-base's resource region can't hold it (it
-  only takes the build's own payload). Tests: `tests/custom_break.sh` (upload, play, reboot, read back, delete in the
-  simulator), `tests/page_parity.sh` (the page's conversion = prep_breaks.py, byte for byte), `tests/page_warp.sh` (the page's
-  groove warp: hits onto the grid sample for sample). The page's library is Cyberworm's Amens from breaks/
+  `tests/engine/`). The breaks stay 2 bars (32 steps). The player's **pack** (PRD S-003, v1.6; 1.4-1.5 had one
+  break): up to 16 breaks in two banks in the built-in bank's format, bank 1 the data area 0x97000-0xD5FFF (63
+  sectors, where the custom break was) and bank 2 XDATA1 0xE5000-0xFBFFF (23 sectors; "AT" never at a sector's 0xF06:
+  `pk_at` refuses it, the page and `tools/cu_frames.py` nudge it out) (`PK_BASE`, `PK_SECT`, `pk_scan`: each bank
+  checked whole), written over USB SysEx by the site's break manager (`app/site/breaks.html` -> site `breaks/`;
+  `app_sysex` in ui/main.c: F0 7D 43 48 CMD 7-bit-packed DATA F7, the bank in CMD's bits 4-5; INFO version 2, 24
+  bytes, the first 12 as version 1); the pack comes first (`n_user`, `slot_of`: bank 1's, bank 2's, the built-in
+  ones), its first always the break at power-on; a pack change sets the split's B back to 0. fm1-base's resource
+  region can't hold it (it only takes the build's own payload). Tests: `tests/pack.sh` (both banks: order, play,
+  reboot, read back, "AT" refused, delete), `tests/custom_break.sh` (a break of one, the 1.5 page's way),
+  `tests/page_parity.sh` (the page's conversion and a bank of three = prep_breaks.py, byte for byte; the AT nudge =
+  cu_frames.py's), `tests/page_warp.sh` (the page's groove warp: hits onto the grid sample for sample). The page's library is Cyberworm's Amens from breaks/
   (tools/site_style.py converts them at site build); a page-only change goes live by running pages.yml (version: the
   latest release, package-from: release), no firmware release needed.
 - **Releases are tags, not merges** (since 6 Nov 2026): `scripts/release.sh` tags vX.Y and pushes it; the shared

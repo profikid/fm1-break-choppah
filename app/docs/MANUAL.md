@@ -123,13 +123,14 @@ sixteenths); the list lives on this site and costs the FM-1 no space. The reader
 | PRESETS | The pattern, P1–P16 (§5); while playing the new one starts at the end of the loop |
 | SEQ · REC | The sequencer; recording the keys into the pattern (§5). SEL + REC: clear the pattern (SEL + SAVE takes it back) |
 | MIDI notes | Notes 48–63 (C3–D#4) play slices 1–16, held like the white keys; 64–74 (E4–D5) press black keys 1–11 (on HOME the performance pads, on ARP the effect pads; SEL + the note holds an ARP pad); 24–35 (C1–B1) pick the break; 36 a kick slice, 38 a snare, 42 / 44 / 46 a hat, 37 / 39 a perc one (the Slice Map's, §8). Any channel, or the one set on GLOBAL's CHANNEL part: the whole map is in §7, [MIDI map](#midi-map) |
-| ALGORITHM | (HOME, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each (AMEN: the record's bars 3 and 4, the crash in the second), played at the tempo you set. A break of your own, when there is one, comes first ([Your own break](#your-own-break)) |
+| ALGORITHM | (HOME, MIXER; SEL held: any page) The next or previous break: its name shows at once (amber in the header) and, while playing, it comes in at the next bar (the old one goes quiet for the bar's last 16th meanwhile); stopped, at once. AMEN (The Winstons), DRUMMER (James Brown, Funky Drummer), THE WORM (Jimmy McGriff), THINK (Lyn Collins), COLD SWEAT (James Brown), HOT PANTS (Bobby Byrd), APACHE (Incredible Bongo Band), SPORT (Lightnin' Rod): 2 bars each (AMEN: the record's bars 3 and 4, the crash in the second), played at the tempo you set. Breaks of your own, when there are some, come first ([Your own breaks](#your-own-break)) |
 | MASTER | Volume |
 
-### Your own break
+### Your own breaks
 
-Beside the eight built in, the FM-1 holds one break of your own. Make it on the site's
-[Your break](https://profikid.github.io/fm1-break-choppah/breaks/) page, in Chrome or Edge on a computer:
+<a id="your-own-break"></a>Beside the eight built in, the FM-1 holds a **pack** of breaks of your own: up to sixteen.
+Make it on the site's [Your breaks](https://profikid.github.io/fm1-break-choppah/breaks/) page, in Chrome or Edge on a
+computer:
 
 1. **Load a sample** of your own: a drum loop of whole bars, in any format the browser plays. Or pick one from the
    library (From the library): Cyberworm's sixty royalty-free Amens, each with its tempo and bars, and a search. The page guesses how many bars it is from its length
@@ -145,13 +146,24 @@ Beside the eight built in, the FM-1 holds one break of your own. Make it on the 
    onto its grid line (every slice an eighth apart), and the sound between is stretched or squeezed to fit, its
    pitch kept and each hit's attack untouched. Place the slices on the hits first, then warp; you go on moving them
    on the original, and hear and send the warped break.
-3. **Connect** the FM-1 by USB, **stop** CHOPPAH, and **send it**. It takes a few seconds; the FM-1 says RECEIVING A
-   BREAK, then BREAK and its name.
+3. **Add it to the pack**, and make the next. **Add these to the pack** in the library adds every break the search
+   shows (search "amen0", say, for Cyberworm's numbered ones). The pack lists them in the order the FM-1 will: rename
+   one, move it up or down, hear it, take it out.
+4. **Connect** the FM-1 by USB, **stop** CHOPPAH, and **send the pack**. A full pack takes about half a minute; the FM-1
+   says RECEIVING A BREAK, then BREAK and the pack's first.
 
-Your break is **break 1** (the built-in ones follow) and **the break CHOPPAH starts with** every time it is switched
-on. Sending another replaces it. Connected, the page reads the break on the FM-1 back: you see and hear what is on it,
-and can delete it (the built-in breaks stay). A break of your own is two bars and at most 56 KB: breaks under
-99.4 BPM are kept at a slightly lower sample rate to fit. It stays through updates of CHOPPAH, and RESET ALL keeps it.
+The flash has **344 KB** for your breaks, in two banks (252 KB and 92 KB; the page lays the pack out over them and
+shows how full each is). A two-bar break takes about 5,300 KB ÷ its tempo at the pack's **quality**: at 22.05 kHz,
+as the built-in breaks, about ten breaks at 170 BPM; at 16 kHz a third more; at 11.025 kHz (duller) all sixteen.
+The quality is for the whole pack; a break under 99.4 BPM is kept at a slightly lower rate still, to fit its two
+bars. If the pack doesn't fit, the page says by how much.
+
+On the FM-1 your breaks come **first** (ALGORITHM: yours, then the eight built in), and the pack's first is **the
+break CHOPPAH starts with** every time it is switched on. Sending a pack replaces the one there. Connected, the page
+lists the FM-1's breaks; **Bring them here** puts them in the pack to hear, reorder, add to and send again, and
+**Delete** takes them off (the built-in breaks stay). The pack also stays in the browser until you clear it, and
+**Export** saves it as one file (.chb) to keep or share; **Import** reads one back. Your breaks stay through updates
+of CHOPPAH, and RESET ALL keeps them. A CHOPPAH 1.4 or 1.5 takes one break: the page sends the pack's first.
 
 ### The split
 

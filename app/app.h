@@ -56,7 +56,7 @@ void app_frame(void);                    /* the UI: input and a redraw, about 60
 void app_input_only(void);               /* between frames: input only */
 void app_say(const char *a, const char *b);   /* a short message on the screen */
 
-/* the break manager's SysEx (ui/main.c app_sysex: the custom break, PRD A-60) */
+/* the break manager's SysEx (ui/main.c app_sysex: the pack, PRD S-003) */
 #define APP_SYSEX
 int app_sysex(const uint8_t *p, uint32_t n);
 

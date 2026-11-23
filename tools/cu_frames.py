@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: MPL-2.0
-"""The pack (PRD A-60, A-61) as the break manager page sends it: WAVs made into a bank exactly as the built-in breaks are
+"""The pack (PRD S-003) as the break manager page sends it: WAVs made into a bank exactly as the built-in breaks are
 (tools/prep_breaks.py), and the SysEx frames that write it into one of the pack's two banks (ui/main.c app_sysex). For
 the tests:
     python3 tools/cu_frames.py FILE.wav BPM NAME > build/custom.txt     a host-simulator scenario that uploads it

@@ -575,7 +575,7 @@ static const bank_slot_t *bank_check(const uint8_t *bank, uint32_t size, uint32_
     return s;
 }
 
-/* the pack (PRD A-61, v1.6; A-60's custom break was a pack of one): breaks of the player's in two banks of the built-in
+/* the pack (PRD S-003, v1.6; the custom break of 1.4-1.5 was a pack of one): breaks of the player's in two banks of the built-in
  * bank's format, written over USB from the site's break manager (app_sysex, ui/main.c). Bank 1 is the data area below
  * the store objects (0xD6000 on), where the custom break lived (a 1.4-1.5 custom break reads as a pack of one); bank 2
  * is PLAT_XDATA1, where the update loader looks for a record at bytes 0xF00..0xF07 of each sector: "AT" never stands at

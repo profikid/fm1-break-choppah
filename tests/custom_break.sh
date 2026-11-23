@@ -1,6 +1,6 @@
 #!/bin/sh
 # SPDX-License-Identifier: MPL-2.0
-# The custom break (PRD A-60; since 1.6 a pack of one in bank 1, A-61) end to end in the host simulator: a WAV made into a bank as the break manager page
+# The custom break (PRD S-003; since 1.6 a pack of one in bank 1) end to end in the host simulator: a WAV made into a bank as the break manager page
 # makes it (tools/cu_frames.py, prep_breaks.py's way), uploaded over SysEx, checked, loaded first and at power-on,
 # read back byte for byte, deleted. Needs ./build.sh --host first.
 #   tests/custom_break.sh

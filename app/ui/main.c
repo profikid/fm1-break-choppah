@@ -1256,7 +1256,7 @@ void app_frame(void)
     ui.redraw = 0u;
 }
 
-/* the break manager (the site's breaks/ page; PRD A-60, A-61): the pack over USB SysEx, F0 7D 43 48 CMD DATA F7
+/* the break manager (the site's breaks/ page; PRD S-003): the pack over USB SysEx, F0 7D 43 48 CMD DATA F7
  * (7D: non-commercial; "CH"), DATA 7-bit packed (each 7 bytes after a byte of their top bits). CMD: the command in bits
  * 0-3, the pack's bank in bits 4-5 (0: bank 1, where 1.4-1.5's custom break was, so their page still works). Answers:
  * F0 7D 43 48 0x40|CMD CODE DATA F7, CODE 0 done, 1 playing (stop first), 2 too big or out of place (bank 2: "AT" at a
