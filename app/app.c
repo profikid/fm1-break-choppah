@@ -161,11 +161,13 @@ static const char *const SNAP_NAME[SNAPS] = {"OFF", "1/8 SLICE", "1/4 SLICE", "1
 static const char *const SNAP_SHORT[SNAPS] = {"OFF", "1/8 SL", "1/4 SL", "1/2 SL", "1 SL", "2 SL", "4 SL"};
 static uint32_t snap_index(void) { return set.snap && set.snap <= SNAPS ? set.snap - 1u : 4u; }
 
+static int8_t slot_pitch;                /* the break playing's own pitch and swing (its pack's), on top of the global ones */
+static uint8_t slot_swing;
 static void settings_apply(void)
 {
     brk_tempo((float)set.tempo_x10 * 0.1f);
-    brk_pitch((float)set.pitch);
-    brk_swing((float)set.swing * 0.01f);
+    brk_pitch((float)(set.pitch + slot_pitch));
+    brk_swing((float)(slot_swing ? slot_swing : set.swing) * 0.01f);
     brk_gen(&set.gen);
     brk_fx_set(&set.fx);
     {
@@ -510,6 +512,7 @@ static void mc_load(void)                /* boot: the saved scenes and queue, ch
     brk_mc_scenes(mcs.sc);
 }
 
+
 /* ------------------------------------------------------------------- engine --- */
 static int16_t pcm_a[CH_PCM_MAX] PLAT_POOL;
 #define CH_DUB_LEN 30720u                /* the dub delay's line: 0.70 s a side, 3/8 down to 97 BPM, 1/2 to 172 */
@@ -565,7 +568,8 @@ static const bank_slot_t *bank_check(const uint8_t *bank, uint32_t size, uint32_
 {
     const bank_header_t *h = (const bank_header_t *)bank;
     const bank_slot_t *s;
-    if (!bank || h->magic != BANK_MAGIC || h->version != BANK_VERSION || i >= h->nslots || i >= BANK_SLOTS ||
+    if (!bank || h->magic != BANK_MAGIC || (h->version != BANK_VERSION && h->version != BANK_VERSION2) ||
+        i >= h->nslots || i >= BANK_SLOTS ||
         16u + 168u * (i + 1u) > size)
         return 0;
     s = (const bank_slot_t *)(bank + 16u + 168u * i);
@@ -588,6 +592,7 @@ static const uint32_t PK_SECT[PK_BANKS] = {63u, 23u};      /* 252 KB, 92 KB */
 static uint32_t pk_n[PK_BANKS];          /* each bank's breaks (checked whole: pk_scan) */
 static uint32_t n_user;                  /* the pack's breaks, both banks: breaks 0 .. n_user - 1 */
 
+static uint32_t rd32le(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
 static uint32_t crc32_of(const uint8_t *p, uint32_t n)   /* zlib's */
 {
     uint32_t c = ~0u, k;
@@ -598,21 +603,167 @@ static uint32_t crc32_of(const uint8_t *p, uint32_t n)   /* zlib's */
     }
     return ~c;
 }
+/* the pack's v2 chunks (PRD_PACKS 3.2): its name and id, each slot's settings, its scenes, its theme, its overlay; 0
+ * when the pack has none (a v1 pack: the factory's) */
+static const bank_pack_t *pk_pack;
+static const bank_sset_t *pk_sset;
+static uint32_t pk_nsset;
+static const uint8_t *pk_scne, *pk_them;
+static const bank_ovly_t *pk_ovly;
+static uint32_t pk_scne_len, pk_tag;     /* pk_tag: the pack's id, hashed (0: no pack of v2) */
+static void pk_chunks(const uint8_t *p, uint32_t size)
+{
+    const bank_header_t *h = (const bank_header_t *)p;
+    uint32_t at = 16u + 168u * h->nslots, n, i;
+    if (h->version != BANK_VERSION2 || at + 4u > size)
+        return;
+    n = rd32le(p + at);
+    at += 4u;
+    for (i = 0; i < n && i < 16u && at + 8u <= size; i++) {
+        uint32_t tag = rd32le(p + at), len = rd32le(p + at + 4u);
+        const uint8_t *d = p + at + 8u;
+        if (len > size - at - 8u)
+            return;
+        if (tag == CHK_PACK && len >= sizeof(bank_pack_t)) {
+            pk_pack = (const bank_pack_t *)d;
+            pk_tag = crc32_of(pk_pack->id, 16u) | 1u;
+        } else if (tag == CHK_SSET) {
+            pk_sset = (const bank_sset_t *)d;
+            pk_nsset = len / sizeof(bank_sset_t);
+        } else if (tag == CHK_SCNE) {
+            pk_scne = d;
+            pk_scne_len = len;
+        } else if (tag == CHK_THEM && len >= 16u)
+            pk_them = d;
+        else if (tag == CHK_OVLY && len >= sizeof(bank_ovly_t) &&
+                 len - sizeof(bank_ovly_t) >= (((const bank_ovly_t *)d)->len + 1u) / 2u)
+            pk_ovly = (const bank_ovly_t *)d;
+        at += 8u + len + (-len & 3u);
+    }
+}
 static void pk_scan(void)
 {
     uint32_t k, i;
     n_user = 0u;
+    pk_pack = 0; pk_sset = 0; pk_scne = 0; pk_them = 0; pk_ovly = 0;
+    pk_nsset = pk_scne_len = pk_tag = 0u;
     for (k = 0; k < PK_BANKS; k++) {
         const uint8_t *p = plat_data(PK_BASE[k]);
         const bank_header_t *h = (const bank_header_t *)p;
         pk_n[k] = 0u;
-        if (!p || !h->nslots || h->nslots > BANK_SLOTS || h->data_size > PK_CAP(k) - 16u ||
-            crc32_of(p + 16, h->data_size) != h->crc32)
+        if (!p || h->magic != BANK_MAGIC || (!h->nslots && h->version != BANK_VERSION2) || h->nslots > BANK_SLOTS ||
+            h->data_size > PK_CAP(k) - 16u || crc32_of(p + 16, h->data_size) != h->crc32)
             continue;
         for (i = 0; i < h->nslots && bank_check(p, 16u + h->data_size, i); i++)
             ;
-        pk_n[k] = i == h->nslots ? i : 0u;
+        if (i != h->nslots)
+            continue;
+        pk_n[k] = i;
         n_user += pk_n[k];
+        pk_chunks(p, 16u + h->data_size);
+    }
+}
+
+/* a slot's settings (PRD_PACKS 4): the pack's break i's, or 0 (a v1 pack, a built-in break) */
+static const bank_sset_t *sset_of(uint32_t i)
+{
+    return i < n_user && i < pk_nsset ? &pk_sset[i] : 0;
+}
+static uint8_t tile_src[BRK_MAX_SLICES + 1];   /* the window's slice i came from the break's slice tile_src[i] */
+
+/* the loop's window (PRD_PACKS PS-002): steps 16ths from step start, repeated over the break's two bars, so the loop,
+ * the generator, MATHCORE and SEQ all play the window without knowing it */
+static void slot_window(brk_break_t *d, int16_t *pcm, uint32_t steps, uint32_t start)
+{
+    uint32_t len = d->len, wl, ws, k, c, m = 0u, n = 0u, at;
+    uint32_t rel[BRK_MAX_SLICES + 1];
+    uint8_t src[BRK_MAX_SLICES + 1];
+    for (k = 0; k <= BRK_MAX_SLICES; k++)
+        tile_src[k] = (uint8_t)k;
+    if (!steps || steps >= 32u || 32u % steps)
+        return;
+    if (start + steps > 32u)
+        start = 32u - steps;
+    wl = len * steps / 32u;
+    ws = len * start / 32u;
+    if (wl < 64u)
+        return;
+    for (k = 0; k < d->nslices && m < BRK_MAX_SLICES; k++) {   /* the slices in the window (and the one it starts in) */
+        uint32_t a = d->slice[k], b = d->slice[k + 1u];
+        if (b <= ws || a >= ws + wl)
+            continue;
+        rel[m] = a > ws ? a - ws : 0u;
+        src[m++] = (uint8_t)k;
+    }
+    for (k = 0; k < wl; k++)             /* the window to the front, then again to the end */
+        pcm[k] = pcm[ws + k];
+    for (at = wl; at < len; at++)
+        pcm[at] = pcm[at - wl];
+    for (c = 0; c < 32u / steps; c++)
+        for (k = 0; k < m && n < BRK_MAX_SLICES; k++) {
+            d->slice[n] = c * wl + rel[k];
+            tile_src[n++] = src[k];
+        }
+    d->nslices = n ? n : 1u;
+    d->slice[d->nslices] = len;
+}
+
+/* a pack break's settings, on the break just decoded (not a split) */
+static void slot_apply(brk_break_t *d, int16_t *pcm, uint32_t i)
+{
+    const bank_sset_t *ss = sset_of(i);
+    uint32_t k;
+    slot_pitch = 0;
+    slot_swing = 0u;
+    for (k = 0; k <= BRK_MAX_SLICES; k++)
+        tile_src[k] = (uint8_t)k;
+    if (!ss)
+        return;
+    if (ss->gain_db) {                   /* the level, into the samples */
+        int32_t g = (int32_t)(brk_exp2f_c((float)ss->gain_db * 0.16609640f) * 4096.0f);
+        for (k = 0; k < d->len; k++) {
+            int32_t v = (pcm[k] * g) >> 12;
+            pcm[k] = (int16_t)(v > 32767 ? 32767 : v < -32768 ? -32768 : v);
+        }
+    }
+    if (ss->bpm_x100 >= 4000u)
+        d->bpm_x100 = ss->bpm_x100;
+    slot_window(d, pcm, ss->loop_steps, ss->loop_start);
+    slot_pitch = ss->pitch < -24 ? -24 : ss->pitch > 24 ? 24 : ss->pitch;
+    slot_swing = ss->swing >= 50u && ss->swing <= 75u ? ss->swing : 0u;
+}
+
+/* the pack's scenes (PRD_PACKS PM-001, PM-002): a pack of v2 brings its own (or the factory's); the scenes and chain
+ * saved are the pack's they were made with (its id hashed into mq.rsv), so another pack never inherits them */
+static void mc_pack(void)
+{
+    uint32_t tag = pk_tag & 0xFFFFFFu, had = mq.rsv[0] | mq.rsv[1] << 8 | (uint32_t)mq.rsv[2] << 16, i;
+    if (tag == had)
+        return;
+    if (pk_scne && pk_scne_len == sizeof mcs && rd32le(pk_scne) == MCS_MAGIC) {
+        uint8_t *z = (uint8_t *)&mcs;
+        for (i = 0; i < sizeof mcs; i++)
+            z[i] = pk_scne[i];
+    } else
+        mc_defaults();
+    mq_defaults();
+    mq.rsv[0] = (uint8_t)tag;
+    mq.rsv[1] = (uint8_t)(tag >> 8);
+    mq.rsv[2] = (uint8_t)(tag >> 16);
+    brk_mc_scenes(mcs.sc);
+}
+
+/* the Slice Map as the pack says (PS-004): a role set by hand wins over the one heard */
+static void slot_roles(uint32_t i, const brk_break_t *b)
+{
+    const bank_sset_t *ss = sset_of(i);
+    uint32_t k;
+    if (!ss || !b)
+        return;
+    for (k = 0; k < b->nslices && k < BRK_MAX_SLICES; k++) {
+        uint8_t r = ss->roles[tile_src[k] & 31u];
+        if (r != 0xFFu)
+            roles_now[k] = r & 15u;
     }
 }
 
@@ -793,13 +944,17 @@ static const brk_break_t *break_load(uint32_t i)
             d->name[k] = s->name[k];
         d->name[12] = 0;
         d->split = 0u;
+        slot_apply(d, pcm_a, i);         /* a pack break's own loop, level, tempo, pitch and swing */
         b = d;
     }
     set.brk = (uint8_t)i;
     if (b)
         wave_build(b);
     mc_auto_roles(b, roles_now);         /* the Slice Map: the kicks, snares, hats and the rest, heard */
+    slot_roles(i, b);
     brk_roles(roles_now, BRK_MAX_SLICES);
+    brk_pitch((float)(set.pitch + slot_pitch));
+    brk_swing((float)(slot_swing ? slot_swing : set.swing) * 0.01f);
     return b;
 }
 
@@ -825,6 +980,7 @@ void app_init(void)
     if (plat_store_load(OBJ_PAT, &pats, sizeof pats) != (int)sizeof pats || pats.magic != PAT_MAGIC)
         pat_defaults();
     mc_load();
+    mc_pack();
     brk_set_break(break_load(set.brk));  /* boot: the audio isn't running yet */
     settings_apply();
     pat_apply();

@@ -19,7 +19,7 @@ N1=$(wc -c < "$O/b1.bin")
 N2=$(wc -c < "$O/b2.bin")
 INFO=$(python3 -c "
 import struct, sys; sys.path.insert(0, 'tools'); import cu_frames as c
-v = struct.pack('<6I', 2 | 5 << 16 | 63 << 24, 63 * 4096, $N1, 2 | 3 << 8 | 2 << 16, 23 * 4096, $N2)
+v = struct.pack('<6I', 3 | 5 << 16 | 63 << 24, 63 * 4096, $N1, 2 | 3 << 8 | 2 << 16, 23 * 4096, $N2)
 print(c.hexs(bytes([0xF0, 0x7D, 0x43, 0x48, 0x41, 0]) + c.pack7(v) + bytes([0xF7])))")
 BEGIN2=$(python3 -c "
 import sys; sys.path.insert(0, 'tools'); import cu_frames as c

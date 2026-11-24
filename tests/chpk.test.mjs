@@ -62,3 +62,24 @@ console.log("chpk: all good");
   assert.deepEqual(P.buildBank(bs), pageBuild(bs));
   console.log("chpk: bank = breaks.html's");
 }
+// the FM-1's v2 banks: the chunks after the slot table, the slots' offsets past them, the CRC
+{
+  const bs = [brk("AMEN", 40000), brk("THINK", 30000)];
+  const m = { id: P.uuid(), name: "v2 pack", author: "me", slots: [{ loop_steps: 16, gain_db: -3, roles: "KSH-" }] };
+  const [b1, b2] = P.deviceBanks(bs, 2, m, { scenes: new Uint8Array(1604), overlay: { rate: 22050, len: 5000, bpm: 136.9, bars: 4, data: new Uint8Array(2500) } });
+  const dv = new DataView(b1.buffer);
+  assert.equal(dv.getUint16(4, true), 2);
+  assert.equal(P.crc32(b1.subarray(16, 16 + dv.getUint32(8, true))), dv.getUint32(12, true));
+  const at = 16 + 168 * 2;
+  assert.equal(dv.getUint32(at, true), 4, "PACK SSET THEM SCNE in bank 1");
+  assert.equal(String.fromCharCode(...b1.subarray(at + 4, at + 8)), "PACK");
+  const off0 = dv.getUint32(16 + 24, true);
+  assert.ok(off0 > at + 4 + 56 + 80 + 32 + 1604, "the ADPCM after the chunks");
+  assert.deepEqual(b1.subarray(off0, off0 + 20), bs[0].data ? bs[0].data.subarray(0, 20) : P.adpcmEncode(bs[0].pcm).subarray(0, 20));
+  const ssAt = at + 4 + 8 + 56 + 8;
+  assert.deepEqual([b1[ssAt], b1[ssAt + 3] << 24 >> 24, b1[ssAt + 8], b1[ssAt + 9], b1[ssAt + 10], b1[ssAt + 11], b1[ssAt + 12]], [16, -3, 1, 2, 4, 0, 0xFF]);
+  assert.ok(b2, "the overlay in bank 2"); const d2 = new DataView(b2.buffer);
+  assert.equal(d2.getUint16(6, true), 0, "bank 2: no breaks, the overlay alone");
+  assert.equal(String.fromCharCode(...b2.subarray(16 + 4, 16 + 8)), "OVLY");
+  console.log("chpk: v2 banks");
+}

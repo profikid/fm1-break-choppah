@@ -1266,7 +1266,8 @@ void app_frame(void)
  * {size u32}: the bank's sectors erased, its breaks gone; 3 DATA {offset u32 (16 on: the header comes last), bytes}
  * -> {offset u32} (1.6 on: a frame sent again tells its answer from a late one); 4 COMMIT {the 16-byte header}:
  * written last, the bank checked, the pack's first break loaded; 5 READ {offset u32, count u32 (256 at most)} ->
- * {offset u32, bytes}; 6 DELETE: the bank's breaks gone. Writes only while stopped (they
+ * {offset u32, bytes}; 6 DELETE: the bank's breaks gone; 7 GETSET {offset u32, count u32}: the scenes and the chain as
+ * in RAM (1.7; INFO says version 3 since: a v2 bank, with the pack's chunks, reads). Writes only while stopped (they
  * stall the sound). The split's B goes back to "the break after A" when the pack changes. The scratch is the demo's
  * stars (the demo ends) */
 static uint32_t cu_size, cu_bank;        /* the bytes BEGIN made room for, in which bank */
@@ -1306,6 +1307,13 @@ static void cu_reply(uint32_t cmd, uint32_t code, const uint8_t *d, uint32_t n)
     (void)plat_sysex_send(f, k);
 }
 static uint32_t rd32(const uint8_t *p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
+/* GETSET (PRD_PACKS PE-002): the edits the builder pulls back into the pack: the scenes (as OBJ_MC holds them), then the
+ * chain and the black keys (OBJ_MQ), as in RAM now */
+#define GS_SIZE ((uint32_t)(sizeof mcs + sizeof mq))
+static uint8_t gs_byte(uint32_t i)
+{
+    return i < sizeof mcs ? ((const uint8_t *)&mcs)[i] : i < GS_SIZE ? ((const uint8_t *)&mq)[i - sizeof mcs] : 0u;
+}
 /* bank 2 (PLAT_XDATA1): would writing d[0..n) at off put "AT" at a sector's 0xF06 (the update loader's record)? */
 static int pk_at(uint32_t bank, uint32_t off, const uint8_t *d, uint32_t n)
 {
@@ -1329,17 +1337,17 @@ int app_sysex(const uint8_t *p, uint32_t n)
         return 0;
     cmd = p[3] & 15u;
     bank = p[3] >> 4 & 3u;
-    if (bank >= PK_BANKS || !cmd || cmd > 6u)
+    if (bank >= PK_BANKS || !cmd || cmd > 7u)
         return 0;
     if (demo.on)
         demo_end();
     ui.idle_t = plat_ms();
     len = unpack7(p + 4, n - 4u > 600u ? 600u : n - 4u, u);
-    if (cmd == 1u || cmd == 5u) {        /* INFO, READ: any time */
+    if (cmd == 1u || cmd == 5u || cmd == 7u) {   /* INFO, READ, GETSET: any time */
         if (cmd == 1u) {
             const bank_header_t *h0 = (const bank_header_t *)plat_data(PK_BASE[0]);
             const bank_header_t *h1 = (const bank_header_t *)plat_data(PK_BASE[1]);
-            uint32_t v[6] = {2u | (uint32_t)playing_now() << 8 | n_user << 16 | PK_SECT[0] << 24, PK_CAP(0),
+            uint32_t v[6] = {3u | (uint32_t)playing_now() << 8 | n_user << 16 | PK_SECT[0] << 24, PK_CAP(0),
                              pk_n[0] ? 16u + h0->data_size : 0u, PK_BANKS | pk_n[0] << 8 | pk_n[1] << 16, PK_CAP(1),
                              pk_n[1] ? 16u + h1->data_size : 0u};
             cu_reply(p[3], 0u, (const uint8_t *)v, 24u);
@@ -1347,14 +1355,14 @@ int app_sysex(const uint8_t *p, uint32_t n)
         }
         off = rd32(u);
         len = rd32(u + 4);
-        if (len > 256u || off > PK_CAP(bank) || len > PK_CAP(bank) - off) {
+        if (len > 256u || off > (cmd == 7u ? GS_SIZE : PK_CAP(bank)) || len > (cmd == 7u ? GS_SIZE : PK_CAP(bank)) - off) {
             cu_reply(p[3], 2u, 0, 0u);
             return 1;
         }
         for (i = 0; i < 4u; i++)
             a[i] = u[i];
         {                                /* {offset, bytes}: packed straight from the flash (a, then the bytes) */
-            const uint8_t *src = plat_data(PK_BASE[bank] + off);
+            const uint8_t *src = cmd == 7u ? 0 : plat_data(PK_BASE[bank] + off);
             uint8_t *f = u;
             uint32_t k;
             f[0] = 0xF0; f[1] = 0x7D; f[2] = 0x43; f[3] = 0x48; f[4] = (uint8_t)(0x40u | p[3]); f[5] = 0u;
@@ -1363,7 +1371,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
                 uint8_t g[7];
                 uint32_t j;
                 for (j = 0; j < 7u; j++)
-                    g[j] = i + j < 4u ? a[i + j] : i + j < 4u + len ? src[i + j - 4u] : 0u;
+                    g[j] = i + j < 4u ? a[i + j] : i + j < 4u + len ? (src ? src[i + j - 4u] : gs_byte(off + i + j - 4u)) : 0u;
                 k += pack7(g, 4u + len - i < 7u ? 4u + len - i : 7u, f + k);
             }
             f[k++] = 0xF7;
@@ -1387,6 +1395,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
         if (cmd == 6u)
             cu_size = 0u;
         breaks_count();
+        mc_pack();
         set.split_b = 0u;
         break_ask(0u);
         if (cmd == 2u)
@@ -1411,7 +1420,8 @@ int app_sysex(const uint8_t *p, uint32_t n)
         if (bank != cu_bank || len < 16u || plat_data_write(PK_BASE[bank], u, 16u))
             code = 3u;
         breaks_count();
-        if (!code && !pk_n[bank])
+        mc_pack();
+        if (!code && !pk_n[bank] && !(bank && pk_ovly))   /* (bank 2 may hold the overlay alone) */
             code = 4u;
         set.split_b = 0u;
         break_ask(0u);                   /* (the pack's first break, or the first of the bank) */
@@ -1455,8 +1465,10 @@ int app_expect(const char *what, int *got)
                                     "split", "split_at", "half", "half_ask", "layer", "split_b",
                                     "mc_on", "mq_n", "mc_scene", "mc_qpos", "mc_edit", "mc_kicks", "mc_snares",
                                     "mc_hats", "mc_percs", "mc_missing", "mc_adv", "mc_hits", "mq_key0", "mc_state0",
-                                    "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next", "mc_math", "mc_base", "playing"};
-    int v[67];
+                                    "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next", "mc_math", "mc_base", "playing",
+                                    "pk_tag", "mq_tag", "sc0_bars", "nslices", "brk_bpm", "slot_pitch", "tile",
+                                    "role0", "slot_swing"};
+    int v[76];
     uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
@@ -1528,7 +1540,29 @@ int app_expect(const char *what, int *got)
     v[64] = set.mc_macro[1];
     v[65] = mc.base;
     v[66] = st.playing;
-    for (i = 0; i < 67u; i++)
+    v[67] = pk_tag != 0u;                /* a pack of v2 (PRD_PACKS) */
+    v[68] = (mq.rsv[0] | mq.rsv[1] | mq.rsv[2]) != 0u;   /* the scenes and chain are a pack's */
+    v[69] = mcs.sc[0].bars;
+    v[70] = brk_get_break() ? (int)brk_get_break()->nslices : 0;
+    v[71] = brk_get_break() ? (int)brk_get_break()->bpm_x100 : 0;
+    v[72] = slot_pitch;
+    v[73] = 32;                          /* the loop's window: the shortest repeat of 4, 8 or 16 steps, else 32 */
+    {
+        const brk_break_t *b = brk_get_break();
+        uint32_t w;
+        for (w = 4u; b && w < 32u; w *= 2u) {
+            uint32_t p = b->len * w / 32u, j, same = 1u;
+            for (j = 0; j + p < b->len && same; j += 97u)
+                same = b->pcm[j] == b->pcm[j + p];
+            if (same && p) {
+                v[73] = (int)w;
+                break;
+            }
+        }
+    }
+    v[74] = roles_now[0];
+    v[75] = slot_swing;
+    for (i = 0; i < 76u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

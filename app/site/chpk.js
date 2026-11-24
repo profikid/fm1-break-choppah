@@ -296,3 +296,83 @@ export function buildBank(list) {
   img.set(body, 16);
   return img;
 }
+
+/* ------------------------------------------------------------------ the FM-1's banks (PRD_PACKS 3.2, CHOPPAH 1.7+) */
+const TAG = (t) => t.charCodeAt(0) | t.charCodeAt(1) << 8 | t.charCodeAt(2) << 16 | t.charCodeAt(3) << 24;
+const ROLE_BIT = { K: 1, S: 2, H: 4, P: 8, "-": 0 };
+const rgb565 = (hex) => { const v = parseInt(hex.slice(1), 16); return ((v >> 19 & 31) << 11) | ((v >> 10 & 63) << 5) | (v >> 3 & 31); };
+const pad16 = (s) => { const b = new Uint8Array(16); for (let i = 0; i < 16 && i < s.length; i++) b[i] = s.charCodeAt(i) & 0x7F; return b; };
+function uuidBytes(id) { const h = id.replace(/-/g, ""); return Uint8Array.from({ length: 16 }, (_, i) => parseInt(h.slice(2 * i, 2 * i + 2), 16)); }
+
+/* the device chunks of a pack: PACK, SSET, THEM, SCNE (bank 1) and OVLY (bank 2 when it fits there, else bank 1) */
+export function deviceChunks(meta, nbreaks, scenes, overlay) {
+  const m = checkMeta(meta);
+  const pk = new Uint8Array(56), pv = new DataView(pk.buffer);
+  pk.set(uuidBytes(m.id), 0); pk.set(pad16(m.name), 16); pk.set(pad16(m.author), 32);
+  pv.setUint32(48, m.created >>> 0, true); pv.setUint32(52, m.updated >>> 0, true);
+  const ss = new Uint8Array(40 * nbreaks), sv = new DataView(ss.buffer);
+  for (let i = 0; i < nbreaks; i++) {
+    const s = checkSlot(m.slots[i]), o = 40 * i;
+    ss[o] = s.loop_steps; ss[o + 1] = s.loop_start; sv.setInt8(o + 2, s.pitch); sv.setInt8(o + 3, s.gain_db);
+    sv.setUint16(o + 4, s.bpm ? Math.round(s.bpm * 100) : 0, true); ss[o + 6] = s.swing || 0;
+    for (let k = 0; k < 32; k++) ss[o + 8 + k] = s.roles && k < s.roles.length ? ROLE_BIT[s.roles[k]] : 0xFF;
+  }
+  const th = new Uint8Array(32), tv = new DataView(th.buffer);
+  THEME_KEYS.forEach((k, i) => tv.setUint16(2 * i, rgb565(m.theme[k]), true));
+  const c1 = [{ tag: "PACK", data: pk }, { tag: "SSET", data: ss }, { tag: "THEM", data: th }];
+  if (scenes) c1.push({ tag: "SCNE", data: scenes });
+  let ov = null;
+  if (overlay) {
+    ov = new Uint8Array(16 + overlay.data.length);
+    const ovv = new DataView(ov.buffer);
+    ovv.setUint32(0, overlay.rate, true); ovv.setUint32(4, overlay.len, true); ovv.setUint32(8, Math.round(overlay.bpm * 100), true);
+    ov[12] = overlay.bars; ov.set(overlay.data, 16);
+  }
+  return { bank1: c1, overlay: ov ? { tag: "OVLY", data: ov } : null };
+}
+
+/* breaks + chunks -> a CHB1 bank of version 2: header, slot table, the chunks, the slots' ADPCM */
+export function buildBankV2(list, chunks) {
+  const n = list.length, datas = list.map((b) => b.data || adpcmEncode(b.pcm));
+  let cl = 4;
+  for (const c of chunks) cl += 8 + c.data.length + (-c.data.length & 3);
+  let size = SLOT_BYTES * n + cl;
+  datas.forEach((d, i) => { size += d.length + (i < n - 1 ? (-d.length & 3) : 0); });
+  const body = new Uint8Array(size), dv = new DataView(body.buffer);
+  let at = SLOT_BYTES * n;
+  dv.setUint32(at, chunks.length, true); at += 4;
+  for (const c of chunks) {
+    dv.setUint32(at, TAG(c.tag), true); dv.setUint32(at + 4, c.data.length, true); body.set(c.data, at + 8);
+    at += 8 + c.data.length + (-c.data.length & 3);
+  }
+  list.forEach((b, k) => {
+    const s = SLOT_BYTES * k, d = datas[k], len = b.len || b.pcm.length;
+    for (let i = 0; i < 12; i++) body[s + i] = i < b.name.length ? b.name.charCodeAt(i) & 0x7F : 0;
+    dv.setUint32(s + 12, Math.round(b.bpm * 100), true); dv.setUint32(s + 16, b.rate, true); dv.setUint32(s + 20, len, true);
+    dv.setUint32(s + 24, 16 + at, true); dv.setUint32(s + 28, d.length, true);
+    body[s + 32] = 2; body[s + 33] = b.slices.length - 1;
+    for (let i = 0; i < 33; i++) dv.setUint32(s + 36 + 4 * i, i < b.slices.length ? b.slices[i] : len, true);
+    body.set(d, at); at += d.length + (-d.length & 3);
+  });
+  const img = new Uint8Array(16 + size), hv = new DataView(img.buffer);
+  hv.setUint32(0, BANK_MAGIC, true); hv.setUint16(4, 2, true); hv.setUint16(6, n, true);
+  hv.setUint32(8, size, true); hv.setUint32(12, crc32(body), true);
+  img.set(body, 16);
+  return img;
+}
+
+/* the two images the builder sends to a CHOPPAH of 1.7 and up (INFO version 3): bank 1 with the pack's chunks, the
+ * overlay in bank 2 when it fits there. k: the breaks in bank 1 (packLayout's first). -> [bank 1, bank 2 or null] */
+export function deviceBanks(breaks, k, meta, { scenes = null, overlay = null, caps = BANK_CAPS } = {}) {
+  const ch = deviceChunks(meta, breaks.length, scenes, overlay);
+  const b2 = breaks.slice(k);
+  let ovIn2 = !!ch.overlay;
+  if (ch.overlay) {
+    const two = buildBankV2(b2, [ch.overlay]);
+    if (two.length > caps[1]) ovIn2 = false;
+  }
+  const img1 = buildBankV2(breaks.slice(0, k), ovIn2 || !ch.overlay ? ch.bank1 : [...ch.bank1, ch.overlay]);
+  const img2 = b2.length || ovIn2 ? buildBankV2(b2, ovIn2 ? [ch.overlay] : []) : null;
+  if (img1.length > caps[0] || (img2 && img2.length > caps[1])) throw new Error("the pack doesn't fit the FM-1's banks");
+  return [img1, img2];
+}

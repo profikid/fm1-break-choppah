@@ -10,6 +10,15 @@
 
 #define BANK_MAGIC 0x31424843u           /* "CHB1" */
 #define BANK_VERSION 1u
+#define BANK_VERSION2 2u                 /* v2 (PRD_PACKS 3.2, CHOPPAH 1.7): after the slot table a u32 count of chunks,
+                                          * each {tag u32, len u32, data, zeros to 4 bytes}, then the slots' ADPCM; a v2
+                                          * bank may hold chunks and no slots (bank 2 with the overlay alone) */
+#define CHK_PACK 0x4B434150u             /* "PACK": bank_pack_t */
+#define CHK_SSET 0x54455353u             /* "SSET": bank_sset_t a slot, in the slots' order (bank 1's, then bank 2's) */
+#define CHK_SCNE 0x454E4353u             /* "SCNE": MATHCORE's scenes as OBJ_MC holds them (magic, 16 x mc_scene_t) */
+#define CHK_THEM 0x4D454854u             /* "THEM": the screen's colours, 8 x RGB565 (bg panel text dim hi mid wave warn)
+                                          * then 16 bytes reserved */
+#define CHK_OVLY 0x594C564Fu             /* "OVLY": the overlay, bank_ovly_t then its IMA ADPCM */
 #define BANK_SLOTS 16u
 #define BANK_SLICES 32u
 
@@ -34,5 +43,31 @@ typedef struct {
     uint32_t slice[BANK_SLICES + 1];     /* sample offsets, slice[nslices] = len */
 } bank_slot_t;                           /* 168 bytes */
 
+typedef struct {
+    uint8_t id[16];                      /* the pack's UUID */
+    char name[16], author[16];           /* NUL-padded, upper case */
+    uint32_t created, updated;           /* Unix seconds */
+} bank_pack_t;                           /* 56 bytes */
+
+typedef struct {
+    uint8_t loop_steps;                  /* 4, 8, 16 or 32 (the whole break): the loop's window, 16ths */
+    uint8_t loop_start;                  /* 0..31: where it starts */
+    int8_t pitch;                        /* -24..+24 semitones, on top of the global pitch */
+    int8_t gain_db;                      /* -24..+12 */
+    uint16_t bpm_x100;                   /* the tempo it was played at, over the slot's (0: the slot's) */
+    uint8_t swing;                       /* 50..75 %, 0: the global swing */
+    uint8_t rsv;
+    uint8_t roles[32];                   /* slice i's role bits (1 << ROLE_*), 0xFF: heard (the Slice Map's own) */
+} bank_sset_t;                           /* 40 bytes */
+
+typedef struct {
+    uint32_t rate, len, bpm_x100;        /* Hz, samples, the tempo it was played at */
+    uint8_t bars;                        /* 4, 8 or 16 */
+    uint8_t rsv[3];
+} bank_ovly_t;                           /* 16 bytes, then (len + 1) / 2 bytes of ADPCM */
+
 _Static_assert(sizeof(bank_header_t) == 16, "bank header");
+_Static_assert(sizeof(bank_pack_t) == 56, "bank pack");
+_Static_assert(sizeof(bank_sset_t) == 40, "bank sset");
+_Static_assert(sizeof(bank_ovly_t) == 16, "bank ovly");
 _Static_assert(sizeof(bank_slot_t) == 168, "bank slot");
