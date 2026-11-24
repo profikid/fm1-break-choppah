@@ -38,6 +38,7 @@ destemmed, tempo found, loops found) and shared on a **pack hub**.
 | D3 | Accounts start **only with an email link** (never a passkey alone). Opening the link: the email's account has a passkey → sign in with it; no account → the name, then a passkey for that email; an account without one → a passkey for it. Returning users sign in with a passkey (24 Nov 2026) |
 | D4 | Uploads are **private by default**; the owner can **publish**; signed-in users can **rate** published packs |
 | D5 | The hub's code lives in a **separate private repository** (§10.1) |
+| D6 | A pack is **installed from the hub** in one click (§10.7); its `.chpk` downloads only when the owner allows it (off by default) or for the owner (24 Nov 2026) |
 
 ---
 
@@ -335,6 +336,19 @@ published:
 on a pack's page and beside each break), **your samples** (your own audio, private, never published: drop files,
 name, tag, BPM, star, listen, take to the builder; 30 MB a file, 300 MB an account). Done; choppah-hub test/e2e.mjs.
 
+### 10.7 Install from the hub (24 Nov 2026, D6)
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| PH-030 | **Install on FM-1** on every pack (its page, its card in the list, starred packs): Web MIDI with SysEx (Chrome, Edge), no builder in between | P0 | *Done; tests/fm1link.test.mjs, choppah-hub test/e2e.mjs* |
+| PH-031 | Before writing, a dialog shows what is on the FM-1: its firmware (the screen reader's HELLO), the pack on it (name, author, theme, from bank 1's PACK and THEM; 1.7 on) or its own breaks, or only the built-in ones; and asks to replace it with this pack. The same pack already on it says so | P0 | *Done* |
+| PH-032 | The FM-1 gets what its firmware takes: 1.7 on (INFO 3) the v2 banks (theme, LOOP settings, scenes, overlay); 1.6 the breaks alone (said in the dialog, with the installer's link); 1.5 and older: update first. Playing: stop first. A bank the pack doesn't need is emptied | P0 | *Done; `installImages` (chpk.js)* |
+| PH-033 | The hub builds the banks (`GET /api/packs/:id/install?proto=`, the CHIM file: the bank images, nothing else) from the stored `.chpk`; installs are counted (`installs`) | P0 | *Done* |
+| PH-034 | **Downloads off by default**: `GET /api/packs/:id/file` (the `.chpk`, and the builder's Open, and a starred break into the builder) for the owner, an admin, or when the owner switched on "Allow downloads" (Account, per pack). Listening uses the breaks alone (`/preview`). The audio still reaches the browser to be sent to the FM-1, so this keeps the pack file to its owner; it is not copy protection | P0 | *Done* |
+
+The link is `app/site/fm1link.js` (MPL-2.0, no DOM: `FM1Link.open`, `status`, `install`; breaks.html's must /
+sendBank rules), vendored into the hub with chpk.js.
+
 ### 10.5 API (sketch)
 
 ```
@@ -343,9 +357,11 @@ POST /api/auth/link           {token}                → session; passkey regist
 POST /api/auth/passkey/*      register / login options and verify
 GET  /api/packs?sort=&q=&tag=&bpm=                   public list
 GET  /api/packs/:id           meta (+ private if owner)
-GET  /api/packs/:id/file      .chpk (counted)
+GET  /api/packs/:id/file      .chpk (counted): the owner, an admin, or allow_download
+GET  /api/packs/:id/preview   the breaks (a CHB1 bank) to listen to
+GET  /api/packs/:id/install?proto=2|3   the FM-1's banks (CHIM; counted as an install)
 POST /api/packs               upload (multipart .chpk) → private
-PATCH /api/packs/:id          {visibility: public|private}
+PATCH /api/packs/:id          {visibility: public|private} | {allow_download: bool}
 PUT  /api/packs/:id/rating    {stars: 1..5}
 POST /api/packs/:id/report    {reason}
 GET  /api/me/packs            the owner's packs

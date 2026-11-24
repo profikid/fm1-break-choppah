@@ -2,15 +2,17 @@
 /* A stand-in FM-1 behind Web MIDI for breaks.html, as ui/main.c's app_sysex answers: INFO, BEGIN, DATA (offset
    echoed, 1.6), COMMIT (the bank's CRC-32 checked), READ, DELETE, and the screen reader's HELLO. NOR flash: erase sets
    0xFF, a write ANDs. Faults from window.FAULTS: drop a frame coming in (pIn), drop an answer (pOut), answer late
-   (pSlow: 2.1-3 s, past DATA's 2 s), and restart once (rebootAt: the nth DATA, the port gone 1.5 s, BEGIN forgotten). */
+   (pSlow: 2.1-3 s, past DATA's 2 s), and restart once (rebootAt: the nth DATA, the port gone 1.5 s, BEGIN forgotten).
+   proto: INFO's version (2: CHOPPAH 1.6, 3: 1.7), name: HELLO's, playing: writes answered 1. In node too
+   (tests/fm1link.test.mjs: window and navigator made first). */
 (() => {
-  const F = Object.assign({ pIn: 0, pOut: 0, pSlow: 0, rebootAt: 0, seed: 1, echo: true }, window.FAULTS || {});
+  const F = Object.assign({ pIn: 0, pOut: 0, pSlow: 0, rebootAt: 0, seed: 1, echo: true, proto: 2, name: "CHOPPAH 1.6.0", playing: false }, window.FAULTS || {});
   let s = F.seed >>> 0;
   const rnd = () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
   const CAP = [63 * 4096, 23 * 4096], flash = CAP.map((c) => new Uint8Array(c).fill(0xFF));
   const st = { cuSize: 0, cuBank: -1, pkN: [0, 0], frames: 0, dropIn: 0, dropOut: 0, slow: 0, reboots: 0, data: 0, dup: 0 };
   const seen = new Set();
-  window.FM1 = { flash, st };
+  window.FM1 = { flash, st, F };
   const CRC = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
   const crc32 = (b) => { let c = 0xFFFFFFFF; for (const v of b) c = CRC[(c ^ v) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
   const pack7 = (b) => { const o = []; for (let i = 0; i < b.length; i += 7) { const g = b.subarray(i, i + 7); let hi = 0; g.forEach((v, j) => { hi |= (v >> 7) << j; }); o.push(hi, ...Array.from(g, (v) => v & 0x7F)); } return o; };
@@ -42,7 +44,7 @@
     if (down) throw new DOMException("disconnected", "InvalidStateError");
     const p = Uint8Array.from(data);
     if (p[1] === 0x7D && p[2] === 0x53 && p[3] === 0x52) {   /* the screen reader's HELLO */
-      if (p[4] === 1) answer([0xF0, 0x7D, 0x53, 0x52, 0x01, 0x01, ...Array.from("CHOPPAH 1.6.0", (c) => c.charCodeAt(0)), 0, 0xF7], false);
+      if (p[4] === 1) answer([0xF0, 0x7D, 0x53, 0x52, 0x01, 0x01, ...Array.from(F.name, (c) => c.charCodeAt(0)), 0, 0xF7], false);
       return;
     }
     if (p[1] !== 0x7D || p[2] !== 0x43 || p[3] !== 0x48) return;
@@ -54,7 +56,7 @@
     }
     if (cmd !== 1 && rnd() < F.pIn) { st.dropIn++; return; }   /* (INFO is the port search: kept, so Connect is quick) */
     if (cmd === 1) {
-      const v = [2 | (st.pkN[0] + st.pkN[1]) << 16 | 63 << 24, CAP[0], st.pkN[0] ? 16 + rd32(flash[0], 8) : 0,
+      const v = [F.proto | (F.playing ? 1 : 0) << 8 | (st.pkN[0] + st.pkN[1]) << 16 | 63 << 24, CAP[0], st.pkN[0] ? 16 + rd32(flash[0], 8) : 0,
         2 | st.pkN[0] << 8 | st.pkN[1] << 16, CAP[1], st.pkN[1] ? 16 + rd32(flash[1], 8) : 0];
       return reply(c, 0, v.flatMap(w32));
     }
@@ -62,6 +64,7 @@
       const off = rd32(u, 0), n = rd32(u, 4);
       return reply(c, 0, [...u.subarray(0, 4), ...flash[k].subarray(off, off + n)]);
     }
+    if (F.playing && (cmd === 2 || cmd === 3 || cmd === 4 || cmd === 6)) return reply(c, 1);   /* writes only while stopped */
     if (cmd === 2 || cmd === 6) {
       st.cuSize = cmd === 2 ? rd32(u, 0) : 1; st.cuBank = k;
       for (let i = 0; i < Math.ceil(st.cuSize / 4096); i++) flash[k].fill(0xFF, i * 4096, (i + 1) * 4096);

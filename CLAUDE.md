@@ -82,6 +82,10 @@ settings bytes reserved).
   still reads), uploads to the hub and opens `#hub=<id>`. The hub is **choppah.app**, a private repo
   (`profikid/choppah-hub`: a Cloudflare Worker, D1, R2, Email Service), which vendors chpk.js pinned to a commit
   (`npm run vendor`) and proxies this site from GitHub Pages byte for byte. Change chpk.js here, never there.
+  The FM-1 link is `app/site/fm1link.js` (MPL-2.0, no DOM: `FM1Link` open / status / install, breaks.html's must and
+  sendBank rules; `tests/fm1link.test.mjs` against `tests/page_send/fake_fm1.js`, which plays a 1.6 or a 1.7): the
+  hub vendors it with chpk.js and installs a pack straight onto the FM-1 (PRD_PACKS §10.7; `installImages` in chpk.js;
+  a pack's `.chpk` downloads only for its owner or when the owner allows it).
   The builder's ears are `app/site/beats.js` (no DOM: onsets, tempo, bars, `findLoops`, `stems` (harmonic /
   percussive), `seamless`; `tests/beats.test.mjs` on the classics) in a module Worker (`beats_worker.js`); on
   choppah.app the page also reads your hub library and saves to it (script 3 of breaks.html). `tests/page_pack.sh`:

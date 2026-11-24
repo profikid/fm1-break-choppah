@@ -377,3 +377,56 @@ export function deviceBanks(breaks, k, meta, { scenes = null, overlay = null, ca
   if (img1.length > caps[0] || (img2 && img2.length > caps[1])) throw new Error("the pack doesn't fit the FM-1's banks");
   return [img1, img2];
 }
+
+/* bank 2 (XDATA1): "AT" never at a sector's 0xF06 (the update loader's record): the byte there nudged (one ADPCM step,
+ * inaudible), the CRC made again (breaks.html's noAt, tools/cu_frames.py) */
+export function noAt(img) {
+  let hit = 0;
+  for (let q = 0xF06; q + 1 < img.length; q += 4096) if (img[q] === 0x41 && img[q + 1] === 0x54) { img[q] ^= 1; hit++; }
+  if (hit) {
+    const dv = new DataView(img.buffer, img.byteOffset, img.byteLength);
+    dv.setUint32(12, crc32(img.subarray(16, 16 + dv.getUint32(8, true))), true);
+  }
+  return img;
+}
+
+/* what an FM-1 is sent for a pack (parsePack's), by the break manager's version INFO tells (proto): 3 (CHOPPAH 1.7 on)
+ * the v2 banks, with the theme, the LOOP settings, the scenes and the overlay; 2 (1.6) the breaks alone, in v1 banks;
+ * 1 (1.4-1.5) can't take a pack. -> [bank 1, bank 2 or null], bank 2 nudged off "AT" (the hub's install, PH-032) */
+export function installImages(pk, proto, caps = BANK_CAPS) {
+  if (proto < 2) throw new Error("this CHOPPAH takes one break of its own, not a pack: update it to CHOPPAH 1.6 or later");
+  const lens = pk.slots.map((s) => s.len), v2 = proto >= 3;
+  const L = packLayout(lens, caps, v2 ? overlayBytes(pk.overlay) : 0);
+  if (!L) throw new Error("the pack doesn't fit this FM-1's banks");
+  const [k] = L;
+  const imgs = v2
+    ? deviceBanks(pk.slots, k, pk.meta, { scenes: pk.scenes, overlay: pk.overlay, caps })
+    : [buildBank(pk.slots.slice(0, k)), k < pk.slots.length ? buildBank(pk.slots.slice(k)) : null];
+  if (imgs[1]) noAt(imgs[1]);
+  return imgs;
+}
+
+/* the install file the hub serves (GET /api/packs/:id/install): "CHIM", version 1, the bank count, then each bank's
+ * length u32 (0: the bank emptied) and the banks */
+export const CHIM_MAGIC = 0x4D494843;          /* "CHIM" */
+export function packImages(imgs) {
+  const n = imgs.length, size = 8 + 4 * n + imgs.reduce((a, m) => a + (m ? m.length : 0), 0);
+  const out = new Uint8Array(size), dv = new DataView(out.buffer);
+  dv.setUint32(0, CHIM_MAGIC, true); dv.setUint16(4, 1, true); dv.setUint16(6, n, true);
+  let at = 8 + 4 * n;
+  imgs.forEach((m, i) => { dv.setUint32(8 + 4 * i, m ? m.length : 0, true); if (m) { out.set(m, at); at += m.length; } });
+  return out;
+}
+export function unpackImages(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  if (b.length < 8 || dv.getUint32(0, true) !== CHIM_MAGIC || dv.getUint16(4, true) !== 1) throw new Error("not an install file");
+  const n = dv.getUint16(6, true), out = [];
+  let at = 8 + 4 * n;
+  for (let i = 0; i < n; i++) {
+    const len = dv.getUint32(8 + 4 * i, true);
+    if (at + len > b.length) throw new Error("the install file is cut short");
+    out.push(len ? b.subarray(at, at + len) : null); at += len;
+  }
+  return out;
+}
