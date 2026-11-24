@@ -8,6 +8,7 @@
  *     META  UTF-8 JSON (required, first): id, name, author, created, updated, description, tags, theme, slots
  *     BANK  a CHB1 bank (app/dsp/brk_bank.h, version 1) of all the pack's breaks, 1..16 (required)
  *     SCNE  MATHCORE's scenes as the FM-1 stores them (OBJ_MC: magic, 16 x mc_scene_t) (optional)
+ *     CHAN  MATHCORE's chain and the black keys' scenes (OBJ_MQ after its magic: n, rsv[3], q[64], key[11], rsv; 80 B) (optional)
  *     OVLY  the overlay: u32 rate, u32 samples, u32 bpm x100, u8 bars, 3 reserved, IMA ADPCM (optional)
  *     THMB  the thumbnail: WebP, PNG or JPEG, at most 64 KB (optional; never sent to the FM-1)
  * Unknown chunks are kept and passed on (forward compatible). Little-endian throughout. */
@@ -21,6 +22,7 @@ export const RATES = [11025, 16000, 22050];
 /* the FM-1's two pack banks (CLAUDE.md: bank 1 0x97000-0xD5FFF, bank 2 XDATA1 0xE5000-0xFBFFF) */
 export const BANK_CAPS = [0xD6000 - 0x97000, 0xFC000 - 0xE5000];
 export const THUMB_MAX = 64 * 1024;
+export const CHAN_BYTES = 80;                 /* CHAN: MATHCORE's chain and the black keys (n, rsv[3], q[64], key[11], rsv) */
 export const FILE_MAX = 512 * 1024;
 export const THEME_KEYS = ["bg", "panel", "text", "dim", "hi", "mid", "wave", "warn"];
 /* the factory's colours as the FM-1 draws them (gfx.c AMBER and CHOPPAH's blocks): a pack in these looks as CHOPPAH does */
@@ -178,8 +180,10 @@ export function parsePack(bytes) {
   if (!packLayout(slots.map((s) => s.len), BANK_CAPS, overlayBytes(overlay))) fail("the breaks and the overlay don't fit the FM-1's two banks");
   const scenes = one("SCNE");
   if (scenes && scenes.length !== 4 + 16 * 100) fail("SCNE: 16 scenes of 100 bytes and their magic");
+  const chain = one("CHAN");
+  if (chain && chain.length !== CHAN_BYTES) fail(`CHAN: the chain and the keys, ${CHAN_BYTES} bytes`);
   if (meta.slots.length !== slots.length) meta.slots = slots.map((_, i) => ({ ...SLOT_DEFAULTS, ...(meta.slots[i] || {}) }));
-  return { meta, bank, slots, scenes, overlay, thumb, thumbType: thumb ? imageType(thumb) : null, chunks };
+  return { meta, bank, slots, scenes, chain, overlay, thumb, thumbType: thumb ? imageType(thumb) : null, chunks };
 }
 
 export function imageType(b) {
@@ -234,6 +238,7 @@ export function buildPack(p) {
   readBank(p.bank);
   const chunks = [{ tag: "META", data: enc.encode(JSON.stringify(meta)) }, { tag: "BANK", data: p.bank }];
   if (p.scenes) chunks.push({ tag: "SCNE", data: p.scenes });
+  if (p.chain) { if (p.chain.length !== CHAN_BYTES) throw new Error(`CHAN: ${CHAN_BYTES} bytes`); chunks.push({ tag: "CHAN", data: p.chain }); }
   if (p.overlay) {
     const h = new Uint8Array(16), hv = new DataView(h.buffer);
     hv.setUint32(0, p.overlay.rate, true); hv.setUint32(4, p.overlay.len, true);
@@ -242,7 +247,7 @@ export function buildPack(p) {
     chunks.push({ tag: "OVLY", data: d });
   }
   if (p.thumb) chunks.push({ tag: "THMB", data: p.thumb });
-  for (const c of p.extra || []) if (!["META", "BANK", "SCNE", "OVLY", "THMB"].includes(c.tag)) chunks.push(c);
+  for (const c of p.extra || []) if (!["META", "BANK", "SCNE", "CHAN", "OVLY", "THMB"].includes(c.tag)) chunks.push(c);
   let len = 0;
   for (const c of chunks) len += 8 + c.data.length + (-c.data.length & 3);
   const out = new Uint8Array(16 + len), dv = new DataView(out.buffer);
@@ -306,7 +311,7 @@ const pad16 = (s) => { const b = new Uint8Array(16); for (let i = 0; i < 16 && i
 function uuidBytes(id) { const h = id.replace(/-/g, ""); return Uint8Array.from({ length: 16 }, (_, i) => parseInt(h.slice(2 * i, 2 * i + 2), 16)); }
 
 /* the device chunks of a pack: PACK, SSET, THEM, SCNE (bank 1) and OVLY (bank 2 when it fits there, else bank 1) */
-export function deviceChunks(meta, nbreaks, scenes, overlay) {
+export function deviceChunks(meta, nbreaks, scenes, overlay, chain = null) {
   const m = checkMeta(meta);
   const pk = new Uint8Array(56), pv = new DataView(pk.buffer);
   pk.set(uuidBytes(m.id), 0); pk.set(pad16(m.name), 16); pk.set(pad16(m.author), 32);
@@ -322,6 +327,7 @@ export function deviceChunks(meta, nbreaks, scenes, overlay) {
   THEME_KEYS.forEach((k, i) => tv.setUint16(2 * i, rgb565(m.theme[k]), true));
   const c1 = [{ tag: "PACK", data: pk }, { tag: "SSET", data: ss }, { tag: "THEM", data: th }];
   if (scenes) c1.push({ tag: "SCNE", data: scenes });
+  if (chain) c1.push({ tag: "CHAN", data: chain });   /* (CHOPPAH 1.7 reads it; before: the factory's chain) */
   let ov = null;
   if (overlay) {
     ov = new Uint8Array(16 + overlay.data.length);
@@ -364,8 +370,8 @@ export function buildBankV2(list, chunks) {
 
 /* the two images the builder sends to a CHOPPAH of 1.7 and up (INFO version 3): bank 1 with the pack's chunks, the
  * overlay in bank 2 when it fits there. k: the breaks in bank 1 (packLayout's first). -> [bank 1, bank 2 or null] */
-export function deviceBanks(breaks, k, meta, { scenes = null, overlay = null, caps = BANK_CAPS } = {}) {
-  const ch = deviceChunks(meta, breaks.length, scenes, overlay);
+export function deviceBanks(breaks, k, meta, { scenes = null, overlay = null, chain = null, caps = BANK_CAPS } = {}) {
+  const ch = deviceChunks(meta, breaks.length, scenes, overlay, chain);
   const b2 = breaks.slice(k);
   let ovIn2 = !!ch.overlay;
   if (ch.overlay) {
@@ -400,7 +406,7 @@ export function installImages(pk, proto, caps = BANK_CAPS) {
   if (!L) throw new Error("the pack doesn't fit this FM-1's banks");
   const [k] = L;
   const imgs = v2
-    ? deviceBanks(pk.slots, k, pk.meta, { scenes: pk.scenes, overlay: pk.overlay, caps })
+    ? deviceBanks(pk.slots, k, pk.meta, { scenes: pk.scenes, overlay: pk.overlay, chain: pk.chain, caps })
     : [buildBank(pk.slots.slice(0, k)), k < pk.slots.length ? buildBank(pk.slots.slice(k)) : null];
   if (imgs[1]) noAt(imgs[1]);
   return imgs;

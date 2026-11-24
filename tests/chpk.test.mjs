@@ -24,6 +24,15 @@ assert.equal(p.thumbType, "image/png");
 assert.ok(p.chunks.find((c) => c.tag === "XTRA"));
 assert.deepEqual(P.parsePack(P.buildPack({ meta: p.meta, bank: p.bank, thumb: p.thumb })).meta, { ...p.meta, updated: p.meta.updated });
 
+{ /* CHAN: the chain and the black keys, in the file and to the FM-1 after SCNE */
+  const chain = new Uint8Array(P.CHAN_BYTES); chain[0] = 2; chain[4] = 3; chain[68] = 15;
+  const sc = new Uint8Array(1604); new DataView(sc.buffer).setUint32(0, 0x3553434D, true);
+  const q = P.parsePack(P.buildPack({ meta, bank, scenes: sc, chain }));
+  assert.deepEqual([...q.chain], [...chain]);
+  assert.deepEqual(P.deviceChunks(q.meta, 2, q.scenes, null, q.chain).bank1.map((c) => c.tag), ["PACK", "SSET", "THEM", "SCNE", "CHAN"]);
+  assert.throws(() => P.buildPack({ meta, bank, chain: new Uint8Array(5) }), /CHAN/);
+  assert.equal(P.parsePack(f).chain, null);
+}
 const bad = f.slice(); bad[40] ^= 1;
 assert.throws(() => P.parsePack(bad), /CRC/);
 assert.throws(() => P.parsePack(new Uint8Array(20)), /not a CHOPPAH pack/);

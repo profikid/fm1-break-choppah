@@ -360,6 +360,16 @@ sendBank rules), vendored into the hub with chpk.js.
 | PH-044 | Every pack of yours shows its **room on the FM-1**: the bytes of its banks (as 1.7 gets them, `installImages`) of the two banks' 344 KB, and its breaks of 16; adding refuses what doesn't fit, before anything is made | P0 | *Done (`packs.flash_used`)* |
 | PH-045 | One header on every page of choppah.app (the site's pages too: the hub's navigation and the account link); the front page is a Three.js presentation: an FM-1 running CHOPPAH, turning | P1 | *Done* |
 
+### 10.9 The MATHCORE editor, scene sets, and samples in packs (24 Nov 2026)
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| PH-050 | A **MATHCORE editor** in the browser (`/hub/mathcore`): all 16 scenes (name, phrase bars, RUN ON, ONCE) and each one's four lanes with every field the FM-1 keeps (on, role, the steps with hits and accents, length, rate, phase, probability, ratchet, pitch, mode, pick, gate, level, seed, rise, vary, reverse, free, swell); the **chain** (up to 64 scenes) and the **black keys'** scenes; copy, paste, clear, factory per scene | P0 | *Done; choppah-hub test/mathcore_ui.mjs* |
+| PH-051 | It is heard as the FM-1 plays it: `mathcore.js` `Player` is brk.c's mc_tick (the same hash, picks, ratchets, VARY, RISE, DENSITY / MATH / SPEED / CHAOS), on a pack's break with its Slice Map (`autoRoles` = mc_auto_roles, the pack's roles set by hand over it); one scene round and round, or the chain | P0 | *Done; tests/mathcore.test.mjs* |
+| PH-052 | A pack carries its **chain and black keys** (CHAN, 80 bytes, after SCNE; CHOPPAH 1.7 reads it in `mc_pack`, older ones skip it); the builder sends, exports, imports and pulls it with the scenes | P0 | *Done; tests/pack_v2.sh, tests/chpk.test.mjs* |
+| PH-053 | Saved **to a pack** of yours (its SCNE and CHAN replaced, a new version) or **to your library** as a named **scene set**; opened from the factory's, a set of yours, or any pack you can see (its scenes: `/api/packs/:id/scenes`) | P0 | *Done* |
+| PH-054 | Every sample shows **which packs it is in** (and which break), and how many: each pack break remembers the sample it was made from (library and builder), kept across a pack's new versions by the break's name and tempo | P1 | *Done* |
+
 ### 10.5 API (sketch)
 
 ```

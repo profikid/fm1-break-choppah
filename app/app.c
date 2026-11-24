@@ -639,7 +639,7 @@ static uint32_t crc32_of(const uint8_t *p, uint32_t n)   /* zlib's */
 static const bank_pack_t *pk_pack;
 static const bank_sset_t *pk_sset;
 static uint32_t pk_nsset;
-static const uint8_t *pk_scne, *pk_them;
+static const uint8_t *pk_scne, *pk_them, *pk_chan;
 static const bank_ovly_t *pk_ovly;
 static uint32_t pk_scne_len, pk_tag;     /* pk_tag: the pack's id, hashed (0: no pack of v2) */
 static void pk_chunks(const uint8_t *p, uint32_t size)
@@ -665,6 +665,8 @@ static void pk_chunks(const uint8_t *p, uint32_t size)
             pk_scne_len = len;
         } else if (tag == CHK_THEM && len >= 16u)
             pk_them = d;
+        else if (tag == CHK_CHAN && len >= 80u)
+            pk_chan = d;
         else if (tag == CHK_OVLY && len >= sizeof(bank_ovly_t) &&
                  len - sizeof(bank_ovly_t) >= (((const bank_ovly_t *)d)->len + 1u) / 2u)
             pk_ovly = (const bank_ovly_t *)d;
@@ -675,7 +677,7 @@ static void pk_scan(void)
 {
     uint32_t k, i;
     n_user = 0u;
-    pk_pack = 0; pk_sset = 0; pk_scne = 0; pk_them = 0; pk_ovly = 0;
+    pk_pack = 0; pk_sset = 0; pk_scne = 0; pk_them = 0; pk_ovly = 0; pk_chan = 0;
     pk_nsset = pk_scne_len = pk_tag = 0u;
     for (k = 0; k < PK_BANKS; k++) {
         const uint8_t *p = plat_data(PK_BASE[k]);
@@ -800,6 +802,13 @@ static void mc_pack(void)
     } else
         mc_defaults();
     mq_defaults();
+    if (pk_chan) {                       /* the pack's chain and black keys (CHAN), each checked */
+        mq.n = (uint8_t)(pk_chan[0] <= MC_QUEUE ? pk_chan[0] : MC_QUEUE);
+        for (i = 0; i < mq.n; i++)
+            mq.q[i] = (uint8_t)(pk_chan[4u + i] < MC_SCENES ? pk_chan[4u + i] : 0u);
+        for (i = 0; i < NPFX; i++)
+            mq.key[i] = (uint8_t)(pk_chan[68u + i] < MC_SCENES ? pk_chan[68u + i] : MC_NOKEY);
+    }
     for (i = 0; i < BANK_SLOTS; i++)
         ss_from_pack(i);
     mq.rsv[0] = (uint8_t)tag;

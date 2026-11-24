@@ -1,7 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: MPL-2.0
 # Packs v2 (docs/PRD_PACKS.md P1) in the host simulator: GETSET reads the scenes back; a v2 pack (app/site/chpk.js
-# deviceBanks, as the builder sends it to CHOPPAH 1.7) brings its own scenes (scene A's phrase changed), each break's
+# deviceBanks, as the builder sends it to CHOPPAH 1.7) brings its own scenes (scene A's phrase changed), its chain and
+# black keys (CHAN), each break's
 # settings (a 1/2-bar window from step 8, -6 dB, +3 semitones, swing 62, the first four slices kicks; the second break's
 # tempo over its slot's; its theme while its breaks play; the window holds 5 of THINK's 16 slices, 4 times: 20) and an overlay in bank 2 alone; they hold through a reboot, and deleting the pack brings the
 # factory scenes back. Needs ./build.sh --host first.
@@ -46,6 +47,13 @@ const P = await import(process.cwd() + "/app/site/chpk.js");
 import { readFileSync, writeFileSync } from "node:fs";
 const o = process.argv[2], gs = readFileSync(`${o}/gs1.bin`), scenes = new Uint8Array(gs.subarray(0, 1604));
 if (new DataView(scenes.buffer).getUint32(0, true) !== 0x3553434D) throw new Error("GETSET: no MCS5 scenes");
+{ /* the hub's MATHCORE editor (app/site/mathcore.js): its factory scenes and chain are the FM-1's, byte for byte */
+  const MC = await import(process.cwd() + "/app/site/mathcore.js");
+  const mine = MC.writeScenes(MC.factoryScenes()), i = mine.findIndex((v, k) => v !== scenes[k]);
+  if (i >= 0) throw new Error(`mathcore.js: the factory scenes differ from the FM-1's at byte ${i} (scene ${Math.floor((i - 4) / 100)}, byte ${(i - 4) % 100})`);
+  const chain = MC.writeChain(MC.factoryChain()), fm1 = gs.subarray(1608, 1688), j = chain.findIndex((v, k) => v !== fm1[k]);
+  if (j >= 0) throw new Error(`mathcore.js: the factory chain differs from the FM-1's at byte ${j}`);
+}
 const bars0 = scenes[4 + 96]; scenes[4 + 96] = bars0 === 8 ? 4 : 8;
 writeFileSync(`${o}/sc0.txt`, String(scenes[4 + 96]));
 const bk = P.readBank(new Uint8Array(readFileSync(`${o}/v1.bin`)));
@@ -53,7 +61,11 @@ const meta = { id: P.uuid(), name: "V2 TEST", author: "CI", theme: { bg: "#10182
   { loop_steps: 8, loop_start: 8, gain_db: -6, pitch: 3, swing: 62, roles: "KKKK" }, { bpm: 150 }] };
 const ovLen = Math.round(4 * 240 / 113.78 * 11025);
 const ov = { rate: 11025, len: ovLen, bpm: 113.78, bars: 4, data: P.adpcmEncode(Float32Array.from({ length: ovLen }, (_, i) => 0.5 * Math.sin(2 * Math.PI * 110 * i / 11025))) };
-const [b1, b2] = P.deviceBanks(bk.slots, 2, meta, { scenes, overlay: ov });
+const chain = new Uint8Array(P.CHAN_BYTES);   /* CHAN: the chain C A E, black key 1 scene P, key 11 none */
+chain[0] = 3; chain.set([2, 0, 4], 4);
+for (let k = 0; k < 11; k++) chain[68 + k] = k;
+chain[68] = 15; chain[78] = 0xFF;
+const [b1, b2] = P.deviceBanks(bk.slots, 2, meta, { scenes, overlay: ov, chain });
 writeFileSync(`${o}/b1.bin`, b1); writeFileSync(`${o}/b2.bin`, b2);
 N
 up() {  # a bank image -> its upload frames
@@ -185,5 +197,8 @@ b = open(sys.argv[1], "rb").read()
 ss = b[1692:1692 + 80]   # GETSET past the scenes (1604) and the chain (88): break 1's and 2's LOOP settings
 assert ss[0] == 16 and ss[1] == 8 and ss[2] == 3 and ss[3] == 256 - 6, f"break 1 as LOOP left it: {list(ss[:8])}"
 assert int.from_bytes(ss[40 + 4:40 + 6], "little") == 15000, "break 2's tempo"
+mq = b[1604:1604 + 88]   # the chain (CHAN): C A E queued, black key 1 on scene P, key 11 on none
+assert mq[4] == 3 and list(mq[8:11]) == [2, 0, 4], f"the pack's chain: {list(mq[4:12])}"
+assert mq[72] == 15 and mq[73] == 1 and mq[82] == 0xFF, f"the pack's keys: {list(mq[72:83])}"
 P
-echo "pack_v2: GETSET read the scenes; a v2 pack's scenes (scene A $SC0 bars), a 1/2-bar window, -6 dB, +3, swing 62, kicks set by hand, a tempo over the slot's and an overlay alone in bank 2 read, the pack's colours and its overlay heard under its breaks, its fader, silent under a built-in one (amber again there); kept at power-on; HOME's LOOP lengthens the window (GETSET reads it back where the builder looks), SAVE keeps it through a reboot, SEL + a knob brings the pack's back; deleted: the factory's again"
+echo "pack_v2: GETSET read the scenes; a v2 pack's scenes (scene A $SC0 bars) and its chain and black keys (CHAN), a 1/2-bar window, -6 dB, +3, swing 62, kicks set by hand, a tempo over the slot's and an overlay alone in bank 2 read, the pack's colours and its overlay heard under its breaks, its fader, silent under a built-in one (amber again there); kept at power-on; HOME's LOOP lengthens the window (GETSET reads it back where the builder looks), SAVE keeps it through a reboot, SEL + a knob brings the pack's back; deleted: the factory's again"

@@ -74,7 +74,7 @@ jobs:
         run: ./build.sh test
 
       - name: Pack file and the builder's ears (node)
-        run: node tests/chpk.test.mjs && node tests/beats.test.mjs && node tests/fm1link.test.mjs && node tests/breakcut.test.mjs
+        run: node tests/chpk.test.mjs && node tests/beats.test.mjs && node tests/fm1link.test.mjs && node tests/breakcut.test.mjs && node tests/mathcore.test.mjs
 
       - name: Firmware and emulator
         env:

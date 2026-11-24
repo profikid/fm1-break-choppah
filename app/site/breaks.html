@@ -649,6 +649,7 @@ async function makeBreak(s, o) {         /* a sample -> a break {name, bpm, rate
 
 async function loadFile(f) { return loadAudio(await f.arrayBuffer(), f.name); }
 async function loadAudio(bytes, fname, known) {   /* known: a library break's {name, bpm, bars} */
+  srcSample = null;
   try {
     src = await decodeAudio(bytes);
     $("name").value = known ? known.name : fname.replace(/\.[^.]*$/, "").replace(/[^A-Za-z0-9 ]+/g, " ").trim().toUpperCase().slice(0, 11) || "MY BREAK";
@@ -1116,8 +1117,11 @@ async function packPick(i, play) {       /* a break of the pack, heard as the FM
   $("packView").classList.remove("hidden");
   if (play) { audio().resume(); packPlayer.start(); }
 }
+let srcSample = null;                    /* the hub library sample the audio here came from (its id), or null: the
+                                            breaks made from it remember it, so the sample knows its packs */
 function addToPack(e) {
   if (pack.length >= 16) return false;
+  if (srcSample && !("sample" in e)) e.sample = srcSample;
   pack.push(e);
   refresh();
   return true;
@@ -1445,7 +1449,7 @@ async function packFile() {                  /* the pack -> a .chpk */
   const bank = buildBank(bs);
   meta.updated = Math.floor(Date.now() / 1000);
   return CHPK.buildPack({ meta: { ...meta, author_full: meta.author, slots: pack.map(slotOf) }, bank, thumb: await thumbBytes(),
-    overlay: meta.overlay || null, scenes: meta.scenes || null });
+    overlay: meta.overlay || null, scenes: meta.scenes || null, chain: meta.scenes && meta.chain || null });
 }
 function takePack(bytes) {                   /* a .chpk (or .chb) -> the pack in this browser; -> its name */
   const b = new Uint8Array(bytes);
@@ -1456,7 +1460,7 @@ function takePack(bytes) {                   /* a .chpk (or .chb) -> the pack in
     meta = { id: p.meta.id, name: p.meta.name, author: p.meta.author_full || p.meta.author, description: p.meta.description, tags: p.meta.tags,
       theme: p.meta.theme, thumb: p.thumb ? p.thumb.slice() : null, created: p.meta.created,
       overlay: p.overlay ? { rate: p.overlay.rate, len: p.overlay.len, bpm: p.overlay.bpm, bars: p.overlay.bars, data: p.overlay.data.slice() } : null,
-      scenes: p.scenes ? p.scenes.slice() : null };
+      scenes: p.scenes ? p.scenes.slice() : null, chain: p.chain ? p.chain.slice() : null };
     cur = -1; $("packView").classList.add("hidden"); refresh(); metaKeep(); metaShow();
     return meta.name;
   }
@@ -1515,7 +1519,7 @@ $("pkUpload").onclick = async () => {
   say($("pkState"), "Saving…");
   try {
     const r = await fetch("/api/packs", { method: "POST", credentials: "same-origin", body: await packFile(),
-      headers: { "content-type": "application/vnd.choppah.pack", "x-hub": "1" } });
+      headers: { "content-type": "application/vnd.choppah.pack", "x-hub": "1", "x-sources": JSON.stringify(pack.map((e) => e.sample || null)) } });
     const d = await r.json();
     if (r.status === 403) { say($("pkState"), `<a href="/hub/account">Sign in</a> first (a new tab keeps this pack), then save again.`, true); return; }
     if (r.status === 409) { meta.id = crypto.randomUUID(); metaKeep(); throw new Error("that pack id was someone else's: it has a new one now, save again"); }
@@ -1694,8 +1698,9 @@ $("keep").onclick = async () => {
   if (!lastFile) return;
   say($("keepState"), "Keeping it…");
   try {
-    await hubApi("/api/me/samples", { method: "POST", body: lastFile, headers: { "content-type": lastFile.type || "audio/wav",
+    const kept = await hubApi("/api/me/samples", { method: "POST", body: lastFile, headers: { "content-type": lastFile.type || "audio/wav",
       "x-name": encodeURIComponent(lastFile.name.replace(/\.[^.]+$/, "")), ...(src ? { "x-seconds": String(src.dur) } : {}), ...($("bpm").value ? { "x-bpm": $("bpm").value } : {}) } });
+    try { srcSample = (await kept.json()).sample.id; } catch (e) { /* (kept, its id unknown) */ }
     say($("keepState"), `In <a href="/hub/library#samples">your library</a>.`);
     hubLoad();
   } catch (e) { say($("keepState"), e.message, true); }
@@ -1716,6 +1721,7 @@ async function useSample(id, name, bpm) {
   say($("hubState"), "Fetching your sample…");
   const bytes = await (await hubApi(`/api/me/samples/${id}/file`)).arrayBuffer();
   await loadAudio(bytes, name, null);
+  srcSample = id;
   if (bpm && src && src.dur <= 20) { const bars = Math.max(1, Math.round(src.dur * bpm / 240)); setBars(bars); fillStart(); $("bpm").value = (+bpm).toFixed(2); await make(); }
   say($("hubState"), "");
   ($("track").classList.contains("hidden") ? $("edit") : $("track")).scrollIntoView({ behavior: "smooth" });
@@ -1724,7 +1730,7 @@ async function useBreak(packId, slot) {     /* a starred break, straight into th
   say($("hubState") || $("packState"), "Fetching the break…");
   const p = CHPK.parsePack(new Uint8Array(await packBytes(packId))), b = slotsOf(p.bank)[slot];
   if (!b) throw new Error("that break isn't in the pack any more");
-  const ok = addToPack({ name: b.name, bpm: b.bpm, rate: b.rate, len: b.len, slices: b.slices, data: b.data, pcm: b.pcm, slot: p.meta.slots[slot] });
+  const ok = addToPack({ name: b.name, bpm: b.bpm, rate: b.rate, len: b.len, slices: b.slices, data: b.data, pcm: b.pcm, slot: p.meta.slots[slot], sample: null });
   say($("addStatus"), ok ? `<b>${esc(b.name)}</b> from ${esc(p.meta.name)} is break ${pack.length} of the pack.` : "The pack has sixteen: take one out first.", !ok);
   say($("hubState"), "");
   $("h-pack").scrollIntoView({ behavior: "smooth" });
@@ -1747,7 +1753,7 @@ async function hubLoad() {
 /* --- scenes: the factory's, this pack's, or another pack's --- */
 $("pkScenes").onchange = () => {
   const v = $("pkScenes").value;
-  if (v === "factory") { meta.scenes = null; metaKeep(); overlayShow(); }
+  if (v === "factory") { meta.scenes = null; meta.chain = null; metaKeep(); overlayShow(); }
   if (v === "file") $("pkScenesFile").click();
 };
 $("pkScenesFile").onchange = async (e) => {
@@ -1755,7 +1761,8 @@ $("pkScenesFile").onchange = async (e) => {
   try {
     const p = CHPK.parsePack(new Uint8Array(await f.arrayBuffer()));
     if (!p.scenes) throw new Error(`${p.meta.name} has CHOPPAH's own scenes, nothing of its own to take`);
-    meta.scenes = p.scenes.slice(); metaKeep(); say($("pkState"), `The MATHCORE scenes of <b>${esc(p.meta.name)}</b> are this pack's now.`);
+    meta.scenes = p.scenes.slice(); meta.chain = p.chain ? p.chain.slice() : null;
+    metaKeep(); say($("pkState"), `The MATHCORE scenes${p.chain ? ", chain and black keys" : ""} of <b>${esc(p.meta.name)}</b> are this pack's now.`);
   } catch (err) { say($("pkState"), err.message, true); }
   overlayShow();
 };
@@ -1789,7 +1796,7 @@ window.addEventListener("hashchange", fromHash);
 /* --- CHOPPAH 1.7 and up (INFO version 3): the pack's chunks sent with its breaks; its scenes read back (GETSET) --- */
 window.packImages = (bs, L) => {
   const m = { ...meta, author_full: meta.author, slots: pack.slice(0, bs.length).map(slotOf), updated: Math.floor(Date.now() / 1000) };
-  const [i1, i2] = CHPK.deviceBanks(bs, L.k, m, { scenes: meta.scenes || null, overlay: meta.overlay || null, caps: dev.caps });
+  const [i1, i2] = CHPK.deviceBanks(bs, L.k, m, { scenes: meta.scenes || null, chain: meta.scenes && meta.chain || null, overlay: meta.overlay || null, caps: dev.caps });
   return [i1, i2 ? noAt(i2) : null];
 };
 async function devPack() {                  /* the v2 pack on the FM-1: its id, or null */
@@ -1810,6 +1817,12 @@ async function getScenes() {                /* GETSET: the scenes as the FM-1 ha
   if (new DataView(out.buffer).getUint32(0, true) !== 0x3553434D) throw new Error("the FM-1's scenes are of another version");
   return out;
 }
+async function getChain() {                 /* GETSET: the chain and the black keys (OBJ_MQ after its magic: a pack's CHAN) */
+  const r = await must(7, [...u32(1608), ...u32(80)], 3000, (a) => a.data.length >= 4 && word(a.data, 0) === 1608);
+  if (r.code) throw new Error("GETSET " + r.code);
+  const c = r.data.slice(4, 84); c[1] = c[2] = c[3] = 0; c[79] = 0;   /* (its reserved bytes: the pack's tag there) */
+  return c;
+}
 async function getSlots(n) {                /* GETSET past the scenes and the chain: each pack break's LOOP settings */
   const at = 1604 + 88, size = 40 * n, raw = new Uint8Array(size);
   for (let off = 0; off < size; off += 256) {
@@ -1828,12 +1841,12 @@ function takeSlots(sl) {                    /* the FM-1's LOOP edits into the pa
 window.packPull = async (st) => {           /* before this pack replaces itself on the FM-1: what was edited there kept */
   try {
     if ((await devPack()) !== meta.id) return;
-    const sc = await getScenes(), sl = await getSlots(Math.min(pack.length, dev.counts[0] + (dev.counts[1] || 0)));
-    const scenesNew = !(meta.scenes && sc.every((v, i) => v === meta.scenes[i])), slotsNew = sl.some((x, i) => pack[i] && !sameSlot(x, slotOf(pack[i])));
+    const sc = await getScenes(), cq = await getChain(), sl = await getSlots(Math.min(pack.length, dev.counts[0] + (dev.counts[1] || 0)));
+    const scenesNew = !(meta.scenes && sc.every((v, i) => v === meta.scenes[i]) && meta.chain && cq.every((v, i) => v === meta.chain[i])), slotsNew = sl.some((x, i) => pack[i] && !sameSlot(x, slotOf(pack[i])));
     if (!scenesNew && !slotsNew) return;
     const what = [scenesNew && "the MATHCORE scenes", slotsNew && "the breaks' LOOP settings"].filter(Boolean).join(" and ");
     if (confirm(`On the FM-1, ${what} were changed since this pack was sent. Keep those changes in the pack?`)) {
-      if (scenesNew) meta.scenes = sc;
+      if (scenesNew) { meta.scenes = sc; meta.chain = cq; }
       if (slotsNew) takeSlots(sl);
       metaKeep(); overlayShow(); refresh(); say(st, `The FM-1's changes (${what}) are in the pack now.`);
     }
@@ -1842,7 +1855,7 @@ window.packPull = async (st) => {           /* before this pack replaces itself 
 $("pkScenes").insertAdjacentHTML("afterend", ' <button id="pkPull" class="hidden" title="Read the MATHCORE scenes and the LOOP settings as they are on the FM-1 now (CHOPPAH 1.7)">Pull the changes from the FM-1</button>');
 $("pkPull").onclick = async () => {
   try {
-    meta.scenes = await getScenes();
+    meta.scenes = await getScenes(); meta.chain = await getChain();
     if ((await devPack()) === meta.id) takeSlots(await getSlots(Math.min(pack.length, dev.counts[0] + (dev.counts[1] || 0))));
     metaKeep(); overlayShow(); refresh(); say($("pkState"), "The FM-1's MATHCORE scenes (and, for this pack, its LOOP settings) are this pack's now.");
   } catch (e) { say($("pkState"), e.message, true); }

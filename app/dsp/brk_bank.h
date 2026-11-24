@@ -15,6 +15,9 @@
                                           * bank may hold chunks and no slots (bank 2 with the overlay alone) */
 #define CHK_PACK 0x4B434150u             /* "PACK": bank_pack_t */
 #define CHK_SSET 0x54455353u             /* "SSET": bank_sset_t a slot, in the slots' order (bank 1's, then bank 2's) */
+#define CHK_CHAN 0x4E414843u             /* "CHAN" (1.7): MATHCORE's chain and the black keys' scenes, as OBJ_MQ holds
+                                          * them after its magic: n, rsv[3], q[64] (scenes 0..15), key[11] (0xFF none),
+                                          * rsv: 80 bytes. Without it a pack gets the factory's chain and keys */
 #define CHK_SCNE 0x454E4353u             /* "SCNE": MATHCORE's scenes as OBJ_MC holds them (magic, 16 x mc_scene_t) */
 #define CHK_THEM 0x4D454854u             /* "THEM": the screen's colours, 8 x RGB565 (bg panel text dim hi mid wave warn)
                                           * then 16 bytes reserved */

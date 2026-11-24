@@ -89,6 +89,12 @@ settings bytes reserved).
   The builder's cut is `app/site/breakcut.js` (MPL-2.0, no DOM: level, slicePoints, warp copied from breaks.html
   unchanged, `tests/breakcut.test.mjs` holds them equal; `cut`, `makeBreak`, `autoEdit`): the hub's library slicer
   (PRD_PACKS §10.8) makes breaks from your samples with it. Change those functions in both places, or the test fails.
+  MATHCORE in the browser is `app/site/mathcore.js` (MPL-2.0, no DOM: SCNE and CHAN to and from bytes, the factory
+  scenes (a copy of app.c's MC_PRESET: `tests/mathcore.test.mjs` reads app.c and brk.c and holds them equal, and
+  tests/pack_v2.sh holds the factory scenes and chain to the host's GETSET byte for byte), `autoRoles` (brk.c
+  mc_auto_roles) and `Player` (brk.c mc_tick: the same hash and choices)): the hub's MATHCORE editor (PRD_PACKS
+  §10.9). Change MC_PRESET, mc_tick or mc_auto_roles, change mathcore.js with them. A pack's chain and black keys are
+  its CHAN chunk (1.7: `pk_chan`, applied in `mc_pack`; without it the factory's).
   The builder's ears are `app/site/beats.js` (no DOM: onsets, tempo, bars, `findLoops`, `stems` (harmonic /
   percussive), `seamless`; `tests/beats.test.mjs` on the classics) in a module Worker (`beats_worker.js`); on
   choppah.app the page also reads your hub library and saves to it (script 3 of breaks.html). `tests/page_pack.sh`:
