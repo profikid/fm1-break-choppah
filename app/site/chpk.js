@@ -77,8 +77,17 @@ export function bankSize(lens) {
   lens.forEach((l, i) => { const d = (l + 1) >> 1; size += d + (i < lens.length - 1 ? (-d & 3) : 0); });
   return size;
 }
-/* the pack over the FM-1's two banks: [breaks in bank 1, in bank 2], or null when it doesn't fit */
-export function packLayout(lens, caps = BANK_CAPS) {
+/* the overlay's bytes in flash (OVLY: its 16-byte header and its ADPCM), kept at the end of bank 2 (PRD_PACKS 7) */
+export const overlayBytes = (ov) => ov ? 16 + ((ov.len + 1) >> 1) : 0;
+/* the pack over the FM-1's two banks: [breaks in bank 1, in bank 2], or null when it doesn't fit; reserve: bytes the
+   overlay takes, from bank 2 first, the rest from bank 1 */
+export function packLayout(lens, caps = BANK_CAPS, reserve = 0) {
+  if (reserve) {
+    caps = caps.slice();
+    const r2 = Math.min(reserve, caps[1] || 0);
+    caps[1] = (caps[1] || 0) - r2; caps[0] -= reserve - r2;
+    if (caps[0] < 0) return null;
+  }
   for (let k = Math.min(lens.length, MAX_SLOTS); k >= 0; k--) {
     const a = lens.slice(0, k), b = lens.slice(k);
     if (b.length > MAX_SLOTS || (b.length && caps.length < 2)) continue;
@@ -149,7 +158,6 @@ export function parsePack(bytes) {
   try { meta = JSON.parse(dec.decode(metaB)); } catch (e) { fail("META isn't JSON"); }
   meta = checkMeta(meta);
   const { slots } = readBank(bank);
-  if (!packLayout(slots.map((s) => s.len))) fail("the breaks don't fit the FM-1's two banks");
   const thumb = one("THMB");
   if (thumb) {
     if (thumb.length > THUMB_MAX) fail("the thumbnail is over 64 KB");
@@ -166,7 +174,9 @@ export function parsePack(bytes) {
     if (![4, 8, 16].includes(overlay.bars)) fail(`overlay of ${overlay.bars} bars (4, 8 or 16)`);
     if (overlay.data.length !== (overlay.len + 1) >> 1) fail("overlay data");
   }
+  if (!packLayout(slots.map((s) => s.len), BANK_CAPS, overlayBytes(overlay))) fail("the breaks and the overlay don't fit the FM-1's two banks");
   const scenes = one("SCNE");
+  if (scenes && scenes.length !== 4 + 16 * 100) fail("SCNE: 16 scenes of 100 bytes and their magic");
   if (meta.slots.length !== slots.length) meta.slots = slots.map((_, i) => ({ ...SLOT_DEFAULTS, ...(meta.slots[i] || {}) }));
   return { meta, bank, slots, scenes, overlay, thumb, thumbType: thumb ? imageType(thumb) : null, chunks };
 }

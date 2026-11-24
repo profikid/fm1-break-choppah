@@ -36,6 +36,18 @@ const page = readFileSync(new URL("../app/site/breaks.html", import.meta.url), "
 assert.ok(page.includes("out[i >> 1] |= code << (4 * (i & 1));"), "breaks.html's encoder layout unchanged");
 const x = tone(1000, 440), y = P.adpcmDecode(P.adpcmEncode(x), 1000);
 assert.ok(Math.max(...x.slice(200).map((v, i) => Math.abs(v - y[i + 200]))) < 0.05, "ADPCM tracks the tone once it has adapted");
+// the overlay counts: it takes bank 2 first
+{
+  const ov = { rate: 22050, bpm: 136.9, bars: 4, len: 140000 };
+  ov.data = P.adpcmEncode(tone(ov.len, 110));
+  const withOv = P.parsePack(P.buildPack({ meta, bank, overlay: ov }));
+  assert.equal(withOv.overlay.bars, 4); assert.equal(withOv.overlay.len, 140000);
+  assert.ok(P.packLayout(Array(6).fill(100000), P.BANK_CAPS, 0)[1] > 0, "past bank 1: bank 2");
+  assert.equal(P.packLayout(Array(6).fill(100000), P.BANK_CAPS, P.BANK_CAPS[1]), null, "with bank 2 full of overlay it doesn't fit");
+  assert.equal(P.packLayout([60000], P.BANK_CAPS, P.BANK_CAPS[1])[0], 1, "bank 2 full of overlay: breaks in bank 1");
+  const bigOv = { ...ov, len: 800000, data: new Uint8Array(400000) };
+  assert.throws(() => P.parsePack(P.buildPack({ meta, bank, overlay: bigOv })), /don't fit|at most/);
+}
 console.log("chpk: all good");
 
 // byte for byte with the page's own buildBank (the code the 1.6 break manager sends to the FM-1)

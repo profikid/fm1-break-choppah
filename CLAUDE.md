@@ -82,6 +82,10 @@ settings bytes reserved).
   still reads), uploads to the hub and opens `#hub=<id>`. The hub is **choppah.app**, a private repo
   (`profikid/choppah-hub`: a Cloudflare Worker, D1, R2, Email Service), which vendors chpk.js pinned to a commit
   (`npm run vendor`) and proxies this site from GitHub Pages byte for byte. Change chpk.js here, never there.
+  The builder's ears are `app/site/beats.js` (no DOM: onsets, tempo, bars, `findLoops`, `stems` (harmonic /
+  percussive), `seamless`; `tests/beats.test.mjs` on the classics) in a module Worker (`beats_worker.js`); on
+  choppah.app the page also reads your hub library and saves to it (script 3 of breaks.html). `tests/page_pack.sh`:
+  the builder in Chrome, a track to a pack with an overlay and back.
   The firmware reads none of v2 yet: Send still writes the v1 banks (slot settings, theme, scenes, overlay: PRD_PACKS
   P1, P5, P6).
 - **Releases are tags, not merges** (since 6 Nov 2026): `scripts/release.sh` tags vX.Y and pushes it; the shared

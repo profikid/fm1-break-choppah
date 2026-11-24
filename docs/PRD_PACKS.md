@@ -4,9 +4,8 @@
 **Parent product PRD:** [PRD.md](PRD.md) (S-003, §10) · related: [PRD_MATHCORE.md](PRD_MATHCORE.md)  
 **Status:** 24 Nov 2026: the hub is **live on choppah.app** (§10, all PH-* rows; repo `profikid/choppah-hub`), the
 `.chpk` file (PK-010, PK-011: `app/site/chpk.js`) and the builder's pack details, export / import, upload and open from
-the hub (PB-020–025 but PB-024's overlay share) are built. Not yet: the firmware side (PK-001–004, PS, PT, PM, PO, PE),
-the builder's beat tracking, loop finder and destemming (PB-001–012), the destem server (PB-003: endpoint built, no GPU
-provider). Decisions in §1.2; open questions in §11.
+the hub (PB-020–025) are built; the builder's tempo, bars, loop finder, stems (v1) and overlay (PB-001–012) too, and the hub's pack manager (§10.6) with the builder inside the hub (§9.4). Not yet: the firmware side (PK-001–004, PS, PT, PM, PO, PE),
+Demucs stems (PB-002 v2), the destem server (PB-003: endpoint built, no GPU provider). Decisions in §1.2; open questions in §11.
 
 ---
 
@@ -233,35 +232,42 @@ the browser; heavy work in Web Workers.
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PB-001 | Import any audio the browser decodes (WAV, AIFF, FLAC, MP3, M4A), up to 10 minutes | P0 | |
-| PB-002 | **Destem** (D1): Demucs (htdemucs, MIT) through ONNX Runtime Web (MIT) on WebGPU, WASM fallback; the model downloaded once and cached (Cache API); drums / bass / other / vocals; progress and cancel | P0 | A 4-minute track separates on an M-series Mac in Chrome; time measured and shown up front |
+| PB-001 | Import any audio the browser decodes (WAV, AIFF, FLAC, MP3, M4A), up to 10 minutes | P0 | *Done (24 Nov 2026): anything decodeAudioData reads* |
+| PB-002 | **Destem** (D1), in the browser: v1 (24 Nov 2026) a harmonic / percussive split (median-filtered spectrogram, Fitzgerald 2010; `stems()` in beats.js, in a Web Worker): drums for the breaks, the rest for the overlay; no download, no server. v2: Demucs (htdemucs, MIT) through ONNX Runtime Web on WebGPU for four stems | P0 | *v1 done: tests/beats.test.mjs (a pad 97 % to the rest), tests/page_pack.sh in Chrome. v2 open* |
 | PB-003 | **Server fallback** (D1) when WebGPU is missing or too slow: a hub Worker forwards to a GPU endpoint (provider to choose, Q5); signed-in users only, a daily quota, the audio deleted when the stems are returned | P1 | No audio kept server-side (R2 lifecycle 1 h) |
-| PB-004 | **Tempo**: beat tracking on the drum stem (spectral-flux onsets → tempogram), the 80–180 prior and ×2 / ÷2 as today; tap to correct | P0 | Within ±0.1 BPM on a 20-track test set (jungle, breaks, funk) |
-| PB-005 | **Downbeat**: bar phase from the kick band and the snare's backbeat; nudge by a beat | P0 | Right on 17 of 20 test tracks |
-| PB-006 | **Loop finder**: every 1- and 2-bar window scored (drum energy, self-similarity with the next window, no vocal/bleed) → the best 8 as cards to audition and add | P0 | |
-| PB-007 | Slices as today (grid / onsets, warp), on the drum stem | P0 | `tests/page_parity.sh` still passes |
-| PB-008 | Own code for beat tracking: no AGPL (essentia.js) in an MPL-2.0 project | P0 | Licence check in CI |
+| PB-004 | **Tempo**: beat tracking on the drum stem (spectral-flux onsets → tempogram), the 80–180 prior and ×2 / ÷2 as today; tap to correct | P0 | *Done: app/site/beats.js (spectral-flux onsets, autocorrelation, a comb refined to 0.01 BPM, a tempo prior; loops of 1/2/4/8/16 bars exact); tests/beats.test.mjs: the 10 classics within 1.5 %, a track at 99.88 for 99.81* |
+| PB-005 | **Downbeat**: bar phase from the kick band and the snare's backbeat; nudge by a beat | P0 | *Done: kicks on 1 and 3, snares on 2 and 4; a loop starts on its 1; the test track's bars 100 % on the break's* |
+| PB-006 | **Loop finder**: every 1- and 2-bar window scored (drum energy, self-similarity with the next window, no vocal/bleed) → the best 8 as cards to audition and add | P0 | *Done: findLoops (onset density, the next bar alike, drum share); the test's best loop on a bar line inside the break* |
+| PB-007 | Slices as today (grid / onsets, warp), on the drum stem | P0 | *Done (unchanged; page_parity.sh)* |
+| PB-008 | Own code for beat tracking: no AGPL (essentia.js) in an MPL-2.0 project | P0 | *Done: no libraries at all* |
 
 ### 9.2 The overlay from the stems
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PB-010 | Choose stems for the overlay (bass, other, vocals), 4 / 8 / 16 bars on the same bar grid as the breaks | P1 | Plays in phase with the breaks in the preview |
-| PB-011 | Seam crossfade, level matched to the breaks (−16 dBFS RMS target as `level()`) | P1 | |
-| PB-012 | Rate chosen to fit the room left (22.05 / 16 / 11.025 kHz) | P1 | |
+| PB-010 | Choose stems for the overlay (bass, other, vocals), 4 / 8 / 16 bars on the same bar grid as the breaks | P1 | *Done: from bar n, 4/8/16 bars, the rest or the mix (tests/page_pack.sh)* |
+| PB-011 | Seam crossfade, level matched to the breaks (−16 dBFS RMS target as `level()`) | P1 | *Done: seamless() (12 ms into the lead-in), level() as the breaks* |
+| PB-012 | Rate chosen to fit the room left (22.05 / 16 / 11.025 kHz) | P1 | *Done: 22.05 → 16 → 11.025 kHz, the first that fits (chpk packLayout reserves it, bank 2 first)* |
 
 ### 9.3 The pack editor
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PB-020 | Pack name, author, description, tags; the id made on creation | P0 | |
-| PB-021 | Theme editor: presets (AMBER, ICE, ACID, DIP …), eight colour pickers, the HOME screen previewed (PT-004) | P1 | |
-| PB-022 | Thumbnail: generated (waveform in the theme), or an image cropped to square | P1 | |
-| PB-023 | Slot settings per break (§4) and the scenes (factory, from another pack, or a `.chpk`) | P0 | |
-| PB-024 | Capacity meter: both banks, breaks + overlay + chunks (`packLayout` extended) | P0 | Never sends what doesn't fit |
-| PB-025 | Library of packs in IndexedDB; export / import `.chpk` | P0 | |
+| PB-020 | Pack name, author, description, tags; the id made on creation | P0 | *Done* |
+| PB-021 | Theme editor: presets (AMBER, ICE, ACID, DIP …), eight colour pickers, the HOME screen previewed (PT-004) | P1 | *Done (presets AMBER ICE ACID DIP TERMINAL PAPER + 8 pickers); the emulator preview waits for the firmware's palette (PT-001)* |
+| PB-022 | Thumbnail: generated (waveform in the theme), or an image cropped to square | P1 | *Done* |
+| PB-023 | Slot settings per break (§4) and the scenes (factory, from another pack, or a `.chpk`) | P0 | *Done: slot settings; scenes factory / this pack's / another .chpk's* |
+| PB-024 | Capacity meter: both banks, breaks + overlay + chunks (`packLayout` extended) | P0 | *Done, the overlay included* |
+| PB-025 | Library of packs in IndexedDB; export / import `.chpk` | P0 | *Done* |
 
 ---
+
+## 9.4 The builder on the hub (24 Nov 2026)
+
+On choppah.app the builder is the hub's: a third source tab, **From your hub library** (your samples, starred
+breaks, your packs), **Keep this sample in my hub library** for a file you load, **Save to my library** (a pack keeps
+its id: saving again replaces it, private until published), **Start a new pack**, and links from the hub straight in:
+`/breaks/#hub=<pack>`, `#sample=<id>`, `#break=<pack>:<slot>`, `#new`.
 
 ## 10. Pack hub
 
@@ -319,6 +325,12 @@ published:
 | PH-021 | Report button on every public pack (reason, contact); a reported pack stays up until reviewed, unless reports pile up (hidden at N) | P0 | |
 | PH-022 | An admin view: hide, restore, delete, ban; a takedown contact on the site | P0 | A takedown done in minutes |
 | PH-023 | No full tracks or stems stored: only packs (the destem fallback keeps nothing, PB-003) | P0 | |
+
+### 10.6 The pack manager (24 Nov 2026)
+
+`/hub/library`: **your packs** (open in the builder, publish from Account), **starred** packs and single breaks (☆
+on a pack's page and beside each break), **your samples** (your own audio, private, never published: drop files,
+name, tag, BPM, star, listen, take to the builder; 30 MB a file, 300 MB an account). Done; choppah-hub test/e2e.mjs.
 
 ### 10.5 API (sketch)
 

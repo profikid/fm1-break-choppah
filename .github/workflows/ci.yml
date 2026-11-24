@@ -73,6 +73,9 @@ jobs:
       - name: Engine tests
         run: ./build.sh test
 
+      - name: Pack file and the builder's ears (node)
+        run: node tests/chpk.test.mjs && node tests/beats.test.mjs
+
       - name: Firmware and emulator
         env:
           PYTHON: /usr/bin/python3

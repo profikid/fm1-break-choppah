@@ -81,6 +81,12 @@
 .brk ol.plist li .grow { flex: 1 1 auto; }
 .brk ol.plist li button { padding: 7px 10px; font-size: 12px; }
 .brk ol.plist:empty::after { content: attr(data-empty); display: block; color: var(--faint); font: 500 14px/1.4 var(--f-sans, inherit); padding: 6px 0; }
+.brk .hubh { font: 600 13px/1.2 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dim); margin: 16px 0 8px; }
+.brk .hubgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; max-height: 260px; overflow: auto; }
+.brk .hubgrid button { text-align: left; text-transform: none; letter-spacing: 0; font: 600 14px/1.25 var(--f-mono); padding: 9px 10px; }
+.brk .hubgrid button small { display: block; font: 500 12px/1.3 var(--f-mono); color: var(--dim); margin-top: 3px; }
+.brk #trackLoops li .score { display: inline-block; width: 60px; height: 6px; background: var(--raise); border-radius: 3px; overflow: hidden; vertical-align: middle; }
+.brk #trackLoops li .score i { display: block; height: 100%; background: var(--amber); }
 @media (max-width: 700px) { .brk .keys { grid-template-columns: repeat(8, 1fr); } }
 </style>
 </head>
@@ -119,6 +125,14 @@ computer.</p>
   <div class="row" role="tablist" aria-label="Where the sample comes from">
     <button role="tab" id="tabFile" aria-selected="true" aria-controls="fileBox">Your own file</button>
     <button role="tab" id="tabLib" aria-selected="false" aria-controls="libBox">From the library</button>
+    <button role="tab" id="tabHub" aria-selected="false" aria-controls="hubBox" class="hidden">From your hub library</button>
+  </div>
+  <div id="hubBox" role="tabpanel" aria-labelledby="tabHub" class="hidden">
+    <p class="hint">Your samples, the breaks you starred and your packs on the <a href="/hub/library">pack hub</a>.</p>
+    <h3 class="hubh">Your samples</h3><div class="grid hubgrid" id="hubSamples"></div>
+    <h3 class="hubh">Starred breaks</h3><div class="grid hubgrid" id="hubBreaks"></div>
+    <h3 class="hubh">Your packs</h3><div class="grid hubgrid" id="hubPacks"></div>
+    <span class="state" id="hubState" role="status"></span>
   </div>
   <div id="libBox" role="tabpanel" aria-labelledby="tabLib" class="hidden">
     <div class="row"><label class="f">Find<input type="search" id="libFind" placeholder="175, jungle, tape…" spellcheck="false"></label>
@@ -130,6 +144,34 @@ computer.</p>
     <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose a sample, or drop one here">
       Drop a sample here, or click to choose one: WAV, AIFF, MP3, FLAC or anything else your browser plays
       <input type="file" id="file" accept="audio/*,.wav,.aif,.aiff,.mp3,.flac,.ogg,.m4a" class="hidden">
+    </div>
+    <div class="row hidden" id="keepRow"><button id="keep">Keep this sample in my hub library</button><span class="state" id="keepState" role="status"></span></div>
+  </div>
+  <div id="track" class="hidden">
+    <h3 class="hubh">A whole track: find its breaks</h3>
+    <p class="sub" id="trackFacts"></p>
+    <div class="row">
+      <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="trackSplit" checked> Split the drums from the rest (stems)</label>
+      <button id="trackGo" class="go">Find the breaks</button>
+      <div class="meter" aria-hidden="true" style="flex:1"><i id="trackBar"></i></div>
+    </div>
+    <p class="state" id="trackState" role="status"></p>
+    <div id="trackOut" class="hidden">
+      <div class="row">
+        <label class="f">Tempo (BPM)<input type="number" id="trackBpm" min="40" max="300" step="0.01" style="width:8ch"></label>
+        <label class="f">Cut from<select id="trackSrc"><option value="drums">The drums only</option><option value="mix">The whole mix</option></select></label>
+        <button id="trackStop">Stop</button>
+      </div>
+      <ol class="plist" id="trackLoops" aria-label="Loops found in the track"></ol>
+      <h3 class="hubh">The overlay: a longer loop under the breaks</h3>
+      <p class="hint">From the rest of the track (bass, chords, vocals: what the drums aren't), on the same bars as the breaks.
+      CHOPPAH plays it under every break of the pack (CHOPPAH 1.7 and up), with its own fader.</p>
+      <div class="row">
+        <label class="f">From bar<select id="ovFrom"></select></label>
+        <label class="f">Length<select id="ovBars"><option>4</option><option selected>8</option><option>16</option></select></label>
+        <label class="f">Take<select id="ovSrc"><option value="rest">The rest (no drums)</option><option value="mix">The whole mix</option></select></label>
+        <button id="ovHear">Hear</button><button id="ovMake" class="go">Make it the pack's overlay</button>
+      </div>
     </div>
   </div>
   <div id="edit" class="hidden">
@@ -248,8 +290,14 @@ computer.</p>
       <p class="hint">Without a picture the hub draws one from the pack's name and theme.</p>
     </div>
   </div>
+  <div class="row" style="margin-top:8px">
+    <label class="f">MATHCORE scenes<select id="pkScenes"><option value="factory">CHOPPAH's own (the factory scenes)</option><option value="pack">From this pack</option><option value="file">From a pack file…</option></select></label>
+    <input type="file" id="pkScenesFile" accept=".chpk" class="hidden">
+    <span class="state" id="pkOverlay"></span>
+  </div>
   <div class="row" style="margin-top:10px">
-    <button id="pkUpload" class="go">Upload to the pack hub</button>
+    <button id="pkUpload" class="go">Save to my library</button>
+    <button id="pkNew">Start a new pack</button>
     <span class="state" id="pkState" role="status"></span>
   </div>
   <p class="hint" id="pkHint">Uploads stay private on the hub until you publish them there.</p>
@@ -1320,7 +1368,8 @@ restore();
 <script type="module">
 /* the pack file (.chpk, app/site/chpk.js, shared with the hub) and the pack's details, its hub */
 import * as CHPK from "./chpk.js";
-window.CHPK = CHPK;
+import * as BEATS from "./beats.js";
+window.CHPK = CHPK; window.BEATS = BEATS;
 window.dispatchEvent(new Event("chpk-ready"));
 </script>
 <script>
@@ -1393,7 +1442,8 @@ async function packFile() {                  /* the pack -> a .chpk */
   const bs = await Promise.all(pack.map((e) => atQuality(e, quality)));
   const bank = buildBank(bs);
   meta.updated = Math.floor(Date.now() / 1000);
-  return CHPK.buildPack({ meta: { ...meta, author_full: meta.author, slots: pack.map(slotOf) }, bank, thumb: await thumbBytes() });
+  return CHPK.buildPack({ meta: { ...meta, author_full: meta.author, slots: pack.map(slotOf) }, bank, thumb: await thumbBytes(),
+    overlay: meta.overlay || null, scenes: meta.scenes || null });
 }
 function takePack(bytes) {                   /* a .chpk (or .chb) -> the pack in this browser; -> its name */
   const b = new Uint8Array(bytes);
@@ -1402,7 +1452,9 @@ function takePack(bytes) {                   /* a .chpk (or .chb) -> the pack in
     pack = all.map((x, i) => ({ name: x.name, bpm: x.bpm, rate: x.rate, len: x.len, slices: x.slices, data: x.data, pcm: x.pcm, slot: p.meta.slots[i] }));
     quality = Math.max(...pack.map((e) => e.rate)); $("quality").value = String([22050, 16000, 11025].find((q) => q <= quality) || 22050);
     meta = { id: p.meta.id, name: p.meta.name, author: p.meta.author_full || p.meta.author, description: p.meta.description, tags: p.meta.tags,
-      theme: p.meta.theme, thumb: p.thumb ? p.thumb.slice() : null, created: p.meta.created };
+      theme: p.meta.theme, thumb: p.thumb ? p.thumb.slice() : null, created: p.meta.created,
+      overlay: p.overlay ? { rate: p.overlay.rate, len: p.overlay.len, bpm: p.overlay.bpm, bars: p.overlay.bars, data: p.overlay.data.slice() } : null,
+      scenes: p.scenes ? p.scenes.slice() : null };
     cur = -1; $("packView").classList.add("hidden"); refresh(); metaKeep(); metaShow();
     return meta.name;
   }
@@ -1456,15 +1508,17 @@ packPick = async (i, play) => {           /* the break picked: its loop settings
   $("slLoop").value = String(s.loop_steps); $("slStart").value = s.loop_start; $("slPitch").value = s.pitch; $("slGain").value = s.gain_db;
 };
 $("pkUpload").onclick = async () => {
-  if (!onHub) { location.href = `${HUB}/hub/account#packs`; return; }
-  say($("pkState"), "Uploading…");
+  if (!onHub) { location.href = `${HUB}/breaks/`; return; }
+  if (!me) { window.open("/hub/account", "_blank"); return; }
+  say($("pkState"), "Saving…");
   try {
     const r = await fetch("/api/packs", { method: "POST", credentials: "same-origin", body: await packFile(),
       headers: { "content-type": "application/vnd.choppah.pack", "x-hub": "1" } });
     const d = await r.json();
-    if (r.status === 403) { say($("pkState"), `Sign in on the <a href="/hub/account">hub</a> first, then upload again.`, true); return; }
+    if (r.status === 403) { say($("pkState"), `<a href="/hub/account">Sign in</a> first (a new tab keeps this pack), then save again.`, true); return; }
+    if (r.status === 409) { meta.id = crypto.randomUUID(); metaKeep(); throw new Error("that pack id was someone else's: it has a new one now, save again"); }
     if (!r.ok) throw new Error(d.error);
-    say($("pkState"), `<b>${esc(d.pack.name)}</b> is on the hub (private): <a href="/hub/pack?id=${d.pack.id}">see it</a>, publish it from <a href="/hub/account#packs">your packs</a>.`);
+    say($("pkState"), `<b>${esc(d.pack.name)}</b> ${d.replaced ? "saved again" : "saved"} in <a href="/hub/library">your library</a> (${d.pack.visibility === "public" ? "public" : "private: publish it there when it's ready"}).`);
   } catch (e) { say($("pkState"), e.message, true); }
 };
 const refreshBefore = refresh;
@@ -1485,7 +1539,250 @@ async function fromHub() {                /* #hub=<id>: a pack from the hub into
   } catch (e) { say($("packState"), "The hub's pack couldn't be read: " + e.message, true); }
 }
 (window.CHPK ? Promise.resolve() : new Promise((r) => window.addEventListener("chpk-ready", r, { once: true })))
-  .then(metaLoad).then(fromHub);
+  .then(metaLoad).then(fromHub).then(() => window.dispatchEvent(new Event("pack-ready")));
+</script>
+<script>
+/* ---------------------------------------------- the builder on the hub: your library, a track's breaks, the overlay */
+let me = null, lastFile = null;
+const hubApi = async (path, o = {}) => {
+  const r = await fetch(path, { credentials: "same-origin", ...o, headers: { ...(o.headers || {}), ...(o.method && o.method !== "GET" ? { "x-hub": "1" } : {}) } });
+  if (!r.ok) { let m = `HTTP ${r.status}`; try { m = (await r.json()).error || m; } catch (e) { /* not JSON */ } throw new Error(m); }
+  return r;
+};
+
+/* the overlay counts against the flash: bank 2 first */
+const layoutPlain = layout;
+layout = () => {
+  const L = layoutPlain();
+  if (!L || !meta || !meta.overlay || !window.CHPK) return L;
+  const l = CHPK.packLayout(L.lens, dev ? dev.caps : CAPS, CHPK.overlayBytes(meta.overlay));
+  return l ? { k: l[0], m: l[1], lens: L.lens } : null;
+};
+function overlayShow() {
+  const o = meta && meta.overlay;
+  $("pkOverlay").innerHTML = o ? `Overlay: <b>${o.bars} bars</b> at ${o.bpm.toFixed(2)} BPM, ${(CHPK.overlayBytes(o) / 1024).toFixed(0)} KB
+    <button id="ovPlay">Hear</button> <button id="ovDel" class="warn">Take it out</button>` : "No overlay (make one from a track, step 2)";
+  if (o) {
+    $("ovPlay").onclick = () => hearLoop(CHPK.adpcmDecode(o.data, o.len), o.rate);
+    $("ovDel").onclick = () => { meta.overlay = null; metaKeep(); overlayShow(); refresh(); };
+  }
+  $("pkScenes").value = meta && meta.scenes ? "pack" : "factory";
+  $("pkScenes").querySelector('[value="pack"]').disabled = !(meta && meta.scenes);
+}
+
+/* hearing a piece of audio on a loop (the track's loops, the overlay) */
+let hearing = null;
+function hearStop() { if (hearing) { try { hearing.stop(); } catch (e) { /* done */ } hearing = null; } }
+function hearLoop(x, rate) {
+  hearStop();
+  const a = audio(); a.resume();
+  const b = a.createBuffer(1, x.length, rate); b.copyToChannel(x, 0);
+  hearing = a.createBufferSource(); hearing.buffer = b; hearing.loop = true; hearing.connect(a.destination); hearing.start();
+}
+
+/* --- a whole track: its stems, tempo, bars and the loops worth cutting --- */
+let track = null, worker = null, jobs = 0;
+const trackWorker = () => worker || (worker = new Worker("beats_worker.js", { type: "module" }));
+function trackOffer() {
+  track = null; $("trackOut").classList.add("hidden"); say($("trackState"), ""); $("trackBar").style.width = "0";
+  const long = src && src.dur > 20;
+  $("track").classList.toggle("hidden", !long);
+  if (long) $("trackFacts").textContent = `${Math.floor(src.dur / 60)}:${String(Math.round(src.dur % 60)).padStart(2, "0")} of audio: too long for one break. Let the builder find the tempo, the bars and the loops worth cutting${$("trackSplit").checked ? ", with the drums split from the rest" : ""}.`;
+}
+$("trackGo").onclick = () => {
+  if (!src) return;
+  const id = ++jobs, split = $("trackSplit").checked;
+  $("trackGo").disabled = true; say($("trackState"), split ? "Splitting the drums from the rest, then listening for the beat…" : "Listening for the beat…");
+  const w = trackWorker();
+  w.onmessage = (e) => {
+    const m = e.data;
+    if (m.id !== id) return;
+    if (m.progress !== undefined && !m.done) { $("trackBar").style.width = (100 * m.progress).toFixed(0) + "%"; return; }
+    $("trackGo").disabled = false; $("trackBar").style.width = "100%";
+    if (m.error) { say($("trackState"), "That didn't work: " + esc(m.error), true); return; }
+    track = m;
+    $("trackSrc").value = m.drums ? "drums" : "mix"; $("trackSrc").querySelector('[value="drums"]').disabled = !m.drums;
+    $("ovSrc").value = m.rest ? "rest" : "mix"; $("ovSrc").querySelector('[value="rest"]').disabled = !m.rest;
+    $("trackBpm").value = m.bpm.toFixed(2);
+    say($("trackState"), `${m.bpm.toFixed(2)} BPM, ${m.bars.length} bars${m.confidence < 0.35 ? " (not sure of the tempo: check it, ×2 and ÷2 are the usual mistakes)" : ""}. The best ${m.loops.length} loops:`);
+    $("ovFrom").innerHTML = m.bars.map((t, i) => `<option value="${i}">${i + 1} (${t.toFixed(1)} s)</option>`).join("");
+    const best = m.loops[0]; if (best) $("ovFrom").value = String(Math.max(0, m.bars.findIndex((t) => Math.abs(t - best.start) < 0.05)));
+    trackList();
+    $("trackOut").classList.remove("hidden");
+  };
+  const copy = src.x.slice();
+  w.postMessage({ id, x: copy, rate: src.rate, split }, [copy.buffer]);
+};
+function trackBarLen() { return 240 / (+$("trackBpm").value || track.bpm); }
+function trackCut(w, from) {                 /* a loop's audio from the stem chosen, at the track's rate */
+  const sig = from === "mix" || !track.drums ? track.mix : track.drums;
+  const end = w.start + w.bars * trackBarLen();
+  return BEATS.seamless(sig, track.rate, w.start, Math.min(end, sig.length / track.rate));
+}
+function trackList() {
+  const li = $("trackLoops"); li.innerHTML = "";
+  track.loops.forEach((w, i) => {
+    const el = document.createElement("li");
+    el.innerHTML = `<span class="grow"><b>${w.bars} bar${w.bars > 1 ? "s" : ""}</b> at ${w.start.toFixed(2)} s
+      <span class="score" title="how good a loop it is"><i style="width:${(100 * Math.min(1, w.score)).toFixed(0)}%"></i></span></span>
+      <button data-a="hear">Hear</button><button data-a="edit">Edit</button><button data-a="add" class="go">Add to the pack</button>`;
+    el.querySelectorAll("button").forEach((b) => b.onclick = async () => {
+      if (b.dataset.a === "hear") return hearLoop(trackCut(w, $("trackSrc").value), track.rate);
+      hearStop();
+      const x = trackCut(w, $("trackSrc").value), bpm = +$("trackBpm").value || track.bpm;
+      src = { x, rate: track.rate, dur: x.length / track.rate };   /* the editor works on the cut; the track stays in track */
+      $("name").value = (meta && meta.name ? meta.name.slice(0, 7) : "CUT") + " " + (i + 1);
+      setBars(w.bars); fillStart(); $("bpm").value = bpm.toFixed(2);
+      $("edit").classList.remove("hidden");
+      await make();
+      if (b.dataset.a === "add") { $("add").click(); say($("trackState"), `Loop ${i + 1} is in the pack.`); }
+      else $("edit").scrollIntoView({ behavior: "smooth" });
+    });
+    li.appendChild(el);
+  });
+}
+$("trackStop").onclick = hearStop;
+$("trackSplit").onchange = trackOffer;
+function overlayCut() {
+  const from = +$("ovFrom").value, bars = +$("ovBars").value, t0 = track.bars[from], t1 = t0 + bars * trackBarLen();
+  const sig = $("ovSrc").value === "rest" && track.rest ? track.rest : track.mix;
+  if (t1 > sig.length / track.rate) throw new Error(`the track ends before bar ${from + bars + 1}: start earlier or take fewer bars`);
+  return BEATS.seamless(sig, track.rate, t0, t1);
+}
+$("ovHear").onclick = () => { try { hearLoop(overlayCut(), track.rate); } catch (e) { say($("trackState"), e.message, true); } };
+$("ovMake").onclick = async () => {
+  try {
+    let x = level(overlayCut(), track.rate);
+    const bars = +$("ovBars").value, bpm = +$("trackBpm").value || track.bpm;
+    const lens = pack.map((e) => lenAt(e, quality)), caps = dev ? dev.caps : CAPS;
+    let pick = null;
+    for (const rate of [22050, 16000, 11025]) {           /* the best rate that still fits beside the breaks */
+      const len = Math.round(x.length * rate / track.rate);
+      if (CHPK.packLayout(lens, caps, 16 + ((len + 1) >> 1))) { pick = { rate, len }; break; }
+    }
+    if (!pick) throw new Error("no room beside these breaks: take a break out, or make a shorter overlay");
+    if (pick.rate !== track.rate) {
+      const oc = new OfflineAudioContext(1, pick.len, pick.rate), ab = oc.createBuffer(1, x.length, track.rate);
+      ab.copyToChannel(x, 0); const n = oc.createBufferSource(); n.buffer = ab; n.connect(oc.destination); n.start();
+      x = (await oc.startRendering()).getChannelData(0).slice(0, pick.len);
+    }
+    meta.overlay = { rate: pick.rate, len: x.length, bpm, bars, data: CHPK.adpcmEncode(x) };
+    metaKeep(); overlayShow(); refresh();
+    say($("trackState"), `The overlay is in the pack: ${bars} bars at ${(pick.rate / 1000).toFixed(2)} kHz, ${(CHPK.overlayBytes(meta.overlay) / 1024).toFixed(0)} KB.`);
+  } catch (e) { say($("trackState"), e.message, true); }
+};
+
+/* the track finder offered whenever a long file comes in; a file you dropped can be kept in your library */
+const loadAudioPlain = loadAudio;
+loadAudio = async (bytes, fname, known) => {
+  hearStop();
+  await loadAudioPlain(bytes, fname, known);
+  if (src && src.dur <= 20 && window.BEATS && !known) {   /* a loop: the onsets choose how many bars its length holds */
+    try {
+      const a = BEATS.analyse(src.x, src.rate);
+      const bars = Math.round(src.dur * a.bpm / 240);
+      if ([1, 2, 4, 8, 16].includes(bars) && Math.abs(+$("bpm").value - a.bpm) > 0.05) { setBars(bars); fillStart(); $("bpm").value = a.bpm.toFixed(2); await make(); }
+    } catch (e) { /* the length's guess stands */ }
+  }
+  trackOffer();
+};
+const loadFilePlain = loadFile;
+loadFile = async (f) => { lastFile = f; $("keepRow").classList.toggle("hidden", !me); say($("keepState"), ""); return loadFilePlain(f); };
+$("keep").onclick = async () => {
+  if (!lastFile) return;
+  say($("keepState"), "Keeping it…");
+  try {
+    await hubApi("/api/me/samples", { method: "POST", body: lastFile, headers: { "content-type": lastFile.type || "audio/wav",
+      "x-name": encodeURIComponent(lastFile.name.replace(/\.[^.]+$/, "")), ...(src ? { "x-seconds": String(src.dur) } : {}), ...($("bpm").value ? { "x-bpm": $("bpm").value } : {}) } });
+    say($("keepState"), `In <a href="/hub/library#samples">your library</a>.`);
+    hubLoad();
+  } catch (e) { say($("keepState"), e.message, true); }
+};
+
+/* --- your hub library as a source --- */
+for (const t of ["tabFile", "tabLib"]) {
+  const plain = $(t).onclick;
+  $(t).onclick = () => { plain(); $("tabHub").setAttribute("aria-selected", "false"); $("hubBox").classList.add("hidden"); };
+}
+$("tabHub").onclick = () => {
+  for (const [t, b] of [["tabFile", "fileBox"], ["tabLib", "libBox"]]) { $(t).setAttribute("aria-selected", "false"); $(b).classList.add("hidden"); }
+  $("tabHub").setAttribute("aria-selected", "true"); $("hubBox").classList.remove("hidden");
+};
+const tile = (title, sub) => { const b = document.createElement("button"); b.innerHTML = `${esc(title)}<small>${sub}</small>`; return b; };
+async function packBytes(id) { return (await hubApi(`/api/packs/${id}/file`)).arrayBuffer(); }
+async function useSample(id, name, bpm) {
+  say($("hubState"), "Fetching your sample…");
+  const bytes = await (await hubApi(`/api/me/samples/${id}/file`)).arrayBuffer();
+  await loadAudio(bytes, name, null);
+  if (bpm && src && src.dur <= 20) { const bars = Math.max(1, Math.round(src.dur * bpm / 240)); setBars(bars); fillStart(); $("bpm").value = (+bpm).toFixed(2); await make(); }
+  say($("hubState"), "");
+  ($("track").classList.contains("hidden") ? $("edit") : $("track")).scrollIntoView({ behavior: "smooth" });
+}
+async function useBreak(packId, slot) {     /* a starred break, straight into the pack */
+  say($("hubState") || $("packState"), "Fetching the break…");
+  const p = CHPK.parsePack(new Uint8Array(await packBytes(packId))), b = slotsOf(p.bank)[slot];
+  if (!b) throw new Error("that break isn't in the pack any more");
+  const ok = addToPack({ name: b.name, bpm: b.bpm, rate: b.rate, len: b.len, slices: b.slices, data: b.data, pcm: b.pcm, slot: p.meta.slots[slot] });
+  say($("addStatus"), ok ? `<b>${esc(b.name)}</b> from ${esc(p.meta.name)} is break ${pack.length} of the pack.` : "The pack has sixteen: take one out first.", !ok);
+  say($("hubState"), "");
+  $("h-pack").scrollIntoView({ behavior: "smooth" });
+}
+async function hubLoad() {
+  if (!me) return;
+  try {
+    const [sm, fv, mine] = await Promise.all([hubApi("/api/me/samples").then((r) => r.json()), hubApi("/api/me/favorites").then((r) => r.json()), hubApi("/api/me/packs").then((r) => r.json())]);
+    const fill = (id, items, empty) => { const g = $(id); g.innerHTML = ""; items.forEach((x) => g.appendChild(x)); if (!items.length) g.innerHTML = `<p class="hint">${empty}</p>`; };
+    fill("hubSamples", sm.samples.map((x) => { const b = tile((x.fav ? "★ " : "") + x.name, [x.bpm ? x.bpm + " BPM" : "", x.seconds ? Math.round(x.seconds) + " s" : ""].filter(Boolean).join(" · ") || "&nbsp;");
+      b.onclick = () => useSample(x.id, x.name, x.bpm).catch((e) => say($("hubState"), e.message, true)); return b; }), "No samples yet: drop audio on the <a href=\"/hub/library#samples\">library</a>, or keep one you load here.");
+    fill("hubBreaks", fv.breaks.map((x) => { const b = tile("★ " + x.name, `${x.bpm} BPM · ${esc(x.pack.name)}`);
+      b.onclick = () => useBreak(x.pack.id, x.slot).catch((e) => say($("hubState"), e.message, true)); return b; }), "Star breaks on packs' pages to have them here.");
+    fill("hubPacks", mine.packs.map((x) => { const b = tile(x.name, `${x.nbreaks} breaks · ${x.visibility}`);
+      b.onclick = async () => { if (pack.length && !confirm("Open this pack instead of the one here? Save or export this one first to keep it.")) return;
+        try { takePack(await packBytes(x.id)); overlayShow(); $("h-pack").scrollIntoView({ behavior: "smooth" }); } catch (e) { say($("hubState"), e.message, true); } }; return b; }), "No packs yet: save this one (step 4).");
+  } catch (e) { say($("hubState"), e.message, true); }
+}
+
+/* --- scenes: the factory's, this pack's, or another pack's --- */
+$("pkScenes").onchange = () => {
+  const v = $("pkScenes").value;
+  if (v === "factory") { meta.scenes = null; metaKeep(); overlayShow(); }
+  if (v === "file") $("pkScenesFile").click();
+};
+$("pkScenesFile").onchange = async (e) => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) { overlayShow(); return; }
+  try {
+    const p = CHPK.parsePack(new Uint8Array(await f.arrayBuffer()));
+    if (!p.scenes) throw new Error(`${p.meta.name} has CHOPPAH's own scenes, nothing of its own to take`);
+    meta.scenes = p.scenes.slice(); metaKeep(); say($("pkState"), `The MATHCORE scenes of <b>${esc(p.meta.name)}</b> are this pack's now.`);
+  } catch (err) { say($("pkState"), err.message, true); }
+  overlayShow();
+};
+$("pkNew").onclick = () => {
+  if (pack.length && !confirm("Start a new, empty pack? Save or export this one first to keep it.")) return;
+  pack = []; cur = -1; packPlayer.stop(); $("packView").classList.add("hidden");
+  meta = newMeta(); metaKeep(); metaShow(); overlayShow(); refresh();
+};
+
+/* --- the hub's links into the builder: #sample=<id>, #break=<pack>:<slot>, #new --- */
+async function fromHash() {
+  const h = new URLSearchParams(location.hash.slice(1));
+  try {
+    if (h.has("new")) { history.replaceState(null, "", location.pathname); $("pkNew").click(); }
+    if (h.get("sample")) { history.replaceState(null, "", location.pathname); await useSample(h.get("sample"), "SAMPLE", null); }
+    if (h.get("break")) { history.replaceState(null, "", location.pathname); const [id, slot] = h.get("break").split(":"); await useBreak(id, +slot); }
+  } catch (e) { say($("packState"), e.message, true); }
+}
+window.addEventListener("pack-ready", async () => {
+  overlayShow();
+  if (onHub) {
+    try { me = (await (await fetch("/api/me", { credentials: "same-origin" })).json()).user; } catch (e) { me = null; }
+    $("tabHub").classList.toggle("hidden", !me);
+    $("pkUpload").textContent = me ? "Save to my library" : "Sign in to save to your library";
+    if (me) hubLoad();
+  } else $("pkUpload").textContent = "Save to my library on choppah.app";
+  fromHash();
+});
+window.addEventListener("hashchange", fromHash);
 </script>
 </body>
 </html>
