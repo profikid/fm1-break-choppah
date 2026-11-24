@@ -19,6 +19,9 @@ export const BANK_MAGIC = 0x31424843;       /* "CHB1" */
 export const SLOT_BYTES = 168;
 export const MAX_SLOTS = 16;
 export const RATES = [11025, 16000, 22050];
+/* a break's own rate: the builder plays a slow one at the rate that fits CH_PCM_MAX (e.g. 22013 Hz at 99 BPM), and the
+   FM-1 plays a slot at any rate; the overlay keeps to RATES */
+export const BREAK_RATE_MIN = 8000, BREAK_RATE_MAX = 22050, CH_PCM_MAX = 106496;
 /* the FM-1's two pack banks (CLAUDE.md: bank 1 0x97000-0xD5FFF, bank 2 XDATA1 0xE5000-0xFBFFF) */
 export const BANK_CAPS = [0xD6000 - 0x97000, 0xFC000 - 0xE5000];
 export const THUMB_MAX = 64 * 1024;
@@ -117,7 +120,8 @@ export function readBank(img) {
     let name = "";
     for (let i = 0; i < 12 && img[s + i]; i++) name += String.fromCharCode(img[s + i]);
     const rate = dv.getUint32(s + 16, true);
-    if (!RATES.includes(rate)) fail(`break ${k + 1}: rate ${rate}`);
+    if (rate < BREAK_RATE_MIN || rate > BREAK_RATE_MAX) fail(`break ${k + 1}: rate ${rate}`);
+    if (len > CH_PCM_MAX) fail(`break ${k + 1}: ${len} samples (at most ${CH_PCM_MAX})`);
     if (off + dl > 16 + size || dl !== (len + 1) >> 1) fail(`break ${k + 1}: data`);
     if (![8, 16, 32].includes(ns)) fail(`break ${k + 1}: ${ns} slices`);
     const slices = [];

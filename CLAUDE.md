@@ -89,6 +89,11 @@ settings bytes reserved).
   The builder's cut is `app/site/breakcut.js` (MPL-2.0, no DOM: level, slicePoints, warp copied from breaks.html
   unchanged, `tests/breakcut.test.mjs` holds them equal; `cut`, `makeBreak`, `autoEdit`): the hub's library slicer
   (PRD_PACKS §10.8) makes breaks from your samples with it. Change those functions in both places, or the test fails.
+  It also cuts a break from the drums alone (an edit's `drums`: beats.js `stems` on the bars and half a second around
+  them) and makes a pack's overlay (`makeOverlay`: bars on the edit's grid, the rest or the mix, `seamless`, `level`, the
+  best of 22.05 / 16 / 11.025 kHz that fits): the hub's pack maker (library and MCP) uses them. A slow break (under
+  ~99.4 BPM) keeps the rate that fits CH_PCM_MAX (`breakRate`, e.g. 22013 Hz): chpk.js reads any break rate of
+  8000–22050 Hz (the FM-1 plays a slot at any rate); the overlay keeps to 22050 / 16000 / 11025.
   MATHCORE in the browser is `app/site/mathcore.js` (MPL-2.0, no DOM: SCNE and CHAN to and from bytes, the factory
   scenes (a copy of app.c's MC_PRESET: `tests/mathcore.test.mjs` reads app.c and brk.c and holds them equal, and
   tests/pack_v2.sh holds the factory scenes and chain to the host's GETSET byte for byte), `autoRoles` (brk.c

@@ -54,10 +54,37 @@ assert.deepEqual(b.slices, Array.from({ length: 17 }, (_, i) => Math.round(i * b
 b = await C.makeBreak(loop, rate, { bpm, marks: [1, 2, 3] }, lin);
 assert.deepEqual(b.slices, b.auto, "marks that don't fit: the auto slices");
 
+/* the rate: slow breaks at the rate that fits CH_PCM_MAX, and the bank takes it (the FM-1 plays a slot at any rate) */
+const { buildBank, readBank } = await import("../app/site/chpk.js");
+const r99 = C.breakRate(99.22);
+assert.ok(r99 > 22000 && r99 < 22050 && Math.round(2 * 240 / 99.22 * r99) <= C.MAX_LEN, "99 BPM: just under 22.05 kHz");
+const slow99 = await C.makeBreak(hits(Math.round(rate * 240 * 2 / 99.22), rate, 99.22), rate, { bpm: 99.22 }, lin);
+assert.equal(readBank(buildBank([slow99])).slots[0].rate, r99, "a 99 BPM break's bank reads back");
+
+/* the drums alone (the stems): the same length and slices; a steady tone under the hits mostly gone */
+const tone = Float32Array.from(loop, (v, i) => v * 0.5 + 0.5 * Math.sin(2 * Math.PI * 220 * i / rate));
+const both = await C.makeBreak(tone, rate, { bpm, level: false }, lin), drums = await C.makeBreak(tone, rate, { bpm, level: false, drums: true }, lin);
+assert.equal(drums.pcm.length, both.pcm.length); assert.equal(drums.rate, both.rate); assert.equal(drums.slices.length, 17);
+const at220 = (y, r) => { let re = 0, im = 0; for (let i = 0; i < y.length; i++) { re += y[i] * Math.cos(2 * Math.PI * 220 * i / r); im += y[i] * Math.sin(2 * Math.PI * 220 * i / r); } return Math.hypot(re, im) / y.length; };
+const rms = (y) => Math.sqrt(y.reduce((a, v) => a + v * v, 0) / y.length);
+assert.ok(at220(drums.pcm, drums.rate) / rms(drums.pcm) < 0.5 * at220(both.pcm, both.rate) / rms(both.pcm), "the tone is mostly out of the drums");
+const once = await C.makeBreak(tone, rate, { bpm, once: true, drums: true }, lin);
+assert.equal(once.pcm.length, both.pcm.length, "one bar twice, from the drums");
+
+/* the overlay: bars on the grid, the rest or the mix, the best rate that fits, the reasons it can't */
+const track = Float32Array.from({ length: rate * 20 }, (_, i) => 0.3 * Math.sin(2 * Math.PI * 110 * i / rate) + (i % (rate / 2) < 200 ? 0.8 * rnd() : 0));
+let ov = await C.makeOverlay(track, rate, { bpm: 120, offset: 0.25, start: 1, bars: 4, take: "mix" }, { resample: lin.resample });
+assert.equal(ov.rate, 22050); assert.equal(ov.len, 4 * 2 * 22050); assert.equal(ov.pcm.length, ov.len); assert.equal(ov.bars, 4); assert.equal(ov.bpm, 120);
+ov = await C.makeOverlay(track, rate, { bpm: 120, start: 0, bars: 4 }, { resample: lin.resample, fits: (len, r) => r < 22050 });
+assert.equal(ov.rate, 16000, "the first rate that fits"); assert.equal(ov.len, 4 * 2 * 16000);
+await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, start: 7, bars: 4 }, lin), /ends before bar 12/);
+await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 4 }, { resample: lin.resample, fits: () => false }), /no room/);
+await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 3 }, lin), /4, 8 or 16/);
+
 /* a first edit: a loop file from its length, a track from its first bar and best loop */
 let e = C.autoEdit("think break.wav", 4.2);
 assert.equal(e.name, "THINK BREAK"); assert.ok(Math.abs(e.bpm - 114.29) < 0.01); assert.equal(e.once, false);
 e = C.autoEdit("track", 150, { bpm: 100, downbeat: 3.1, loops: [{ start: 3.1 + 2.4 * 7, bars: 2 }] });
 assert.equal(e.bpm, 100); assert.ok(Math.abs(e.offset - 0.7) < 1e-6); assert.equal(e.start, 8);
 
-console.log("breakcut: the builder's level, slices and warp, sample for sample; the cut, the rate, marks, warp, the first edit");
+console.log("breakcut: the builder's level, slices and warp, sample for sample; the cut, the rate (slow ones read back), marks, warp, the drums alone, the overlay, the first edit");
