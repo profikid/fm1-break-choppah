@@ -200,7 +200,7 @@ static void mc_follow_page(const brk_status_t *st)
         brk_mc_jump((int)to, 16u);
         mc_mute_out();
         app_say("MATHCORE", "NEXT BAR");
-    } else if ((pg == PG_HOME || pg == PG_GEN || pg == PG_SPLIT || pg == PG_SEQ) && mc.on) {
+    } else if ((pg == PG_HOME || pg == PG_GEN || pg == PG_SPLIT || pg == PG_LOOP || pg == PG_SEQ) && mc.on) {
         mc.on = 0u;
         mc.held = -1;
         brk_mc_jump(-1, 16u);            /* (the loop again, on the bar) */

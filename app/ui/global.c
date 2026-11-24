@@ -268,6 +268,92 @@ static void draw_split(void)
     cv_blit(0, 140);
 }
 
+/* HOME's fourth part, LOOP (1.7, PRD_PACKS PS-003): a pack break's own loop, as its pack set it and as you change it
+ * here (saved with SAVE, per pack): K1 LENGTH, the window (2 bars .. 1/4 bar), K2 its first step, K3 pitch, K4 gain. SEL + a
+ * knob: back to the pack's. The break follows at the next bar. Built-in breaks: as they are */
+static const char *const LOOP_LEN[4] = {"2 BARS", "1 BAR", "1/2 BAR", "1/4 BAR"};
+static uint32_t loop_len_i(uint32_t steps) { return steps >= 32u ? 0u : steps >= 16u ? 1u : steps >= 8u ? 2u : 3u; }
+static void loop_value(int i, char *t)
+{
+    const bank_sset_t *ss = sset_of(set.brk);
+    t[0] = 0;
+    if (!ss) {
+        text_cat(t, i ? "" : "BUILT IN");
+        return;
+    }
+    if (i == 0)
+        text_cat(t, LOOP_LEN[loop_len_i(ss->loop_steps)]);
+    else if (i == 1) {
+        text_cat(t, "STEP ");
+        int_text((int32_t)ss->loop_start + 1, t + 5);
+    } else {
+        int32_t v = i == 2 ? ss->pitch : ss->gain_db;
+        if (v > 0)
+            text_cat(t, "+");
+        int_text(v, t + (v > 0));
+        if (i == 3)
+            text_cat(t, " DB");
+    }
+}
+static void loop_turn(int i, int32_t d)
+{
+    char t[16];
+    static const char *const LN[4] = {"LENGTH", "FROM", "PITCH", "GAIN"};
+    bank_sset_t *ss = set.brk < n_user && set.brk < BANK_SLOTS ? &mq.ss[set.brk] : 0;
+    if (!ss) {
+        app_say("LOOP", "PACK BREAKS ONLY");
+        return;
+    }
+    if (ui.btn & 1u << B_SEL) {          /* SEL + a knob: the pack's own again */
+        ss_from_pack(set.brk);
+        app_say("LOOP", "AS THE PACK HAS IT");
+    } else {
+        if (i == 0)
+            ss->loop_steps = (uint8_t)(32u >> clamp((int32_t)loop_len_i(ss->loop_steps) + (d > 0 ? 1 : -1), 0, 3));
+        else if (i == 1)
+            ss->loop_start = (uint8_t)clamp((int32_t)ss->loop_start + d, 0, 32 - (int32_t)ss->loop_steps);
+        else if (i == 2)
+            ss->pitch = (int8_t)clamp((int32_t)ss->pitch + d, -24, 24);
+        else
+            ss->gain_db = (int8_t)clamp((int32_t)ss->gain_db + d, -24, 12);
+        if (ss->loop_start + ss->loop_steps > 32u)
+            ss->loop_start = (uint8_t)(32u - ss->loop_steps);
+        loop_value(i, t);
+        app_say(LN[i], t);
+    }
+    break_ask(set.brk);                  /* the break again, at the next bar */
+    ui.redraw |= RG_BLOCKS | RG_FOOT;
+}
+static void draw_loop(void)
+{
+    const bank_sset_t *ss = sset_of(set.brk);
+    char t[24];
+    uint32_t k;
+    cv_begin(240, 52, C_BLACK);
+    cv_text(6, 2, &FONT_T, "BREAK", C_GRAY);
+    cv_text(96, 2, &FONT_T, break_name(set.brk), C_HI);
+    for (k = 0; k < 32u; k++) {          /* the two bars' 16ths, the window lit */
+        int in = ss && k >= ss->loop_start && k < (uint32_t)ss->loop_start + ss->loop_steps;
+        cv_rect(6 + (int32_t)k * 7, 24, 6, 14, !ss || in ? C_BLOCK_HI : C_BLOCK);
+        if (!(k & 3u))
+            cv_rect(6 + (int32_t)k * 7, 40, 1, 4, k & 15u ? C_LINE : C_GRAY);
+    }
+    cv_blit(0, 88);
+    cv_begin(240, 52, C_BLACK);
+    if (!ss)
+        cv_text(6, 4, &FONT_XS, "A PACK BREAK'S OWN LOOP, PITCH AND GAIN: LOAD A PACK", C_DIM);
+    else {
+        for (k = 0; k < 4u; k++) {
+            static const char *const LN[4] = {"LENGTH", "FROM", "PITCH", "GAIN"};
+            loop_value((int)k, t);
+            cv_text(6 + (int32_t)k * 58, 2, &FONT_XS, LN[k], C_GRAY);
+            cv_text(6 + (int32_t)k * 58, 14, &FONT_T, t, C_HI);
+        }
+        cv_text(6, 36, &FONT_XS, "SEL + A KNOB: AS THE PACK HAS IT", C_DIM);
+    }
+    cv_blit(0, 140);
+}
+
 static void global_part(uint32_t g)      /* GLO (again: the next part) and ALGORITHM on GLOBAL */
 {
     ui.gpage = (uint8_t)g;

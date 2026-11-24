@@ -162,8 +162,39 @@ On the FM-1 your breaks come **first** (ALGORITHM: yours, then the eight built i
 break CHOPPAH starts with** every time it is switched on. Sending a pack replaces the one there. Connected, the page
 lists the FM-1's breaks; **Bring them here** puts them in the pack to hear, reorder, add to and send again, and
 **Delete** takes them off (the built-in breaks stay). The pack also stays in the browser until you clear it, and
-**Export** saves it as one file (.chb) to keep or share; **Import** reads one back. Your breaks stay through updates
+**Export** saves it as one file (.chpk: the breaks and all the pack's settings) to keep or share; **Import** reads one
+back (an older .chb too). Your breaks stay through updates
 of CHOPPAH, and RESET ALL keeps them. A CHOPPAH 1.4 or 1.5 takes one break: the page sends the pack's first.
+
+### Packs: a break's own loop, the pack's colours, scenes and overlay (1.7)
+
+<a id="packs"></a>A pack made in the **pack builder** (the [Pack builder](https://choppah.app/breaks/) page, also on
+[choppah.app](https://choppah.app/), where the [pack hub](https://choppah.app/hub/) keeps and shares packs) carries
+more than breaks, and CHOPPAH 1.7 plays all of it:
+
+- **Each break's own loop**: a window of it (2 bars, 1 bar, ½ bar, ¼ bar, from any step) repeated over the two bars,
+  so the loop, the generator, MATHCORE and the sequencer play the window; its level, its pitch and swing on top of
+  yours, its tempo, and slices marked by hand as kicks, snares, hats or percussion (over the Slice Map's own).
+- **Its colours**: the screen in the pack's theme while one of its breaks plays; a built-in break brings amber back.
+- **Its MATHCORE scenes**: loading a pack brings its scenes (or CHOPPAH's own when it has none). The scenes and the
+  chain you change and SAVE are kept for that pack: another pack never takes them over.
+- **An overlay**: a longer loop (4, 8 or 16 bars; a bass line, chords, a vocal: the rest of the track the breaks came
+  from) under its breaks, on the bars, with the tempo. It has its own fader on the MIXER (OVERLAY), goes through the
+  FX chain or around it (GROOVE's OVL ROUTE), slows with HALF and the TAPE STOP and stops with the transport; nothing
+  else of the pads touches it. Under a built-in break it is quiet.
+
+**HOME a fourth time** opens **LOOP**, a pack break's own loop to change on the FM-1:
+
+| Knob | Sets | |
+| --- | --- | --- |
+| K1 LENGTH | 2 BARS · 1 BAR · 1/2 BAR · 1/4 BAR | The window, repeated over the two bars |
+| K2 FROM | STEP 1–32 | Where the window starts |
+| K3 PITCH | −24 … +24 | Semitones, on top of the global pitch |
+| K4 GAIN | −24 … +12 dB | Its level |
+
+The break follows at the next bar (stopped: at once). **SEL + a knob** brings the pack's own back. SAVE keeps your
+changes for that pack; the builder's **Pull the changes from the FM-1** (and its Send, when you send the same pack
+again) takes them, and the scenes, back into the pack. Built-in breaks play as they are.
 
 ### The split
 
@@ -704,8 +735,8 @@ lit: on). **LFO again** turns to GROOVE.
 
 | Half | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
-| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too; the drum lanes and MATHCORE play the break, so them too) | | | FX: the master FX chain against the dry sound |
-| GROOVE | SWING (50–75 %) | | | |
+| LEVELS | BREAK: the break's level (its throws into the delay and the reverb too; the drum lanes and MATHCORE play the break, so them too) | OVERLAY: the pack's overlay (NONE without one) | | FX: the master FX chain against the dry sound |
+| GROOVE | SWING (50–75 %) | OVL ROUTE: the overlay through the FX chain (CHAIN) or around it (AROUND) | | |
 
 FX is how much of the chain you hear. HOME keeps the gate, FX and COMPLEXITY to ride (K1, K3, K4) and the **DJ filter** (K2), which filters the
 break (and so the drum lanes and the scenes) as a DJ mixer's filter does. The FLT pad throws it the same way.
@@ -715,10 +746,11 @@ break (and so the drum lanes and the scenes) as a DJ mixer's filter does. The FL
 | Page | K1 | K2 | K3 | K4 |
 | --- | --- | --- | --- | --- |
 | HOME (perform) | Gate | DJ filter on the break (left low-pass, right high-pass) | FX (the MIXER's) | Complexity (the GENERATOR's) |
-| LFO (mixer) | Break level | | | FX (the chain, dry to wet) |
-| LFO again (groove) | Swing | | | |
+| LFO (mixer) | Break level | Overlay level | | FX (the chain, dry to wet) |
+| LFO again (groove) | Swing | Overlay route | | |
 | HOME again (generator) | Complexity | Anchor | Roll | Fill |
 | HOME a third time (split) | Split on / off | Break B | A's bar | B's bar |
+| HOME a fourth time (loop) | Length | From | Pitch | Gain |
 | FX (the chain) | the focused slot's effect: its three settings (FX again: its MORE and MOD parts; an MB COMP its six, see §6) | | | Its mix |
 | SEQ (patterns) | Slice | Pitch | Hits | Reverse |
 | SEQ, a drum lane | Fill | Rotate | Clear / 4x4 | Copy |
@@ -738,7 +770,7 @@ the slice lit in the waveform shrinks with it. It covers the loop's slices, ratc
 
 The generator rearranges the break as it plays: **complexity** is how often it jumps, **anchor** keeps the kick and
 snare on the beats, **roll** repeats a slice or takes the one next to it, **fill** breaks the rules in the last bar
-of a phrase; it is HOME's second part (HOME again). HOME a third time is the [split](#split). SEL + ARP writes a random pattern (ARP alone opens the black keys' effects).
+of a phrase; it is HOME's second part (HOME again). HOME a third time is the [split](#split), a fourth time a pack break's [LOOP](#packs). SEL + ARP writes a random pattern (ARP alone opens the black keys' effects).
 
 ## 11. The control map
 

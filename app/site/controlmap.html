@@ -162,10 +162,11 @@
   if (!root) return;
   const $ = (n) => root.querySelector('[data-cm="' + n + '"]');
   const PAGES = [
-    { id: "home", btn: "HOME", name: "PERFORM · GENERATOR · SPLIT", sub: "Play; how the break rearranges; two breaks in one loop", again: "next part (3)", subs: [
+    { id: "home", btn: "HOME", name: "PERFORM · GENERATOR · SPLIT · LOOP", sub: "Play; how the break rearranges; two breaks in one loop; a pack break's own loop", again: "next part (4)", subs: [
       { n: "PERFORM", k: ["GATE", "DJ FILTER", "FX", "COMPLEXITY"], strip: "16 SLICE BLOCKS", note: "the slice playing lit; a held key outlined" },
       { n: "GENERATOR", k: ["COMPLEXITY", "ANCHOR", "ROLL", "FILL"], strip: "16 SLICE BLOCKS", note: "HOME again" },
-      { n: "SPLIT", k: ["SPLIT", "BREAK B", "BAR A", "BAR B"], strip: "SPLIT: A AND B, THEIR BARS", note: "HOME a third time. Bar 1 break A (keys 1-8), bar 2 break B (keys 9-16). A key latches its half from the next bar; SEL + key: both; a key of each half held: layered; ALGORITHM turns the latched bar's break" } ],
+      { n: "SPLIT", k: ["SPLIT", "BREAK B", "BAR A", "BAR B"], strip: "SPLIT: A AND B, THEIR BARS", note: "HOME a third time. Bar 1 break A (keys 1-8), bar 2 break B (keys 9-16). A key latches its half from the next bar; SEL + key: both; a key of each half held: layered; ALGORITHM turns the latched bar's break" },
+      { n: "LOOP", k: ["LENGTH", "FROM", "PITCH", "GAIN"], strip: "THE BREAK'S 32 STEPS, ITS WINDOW LIT", note: "HOME a fourth time (1.7). A pack break's own loop: its window repeated over the two bars, its pitch and gain; at the next bar. SEL + a knob: the pack's own. SAVE keeps it for that pack" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices",
       notes: [["SEL", "Pressed alone: every combination"], ["SEL + ALGO · SEL + PRESETS", "Break · pattern, any page"], ["ARP", "Effects on the black keys"], ["MIDI 48–63 · 64–74", "Slices · black-key pads"]] },
     { id: "arp", btn: "ARP", name: "EFFECT PADS", sub: "An effect on each black key", again: "the shown key's next part (MAIN, MORE, MOD)", part: true, subs: [
@@ -198,8 +199,8 @@
               ["SEL + REC (LIVE)", "Clear the chain (the groove plays on)"], ["Black key (SCENE)", "It plays this scene; SEL + it: nothing"],
               ["PLAY on LANE / SCENE", "The scene edited, round and round"], ["MIDI 36 · 38 · 42 · 39", "A kick, snare, hat, perc slice"]] },
     { id: "lfo", btn: "LFO", name: "MIXER", sub: "Levels and groove", again: "next part (2)", subs: [
-      { n: "LEVELS", k: ["BREAK", "", "", "FX"], strip: "FADERS AND METERS", note: "FX shows the 4 slots" },
-      { n: "GROOVE", k: ["SWING", "", "", ""], strip: "SWING", note: "" } ],
+      { n: "LEVELS", k: ["BREAK", "OVERLAY", "", "FX"], strip: "FADERS AND METERS", note: "FX shows the 4 slots; OVERLAY: the pack's overlay (1.7)" },
+      { n: "GROOVE", k: ["SWING", "OVL ROUTE", "", ""], strip: "SWING", note: "OVL ROUTE: the overlay through the chain or around it" } ],
       algo: "Break (next bar)", brk: true, presets: "Pattern P1–P16", keys: "slices", notes: [] },
     { id: "env", btn: "ENV", name: "TAP TEMPO", sub: "The whole screen", again: "a tap", subs: [
       { n: "TAP TEMPO", k: ["TEMPO", "FINE", "HALF / X2", "CLICK"], strip: "LED BPM · A METRONOME SWINGING IN TIME · TAPS", note: "the whole screen: no waveform, no tabs" } ],

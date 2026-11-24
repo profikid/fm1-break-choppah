@@ -86,8 +86,18 @@ settings bytes reserved).
   percussive), `seamless`; `tests/beats.test.mjs` on the classics) in a module Worker (`beats_worker.js`); on
   choppah.app the page also reads your hub library and saves to it (script 3 of breaks.html). `tests/page_pack.sh`:
   the builder in Chrome, a track to a pack with an overlay and back.
-  The firmware reads none of v2 yet: Send still writes the v1 banks (slot settings, theme, scenes, overlay: PRD_PACKS
-  P1, P5, P6).
+  **The firmware reads v2 (1.7)**: bank version 2 (`brk_bank.h`: chunks after the slot table, PACK SSET SCNE THEM
+  OVLY; `pk_chunks`), INFO version 3, GETSET (7: the scenes, the chain and the LOOP settings as in RAM). A pack
+  break's settings (`slot_apply`: gain, tempo, the loop's window tiled over the two bars by `slot_window`, pitch and
+  swing on top of the global ones; `slot_roles` through the tiling) come from `mq.ss[]` (OBJ_MQ, 1.6's 88-byte saves
+  load into its front), which `mc_pack` fills from the pack's SSET when the pack changes (its id hashed into
+  `mq.rsv`; a v1 pack's tag is its bank's CRC; a 1.6 save with a v1 pack keeps its scenes); HOME's fourth part LOOP
+  (`PG_LOOP`, page 7, ui/global.c) edits them, SEL + a knob: the pack's own. The theme (`theme_apply`): gfx.c's
+  `pal[]` and CHOPPAH's ground (`C_BLACK` is `th_bg` in the app) and blocks; a built-in break: the factory's. The
+  overlay (`brk_overlay`, brk.c): ADPCM read from the flash as it plays, marks every 4096 samples, on the bars;
+  `brk_overlay_on` under its pack's breaks; MIXER K2 OVERLAY (`set.lane_level`), GROOVE K2 OVL ROUTE
+  (`set.ov_route`: the chain's `thru` or `post`). The builder sends v2 to INFO 3 (`chpk.deviceBanks`) and pulls the
+  FM-1's changes back first. Tests: `tests/pack_v2.sh`, `test_overlay`.
 - **Releases are tags, not merges** (since 6 Nov 2026): `scripts/release.sh` tags vX.Y and pushes it; the shared
   builder (`zvenson/fm1-build@v1`, via `.github/workflows/release.yml`) builds it on GitHub, signs the build
   provenance, publishes the release and rebuilds the site. The Firmware Hub only shows "Built from source" for

@@ -2,7 +2,10 @@
 
 **Feature PRD** · v0.1 · 24 Nov 2026 · Owner: Laurens (Sylverline)  
 **Parent product PRD:** [PRD.md](PRD.md) (S-003, §10) · related: [PRD_MATHCORE.md](PRD_MATHCORE.md)  
-**Status:** 24 Nov 2026: the hub is **live on choppah.app** (§10, all PH-* rows; repo `profikid/choppah-hub`), the
+**Status:** 24 Nov 2026 (later): the FM-1 side is built for **CHOPPAH 1.7** (branch `packs-v2`, merged): pack v2,
+the slot settings and HOME's LOOP, scenes per pack, the theme, the overlay, GETSET; tested in the host simulator and
+built for the device by CI (image 562 KB of 581.5). To check on an FM-1 before the 1.7 release: the overlay's render
+cost (PO-002). Earlier the same day: the hub is **live on choppah.app** (§10, all PH-* rows; repo `profikid/choppah-hub`), the
 `.chpk` file (PK-010, PK-011: `app/site/chpk.js`) and the builder's pack details, export / import, upload and open from
 the hub (PB-020–025) are built; the builder's tempo, bars, loop finder, stems (v1) and overlay (PB-001–012) too, and the hub's pack manager (§10.6) with the builder inside the hub (§9.4). Not yet: the firmware side (PK-001–004, PS, PT, PM, PO, PE),
 Demucs stems (PB-002 v2), the destem server (PB-003: endpoint built, no GPU provider). Decisions in §1.2; open questions in §11.
@@ -97,10 +100,10 @@ Unknown tags are skipped (forward compatible). The CRC still covers everything a
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PK-001 | Firmware reads bank v2 and v1; v1 gets factory theme, scenes and slot settings | P0 | `tests/pack.sh` passes with a v1 and a v2 pack |
-| PK-002 | Firmware before packs v2 refuses a v2 bank instead of misreading it (check `pk_scan` on 1.6 now; ship the guard in the next patch if it reads only the magic) | P0 | A v2 bank on 1.6.x: "PACK NEEDS UPDATE", the built-ins play |
-| PK-003 | INFO answers version 3: pack support, chunk tags known, bytes free per bank | P0 | The builder shows what fits before sending |
-| PK-004 | The built-in bank is the **factory pack** (amber, factory scenes, default slot settings) | P0 | Built-ins behave as today |
+| PK-001 | Firmware reads bank v2 and v1; v1 gets factory theme, scenes and slot settings | P0 | *Done (1.7): tests/pack.sh (v1), tests/pack_v2.sh (v2)* |
+| PK-002 | Firmware before packs v2 refuses a v2 bank instead of misreading it (check `pk_scan` on 1.6 now; ship the guard in the next patch if it reads only the magic) | P0 | *1.6 checks the version byte (bank_check): a v2 bank isn't read there; the builder sends v2 only to INFO 3* |
+| PK-003 | INFO answers version 3: pack support, chunk tags known, bytes free per bank | P0 | *Done: INFO version 3; the builder reads the pack's id back (READ) and its edits (GETSET)* |
+| PK-004 | The built-in bank is the **factory pack** (amber, factory scenes, default slot settings) | P0 | *Done: no pack, or a built-in break: amber, the factory's scenes, the break as it is* |
 
 ### 3.3 The exchange file `.chpk`
 
@@ -133,10 +136,10 @@ Each break carries how it plays. Defaults are today's behaviour, so a v1 break s
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PS-001 | Loading a break applies its slot settings at the bar swap | P0 | Engine test: a 16-step window loops one bar |
-| PS-002 | Loop window in the engine (`brk_break_t`): the loop, the generator, MATHCORE and SEQ read the window, not the whole break | P0 | COMPLEXITY 0 = the window looped bit-exact |
-| PS-003 | EDIT shows and edits the slot's settings (BREAK part) | P1 | SAVE keeps them per pack (§8) |
-| PS-004 | Roles set by hand override the heard Slice Map for that slice only | P1 | |
+| PS-001 | Loading a break applies its slot settings at the bar swap | P0 | *Done (1.7): slot_apply when the break loads (the bar swap)* |
+| PS-002 | Loop window in the engine (`brk_break_t`): the loop, the generator, MATHCORE and SEQ read the window, not the whole break | P0 | *Done: slot_window tiles the window over the two bars; tests/pack_v2.sh (a 1/2-bar window: the break repeats every 8 steps)* |
+| PS-003 | EDIT shows and edits the slot's settings (BREAK part) | P1 | *Done, on HOME's fourth part LOOP (EDIT brings MATHCORE in): LENGTH, FROM, PITCH, GAIN* |
+| PS-004 | Roles set by hand override the heard Slice Map for that slice only | P1 | *Done: slot_roles, through the window's tiling* |
 
 ---
 
@@ -159,10 +162,10 @@ bands, the K S H P letters) stay fixed for legibility, or are derived from `hi` 
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PT-001 | A runtime palette: the UI's named colours read from a RAM table; fm1-base's `APP_PALETTE` becomes the default table (an fm1-base change: propose upstream) | P0 | Every page drawn in a test palette, no amber left (doc_shots diff) |
-| PT-002 | The theme changes with the break, at its bar swap (see Q1) | P0 | Host scenario: pack break → built-in → back |
-| PT-003 | The builder warns on low contrast (text on bg < 4.5 : 1) | P1 | |
-| PT-004 | The builder previews the theme in the browser emulator | P1 | |
+| PT-001 | A runtime palette: the UI's named colours read from a RAM table; fm1-base's `APP_PALETTE` becomes the default table (an fm1-base change: propose upstream) | P0 | *Done (1.7): gfx.c's pal[] is RAM already: no fm1-base change; tests/pack_v2.sh* |
+| PT-002 | The theme changes with the break, at its bar swap (see Q1) | P0 | *Done* |
+| PT-003 | The builder warns on low contrast (text on bg < 4.5 : 1) | P1 | *Done: the builder names the colours under 4.5 : 1* |
+| PT-004 | The builder previews the theme in the browser emulator | P1 | *Open: the builder draws the HOME screen's colours (its picture); the emulator itself takes packs once it reads banks from the page* |
 
 ---
 
@@ -170,9 +173,9 @@ bands, the K S H P letters) stay fixed for legibility, or are derived from `hi` 
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PM-001 | A pack may carry its 16 scenes, its chain and its black keys; without them, the factory `MC_PRESET` | P0 | Engine test: a pack's scene plays its lanes |
-| PM-002 | `OBJ_MC` holds the **active pack's id** and its edited scenes; `OBJ_MQ` its chain and keys. A different pack loads its own (the edits of the previous one are pulled first, §8) | P0 | Edits survive a reboot; another pack doesn't inherit them |
-| PM-003 | A scene format change (MCS5 → MCS6) converts old packs in the builder, not on the device | P1 | |
+| PM-001 | A pack may carry its 16 scenes, its chain and its black keys; without them, the factory `MC_PRESET` | P0 | *Done (1.7): mc_pack; tests/pack_v2.sh (scene A's phrase from the pack)* |
+| PM-002 | `OBJ_MC` holds the **active pack's id** and its edited scenes; `OBJ_MQ` its chain and keys. A different pack loads its own (the edits of the previous one are pulled first, §8) | P0 | *Done: keyed by the pack's id in mq.rsv; a 1.6 save keeps its scenes for its v1 pack* |
+| PM-003 | A scene format change (MCS5 → MCS6) converts old packs in the builder, not on the device | P1 | *Standing rule: none needed yet (MCS5)* |
 
 ---
 
@@ -199,12 +202,12 @@ Bank 2 (92 KB) is its natural home; longer or slower overlays take room from the
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PO-001 | Streaming overlay voice in `app/dsp/` (platform-free): flash pointer in, PCM out, phase from the transport | P0 | Engine test: 64 bars, phase error 0 samples, seam inaudible |
-| PO-002 | Render cost measured on the device against the last release (flash-cache misses: the reason `fx_samples` is in RAM) | P0 | Render < 85 % with all FX + overlay |
-| PO-003 | MIXER: an OVERLAY fader and mute (the old LANES fader's reserved bytes) | P0 | |
-| PO-004 | Which performance actions reach the overlay (Q2): default **TAPE STOP, HALF and STOP** do; ROLL, FREEZE, REVERSE, scrub and slice FX don't; the DJ filter: a setting | P1 | Host scenario per pad |
-| PO-005 | Through the FX chain or around it (like the old drums' route) | P1 | |
-| PO-006 | While a flash write stalls reads (SAVE, a pack being sent), the overlay fades out and back | P0 | No click on SAVE |
+| PO-001 | Streaming overlay voice in `app/dsp/` (platform-free): flash pointer in, PCM out, phase from the transport | P0 | *Done (1.7): brk_overlay; test_overlay (bar 2 on its bar 2), tests/pack_v2.sh (heard)* |
+| PO-002 | Render cost measured on the device against the last release (flash-cache misses: the reason `fx_samples` is in RAM) | P0 | Render < 85 % with all FX + overlay. *Host: 64 samples decoded at a time, a mark every 4096; on the FM-1: to measure before the release (OVERLOAD sheds the FX first)* |
+| PO-003 | MIXER: an OVERLAY fader and mute (the old LANES fader's reserved bytes) | P0 | *Done: MIXER K2 OVERLAY with its meter* |
+| PO-004 | Which performance actions reach the overlay (Q2): default **TAPE STOP, HALF and STOP** do; ROLL, FREEZE, REVERSE, scrub and slice FX don't; the DJ filter: a setting | P1 | *Done: TAPE STOP, HALF and STOP; the DJ filter: the route (through the chain after it, or around)* |
+| PO-005 | Through the FX chain or around it (like the old drums' route) | P1 | *Done: GROOVE K2 OVL ROUTE* |
+| PO-006 | While a flash write stalls reads (SAVE, a pack being sent), the overlay fades out and back | P0 | *Done: let go before a bank's erase; stopped, it fades out first* |
 
 ---
 
@@ -215,11 +218,11 @@ scenes, chain, keys) in its store objects with the pack's id.
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PE-001 | Store edits keyed by pack id: `OBJ_MC` (scenes), `OBJ_MQ` grown with the slot settings (16 × 48 B) | P0 | Reboot keeps them; ≤ 3840 B per object |
-| PE-002 | SysEx `GETSET`: the edits of the pack on the FM-1, as chunks (`SSET`, `SCNE`) | P0 | Read back = what the FM-1 plays |
-| PE-003 | The builder's **Pull edits** merges them into the pack in IndexedDB (a new `updated`; "save as" = a new id) | P0 | |
-| PE-004 | Before **Send** replaces a pack with edits on the FM-1, the builder pulls them and asks: keep in the old pack / discard | P0 | Nothing lost silently |
-| PE-005 | On the FM-1, SEL + SAVE on EDIT's BREAK part: revert the slot to the pack's defaults | P2 | |
+| PE-001 | Store edits keyed by pack id: `OBJ_MC` (scenes), `OBJ_MQ` grown with the slot settings (16 × 48 B) | P0 | *Done (1.7): mq.ss[] in OBJ_MQ (scenes in OBJ_MC), keyed by the pack* |
+| PE-002 | SysEx `GETSET`: the edits of the pack on the FM-1, as chunks (`SSET`, `SCNE`) | P0 | *Done: GETSET (7) = OBJ_MC's scenes, OBJ_MQ's chain (88 B), the LOOP settings (40 B each); tests/pack_v2.sh* |
+| PE-003 | The builder's **Pull edits** merges them into the pack in IndexedDB (a new `updated`; "save as" = a new id) | P0 | *Done: Pull the changes from the FM-1* |
+| PE-004 | Before **Send** replaces a pack with edits on the FM-1, the builder pulls them and asks: keep in the old pack / discard | P0 | *Done: Send asks first when the FM-1's pack is this one and it changed there* |
+| PE-005 | On the FM-1, SEL + SAVE on EDIT's BREAK part: revert the slot to the pack's defaults | P2 | *Done: SEL + a knob on LOOP* |
 
 ---
 

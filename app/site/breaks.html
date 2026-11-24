@@ -1810,23 +1810,62 @@ async function getScenes() {                /* GETSET: the scenes as the FM-1 ha
   if (new DataView(out.buffer).getUint32(0, true) !== 0x3553434D) throw new Error("the FM-1's scenes are of another version");
   return out;
 }
-window.packPull = async (st) => {           /* before this pack replaces itself on the FM-1: the scenes edited there kept */
+async function getSlots(n) {                /* GETSET past the scenes and the chain: each pack break's LOOP settings */
+  const at = 1604 + 88, size = 40 * n, raw = new Uint8Array(size);
+  for (let off = 0; off < size; off += 256) {
+    const m = Math.min(256, size - off), r = await must(7, [...u32(at + off), ...u32(m)], 3000, (a) => a.data.length >= 4 && word(a.data, 0) === at + off);
+    if (r.code) throw new Error("GETSET " + r.code);
+    raw.set(r.data.subarray(4, 4 + m), off);
+  }
+  const dv = new DataView(raw.buffer);
+  return Array.from({ length: n }, (_, i) => ({ loop_steps: raw[40 * i] || 32, loop_start: raw[40 * i + 1], pitch: dv.getInt8(40 * i + 2),
+    gain_db: dv.getInt8(40 * i + 3), bpm: dv.getUint16(40 * i + 4, true) ? dv.getUint16(40 * i + 4, true) / 100 : null, swing: raw[40 * i + 6] || null }));
+}
+const sameSlot = (a, b) => ["loop_steps", "loop_start", "pitch", "gain_db"].every((k) => (a[k] || 0) === (b[k] || 0));
+function takeSlots(sl) {                    /* the FM-1's LOOP edits into the pack's breaks (their roles stay the pack's) */
+  sl.forEach((x, i) => { if (pack[i]) pack[i].slot = { ...slotOf(pack[i]), loop_steps: x.loop_steps, loop_start: x.loop_start, pitch: x.pitch, gain_db: x.gain_db }; });
+}
+window.packPull = async (st) => {           /* before this pack replaces itself on the FM-1: what was edited there kept */
   try {
     if ((await devPack()) !== meta.id) return;
-    const sc = await getScenes();
-    if (meta.scenes && sc.every((v, i) => v === meta.scenes[i])) return;
-    if (confirm("The scenes on the FM-1 were edited since this pack was sent. Keep those edits in the pack?")) {
-      meta.scenes = sc; metaKeep(); overlayShow(); say(st, "The FM-1's scenes are in the pack now.");
+    const sc = await getScenes(), sl = await getSlots(Math.min(pack.length, dev.counts[0] + (dev.counts[1] || 0)));
+    const scenesNew = !(meta.scenes && sc.every((v, i) => v === meta.scenes[i])), slotsNew = sl.some((x, i) => pack[i] && !sameSlot(x, slotOf(pack[i])));
+    if (!scenesNew && !slotsNew) return;
+    const what = [scenesNew && "the MATHCORE scenes", slotsNew && "the breaks' LOOP settings"].filter(Boolean).join(" and ");
+    if (confirm(`On the FM-1, ${what} were changed since this pack was sent. Keep those changes in the pack?`)) {
+      if (scenesNew) meta.scenes = sc;
+      if (slotsNew) takeSlots(sl);
+      metaKeep(); overlayShow(); refresh(); say(st, `The FM-1's changes (${what}) are in the pack now.`);
     }
   } catch (e) { /* an older CHOPPAH, or no pack of this one's on it: nothing to pull */ }
 };
-$("pkScenes").insertAdjacentHTML("afterend", ' <button id="pkPull" class="hidden" title="Read the MATHCORE scenes as they are on the FM-1 now (CHOPPAH 1.7)">Pull the scenes from the FM-1</button>');
+$("pkScenes").insertAdjacentHTML("afterend", ' <button id="pkPull" class="hidden" title="Read the MATHCORE scenes and the LOOP settings as they are on the FM-1 now (CHOPPAH 1.7)">Pull the changes from the FM-1</button>');
 $("pkPull").onclick = async () => {
-  try { meta.scenes = await getScenes(); metaKeep(); overlayShow(); say($("pkState"), "The FM-1's MATHCORE scenes are this pack's now."); }
-  catch (e) { say($("pkState"), e.message, true); }
+  try {
+    meta.scenes = await getScenes();
+    if ((await devPack()) === meta.id) takeSlots(await getSlots(Math.min(pack.length, dev.counts[0] + (dev.counts[1] || 0))));
+    metaKeep(); overlayShow(); refresh(); say($("pkState"), "The FM-1's MATHCORE scenes (and, for this pack, its LOOP settings) are this pack's now.");
+  } catch (e) { say($("pkState"), e.message, true); }
 };
 const refreshPlain = refresh;
 refresh = (store = true) => { refreshPlain(store); const b = $("pkPull"); if (b) b.classList.toggle("hidden", !(dev && dev.fw >= 3 && out)); };
+
+/* --- the theme read on the FM-1's screen (PT-003): labels and values against the ground, 4.5 : 1 at least --- */
+function contrast(a, b) {
+  const lum = (h) => { const v = parseInt(h.slice(1), 16), c = [v >> 16, v >> 8 & 255, v & 255].map((x) => { x /= 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+function contrastNote() {
+  if (!meta) return;
+  const t = meta.theme, low = [["text", "labels"], ["hi", "values"], ["mid", "secondary text"]].filter(([k]) => contrast(t[k], t.bg) < 4.5);
+  let el = $("pkContrast");
+  if (!el) { $("pkColours").insertAdjacentHTML("afterend", '<span class="state" id="pkContrast"></span>'); el = $("pkContrast"); }
+  say(el, low.length ? `Hard to read on the FM-1: ${low.map(([k, w]) => `${w} (${k}, ${contrast(t[k], t.bg).toFixed(1)} : 1)`).join(", ")} against the ground. 4.5 : 1 at least.` : "", low.length > 0);
+}
+$("pkColours").addEventListener("input", contrastNote);
+$("pkTheme").addEventListener("change", () => setTimeout(contrastNote));
+window.addEventListener("pack-ready", () => setTimeout(contrastNote, 50));
 </script>
 </body>
 </html>

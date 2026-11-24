@@ -59,6 +59,10 @@ static void knob_turn(int k, int32_t d)
         split_turn(k - EN_K1, d);
         return;
     }
+    if (ui.page == PG_LOOP) {
+        loop_turn(k - EN_K1, d);
+        return;
+    }
     if (ui.page == PG_MC) {
         mc_turn(k - EN_K1, d);
         return;
@@ -351,7 +355,7 @@ static void input(void)
             transport(!st.playing, 0);
         muted = 0u;
     }
-    if (bdn & 1u << B_HOME) {            /* HOME: PERFORM; again (let go alone), GENERATOR, SPLIT, and back */
+    if (bdn & 1u << B_HOME) {            /* HOME: PERFORM; again (let go alone), GENERATOR, SPLIT, LOOP, and back */
         if (home_page()) {
             ui.home_hold = 1u;
             ui.home_combo = 0u;
@@ -364,7 +368,7 @@ static void input(void)
     if (ui.home_hold && !(btn & 1u << B_HOME)) {
         ui.home_hold = 0u;
         if (!ui.home_combo && home_page()) {
-            ui.page = ui.page == PG_HOME ? PG_GEN : ui.page == PG_GEN ? PG_SPLIT : PG_HOME;
+            ui.page = ui.page == PG_HOME ? PG_GEN : ui.page == PG_GEN ? PG_SPLIT : ui.page == PG_SPLIT ? PG_LOOP : PG_HOME;
             ui.redraw |= RG_FOOT | RG_BLOCKS;
             page_say();
         }
@@ -665,6 +669,10 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
         split_value(i, t);
         return;
     }
+    if (ui.page == PG_LOOP) {
+        loop_value((int)i, t);
+        return;
+    }
     if (ui.page == PG_MC) {
         mc_value(i, t);
         return;
@@ -715,7 +723,7 @@ static int32_t tab(int32_t x, const char *s, int on)
     return x + w + 3;
 }
 /* the pages' buttons as printed, GLOBAL's parts, SEQ's lanes: for the tabs and the header (page_say) */
-static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "EDIT", "ENV", "ARP", "HOME"};
+static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "HOME", "ENV", "ARP", "HOME"};
 static const char *const GPART[GPARTS] = {"MIDI", "PITCH", "CHANNEL"};
 static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
 static void draw_tabs(void)
@@ -726,10 +734,11 @@ static void draw_tabs(void)
     part[0] = 0;
     cv_begin(240, 14, C_BLACK);
     x = cv_text(4, 1, &FONT_T, BTN[ui.page % NPAGES], C_WHITE) + 6;
-    if (home_page()) {                   /* HOME: PERFORM, GENERATOR, SPLIT */
+    if (home_page()) {                   /* HOME: PERFORM, GENERATOR, SPLIT, LOOP */
         x = tab(x, "PERFORM", ui.page == PG_HOME);
         x = tab(x, "GENERATOR", ui.page == PG_GEN);
-        tab(x, "SPLIT", ui.page == PG_SPLIT);
+        x = tab(x, "SPLIT", ui.page == PG_SPLIT);
+        tab(x, "LOOP", ui.page == PG_LOOP);
     }
     else if (ui.page == PG_TAP)
         tab(x, "TAP TEMPO", 1);
@@ -789,6 +798,7 @@ static void page_say(void)
     case PG_HOME: text_cat(t, "PERFORM"); break;
     case PG_GEN: text_cat(t, "GENERATOR"); break;
     case PG_SPLIT: text_cat(t, "SPLIT"); break;
+    case PG_LOOP: text_cat(t, "LOOP"); break;
     case PG_GLOBAL: text_cat(t, GPART[ui.gpage % GPARTS]); break;
     case PG_MIX: text_cat(t, ui.mpage ? "GROOVE" : "LEVELS"); break;
     case PG_SEQ: text_cat(t, SEQL[ui.seq_lane % NSEQL]); break;
@@ -868,7 +878,7 @@ static const char *foot_knob(uint32_t i, char *t)
                                               {"", "", "", ""},
                                               {"BREAK", "OVERLAY", "", "FX"},
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
-                                              {"", "", "", ""},
+                                              {"LENGTH", "FROM", "PITCH", "GAIN"},
                                               {"TEMPO", "FINE", "HALF / X2", "CLICK"},
                                               {"P1", "P2", "P3", "MIX"},
                                               {"SPLIT", "BREAK B", "BAR A", "BAR B"}};
@@ -1141,7 +1151,7 @@ void app_frame(void)
         ui.last_keys = ui.keys;
         ui.redraw |= RG_BLOCKS;
     }
-    if ((ui.page == PG_GLOBAL || ui.page == PG_SPLIT) && now - ui.panel_drawn >= 200u)   /* their panels: 5 a second */
+    if ((ui.page == PG_GLOBAL || ui.page == PG_SPLIT || ui.page == PG_LOOP) && now - ui.panel_drawn >= 200u)   /* their panels: 5 a second */
         ui.redraw |= RG_BLOCKS;
     if (ui.page == PG_MIX && now - ui.mix_drawn >= 33u)   /* the MIXER's meters: about 30 times a second */
         ui.redraw |= RG_BLOCKS;
@@ -1250,6 +1260,9 @@ void app_frame(void)
             ui.panel_drawn = now;
         } else if (ui.page == PG_SPLIT) {
             draw_split();
+            ui.panel_drawn = now;
+        } else if (ui.page == PG_LOOP) {
+            draw_loop();
             ui.panel_drawn = now;
         } else if (ui.page == PG_FX) {
             draw_chain();
@@ -1479,8 +1492,8 @@ int app_expect(const char *what, int *got)
                                     "mc_hats", "mc_percs", "mc_missing", "mc_adv", "mc_hits", "mq_key0", "mc_state0",
                                     "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next", "mc_math", "mc_base", "playing",
                                     "pk_tag", "mq_tag", "sc0_bars", "nslices", "brk_bpm", "slot_pitch", "tile",
-                                    "role0", "slot_swing", "pal_hi", "th_bg", "ov_have", "ov_loud"};
-    int v[80];
+                                    "role0", "slot_swing", "pal_hi", "th_bg", "ov_have", "ov_loud", "ss0_steps", "brk_wait"};
+    int v[82];
     uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
@@ -1578,7 +1591,9 @@ int app_expect(const char *what, int *got)
     v[77] = th_bg;
     v[78] = pk_ovly != 0;
     v[79] = meter_ov > 0.05f;            /* the overlay heard (over -26 dBFS) */
-    for (i = 0; i < 80u; i++)
+    v[80] = mq.ss[0].loop_steps;         /* break 1's window as LOOP has it */
+    v[81] = brk_next;                    /* a break asked for, not in yet (-1 none) */
+    for (i = 0; i < 82u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

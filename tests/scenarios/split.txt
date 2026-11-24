@@ -22,6 +22,8 @@ turn K4 1 10
 wait 400
 expect split_at 8
 tap HOME
+wait 150
+tap HOME
 wait 300
 shot sp_home.png
 tap PLAY

@@ -7,8 +7,8 @@
 #define brk_log2f brk_log2f_c
 
 /* the pages (their numbers kept: the scenarios' "expect page"). PG_MC: MATHCORE on EDIT (ui/mc.c), where the drums'
- * design was; PG_X7 was the snare and hat's page, gone with them (22 Nov 2026): never shown */
-enum { PG_HOME, PG_GEN, PG_FX, PG_GLOBAL, PG_MC, PG_MIX, PG_SEQ, PG_X7, PG_TAP, PG_ARP, PG_SPLIT, NPAGES };
+ * design was; page 7 was the snare and hat's, gone with them (22 Nov 2026); since 1.7 it is HOME's LOOP */
+enum { PG_HOME, PG_GEN, PG_FX, PG_GLOBAL, PG_MC, PG_MIX, PG_SEQ, PG_LOOP, PG_TAP, PG_ARP, PG_SPLIT, NPAGES };
 static const char *const PAD_NAME[BRK_NPADS] = {"R8", "R16", "R32", "REV", "FRZ", "HLF", "STP", "GAT", "RND",
                                                 "FLT", "DUB"};
 static const uint8_t WK[16] = PLAT_WHITE_KEYS, BK[11] = PLAT_BLACK_KEYS;
@@ -63,7 +63,7 @@ static struct {
 static void page_say(void);              /* the header: the page's button and part, as its tabs (main.c) */
 static int mc_lane_page(void);           /* (ui/mc.c) */
 static int slices_page(void) { return ui.page != PG_SEQ && ui.page != PG_TAP && !mc_lane_page(); }
-static int home_page(void) { return ui.page == PG_HOME || ui.page == PG_GEN || ui.page == PG_SPLIT; }
+static int home_page(void) { return ui.page == PG_HOME || ui.page == PG_GEN || ui.page == PG_SPLIT || ui.page == PG_LOOP; }
 enum { RG_HEAD = 1, RG_WAVE = 2, RG_BLOCKS = 4, RG_FOOT = 8, RG_ALL = 15, RG_FX = 16 };
 
 static void text_cat(char *d, const char *s)

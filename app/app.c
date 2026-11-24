@@ -300,7 +300,10 @@ static struct {
     uint8_t q[MC_QUEUE];                 /* each a scene, 0..MC_SCENES-1, played in order and round again */
     uint8_t key[NPFX];                   /* each black key's scene (MC_NOKEY none) */
     uint8_t rsv2[5];
+    bank_sset_t ss[BANK_SLOTS];          /* (1.7, PRD_PACKS PS-003, PE-001) each pack break's settings as edited on
+                                          * HOME's LOOP: the pack's own (its SSET) when it came, saved with SAVE */
 } mq;
+#define MQ_SIZE_16 88u                   /* the queue as 1.5.5 - 1.6 saved it: it loads into the front */
 _Static_assert(sizeof mq <= 3840u, "a store object holds 3840 bytes");
 static uint8_t roles_now[BRK_MAX_SLICES];   /* the Slice Map of the break playing (heard: mc_auto_roles) */
 
@@ -473,6 +476,16 @@ static void mc_defaults(void)
     for (i = 0; i < MC_SCENES; i++)
         mc_scene_defaults(&mcs.sc[i], i);
 }
+static void ss_defaults(bank_sset_t *s)   /* a break as it is: the whole loop, no change */
+{
+    uint32_t k;
+    uint8_t *z = (uint8_t *)s;
+    for (k = 0; k < sizeof *s; k++)
+        z[k] = 0u;
+    s->loop_steps = 32u;
+    for (k = 0; k < 32u; k++)
+        s->roles[k] = 0xFFu;
+}
 static void mq_defaults(void)
 {
     uint32_t i;
@@ -482,6 +495,8 @@ static void mq_defaults(void)
     mq.magic = MQ_MAGIC;
     for (i = 0; i < NPFX; i++)           /* the first eleven scenes (PRD_MATHCORE 7.3) */
         mq.key[i] = (uint8_t)i;
+    for (i = 0; i < BANK_SLOTS; i++)
+        ss_defaults(&mq.ss[i]);
 }
 static uint32_t crc32_of(const uint8_t *p, uint32_t n);
 static uint32_t mcs_saved, mq_saved;     /* the CRCs of the scenes and the queue as saved: SAVE writes them when changed */
@@ -507,8 +522,15 @@ static void mc_load(void)                /* boot: the saved scenes and queue, ch
     uint32_t i;
     if (plat_store_load(OBJ_MC, &mcs, sizeof mcs) != (int)sizeof mcs || mcs.magic != MCS_MAGIC)
         mc_defaults();
-    if (plat_store_load(OBJ_MQ, &mq, sizeof mq) != (int)sizeof mq || mq.magic != MQ_MAGIC || mq.n > MC_QUEUE)
-        mq_defaults();
+    mq_defaults();                       /* (a 1.6 save fills the front: the settings after it stay as they are) */
+    {
+        int got = plat_store_load(OBJ_MQ, &mq, sizeof mq);
+        if ((got != (int)sizeof mq && got != (int)MQ_SIZE_16) || mq.magic != MQ_MAGIC || mq.n > MC_QUEUE)
+            mq_defaults();
+        else if (got == (int)MQ_SIZE_16)
+            for (i = 0; i < BANK_SLOTS; i++)
+                ss_defaults(&mq.ss[i]);
+    }
     for (i = 0; i < mq.n; i++)           /* (an entry out of range: the first scene) */
         if (mq.q[i] >= MC_SCENES)
             mq.q[i] = 0u;
@@ -633,10 +655,9 @@ static void pk_chunks(const uint8_t *p, uint32_t size)
         const uint8_t *d = p + at + 8u;
         if (len > size - at - 8u)
             return;
-        if (tag == CHK_PACK && len >= sizeof(bank_pack_t)) {
+        if (tag == CHK_PACK && len >= sizeof(bank_pack_t))
             pk_pack = (const bank_pack_t *)d;
-            pk_tag = crc32_of(pk_pack->id, 16u) | 1u;
-        } else if (tag == CHK_SSET) {
+        else if (tag == CHK_SSET) {
             pk_sset = (const bank_sset_t *)d;
             pk_nsset = len / sizeof(bank_sset_t);
         } else if (tag == CHK_SCNE) {
@@ -670,13 +691,28 @@ static void pk_scan(void)
         pk_n[k] = i;
         n_user += pk_n[k];
         pk_chunks(p, 16u + h->data_size);
+        if (!pk_tag && pk_n[k])          /* a pack without an id (v1): its bank's CRC tells it from another */
+            pk_tag = h->crc32 | 1u;
     }
+    if (pk_pack)
+        pk_tag = crc32_of(pk_pack->id, 16u) | 1u;
 }
 
 /* a slot's settings (PRD_PACKS 4): the pack's break i's, or 0 (a v1 pack, a built-in break) */
 static const bank_sset_t *sset_of(uint32_t i)
 {
-    return i < n_user && i < pk_nsset ? &pk_sset[i] : 0;
+    return i < n_user && i < BANK_SLOTS ? &mq.ss[i] : 0;   /* (mc_pack put the pack's there) */
+}
+static void ss_from_pack(uint32_t i)    /* break i's settings as its pack has them (LOOP's SEL + a knob: back to them) */
+{
+    uint32_t k;
+    if (i >= BANK_SLOTS)
+        return;
+    if (i < pk_nsset)
+        for (k = 0; k < sizeof(bank_sset_t); k++)
+            ((uint8_t *)&mq.ss[i])[k] = ((const uint8_t *)&pk_sset[i])[k];
+    else
+        ss_defaults(&mq.ss[i]);
 }
 static uint8_t tile_src[BRK_MAX_SLICES + 1];   /* the window's slice i came from the break's slice tile_src[i] */
 
@@ -749,6 +785,14 @@ static void mc_pack(void)
     uint32_t tag = pk_tag & 0xFFFFFFu, had = mq.rsv[0] | mq.rsv[1] << 8 | (uint32_t)mq.rsv[2] << 16, i;
     if (tag == had)
         return;
+    if (!had && !pk_pack && !pk_scne) {  /* saved before 1.7 with a pack of v1: those scenes are this pack's */
+        for (i = 0; i < BANK_SLOTS; i++)
+            ss_from_pack(i);
+        mq.rsv[0] = (uint8_t)tag;
+        mq.rsv[1] = (uint8_t)(tag >> 8);
+        mq.rsv[2] = (uint8_t)(tag >> 16);
+        return;
+    }
     if (pk_scne && pk_scne_len == sizeof mcs && rd32le(pk_scne) == MCS_MAGIC) {
         uint8_t *z = (uint8_t *)&mcs;
         for (i = 0; i < sizeof mcs; i++)
@@ -756,6 +800,8 @@ static void mc_pack(void)
     } else
         mc_defaults();
     mq_defaults();
+    for (i = 0; i < BANK_SLOTS; i++)
+        ss_from_pack(i);
     mq.rsv[0] = (uint8_t)tag;
     mq.rsv[1] = (uint8_t)(tag >> 8);
     mq.rsv[2] = (uint8_t)(tag >> 16);

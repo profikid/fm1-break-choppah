@@ -16,7 +16,7 @@ python3 tools/cu_frames.py --out "$O/v1.bin" $C/lyn_collins_think_about_it.wav 1
 gs() {  # GETSET frames: the scenes and the chain, 256 bytes a frame
 python3 - <<'P'
 import sys; sys.path.insert(0, 'tools'); import cu_frames as c
-for off in range(0, 1700, 256):
+for off in range(0, 1700 + 640, 256):
     print("sysex " + c.hexs(c.frame(7, off.to_bytes(4, 'little') + (256).to_bytes(4, 'little'))))
     print("wait 30")
 P
@@ -33,7 +33,7 @@ for f in raw.split(b"\xf0")[1:]:
     for i in range(0, len(p), 8):
         u += bytes(p[i + j] | ((p[i] >> (j - 1)) & 1) << 7 for j in range(1, min(8, len(p) - i)))
     off = int.from_bytes(u[:4], "little"); out[off:off + len(u) - 4] = u[4:]
-open(sys.argv[2], "wb").write(out[:1692])
+open(sys.argv[2], "wb").write(out[:1692 + 640])
 P
 }
 # 1. the factory's scenes, read back
@@ -111,6 +111,53 @@ wait 300
 expect pk_tag 1
 expect sc0_bars $SC0
 expect tile 8
+tap LFO
+wait 150
+tap HOME
+wait 150
+tap HOME
+wait 150
+tap HOME
+wait 150
+tap HOME
+wait 300
+expect page 7
+expect page 7
+turn K1 -1
+wait 300
+expect tile 16
+sysex_log $PWD/$O/gs2.syx
+sysex_out
+S
+gs
+cat <<S
+wait 100
+sysex_log off
+tap SAVE
+wait 500
+reboot
+wait 2600
+tap HOME
+wait 300
+expect tile 16
+tap LFO
+wait 150
+tap HOME
+wait 150
+tap HOME
+wait 150
+tap HOME
+wait 150
+tap HOME
+wait 300
+expect page 7
+press SEL
+turn K1 1
+release SEL
+wait 300
+expect tile 8
+tap HOME
+wait 300
 expect pal_hi 14329
 turn ALGO 2
 wait 300
@@ -131,4 +178,12 @@ S
 } > "$O/s2.txt"
 $H "$O/s2.txt" app/build/scenarios > "$O/run2.log" 2>&1 || { grep -E "FAIL|host:" "$O/run2.log"; exit 1; }
 grep -q "EXPECTATIONS FAILED" "$O/run2.log" && { grep FAIL "$O/run2.log"; exit 1; }
-echo "pack_v2: GETSET read the scenes; a v2 pack's scenes (scene A $SC0 bars), a 1/2-bar window, -6 dB, +3, swing 62, kicks set by hand, a tempo over the slot's and an overlay alone in bank 2 read, the pack's colours and its overlay heard under its breaks, its fader, silent under a built-in one (amber again there); kept at power-on; deleted: the factory's again"
+blob "$O/gs2.syx" "$O/gs2.bin"
+python3 - "$O/gs2.bin" <<'P'
+import sys
+b = open(sys.argv[1], "rb").read()
+ss = b[1692:1692 + 80]   # GETSET past the scenes (1604) and the chain (88): break 1's and 2's LOOP settings
+assert ss[0] == 16 and ss[1] == 8 and ss[2] == 3 and ss[3] == 256 - 6, f"break 1 as LOOP left it: {list(ss[:8])}"
+assert int.from_bytes(ss[40 + 4:40 + 6], "little") == 15000, "break 2's tempo"
+P
+echo "pack_v2: GETSET read the scenes; a v2 pack's scenes (scene A $SC0 bars), a 1/2-bar window, -6 dB, +3, swing 62, kicks set by hand, a tempo over the slot's and an overlay alone in bank 2 read, the pack's colours and its overlay heard under its breaks, its fader, silent under a built-in one (amber again there); kept at power-on; HOME's LOOP lengthens the window (GETSET reads it back where the builder looks), SAVE keeps it through a reboot, SEL + a knob brings the pack's back; deleted: the factory's again"
