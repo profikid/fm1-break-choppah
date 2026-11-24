@@ -31,6 +31,7 @@ destemmed, tempo found, loops found) and shared on a **pack hub**.
 | D2 | The hub runs on **Cloudflare** (Workers, D1, R2) |
 | D3 | Login with a **passkey**; an **email link** signs up / recovers an account and registers a passkey |
 | D4 | Uploads are **private by default**; the owner can **publish**; signed-in users can **rate** published packs |
+| D5 | The hub's code lives in a **separate private repository** (§10.1) |
 
 ---
 
@@ -260,8 +261,17 @@ the browser; heavy work in Web Workers.
 
 ## 10. Pack hub
 
-### 10.1 Architecture (D2)
+### 10.1 Architecture (D2, D5)
 
+- **Repository (D5):** the hub lives in a **separate private repository** (proposed `profikid/choppah-hub`): the
+  Worker, the D1 schema and migrations, the hub's pages, the admin view, deploy workflows. Nothing of the hub goes into
+  this public firmware repository, and nothing of the firmware goes into the hub's.
+- **What crosses:** the `.chpk` parser (PK-011) lives **here**, public, as one MPL-2.0 module (`app/site/chpk.js`),
+  used by the builder; the hub vendors it pinned to a commit of this repository (MPL-2.0 is per file: the file stays
+  MPL and its source is already public; the rest of the hub stays private). The builder knows the hub only by its URL
+  and the API of §10.5.
+- **Secrets** (mail provider key, GPU provider key, session signing key) are Worker secrets (`wrangler secret`),
+  never in either repository.
 - **Site:** the hub pages are part of the GitHub Pages site (or `hub.` on the same domain); they call the API.
 - **API:** one Cloudflare Worker (`/api/*`).
 - **D1:** users, passkeys, packs, ratings, reports.
@@ -343,8 +353,8 @@ GET  /api/me/packs            the owner's packs
 | --- | --- | --- |
 | **P1 Pack v2** | Bank v2 + chunks, `.chpk`, slot settings and the loop window, scenes per pack, edits keyed by pack, GETSET, pull edits | PK-*, PS-001/002, PM-001/002, PE-001–004 |
 | **P2 Builder: any WAV** | Beat tracking, downbeat, loop finder, then destemming in the browser | PB-001–008 |
-| **P3 Hub: read** | Worker, D1, R2, browse, pack pages, Open in builder | PH-015/016 with seeded packs |
-| **P4 Hub: accounts and uploads** | Passkeys, email links, private uploads, publish, ratings, reports, admin | PH-001–023 |
+| **P3 Hub: read** (hub repo) | Worker, D1, R2, browse, pack pages, Open in builder | PH-015/016 with seeded packs |
+| **P4 Hub: accounts and uploads** (hub repo) | Passkeys, email links, private uploads, publish, ratings, reports, admin | PH-001–023 |
 | **P5 Theme** | Runtime palette (fm1-base), theme editor and preview | PT-* |
 | **P6 Overlay** | Streaming voice, MIXER fader, builder overlay from stems, server destem fallback | PO-*, PB-010–012, PB-003 |
 
