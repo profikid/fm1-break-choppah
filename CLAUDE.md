@@ -94,7 +94,10 @@ settings bytes reserved).
   tests/pack_v2.sh holds the factory scenes and chain to the host's GETSET byte for byte), `autoRoles` (brk.c
   mc_auto_roles) and `Player` (brk.c mc_tick: the same hash and choices)): the hub's MATHCORE editor (PRD_PACKS
   §10.9). Change MC_PRESET, mc_tick or mc_auto_roles, change mathcore.js with them. A pack's chain and black keys are
-  its CHAN chunk (1.7: `pk_chan`, applied in `mc_pack`; without it the factory's).
+  its CHAN chunk (1.7: `pk_chan`, applied in `mc_pack`; without it the factory's). Live from the editor (INFO version
+  4, PRD_PACKS §10.10): SysEx PUTSET (8: GETSET's scenes and chain written into RAM, playing or not), STATUS (9:
+  `mc_status`, 32 bytes) and MCCTL (10: `mc_remote`, what PLAY on LANE / LIVE, a black key, LIVE's knobs and SEL + K
+  do); `tests/mc_live.sh`. fm1link.js `mathcore`, `putScene`, `putChain`, `mcStatus`, `playScene` ... speak them.
   The builder's ears are `app/site/beats.js` (no DOM: onsets, tempo, bars, `findLoops`, `stems` (harmonic /
   percussive), `seamless`; `tests/beats.test.mjs` on the classics) in a module Worker (`beats_worker.js`); on
   choppah.app the page also reads your hub library and saves to it (script 3 of breaks.html). `tests/page_pack.sh`:

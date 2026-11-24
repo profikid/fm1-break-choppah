@@ -278,3 +278,53 @@ export class Player {
       late: w.rat < 2 ? w.late : 0, runOn: !!(sc.flags & SF.BREAK), pos: w.pos };
   }
 }
+
+/* --- readable scenes (the MCP server's, PRD_PACKS 10.11): letters, names and patterns for the numbers --- */
+const flag = (v, b) => !!(v & b);
+export function laneToJSON(L, l) {
+  return { lane: l + 1, on: flag(L.flags, LF.ON), role: ROLES[L.role % 4], pattern: toPattern(L), rate: RATES[L.rate] || "1/16",
+    phase: L.phase, prob: L.prob, ratchet: L.ratchet, pitch: L.pitch, mode: MODES[L.mode] || "FIXED", pick: L.pick, gate: L.gate,
+    level: L.level, seed: L.seed, rise: L.rise, vary: L.vary, reverse: flag(L.flags, LF.REV), free: flag(L.flags, LF.FREE), swell: flag(L.flags, LF.SWELL) };
+}
+export const sceneToJSON = (s, i) => ({ scene: sceneLetter(i), name: NAMES[s.name] || "", bars: s.bars, run_on: flag(s.flags, SF.BREAK), once: flag(s.flags, SF.ONCE),
+  lanes: s.lane.map(laneToJSON) });
+export const chainToJSON = (c) => ({ chain: c.q.map(sceneLetter), keys: c.key.map((k) => (k === NOKEY ? null : sceneLetter(k))) });
+/* "C", "c", 2 -> 2; anything else throws */
+export function sceneIndex(v) {
+  const i = typeof v === "number" ? v : /^[A-Pa-p]$/.test(String(v)) ? String(v).toUpperCase().charCodeAt(0) - 65 : NaN;
+  if (!(i >= 0 && i < SCENES)) throw new Error(`a scene is A..P: ${v}`);
+  return i;
+}
+const pick = (list, v, what) => { const i = typeof v === "number" ? v : list.indexOf(String(v).toUpperCase()); if (!(i >= 0 && i < list.length)) throw new Error(`${what}: one of ${list.join(", ")}`); return i; };
+const range = (v, lo, hi, what) => { const n = Math.round(+v); if (!Number.isFinite(n) || n < lo || n > hi) throw new Error(`${what}: ${lo}..${hi}`); return n; };
+/* a lane changed by a readable patch (only the fields given) */
+export function patchLane(L, p) {
+  if (p.pattern !== undefined) { const t = String(p.pattern); if (!/^[xX.]{1,32}$/.test(t)) throw new Error("pattern: x a hit, X accented, . none (1..32)"); fromPattern(L, t); }
+  if (p.events !== undefined) L.len = range(p.events, 1, EVENTS, "events");
+  if (p.on !== undefined) L.flags = p.on ? L.flags | LF.ON : L.flags & ~LF.ON;
+  if (p.reverse !== undefined) L.flags = p.reverse ? L.flags | LF.REV : L.flags & ~LF.REV;
+  if (p.free !== undefined) L.flags = p.free ? L.flags | LF.FREE : L.flags & ~LF.FREE;
+  if (p.swell !== undefined) L.flags = p.swell ? L.flags | LF.SWELL : L.flags & ~LF.SWELL;
+  if (p.role !== undefined) L.role = pick(ROLES, p.role === "K" ? "KICK" : p.role === "S" ? "SNARE" : p.role === "H" ? "HAT" : p.role === "P" ? "PERC" : p.role, "role");
+  if (p.rate !== undefined) L.rate = pick(RATES, p.rate, "rate");
+  if (p.mode !== undefined) L.mode = pick(MODES, p.mode, "mode");
+  for (const [k, lo, hi] of [["phase", 0, 31], ["prob", 0, 100], ["ratchet", 1, 4], ["pitch", -12, 12], ["pick", 0, 31], ["gate", 5, 100],
+    ["level", 0, 100], ["seed", 0, 255], ["rise", -24, 24], ["vary", 0, 100]]) if (p[k] !== undefined) L[k] = range(p[k], lo, hi, k);
+  return L;
+}
+/* a scene changed by a readable patch: name, bars, run_on, once, lanes [{lane: 1..4, ...patchLane's}] */
+export function patchScene(s, p) {
+  if (p.name !== undefined) { const i = NAMES.indexOf(String(p.name).toUpperCase()); if (i < 0) throw new Error(`name: one of ${NAMES.filter(Boolean).join(", ")} (or "")`); s.name = i; }
+  if (p.bars !== undefined) { if (![1, 2, 4, 8].includes(+p.bars)) throw new Error("bars: 1, 2, 4 or 8"); s.bars = +p.bars; }
+  if (p.run_on !== undefined) s.flags = p.run_on ? s.flags | SF.BREAK : s.flags & ~SF.BREAK;
+  if (p.once !== undefined) s.flags = p.once ? s.flags | SF.ONCE : s.flags & ~SF.ONCE;
+  for (const lp of p.lanes || []) { const l = range(lp.lane, 1, LANES, "lane") - 1; patchLane(s.lane[l], lp); }
+  return s;
+}
+/* the chain and keys from readable ones: chain ["C", "A"], keys [ "P", null, ...] (11, null none) */
+export function chainFrom(c, p) {
+  const out = { q: c.q.slice(), key: c.key.slice() };
+  if (p.chain !== undefined) { if (!Array.isArray(p.chain) || p.chain.length > QUEUE) throw new Error(`chain: up to ${QUEUE} scenes`); out.q = p.chain.map(sceneIndex); }
+  if (p.keys !== undefined) { if (!Array.isArray(p.keys) || p.keys.length > KEYS) throw new Error(`keys: up to ${KEYS}`); p.keys.forEach((k, i) => { out.key[i] = k == null || k === "" ? NOKEY : sceneIndex(k); }); }
+  return out;
+}

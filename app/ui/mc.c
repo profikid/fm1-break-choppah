@@ -266,6 +266,97 @@ static void mc_release(uint32_t now)
     ui.redraw |= RG_BLOCKS | RG_FOOT;
 }
 
+/* the hub's MATHCORE editor, over SysEx (MCCTL, PRD_PACKS 10.10): what PLAY on LANE or LIVE, a black key, LIVE's
+ * knobs and SEL + K1-K4 do, from the browser. op 0 stop; 1 scene d0 round and round; 2 the chain (or the groove);
+ * 3 scene d0 launched as a black key would (a groove on the next bar, a fill on the next beat; stopped: now);
+ * 4 the macros d0..d3 (DENSITY MATH SPEED CHAOS, 0..100); 5 the scene (and lane d1) the FM-1's own pages edit;
+ * 6 lane d0 muted (d1 0xFF), playing (0) or soloed (1) */
+static void mc_remote(uint32_t op, const uint8_t *d)
+{
+    brk_status_t st;
+    uint32_t s = d[0] % MC_SCENES, i;
+    brk_status(&st);
+    if (op == 0u) {
+        mc.on = 0u;
+        mc.held = -1;
+        brk_mc_start(-1);
+        if (st.playing)
+            transport(0, 0);
+    } else if (op <= 3u) {
+        if (op == 2u) {
+            mc.on = 1u;
+            mc.qpos = 0u;
+            mc.qgone = 0u;
+            mc.qled = mq.n != 0u;
+            if (mq.n && !mc_once(mq.q[0]))
+                mc.base = mq.q[0];
+            s = mq.n ? mq.q[0] : mc.base;
+        } else if (op == 1u) {
+            mc.on = 2u;
+            mc.scene = (uint8_t)s;
+        } else {
+            mc.on = 1u;
+            mc.qled = 0u;
+            if (!mc_once(s))
+                mc.base = (uint8_t)s;
+        }
+        mc.held = -1;
+        mc.next_sent = -2;
+        if (!st.playing) {
+            mc.seen_play = 0u;
+            brk_mc_start((int)s);
+            transport(1, 0);
+            muted = 0u;
+            mc.adv_seen = st.mc_adv;
+            mc.end_seen = st.mc_ended;
+        } else
+            brk_mc_jump((int)s, op == 3u && mc_once(s) ? 4u : 16u);
+        mc_mute_out();
+    } else if (op == 4u) {
+        for (i = 0; i < 4u; i++)
+            set.mc_macro[i] = (uint8_t)(d[i] > 100u ? 100u : d[i]);
+        brk_mc_macro(set.mc_macro[0], set.mc_macro[1], set.mc_macro[2], set.mc_macro[3]);
+    } else if (op == 5u) {
+        mc.scene = (uint8_t)s;
+        mc.lane = (uint8_t)(d[1] % MC_LANES);
+    } else if (op == 6u) {
+        mc.state[d[0] % MC_LANES] = (int8_t)(d[1] == 0xFFu ? -1 : d[1] ? 1 : 0);
+        mc_mute_out();
+    }
+    ui.redraw |= RG_ALL;
+}
+/* what plays, for the hub's editor (STATUS): 32 bytes */
+static void mc_status(uint8_t *v)
+{
+    brk_status_t st;
+    uint32_t i;
+    brk_status(&st);
+    for (i = 0; i < 32u; i++)
+        v[i] = 0u;
+    v[0] = 1u;                           /* (this layout's version) */
+    v[1] = st.playing;
+    v[2] = mc.on;
+    v[3] = (uint8_t)st.mc_scene;         /* (0xFF none) */
+    v[4] = (uint8_t)st.mc_next;
+    v[5] = mc.scene;
+    v[6] = mc.lane;
+    v[7] = (uint8_t)(ui.page == PG_MC ? mc.part : 0xFFu);
+    v[8] = (uint8_t)st.mc_step;
+    v[9] = (uint8_t)(st.mc_step >> 8);
+    for (i = 0; i < 4u; i++) {
+        v[10u + i] = st.mc_pos[i];
+        v[14u + i] = st.mc_hits[i];
+        v[21u + i] = set.mc_macro[i];
+        v[26u + i] = (uint8_t)mc.state[i];
+    }
+    v[18] = st.mc_missing;
+    v[19] = mc.qpos;
+    v[20] = mq.n;
+    v[25] = (uint8_t)st.bar16;
+    v[30] = mc.base;
+    v[31] = (uint8_t)st.bar;
+}
+
 /* the chain: SEL + a black key adds its scene (a song made of scenes, played in order and round again), SEL + REC
  * clears it, ALGORITHM points, PRESETS moves the entry pointed at. The scene playing is never cut */
 static void mq_said(const char *what, uint32_t s)

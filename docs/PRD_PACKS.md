@@ -370,6 +370,30 @@ sendBank rules), vendored into the hub with chpk.js.
 | PH-053 | Saved **to a pack** of yours (its SCNE and CHAN replaced, a new version) or **to your library** as a named **scene set**; opened from the factory's, a set of yours, or any pack you can see (its scenes: `/api/packs/:id/scenes`) | P0 | *Done* |
 | PH-054 | Every sample shows **which packs it is in** (and which break), and how many: each pack break remembers the sample it was made from (library and builder), kept across a pack's new versions by the break's name and tempo | P1 | *Done* |
 
+### 10.10 The editor live on the FM-1 (24 Nov 2026)
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| PH-060 | The MATHCORE editor **connects to the FM-1** (Web MIDI): it takes the FM-1's scenes, chain and keys (GETSET), or sends its own; from then **every edit is on the FM-1 at once** (PUTSET, 8: the scenes and the chain into RAM, playing or not; SAVE on the FM-1 keeps them) | P0 | *Done; tests/mc_live.sh, choppah-hub test/mathcore_ui.mjs* |
+| PH-061 | Connected, **the FM-1 plays**: Scene, Chain, a scene launched as a black key would (a groove on the bar, a fill on the beat), Stop, the macros and each lane's mute and solo drive the FM-1 (MCCTL, 10); the editor shows what it plays, its scene, each lane's event and the chain's entry (STATUS, 9, ~8 times a second); the scene picked in the browser is the one the FM-1's own pages show | P0 | *Done* |
+| PH-062 | Changes made elsewhere (a scene set or pack edited through the MCP server, another tab) reach the open editor and, connected, the FM-1 | P1 | *Done: the editor follows its set or pack (polled)* |
+| PH-063 | INFO says version 4 (1.7 with these); older ones edit and play in the browser only | P0 | *Done* |
+
+### 10.11 The MCP server (24 Nov 2026)
+
+`https://choppah.app/mcp` (Streamable HTTP, JSON-RPC): an assistant (Claude, any MCP client) works on a user's hub.
+Signed in by OAuth 2.1 (dynamic client registration, PKCE, the hub's own sign-in and a consent page) or a personal
+token made on the Account page. Tools:
+
+| Area | Tools |
+| --- | --- |
+| MATHCORE | read the scenes of a pack, a set or the factory's (readable: letters, names, patterns `X..x`); edit a scene (name, bars, run on, once) and its lanes (every field); set the chain and the black keys; scene sets: list, create (from the factory's, a set or a pack), rename, delete; put a set's scenes into a pack of yours |
+| Packs | list yours, search the public ones, read one (breaks, room, settings); change its name, description, tags, theme; each break's settings (loop, start, pitch, gain, swing, roles); reorder and remove breaks; publish, unpublish, allow downloads; delete; make a pack from samples, add samples to a pack |
+| Samples | list (with their edits and packs), read one, rename, tag, star, change how its break is cut (tempo, start, bars, offset, hits or grid, level, warp, slices by hand), reset, delete |
+
+The tools act on the hub; the FM-1 follows through an editor open and connected (PH-062). A sample's break is made
+on the server only from WAV (the browser makes it from anything it decodes).
+
 ### 10.5 API (sketch)
 
 ```

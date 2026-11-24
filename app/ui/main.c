@@ -1291,7 +1291,9 @@ void app_frame(void)
  * -> {offset u32} (1.6 on: a frame sent again tells its answer from a late one); 4 COMMIT {the 16-byte header}:
  * written last, the bank checked, the pack's first break loaded; 5 READ {offset u32, count u32 (256 at most)} ->
  * {offset u32, bytes}; 6 DELETE: the bank's breaks gone; 7 GETSET {offset u32, count u32}: the scenes and the chain as
- * in RAM (1.7; INFO says version 3 since: a v2 bank, with the pack's chunks, reads). Writes only while stopped (they
+ * in RAM (1.7; INFO says version 3 since: a v2 bank, with the pack's chunks, reads); 8 PUTSET {offset, bytes}: GETSET's
+ * scenes and chain written, live; 9 STATUS -> what MATHCORE plays (32 bytes, mc_status); 10 MCCTL {op, d0..d3}: plays,
+ * launches, stops, the macros (mc_remote) (1.7 later: INFO version 4, PRD_PACKS 10.10). Writes only while stopped (they
  * stall the sound). The split's B goes back to "the break after A" when the pack changes. The scratch is the demo's
  * stars (the demo ends) */
 static uint32_t cu_size, cu_bank;        /* the bytes BEGIN made room for, in which bank */
@@ -1361,7 +1363,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
         return 0;
     cmd = p[3] & 15u;
     bank = p[3] >> 4 & 3u;
-    if (bank >= PK_BANKS || !cmd || cmd > 7u)
+    if (bank >= PK_BANKS || !cmd || cmd > 10u)
         return 0;
     if (demo.on)
         demo_end();
@@ -1371,7 +1373,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
         if (cmd == 1u) {
             const bank_header_t *h0 = (const bank_header_t *)plat_data(PK_BASE[0]);
             const bank_header_t *h1 = (const bank_header_t *)plat_data(PK_BASE[1]);
-            uint32_t v[6] = {3u | (uint32_t)playing_now() << 8 | n_user << 16 | PK_SECT[0] << 24, PK_CAP(0),
+            uint32_t v[6] = {4u | (uint32_t)playing_now() << 8 | n_user << 16 | PK_SECT[0] << 24, PK_CAP(0),
                              pk_n[0] ? 16u + h0->data_size : 0u, PK_BANKS | pk_n[0] << 8 | pk_n[1] << 16, PK_CAP(1),
                              pk_n[1] ? 16u + h1->data_size : 0u};
             cu_reply(p[3], 0u, (const uint8_t *)v, 24u);
@@ -1401,6 +1403,44 @@ int app_sysex(const uint8_t *p, uint32_t n)
             f[k++] = 0xF7;
             (void)plat_sysex_send(f, k);
         }
+        return 1;
+    }
+    if (cmd == 8u) {                     /* PUTSET {offset, bytes}: the scenes and the chain into RAM, in GETSET's layout,
+                                          * playing or not (no flash: SAVE keeps them). The scenes' magic, the pack's
+                                          * tag and the reserved bytes stay; each chain entry checked */
+        off = rd32(u);
+        if (len < 4u || off < 4u || off - 4u + len > sizeof mcs + 84u) {
+            cu_reply(p[3], 2u, 0, 0u);
+            return 1;
+        }
+        for (i = 4u; i < len; i++) {
+            uint32_t at = off + i - 4u, m = at - (uint32_t)sizeof mcs;
+            if (at < sizeof mcs)
+                ((uint8_t *)&mcs)[at] = u[i];
+            else if (m == 4u)
+                mq.n = (uint8_t)(u[i] <= MC_QUEUE ? u[i] : MC_QUEUE);
+            else if (m >= 8u && m < 8u + MC_QUEUE)
+                mq.q[m - 8u] = (uint8_t)(u[i] < MC_SCENES ? u[i] : 0u);
+            else if (m >= 72u && m < 72u + NPFX)
+                mq.key[m - 72u] = (uint8_t)(u[i] < MC_SCENES ? u[i] : MC_NOKEY);
+        }
+        if (mc.qpos >= mq.n)
+            mc.qpos = 0u;
+        ui.redraw |= RG_ALL;
+        for (i = 0; i < 4u; i++)         /* (its offset: a late answer told from the next; out of the scratch the */
+            a[i] = u[i];                 /* reply is made in) */
+        cu_reply(p[3], 0u, a, 4u);
+        return 1;
+    }
+    if (cmd == 9u || cmd == 10u) {       /* STATUS; MCCTL {op, d0..d3}: MATHCORE from the hub's editor, any time */
+        uint8_t v[32];
+        if (cmd == 10u && len >= 1u) {
+            for (i = len; i < 5u; i++)
+                u[i] = 0u;
+            mc_remote(u[0], u + 1);
+        }
+        mc_status(v);
+        cu_reply(p[3], 0u, v, 32u);
         return 1;
     }
     if (playing_now()) {                 /* the writes stall the sound: stopped only */

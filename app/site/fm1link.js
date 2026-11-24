@@ -8,7 +8,10 @@
 //
 // SysEx: F0 7D 43 48 CMD 7-bit-packed DATA F7, the bank in CMD's bits 4-5; answers F0 7D 43 48 0x40|CMD CODE DATA F7.
 // 1 INFO, 2 BEGIN {size}, 3 DATA {offset, bytes} -> {offset}, 4 COMMIT {header}, 5 READ {offset, count} ->
-// {offset, bytes}, 6 DELETE, 7 GETSET. The screen reader's HELLO (F0 7D 53 52 01 01 F7) names the firmware.
+// {offset, bytes}, 6 DELETE, 7 GETSET {offset, count} -> {offset, bytes} (the scenes 0..1603, the chain 1604..1691,
+// the LOOP settings), and from INFO version 4 (MATHCORE live, PRD_PACKS 10.10): 8 PUTSET {offset, bytes} -> {offset}
+// (the scenes and the chain into RAM, playing or not), 9 STATUS -> 32 bytes, 10 MCCTL {op, d0..d3} -> STATUS.
+// The screen reader's HELLO (F0 7D 53 52 01 01 F7) names the firmware.
 
 export const ERR = { 1: "CHOPPAH is playing: stop it (PLAY) and try again.", 2: "The pack doesn't fit.",
   3: "The flash could not be written.", 4: "The pack as written doesn't check: send it again." };
@@ -144,6 +147,56 @@ export class FM1Link {
     }
     return img;
   }
+
+  /* --- MATHCORE live (INFO version 4) --- */
+  get live() { return !!this.dev && this.dev.proto >= 4; }
+  async getSet(off, size) {               /* GETSET: size bytes from off (the scenes, the chain, the LOOP settings) */
+    const out = new Uint8Array(size);
+    for (let at = 0; at < size; at += 256) {
+      const n = Math.min(256, size - at), o = off + at;
+      const r = await this.must(7, [...u32(o), ...u32(n)], 3000, (a) => a.data.length >= 4 && word(a.data, 0) === o);
+      if (r.code) throw new Error("GETSET " + r.code);
+      out.set(r.data.subarray(4, 4 + n), at);
+    }
+    return out;
+  }
+  /* the scenes (SCNE, 1604 bytes) and the chain (CHAN, 80: its reserved bytes, where the pack's tag is kept, cleared) */
+  async mathcore() {
+    const scenes = await this.getSet(0, 1604), chain = await this.getSet(1608, 80);
+    chain[1] = chain[2] = chain[3] = 0; chain[79] = 0;
+    return { scenes, chain };
+  }
+  /* PUTSET: bytes at off (448 a frame), on the FM-1 at once */
+  async putSet(off, bytes) {
+    if (!this.live) throw new Error("this CHOPPAH can't take scenes live: update it (CHOPPAH 1.7, INFO version 4)");
+    for (let at = 0; at < bytes.length; at += CHUNK) {
+      const o = off + at, r = await this.must(8, [...u32(o), ...bytes.subarray(at, at + CHUNK)], 1000, (a) => a.data.length >= 4 && word(a.data, 0) === o);
+      if (r.code) throw new Error(r.code === 2 ? "PUTSET: out of the scenes and the chain" : "PUTSET " + r.code);
+    }
+  }
+  putScene(i, bytes100) { return this.putSet(4 + 100 * i, bytes100); }   /* one scene (writeScenes' 100 bytes) */
+  async putChain(chan80) {                /* the entries and keys first, then n (CHAN's layout; its reserved bytes left) */
+    await this.putSet(1612, chan80.subarray(4, 79));
+    await this.putSet(1608, chan80.subarray(0, 1));
+  }
+  /* what MATHCORE plays: {playing, on (0, 1 the chain or launched, 2 a scene round), scene (-1), next, edit, lane,
+     part, step, pos[4], hits[4], missing, qpos, n, bar16, macros[4], state[4], base, bar} */
+  async mcStatus(op = null, args = []) {
+    const r = op === null ? await this.must(9) : await this.must(10, [op, ...args]);
+    if (r.code) throw new Error("STATUS " + r.code);
+    const v = r.data, i8 = (x) => (x > 127 ? x - 256 : x);
+    return { playing: !!v[1], on: v[2], scene: i8(v[3]), next: i8(v[4]), edit: v[5], lane: v[6], part: v[7] === 255 ? -1 : v[7],
+      step: v[8] | v[9] << 8, pos: [...v.subarray(10, 14)], hits: [...v.subarray(14, 18)], missing: v[18], qpos: v[19], n: v[20],
+      macros: [...v.subarray(21, 25)], bar16: i8(v[25]), state: [...v.subarray(26, 30)].map(i8), base: v[30], bar: v[31] };
+  }
+  mc(op, ...args) { return this.mcStatus(op, args); }   /* MCCTL: 0 stop, 1 scene s, 2 the chain, 3 launch s, 4 macros d m s c, 5 edit s l, 6 lane l state */
+  stop() { return this.mc(0); }
+  playScene(s) { return this.mc(1, s); }
+  playChain() { return this.mc(2); }
+  launch(s) { return this.mc(3, s); }
+  macros(d, m, sp, c) { return this.mc(4, d, m, sp, c); }
+  edit(s, l = 0) { return this.mc(5, s, l); }
+  laneState(l, st) { return this.mc(6, l, st < 0 ? 0xFF : st ? 1 : 0); }
 
   /* what is on the FM-1: {name (its firmware), proto, playing, caps, breaks: [{name, bpm, bank}], pack: null or
      {id, name, author, created, updated, theme}} (a pack: a v2 bank 1, CHOPPAH 1.7 on) */

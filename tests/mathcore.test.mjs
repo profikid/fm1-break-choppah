@@ -81,3 +81,21 @@ let seen = new Set(); for (let s = 0; s < 40; s++) seen.add(p.step(s));
 assert.deepEqual([...seen], [10, 0], "a phrase done: the next scene");
 
 console.log("mathcore: app.c's presets, names, rates, modes, MATH; brk.c's hash; scenes and chain to bytes and back; the Slice Map; the lanes played");
+
+/* readable scenes (the MCP server's) */
+{
+  const s = MC.factoryScenes();
+  const j = MC.sceneToJSON(s[1], 1);
+  assert.equal(j.scene, "B"); assert.equal(j.name, "AMEN"); assert.equal(j.lanes[0].pattern, "X.X.......XX...."); assert.equal(j.lanes[0].role, "KICK");
+  MC.patchScene(s[1], { bars: 4, once: true, name: "fill", lanes: [{ lane: 2, pattern: "x.X.", rate: "1/16T", mode: "random", prob: 70, reverse: true }] });
+  const k = MC.sceneToJSON(s[1], 1);
+  assert.deepEqual([k.bars, k.once, k.name, k.lanes[1].pattern, k.lanes[1].rate, k.lanes[1].mode, k.lanes[1].prob, k.lanes[1].reverse], [4, true, "FILL", "x.X.", "1/16T", "RANDOM", 70, true]);
+  assert.throws(() => MC.patchScene(s[1], { bars: 3 }), /bars/);
+  assert.throws(() => MC.patchScene(s[1], { lanes: [{ lane: 1, rate: "1/5" }] }), /rate/);
+  assert.throws(() => MC.patchScene(s[1], { lanes: [{ lane: 5 }] }), /lane/);
+  const c = MC.chainFrom(MC.factoryChain(), { chain: ["c", "A", 4], keys: ["P", null] });
+  assert.deepEqual(MC.chainToJSON(c).chain, ["C", "A", "E"]); assert.deepEqual(MC.chainToJSON(c).keys.slice(0, 3), ["P", null, "C"]);
+  assert.throws(() => MC.chainFrom(MC.factoryChain(), { chain: ["Q"] }), /A\.\.P/);
+  assert.deepEqual(MC.readScenes(MC.writeScenes(s))[1], s[1], "a patched scene to bytes and back");
+}
+console.log("mathcore: readable scenes, patches and the chain");

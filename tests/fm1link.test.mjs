@@ -102,10 +102,45 @@ for (const faults of [{ proto: 3, name: "CHOPPAH 1.7.0" },
   assert.ok(F.flash[0].every((v) => v === 0xFF), "nothing written");
 }
 
+/* MATHCORE live (INFO 4): the scenes and the chain read and written, played, launched, the macros, a lane muted, stopped */
+{
+  const F = fm1({ proto: 4, name: "CHOPPAH 1.7.0", seed: 33, pIn: 0.05, pOut: 0.05 });
+  const link = await FM1Link.open();
+  await link.info();
+  assert.equal(link.live, true);
+  const mc = await link.mathcore();
+  assert.equal(new DataView(mc.scenes.buffer).getUint32(0, true), 0x3553434D); assert.equal(mc.chain.length, 80);
+  const scene = new Uint8Array(100); scene[96] = 8; scene[0] = 0x55;
+  await link.putScene(3, scene);
+  assert.deepEqual([...F.gs.subarray(4 + 300, 4 + 400)], [...scene], "scene D written");
+  const chan = new Uint8Array(80); chan[0] = 2; chan.set([3, 1], 4); chan[68] = 15; chan[69] = 0xFF;
+  await link.putChain(chan);
+  const back = (await link.mathcore()).chain;
+  assert.deepEqual([back[0], back[4], back[5], back[68], back[69]], [2, 3, 1, 15, 0xFF], "the chain and keys written");
+  await assert.rejects(link.putSet(0, new Uint8Array(4)), /out of/);
+  let st = await link.playScene(2);
+  assert.deepEqual([st.playing, st.on, st.scene], [true, 2, 2]);
+  st = await link.macros(80, 50, 50, 0); assert.deepEqual(st.macros, [80, 50, 50, 0]);
+  st = await link.playChain(); assert.equal(st.scene, 3, "the chain from its first entry");
+  st = await link.launch(5); assert.equal(st.scene, 5);
+  st = await link.laneState(0, -1); assert.equal(st.state[0], -1);
+  st = await link.edit(7, 2); assert.deepEqual([st.edit, st.lane], [7, 2]);
+  st = await link.stop(); assert.deepEqual([st.playing, st.on, st.scene], [false, 0, -1]);
+  assert.deepEqual(F.mc.ops.map((o) => o[0]).filter((o, i, a) => o !== a[i - 1]), [1, 4, 2, 3, 6, 5, 0], "(a command sent again when its answer was lost: safe twice)");
+  link.close();
+}
+{
+  fm1({ proto: 3 });
+  const link = await FM1Link.open(); await link.info();
+  assert.equal(link.live, false);
+  await assert.rejects(link.putScene(0, new Uint8Array(100)), /update/);
+  link.close();
+}
+
 /* a 1.5 can't take a pack */
 assert.throws(() => P.installImages(big, 1), /one break/);
 /* the PACK chunk of a head too short to hold it: none */
 assert.equal(packOf(new Uint8Array(16 + 168), 1), null);
 
-console.log(`fm1link: the hub's install arrives byte for byte (1.7, 1.6, a bad link), refuses a playing FM-1 (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
+console.log(`fm1link: the hub's install arrives byte for byte (1.7, 1.6, a bad link), refuses a playing FM-1; MATHCORE live read, written, played (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 process.exit(0);
