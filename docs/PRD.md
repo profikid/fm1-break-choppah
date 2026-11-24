@@ -368,6 +368,10 @@ Use one high-resolution master transport clock and a deterministic event schedul
 
 Keep the existing desktop preparation tool and browser break manager as the source of prepared break assets.
 
+**Packs v2, the pack builder and the pack hub** (24 Nov 2026, draft): [PRD_PACKS.md](PRD_PACKS.md). A pack carries
+its breaks' settings, theme, MATHCORE scenes and an overlay loop; the break manager grows into a builder (any WAV,
+destemmed, tempo and loops found) and packs are shared on a hub on Cloudflare.
+
 - WAV input with native BPM and bar count.
 - Trim to musical region.
 - Level normalisation with headroom.
