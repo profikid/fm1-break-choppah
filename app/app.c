@@ -89,9 +89,10 @@ typedef struct {
     uint8_t split_bars;                  /* bit 0: A's second bar, bit 1: B's second bar (0: their first) */
     uint8_t rsv5;
     /* (appended 22 Nov 2026: MATHCORE, docs/PRD_MATHCORE.md) */
-    uint8_t lane_level;                  /* (the MIXER's LANES fader of the first MATHCORE build: unused since the
-                                          * lanes play the break itself) */
-    uint8_t mc_rsv[3];
+    uint8_t lane_level;                  /* the MIXER's OVERLAY fader, 0..100 % (24 Nov 2026, PRD_PACKS PO-003; the LANES
+                                          * fader of the first MATHCORE build before: its byte, its default 100) */
+    uint8_t ov_route;                    /* the overlay through the FX chain (0) or around it (1) (PO-005) */
+    uint8_t mc_rsv[2];
     uint8_t mc_macro[4];                 /* MATHCORE LIVE's K1-K4: DENSITY, MATH, SPEED, CHAOS (0..100) */
 } settings_t;
 #define SET_SIZE_MIN offsetof(settings_t, rsv2)   /* the shortest save that loads: CHP7's first size */
@@ -536,6 +537,7 @@ static uint8_t blk_px[BLK_N][BLK_W];     /* each slice's waveform, 0..19 */
 static uint8_t blk_n;                    /* blocks with a slice behind them */
 static volatile uint8_t muted;
 static volatile float meter_brk;         /* the MIXER's channel: the break, before the chain */
+static volatile float meter_ov;          /* the overlay's, after its fader */
 static volatile float meter_l, meter_r;  /* the output's peaks as it leaves (after MASTER: 1 = full scale), falling
                                           * ~20 dB a second: the render writes, the header's meter reads */
 static uint16_t click_at[4];             /* the render: this block's metronome clicks (their samples, the bar's first) */
@@ -827,6 +829,10 @@ static void breaks_count(void)
 {
     const uint8_t *bk;
     pk_scan();
+    if (pk_ovly)                         /* the pack's overlay, read from the flash as it plays (PO-001) */
+        brk_overlay((const uint8_t *)(pk_ovly + 1), pk_ovly->len, pk_ovly->bars);
+    else
+        brk_overlay(0, 0u, 0u);
     n_breaks = 0u;
     while (n_breaks < BANK_SLOTS && slot_of(n_user + n_breaks, &bk))
         n_breaks++;
@@ -988,6 +994,7 @@ static const brk_break_t *break_load(uint32_t i)
     mc_auto_roles(b, roles_now);         /* the Slice Map: the kicks, snares, hats and the rest, heard */
     slot_roles(i, b);
     theme_apply(i < n_user);             /* the pack's colours while its breaks play (Q1: a built-in break, amber) */
+    brk_overlay_on(i < n_user);          /* its overlay under its breaks only */
     brk_roles(roles_now, BRK_MAX_SLICES);
     brk_pitch((float)(set.pitch + slot_pitch));
     brk_swing((float)(slot_swing ? slot_swing : set.swing) * 0.01f);
@@ -1231,7 +1238,7 @@ static float meter(const float *x, uint32_t n, float last)
 
 void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
 {
-    static float mono[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK], echo[APP_BLOCK], verb[APP_BLOCK];
+    static float mono[APP_BLOCK], l[APP_BLOCK], r[APP_BLOCK], echo[APP_BLOCK], verb[APP_BLOCK], ovl[APP_BLOCK];
 
     float gain = muted ? 0.0f : (float)master_q12 * (1.0f / 4096.0f) * 8300000.0f;
     brk_status_t st;
@@ -1245,6 +1252,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
     while (n) {
         uint32_t m = n < APP_BLOCK ? n : APP_BLOCK, i;
         brk_sends(echo, verb);           /* the slices' throws into the delay and the reverb */
+        brk_overlay_out(ovl);            /* the pack's overlay, beside the break */
         brk_render(mono, m);
         {                                /* the MIXER's BREAK fader (eased: no zipper), on the break and its throws */
             static float lvl = 1.0f;
@@ -1256,6 +1264,15 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
                 verb[i] *= lvl;
             }
             meter_brk = meter(mono, m, meter_brk);
+        }
+        {                                /* the MIXER's OVERLAY fader (eased) */
+            static float olv = 1.0f;
+            float want = (float)set.lane_level * 0.01f;
+            for (i = 0; i < m; i++) {
+                olv += (want - olv) * 0.002f;
+                ovl[i] *= olv;
+            }
+            meter_ov = meter(ovl, m, meter_ov);
         }
         if (set.clk_out) {               /* clock out: each tick due as its sample plays (a block from now) */
             uint16_t off[16];
@@ -1279,7 +1296,8 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
         }
         brk_status(&st);
         /* the break through the DJ filter into the chain (the drum lanes and MATHCORE play the break itself) */
-        brk_fx_process(mono, 0, echo, verb, 0, l, r, m, st.pads);
+        brk_fx_process(mono, set.ov_route ? 0 : ovl, echo, verb, set.ov_route ? ovl : 0, l, r, m, st.pads);   /* (the
+                                          * overlay into the chain after the DJ filter, or around it, PO-005) */
         if (nclick || click_env > 1e-3f) {   /* the metronome's click: dry, over everything, both sides */
             uint32_t j = 0u;
             for (i = 0; i < m; i++) {

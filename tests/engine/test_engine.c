@@ -2422,6 +2422,98 @@ static void test_pad_fx(void)
     brk_fx_pad_buffer(0);
 }
 
+/* the overlay (PRD_PACKS PO-001): a 4-bar loop of ADPCM played from its bytes, on the transport's bars: at each bar
+ * line its sample is that bar's first; silent while stopped and while it's off; HALF slows it; a new one mid-play
+ * starts on the bar */
+static uint8_t ov_enc(int16_t x, int16_t *pred, uint8_t *idx)   /* IMA ADPCM, as the page's adpcmEncode */
+{
+    static const int16_t ST[89] = {7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50,
+        55, 60, 66, 73, 80, 88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408, 449,
+        494, 544, 598, 658, 724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749,
+        3024, 3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899,
+        15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767};
+    static const int8_t AD[8] = {-1, -1, -1, -1, 2, 4, 6, 8};
+    int32_t d = x - *pred, step = ST[*idx], diff = step >> 3, p;
+    uint8_t code = 0;
+    if (d < 0) { code = 8; d = -d; }
+    if (d >= step) { code |= 4; d -= step; diff += step; }
+    if (d >= step >> 1) { code |= 2; d -= step >> 1; diff += step >> 1; }
+    if (d >= step >> 2) { code |= 1; diff += step >> 2; }
+    p = *pred + ((code & 8) ? -diff : diff);
+    *pred = (int16_t)(p > 32767 ? 32767 : p < -32768 ? -32768 : p);
+    p = *idx + AD[code & 7];
+    *idx = (uint8_t)(p < 0 ? 0 : p > 88 ? 88 : p);
+    return code;
+}
+static void ov_render(float *out, float *ovo, uint32_t n)   /* blocks of BLOCK, the overlay's samples beside them */
+{
+    uint32_t i;
+    for (i = 0; i < n; i += BLOCK) {
+        brk_overlay_out(ovo + i);
+        brk_render(out + i, n - i < BLOCK ? n - i : BLOCK);
+    }
+}
+static void test_overlay(void)
+{
+    static uint8_t ov[60000];
+    static int16_t dec[120000];
+    static float out[330000], ovo[330000];
+    uint32_t len = 4u * (uint32_t)(RATE * 240.0f / BPM), i, bar = (uint32_t)(BRK_SR * 240.0f / BPM + 0.5f);
+    int16_t pred = 0;
+    uint8_t idx = 0;
+    adpcm_state_t st = {0, 0, 0};
+    float peak = 0.0f, e;
+    if (len > 2u * sizeof ov)
+        len = 2u * (uint32_t)sizeof ov;
+    memset(ov, 0, sizeof ov);
+    for (i = 0; i < len; i++) {          /* a slow sweep: every place in it a different value */
+        int16_t x = (int16_t)(12000.0f * sinf(6.2831853f * 3.0f * (float)i / (float)len) + 6000.0f * (float)i / (float)len);
+        ov[i >> 1] |= (uint8_t)(ov_enc(x, &pred, &idx) << (4u * (i & 1u)));
+    }
+    adpcm_decode(&st, ov, dec, len);
+    fresh(2u);
+    brk_overlay(ov, len, 4u);
+    brk_overlay_on(1);
+    brk_overlay_out(ovo);
+    ov_render(out, ovo, 2048u);         /* stopped: nothing */
+    for (i = 0; i < 2048u; i++)
+        peak = fmaxf(peak, fabsf(ovo[i]));
+    CHECK(peak < 1e-6f, "the overlay is silent while stopped (%g)", (double)peak);
+    brk_reset();
+    brk_play(1);
+    {                                    /* through bar 1 to bar 2's first sample (blocks of 256) */
+        uint32_t done = 0u;
+        while (done + BLOCK <= bar) {
+            ov_render(out, ovo, BLOCK);
+            done += BLOCK;
+        }
+        ov_render(out, ovo, bar - done + 1u);
+        e = fabsf(ovo[bar - done] - (float)dec[len / 4u] / 32768.0f);
+        CHECK(e < 0.02f, "bar 2 begins on the overlay's bar 2 (off by %g of %g)", (double)e, (double)dec[len / 4u] / 32768.0);
+    }
+    peak = 0.0f;
+    ov_render(out, ovo, 4096u);
+    for (i = 0; i < 4096u; i++)
+        peak = fmaxf(peak, fabsf(ovo[i]));
+    CHECK(peak > 0.1f && peak < 1.0f, "the overlay sounds while playing (peak %g)", (double)peak);
+    brk_overlay_on(0);                   /* a built-in break: it fades out */
+    ov_render(out, ovo, 8192u);
+    CHECK(fabsf(ovo[8191]) < 1e-3f, "off: it fades to nothing (%g)", (double)ovo[8191]);
+    brk_overlay_on(1);
+    brk_overlay(0, 0u, 0u);              /* taken away mid-play: silence, no crash */
+    ov_render(out, ovo, 1024u);
+    CHECK(fabsf(ovo[1023]) < 1e-3f, "no overlay: silence");
+    brk_overlay(ov, len, 4u);            /* back, mid-bar: on its bar again from the mark before it */
+    ov_render(out, ovo, 4u * bar);
+    peak = 0.0f;
+    for (i = 0; i < 4u * bar; i++)
+        peak = fmaxf(peak, fabsf(ovo[i]));
+    CHECK(peak > 0.1f && peak < 1.0f, "a new overlay mid-play sounds (peak %g)", (double)peak);
+    brk_overlay_out(0);
+    brk_overlay(0, 0u, 0u);
+    brk_play(0);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -2461,6 +2553,7 @@ int main(int argc, char **argv)
     test_dub();
     test_styles();
     test_pad_fx();
+    test_overlay();
     printf("%d of %d checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;
 }

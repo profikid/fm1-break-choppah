@@ -51,7 +51,8 @@ writeFileSync(`${o}/sc0.txt`, String(scenes[4 + 96]));
 const bk = P.readBank(new Uint8Array(readFileSync(`${o}/v1.bin`)));
 const meta = { id: P.uuid(), name: "V2 TEST", author: "CI", theme: { bg: "#101820", hi: "#33ffcc" }, slots: [
   { loop_steps: 8, loop_start: 8, gain_db: -6, pitch: 3, swing: 62, roles: "KKKK" }, { bpm: 150 }] };
-const ov = { rate: 11025, len: 30000, bpm: 113.78, bars: 4, data: P.adpcmEncode(new Float32Array(30000)) };
+const ovLen = Math.round(4 * 240 / 113.78 * 11025);
+const ov = { rate: 11025, len: ovLen, bpm: 113.78, bars: 4, data: P.adpcmEncode(Float32Array.from({ length: ovLen }, (_, i) => 0.5 * Math.sin(2 * Math.PI * 110 * i / 11025))) };
 const [b1, b2] = P.deviceBanks(bk.slots, 2, meta, { scenes, overlay: ov });
 writeFileSync(`${o}/b1.bin`, b1); writeFileSync(`${o}/b2.bin`, b2);
 N
@@ -80,6 +81,23 @@ expect slot_swing 62
 expect role0 1
 expect pal_hi 14329
 expect th_bg 4292
+expect ov_have 1
+expect ov_loud 0
+tap PLAY
+wait 2000
+expect ov_loud 1
+tap LFO
+wait 200
+turn K2 -50
+wait 400
+expect ov_loud 0
+turn K2 50
+wait 300
+
+tap HOME
+wait 200
+tap PLAY
+wait 600
 turn ALGO 1
 wait 300
 expect brk 1
@@ -98,6 +116,11 @@ turn ALGO 2
 wait 300
 expect brk 2
 expect pal_hi 64968
+tap PLAY
+wait 2000
+expect ov_loud 0
+tap PLAY
+wait 300
 expect th_bg 0
 sysex F0 7D 43 48 06 F7
 wait 300
@@ -108,4 +131,4 @@ S
 } > "$O/s2.txt"
 $H "$O/s2.txt" app/build/scenarios > "$O/run2.log" 2>&1 || { grep -E "FAIL|host:" "$O/run2.log"; exit 1; }
 grep -q "EXPECTATIONS FAILED" "$O/run2.log" && { grep FAIL "$O/run2.log"; exit 1; }
-echo "pack_v2: GETSET read the scenes; a v2 pack's scenes (scene A $SC0 bars), a 1/2-bar window, -6 dB, +3, swing 62, kicks set by hand, a tempo over the slot's and an overlay alone in bank 2 read, the pack's colours (amber again on a built-in break); kept at power-on; deleted: the factory's again"
+echo "pack_v2: GETSET read the scenes; a v2 pack's scenes (scene A $SC0 bars), a 1/2-bar window, -6 dB, +3, swing 62, kicks set by hand, a tempo over the slot's and an overlay alone in bank 2 read, the pack's colours and its overlay heard under its breaks, its fader, silent under a built-in one (amber again there); kept at power-on; deleted: the factory's again"

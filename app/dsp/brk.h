@@ -272,6 +272,14 @@ void brk_slicefx_defaults(brk_slicefx_t *f);   /* off, level 100 */
 void brk_slicefx(uint32_t slice, const brk_slicefx_t *f);   /* main loop; the slice's next hit follows it */
 /* the render, before brk_render: where it writes the slices' throws (ECHO, VERB) for the effects; 0: none */
 void brk_sends(float *echo, float *verb);
+/* the overlay (PRD_PACKS 7, PO-001): a longer loop of the pack's (4, 8 or 16 bars of IMA ADPCM, read from flash as it
+ * plays: never decoded whole) under the breaks, on the transport's bars (bar b plays its bar b mod bars), repitched
+ * with the tempo; TAPE STOP, HALF and STOP reach it, nothing else of the pads. brk_overlay: main loop (0: none; it
+ * walks the data once to mark where decoding can start); brk_overlay_on: while a break of its pack plays;
+ * brk_overlay_out: before each brk_render, where its samples go (0: nowhere) */
+void brk_overlay(const uint8_t *adpcm, uint32_t len, uint32_t bars);
+void brk_overlay_on(int on);
+void brk_overlay_out(float *o);
 void brk_pad(int pad, int down);
 void brk_gen(const brk_gen_t *g);
 void brk_padset_defaults(brk_padset_t *p);

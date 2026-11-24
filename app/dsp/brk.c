@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MPL-2.0 */
 /* CHOPPAH's break engine (brk.h): the sequencer, the generator, the pads and two crossfading slice voices. */
 #include "brk.h"
+#include "adpcm.h"
 #include "brk_math.h"
 
 #define FADE_IN 44.0f                    /* samples: 1 ms in, 2 ms out on every cut (PRD A-6) */
@@ -123,6 +124,17 @@ static uint16_t ev_off[EV_MAX];          /* the last render's steps: offsets and
 static uint8_t ev_idx[EV_MAX];
 static uint32_t ev_cnt;
 static uint32_t steps_total;             /* steps begun since the reset (the outside clock counts from its start) */
+/* the overlay (brk_overlay): the data in flash, decoded OVB samples at a time; where decoding may start, every OV_CK */
+#define OVB 64u
+#define OV_CK 4096u
+#define OV_NCK 160u                      /* (655,360 samples at most: 16 bars at 22.05 kHz down to 64 BPM) */
+static const uint8_t *volatile p_ov;
+static volatile uint32_t p_ov_len, p_ov_bars, p_ov_gen, p_ov_on;
+static adpcm_state_t ov_ck[OV_NCK];
+static uint32_t ov_gen_seen, ov_b0 = 0xFFFFFFFFu;
+static adpcm_state_t ov_st;
+static int16_t ov_buf[OVB];
+static float ov_pos, ov_amp, *ov_out;
 static int was_playing;                  /* the transport at the last render: a stop fades the break out */
 static volatile uint32_t n_renders;
 /* MATHCORE: the roles, the lanes' voices, the scene playing */
@@ -1079,6 +1091,46 @@ static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float pf, fl
 }
 
 static const brk_break_t *swap_now(void);
+void brk_overlay(const uint8_t *adpcm, uint32_t len, uint32_t bars)
+{
+    adpcm_state_t st = {0, 0, 0};
+    int16_t tmp[OVB];
+    uint32_t at;
+    p_ov = 0;                            /* (the render lets go first) */
+    if (!adpcm || len < OVB || len > OV_NCK * OV_CK || !bars)
+        return;
+    for (at = 0; at < len; at += OVB) {  /* the state at every OV_CK: where a jump starts decoding */
+        if (!(at % OV_CK))
+            ov_ck[at / OV_CK] = st;
+        adpcm_decode(&st, adpcm + at / 2u, tmp, len - at < OVB ? len - at : OVB);
+    }
+    p_ov_len = len;
+    p_ov_bars = bars;
+    p_ov_gen++;
+    p_ov = adpcm;
+}
+void brk_overlay_on(int on) { p_ov_on = on != 0; }
+void brk_overlay_out(float *o) { ov_out = o; }
+
+/* overlay sample j (0..len-1): the next OVB decoded in turn, or from the mark before j after a jump */
+static int16_t ov_at(const uint8_t *d, uint32_t len, uint32_t j)
+{
+    if (j - ov_b0 >= OVB) {
+        if (j - ov_b0 >= 2u * OVB || ov_b0 >= len) {   /* a jump: from the mark */
+            uint32_t k = j / OV_CK;
+            ov_st = ov_ck[k];
+            ov_b0 = k * OV_CK;
+            while (j - ov_b0 >= OVB) {
+                adpcm_decode(&ov_st, d + ov_b0 / 2u, ov_buf, OVB);
+                ov_b0 += OVB;
+            }
+        } else
+            ov_b0 += OVB;
+        adpcm_decode(&ov_st, d + ov_b0 / 2u, ov_buf, len - ov_b0 < OVB ? len - ov_b0 : OVB);
+    }
+    return ov_buf[j - ov_b0];
+}
+
 void brk_render(float *out, uint32_t n)
 {
     const brk_break_t *b = brk_now;
@@ -1091,6 +1143,8 @@ void brk_render(float *out, uint32_t n)
     if (!b || !b->len || !b->nslices) {
         for (i = 0; i < n; i++) {
             out[i] = 0.0f;
+            if (ov_out)
+                ov_out[i] = 0.0f;
             if (send_echo)
                 send_echo[i] = 0.0f;
             if (send_verb)
@@ -1106,7 +1160,13 @@ void brk_render(float *out, uint32_t n)
                 role_hit(b, r);
             }
     }
+    if (p_ov_gen != ov_gen_seen) {       /* a new overlay: its decoding from the mark, its place from the bar */
+        ov_gen_seen = p_ov_gen;
+        ov_b0 = 0xFFFFFFFFu;
+        ov_pos = p_ov_bars ? (float)((steps_total / 16u) % p_ov_bars) * (float)p_ov_len / (float)p_ov_bars : 0.0f;
+    }
     if (p_reset != reset_seen) {
+        ov_pos = 0.0f;
         reset_seen = p_reset;
         step = -1;
         bar = 0u;
@@ -1207,6 +1267,8 @@ void brk_render(float *out, uint32_t n)
                     ev_off[ev_cnt] = (uint16_t)i;
                     ev_idx[ev_cnt++] = (uint8_t)(steps_total & 15u);
                 }
+                if (p_ov && !(steps_total & 15u))   /* a bar line: the overlay on its bar (no drift, ever) */
+                    ov_pos = (float)((steps_total >> 4) % p_ov_bars) * (float)p_ov_len / (float)p_ov_bars;
                 steps_total++;
                 to_next += len;
                 if (!(step & 1)) {       /* MIDI clock: twelve straight ticks over each pair of 16ths */
@@ -1340,6 +1402,25 @@ void brk_render(float *out, uint32_t n)
         {
             float k = (1.0f / 32768.0f) * gate_amp * mute_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
             out[i] = acc * k;
+            if (ov_out) {                /* the overlay: on the bars, with the tempo, HALF and the tape; STOP fades it */
+                const uint8_t *od = p_ov;
+                float y = 0.0f;
+                ov_amp += ((od && p_ov_on && playing ? 1.0f : 0.0f) - ov_amp) * 0.0015f;
+                if (od && ov_amp > 0.0005f) {
+                    uint32_t len = p_ov_len, ip;
+                    float fr;
+                    if (ov_pos >= (float)len || ov_pos < 0.0f)
+                        ov_pos = 0.0f;
+                    ip = (uint32_t)ov_pos;
+                    fr = ov_pos - (float)ip;
+                    y = (float)ov_at(od, len, ip);
+                    if (ip + 1u < len)
+                        y += ((float)ov_at(od, len, ip + 1u) - y) * fr;
+                    if (playing)
+                        ov_pos += (float)len / ((float)p_ov_bars * 16.0f * sl) * half * tape;
+                }
+                ov_out[i] = y * (1.0f / 32768.0f) * ov_amp * mute_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
+            }
             if (send_echo)               /* the slices' throws, for the effects' delay and reverb */
                 send_echo[i] = ea * k;
             if (send_verb)

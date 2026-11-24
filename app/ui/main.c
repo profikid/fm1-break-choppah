@@ -73,12 +73,18 @@ static void knob_turn(int k, int32_t d)
             if (k == EN_K1) {
                 set.swing = (uint8_t)clamp((int32_t)set.swing + d, 50, 75);
                 say_int("SWING", set.swing, "%");
+            } else if (k == EN_K2 && pk_ovly) {   /* the overlay: through the chain, or around it */
+                set.ov_route = d > 0 ? 1u : 0u;
+                app_say("OVL ROUTE", set.ov_route ? "AROUND" : "CHAIN");
             } else
                 return;
         } else if (k == EN_K1) {
             set.brk_level = (uint8_t)clamp((int32_t)set.brk_level + d * 2, 0, 100);
             say_int("BREAK", set.brk_level, "%");
-        } else if (k != EN_K4) {         /* (K2, K3: nothing: the lanes play the break itself) */
+        } else if (k == EN_K2 && pk_ovly) {   /* the pack's overlay */
+            set.lane_level = (uint8_t)clamp((int32_t)set.lane_level + d * 2, 0, 100);
+            say_int("OVERLAY", set.lane_level, "%");
+        } else if (k != EN_K4) {         /* (K3: nothing; K2 without an overlay) */
             (void)t;
             return;
         } else {                         /* FX: the whole chain against the dry sound */
@@ -860,14 +866,14 @@ static const char *foot_knob(uint32_t i, char *t)
                                               {"P1", "P2", "P3", "MIX"},
                                               {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"},
                                               {"", "", "", ""},
-                                              {"BREAK", "", "", "FX"},
+                                              {"BREAK", "OVERLAY", "", "FX"},
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
                                               {"", "", "", ""},
                                               {"TEMPO", "FINE", "HALF / X2", "CLICK"},
                                               {"P1", "P2", "P3", "MIX"},
                                               {"SPLIT", "BREAK B", "BAR A", "BAR B"}};
     static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
-    static const char *const KN_GROOVE[4] = {"SWING", "", "", ""};
+    static const char *const KN_GROOVE[4] = {"SWING", "OVL ROUTE", "", ""};
     static const char *const KN_CHAN[4] = {"CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"};
     static const char *const KN_LANE[4] = {"FILL", "ROTATE", "CLR / 4X4", "COPY"};
     const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_CHAN[i] : ui.page == PG_GLOBAL && ui.gpage
@@ -1392,6 +1398,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
     if (cmd == 2u || cmd == 6u) {        /* BEGIN, DELETE: room made, the bank's breaks gone */
         cu_size = cmd == 2u ? rd32(u) : 1u;
         cu_bank = bank;
+        brk_overlay(0, 0u, 0u);          /* (it reads the flash about to be erased) */
         if (cu_size < 16u + 168u && cmd == 2u)
             code = 2u;
         for (i = 0; !code && i < (cu_size + 4095u) / 4096u; i++)
@@ -1472,8 +1479,8 @@ int app_expect(const char *what, int *got)
                                     "mc_hats", "mc_percs", "mc_missing", "mc_adv", "mc_hits", "mq_key0", "mc_state0",
                                     "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next", "mc_math", "mc_base", "playing",
                                     "pk_tag", "mq_tag", "sc0_bars", "nslices", "brk_bpm", "slot_pitch", "tile",
-                                    "role0", "slot_swing", "pal_hi", "th_bg"};
-    int v[78];
+                                    "role0", "slot_swing", "pal_hi", "th_bg", "ov_have", "ov_loud"};
+    int v[80];
     uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
@@ -1569,7 +1576,9 @@ int app_expect(const char *what, int *got)
     v[75] = slot_swing;
     v[76] = pal[4];
     v[77] = th_bg;
-    for (i = 0; i < 78u; i++)
+    v[78] = pk_ovly != 0;
+    v[79] = meter_ov > 0.05f;            /* the overlay heard (over -26 dBFS) */
+    for (i = 0; i < 80u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;
