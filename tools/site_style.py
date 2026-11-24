@@ -157,6 +157,7 @@ def breaks(site):
     page = page.replace("<style>/*SITE_CSS*/", FONTS + "<style>" + css, 1).replace("<!--HEADER-->", header("Your breaks"), 1)
     (site / "breaks").mkdir(parents=True, exist_ok=True)
     (site / "breaks" / "index.html").write_text(page, encoding="utf-8")
+    (site / "breaks" / "chpk.js").write_text((APP / "site" / "chpk.js").read_text(encoding="utf-8"), encoding="utf-8")   # the pack file
     print(f"site_style: breaks/: the break manager, {library(site / 'breaks')} breaks in its library")
 
 

@@ -2,7 +2,11 @@
 
 **Feature PRD** · v0.1 · 24 Nov 2026 · Owner: Laurens (Sylverline)  
 **Parent product PRD:** [PRD.md](PRD.md) (S-003, §10) · related: [PRD_MATHCORE.md](PRD_MATHCORE.md)  
-**Status:** draft for review, nothing built yet. Decisions taken on 24 Nov 2026 are in §1.2; open questions in §11.
+**Status:** 24 Nov 2026: the hub is **live on choppah.app** (§10, all PH-* rows; repo `profikid/choppah-hub`), the
+`.chpk` file (PK-010, PK-011: `app/site/chpk.js`) and the builder's pack details, export / import, upload and open from
+the hub (PB-020–025 but PB-024's overlay share) are built. Not yet: the firmware side (PK-001–004, PS, PT, PM, PO, PE),
+the builder's beat tracking, loop finder and destemming (PB-001–012), the destem server (PB-003: endpoint built, no GPU
+provider). Decisions in §1.2; open questions in §11.
 
 ---
 
@@ -29,7 +33,7 @@ destemmed, tempo found, loops found) and shared on a **pack hub**.
 | --- | --- |
 | D1 | Destemming runs **in the browser** where it can; a **server** fallback is acceptable |
 | D2 | The hub runs on **Cloudflare** (Workers, D1, R2) |
-| D3 | Login with a **passkey**; an **email link** signs up / recovers an account and registers a passkey |
+| D3 | Accounts start **only with an email link** (never a passkey alone). Opening the link: the email's account has a passkey → sign in with it; no account → the name, then a passkey for that email; an account without one → a passkey for it. Returning users sign in with a passkey (24 Nov 2026) |
 | D4 | Uploads are **private by default**; the owner can **publish**; signed-in users can **rate** published packs |
 | D5 | The hub's code lives in a **separate private repository** (§10.1) |
 
@@ -276,15 +280,15 @@ the browser; heavy work in Web Workers.
 - **API:** one Cloudflare Worker (`/api/*`).
 - **D1:** users, passkeys, packs, ratings, reports.
 - **R2:** `.chpk` files and thumbnails; public packs served through the Worker (counted downloads).
-- **Mail:** magic links through a mail provider (Cloudflare's own sending, if available for arbitrary addresses by
-  then; otherwise Resend or Postmark) (Q4).
+- **Mail:** Cloudflare Email Service (Email Sending, choppah.app onboarded 24 Nov 2026; a `send_email` binding), Resend
+  as a fallback (Q4 decided).
 - **WebAuthn:** SimpleWebAuthn (MIT) runs on Workers.
 
 ### 10.2 Accounts (D3)
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| PH-001 | Sign up: email → a link (15 min, one use) → register a passkey on that device | P0 | |
+| PH-001 | Sign up: email → a link (15 min, one use) → the name → a passkey for that email; the link used up only when the passkey checks | P0 | *Done; choppah-hub test/e2e.mjs* |
 | PH-002 | Sign in with a passkey (discoverable credentials: no username typed) | P0 | |
 | PH-003 | A new device: sign in with the email link, then add its passkey; several passkeys per account, each removable | P0 | |
 | PH-004 | Sessions: HttpOnly, Secure, SameSite=Lax cookie, 30 days, revocable | P0 | |

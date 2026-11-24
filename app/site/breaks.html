@@ -202,7 +202,12 @@ computer.</p>
     <div class="row">
       <button id="packPlay">Play</button>
       <button id="packChop" aria-pressed="false">Chop</button>
+      <label class="f">Loop<select id="slLoop"><option value="32">2 bars</option><option value="16">1 bar</option><option value="8">½ bar</option><option value="4">¼ bar</option></select></label>
+      <label class="f">From step<input type="number" id="slStart" min="0" max="31" value="0" style="width:5ch"></label>
+      <label class="f">Pitch<input type="number" id="slPitch" min="-24" max="24" value="0" style="width:5ch"></label>
+      <label class="f">Gain dB<input type="number" id="slGain" min="-24" max="12" value="0" style="width:5ch"></label>
     </div>
+    <p class="hint">How this break loops on the FM-1 (with CHOPPAH 1.7 and up): kept in the pack, shared with it.</p>
   </div>
   <div class="row">
     <button id="send" class="go" disabled>Send the pack to the FM-1</button>
@@ -214,11 +219,40 @@ computer.</p>
   <div class="row">
     <button id="export">Export the pack</button>
     <button id="import">Import a pack</button>
-    <input type="file" id="importFile" accept=".chb" class="hidden">
+    <input type="file" id="importFile" accept=".chpk,.chb" class="hidden">
     <button id="clear" class="warn">Clear the pack</button>
   </div>
-  <p class="hint">The pack stays in this browser until you clear it. Export saves it as one file (.chb, the FM-1's own
-  bank format) to keep or share; Import reads one back.</p>
+  <p class="hint">The pack stays in this browser until you clear it. Export saves it as one file (.chpk: the breaks,
+  their settings, the pack's name, theme and picture) to keep or share; Import reads one back (an older .chb too).</p>
+</section>
+
+<section class="card" aria-labelledby="h-share">
+  <h2 id="h-share">4. The pack's name, look and hub</h2>
+  <p class="sub">A pack carries its name, who made it, a theme for the FM-1's screen and a picture for the
+  <a href="https://choppah.app/hub/">pack hub</a>. Each break keeps how it loops.</p>
+  <div class="row">
+    <label class="f">Name<input type="text" id="pkName" maxlength="16" spellcheck="false" placeholder="MY PACK"></label>
+    <label class="f">Made by<input type="text" id="pkAuthor" maxlength="40" placeholder="your name"></label>
+    <label class="f">Tags<input type="text" id="pkTags" maxlength="120" placeholder="jungle, amen, 170"></label>
+  </div>
+  <label class="f" style="display:block;margin-top:8px">About it<textarea id="pkDesc" rows="2" maxlength="2000" style="width:100%"></textarea></label>
+  <div class="row" style="margin-top:8px">
+    <label class="f">Theme<select id="pkTheme"></select></label>
+    <span id="pkColours" class="row" style="gap:4px"></span>
+  </div>
+  <div class="row" style="margin-top:8px;align-items:flex-start">
+    <canvas id="pkThumb" width="160" height="160" style="width:120px;height:120px;border-radius:8px;border:1px solid var(--line)" aria-label="The pack's picture"></canvas>
+    <div>
+      <div class="row"><button id="pkPic">Use a picture</button><button id="pkPicDrawn">Draw it from the pack</button>
+        <input type="file" id="pkPicFile" accept="image/*" class="hidden"></div>
+      <p class="hint">Without a picture the hub draws one from the pack's name and theme.</p>
+    </div>
+  </div>
+  <div class="row" style="margin-top:10px">
+    <button id="pkUpload" class="go">Upload to the pack hub</button>
+    <span class="state" id="pkState" role="status"></span>
+  </div>
+  <p class="hint" id="pkHint">Uploads stay private on the hub until you publish them there.</p>
 </section>
 </main>
 </div>
@@ -1282,6 +1316,176 @@ document.addEventListener("keydown", (e) => {
 });
 if (!navigator.requestMIDIAccess) say($("devStatus"), "This browser has no Web MIDI: use Chrome or Edge to send the pack. You can still make one, hear it and export it.", true);
 restore();
+</script>
+<script type="module">
+/* the pack file (.chpk, app/site/chpk.js, shared with the hub) and the pack's details, its hub */
+import * as CHPK from "./chpk.js";
+window.CHPK = CHPK;
+window.dispatchEvent(new Event("chpk-ready"));
+</script>
+<script>
+/* ------------------------------------------------- the pack's details, its file (.chpk) and the hub (PRD_PACKS) */
+const HUB = "https://choppah.app";
+const onHub = location.origin === HUB;
+const THEMES = {
+  AMBER: { bg: "#0e0d0b", panel: "#18181e", text: "#ede6d4", dim: "#6b6353", hi: "#ffb846", mid: "#a36a1e", wave: "#ffb21a", warn: "#ff6848" },
+  ICE: { bg: "#070b10", panel: "#101823", text: "#e2f1ff", dim: "#5d7286", hi: "#7fd6ff", mid: "#2f6f99", wave: "#9ee4ff", warn: "#ff6b6b" },
+  ACID: { bg: "#080a05", panel: "#141a0c", text: "#efffd6", dim: "#6b7a52", hi: "#c6ff2e", mid: "#6f9a12", wave: "#a8ff3e", warn: "#ff5f3a" },
+  DIP: { bg: "#0d0712", panel: "#1b1024", text: "#ffe9fb", dim: "#7d5f86", hi: "#ff5fd2", mid: "#8d3aa8", wave: "#ffd166", warn: "#ff5a5a" },
+  TERMINAL: { bg: "#000000", panel: "#0b120b", text: "#c8ffc8", dim: "#3f6b3f", hi: "#39ff14", mid: "#1f8a1f", wave: "#39ff14", warn: "#ff3b30" },
+  PAPER: { bg: "#f1ece0", panel: "#e2dccd", text: "#1b1915", dim: "#7b7466", hi: "#d2461e", mid: "#8a6a3a", wave: "#1b1915", warn: "#c0262d" },
+};
+const THEME_KEYS = ["bg", "panel", "text", "dim", "hi", "mid", "wave", "warn"];
+let meta = null;                         /* {id, name, author, description, tags[], theme{}, thumb: Uint8Array|null, created} */
+const newMeta = () => ({ id: crypto.randomUUID(), name: "MY PACK", author: "", description: "", tags: [], theme: { ...THEMES.AMBER }, thumb: null, created: Math.floor(Date.now() / 1000) });
+const slotOf = (e) => (e.slot = e.slot || { loop_steps: 32, loop_start: 0, pitch: 0, gain_db: 0 });
+
+async function metaLoad() {
+  try {
+    const db = await idb(), v = await new Promise((res) => { const q = db.transaction("kv").objectStore("kv").get("meta"); q.onsuccess = () => res(q.result); q.onerror = () => res(null); });
+    meta = v && v.id ? v : newMeta();
+  } catch (e) { meta = newMeta(); }
+  metaShow();
+}
+async function metaKeep() {
+  try { const db = await idb(); db.transaction("kv", "readwrite").objectStore("kv").put(meta, "meta"); } catch (e) { /* the page's lifetime */ }
+}
+function metaShow() {
+  $("pkName").value = meta.name; $("pkAuthor").value = meta.author; $("pkDesc").value = meta.description;
+  $("pkTags").value = meta.tags.join(", ");
+  const sel = $("pkTheme");
+  sel.innerHTML = Object.keys(THEMES).map((k) => `<option>${k}</option>`).join("") + "<option value=\"\">your own</option>";
+  sel.value = Object.keys(THEMES).find((k) => THEME_KEYS.every((c) => THEMES[k][c] === meta.theme[c])) || "";
+  $("pkColours").innerHTML = THEME_KEYS.map((c) => `<label title="${c}" style="display:flex;flex-direction:column;align-items:center;font:500 10px var(--f-mono);color:var(--faint)"><input type="color" data-c="${c}" value="${meta.theme[c]}" style="width:28px;height:24px;padding:0;border:0;background:none">${c}</label>`).join("");
+  $("pkColours").querySelectorAll("input").forEach((i) => i.oninput = () => { meta.theme[i.dataset.c] = i.value; $("pkTheme").value = ""; drawThumb(); metaKeep(); });
+  drawThumb();
+  $("pkUpload").disabled = !pack.length;
+  $("pkHint").innerHTML = onHub ? "Uploads stay private on the hub until you publish them there (<a href=\"/hub/account#packs\">your packs</a>)."
+    : `Uploading works on <a href="${HUB}/breaks/">choppah.app</a> (export here, import there), or export the pack and upload the file on the <a href="${HUB}/hub/account#packs">hub</a>.`;
+}
+function drawThumb() {
+  const c = $("pkThumb"), g = c.getContext("2d"), t = meta.theme, w = c.width;
+  if (meta.thumb) {
+    const img = new Image(); img.onload = () => { g.drawImage(img, 0, 0, w, w); URL.revokeObjectURL(img.src); };
+    img.src = URL.createObjectURL(new Blob([meta.thumb])); return;
+  }
+  g.fillStyle = t.bg; g.fillRect(0, 0, w, w);
+  const n = 16, bw = w / n;
+  for (let i = 0; i < n; i++) {
+    const e = pack[i % Math.max(1, pack.length)], h = (0.3 + 0.6 * Math.abs(Math.sin((i + 1) * 1.7 + (e ? e.bpm : 0)))) * w * 0.5;
+    g.globalAlpha = i % 4 ? 0.55 : 1; g.fillStyle = i % 4 ? t.wave : t.hi; g.fillRect(i * bw + 1, w * 0.62 - h / 2, bw - 2, h);
+  }
+  g.globalAlpha = 1; g.fillStyle = t.text; g.font = `700 ${w / 9}px "Chakra Petch", sans-serif`; g.fillText(meta.name.slice(0, 12), w * 0.06, w * 0.17);
+}
+async function thumbBytes() {                /* the picture as WebP (or PNG), 512 px, under 64 KB */
+  if (meta.thumb) return meta.thumb;
+  const c = document.createElement("canvas"); c.width = c.height = 512;
+  const save = $("pkThumb"); const old = save.width; save.width = save.height = 512; drawThumb();
+  c.getContext("2d").drawImage(save, 0, 0); save.width = save.height = old; drawThumb();
+  for (const q of [0.85, 0.7, 0.5]) {
+    const b = await new Promise((r) => c.toBlob(r, "image/webp", q));
+    if (b && b.size <= 64 * 1024 && b.type === "image/webp") return new Uint8Array(await b.arrayBuffer());
+  }
+  return null;
+}
+async function packFile() {                  /* the pack -> a .chpk */
+  if (!window.CHPK) throw new Error("the page is still loading");
+  const bs = await Promise.all(pack.map((e) => atQuality(e, quality)));
+  const bank = buildBank(bs);
+  meta.updated = Math.floor(Date.now() / 1000);
+  return CHPK.buildPack({ meta: { ...meta, author_full: meta.author, slots: pack.map(slotOf) }, bank, thumb: await thumbBytes() });
+}
+function takePack(bytes) {                   /* a .chpk (or .chb) -> the pack in this browser; -> its name */
+  const b = new Uint8Array(bytes);
+  if (window.CHPK && new DataView(b.buffer, b.byteOffset).getUint32(0, true) === CHPK.CHPK_MAGIC) {
+    const p = CHPK.parsePack(b), all = slotsOf(p.bank);
+    pack = all.map((x, i) => ({ name: x.name, bpm: x.bpm, rate: x.rate, len: x.len, slices: x.slices, data: x.data, pcm: x.pcm, slot: p.meta.slots[i] }));
+    quality = Math.max(...pack.map((e) => e.rate)); $("quality").value = String([22050, 16000, 11025].find((q) => q <= quality) || 22050);
+    meta = { id: p.meta.id, name: p.meta.name, author: p.meta.author_full || p.meta.author, description: p.meta.description, tags: p.meta.tags,
+      theme: p.meta.theme, thumb: p.thumb ? p.thumb.slice() : null, created: p.meta.created };
+    cur = -1; $("packView").classList.add("hidden"); refresh(); metaKeep(); metaShow();
+    return meta.name;
+  }
+  const all = slotsOf(b);
+  if (!all) throw new Error("That file isn't a CHOPPAH pack (.chpk or .chb).");
+  let n = 0;
+  for (const x of all) if (addToPack({ name: x.name, bpm: x.bpm, rate: x.rate, len: x.len, slices: x.slices, data: x.data, pcm: x.pcm })) n++;
+  return `${n} of ${all.length} breaks`;
+}
+
+/* the export and import buttons: .chpk now (the old .chb still reads) */
+$("export").onclick = async () => {
+  try {
+    const f = await packFile(), a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([f], { type: "application/vnd.choppah.pack" }));
+    a.download = (meta.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "choppah-pack") + ".chpk"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (e) { say($("packState"), e.message, true); }
+};
+$("importFile").onchange = async (ev) => {
+  const f = ev.target.files[0]; ev.target.value = "";
+  if (!f) return;
+  try { say($("addStatus"), `<b>${esc(takePack(await f.arrayBuffer()))}</b> from ${esc(f.name)} is in the pack.`); }
+  catch (e) { say($("packState"), e.message, true); }
+};
+$("pkName").onchange = () => { meta.name = (window.CHPK ? CHPK.checkMeta({ id: meta.id, name: $("pkName").value }).name : $("pkName").value.toUpperCase()) || "MY PACK"; $("pkName").value = meta.name; drawThumb(); metaKeep(); };
+$("pkAuthor").onchange = () => { meta.author = $("pkAuthor").value.trim().slice(0, 40); metaKeep(); };
+$("pkDesc").onchange = () => { meta.description = $("pkDesc").value.slice(0, 2000); metaKeep(); };
+$("pkTags").onchange = () => { meta.tags = $("pkTags").value.split(/[,\s]+/).map((t) => t.toLowerCase().replace(/[^a-z0-9-]/g, "")).filter(Boolean).slice(0, 8); $("pkTags").value = meta.tags.join(", "); metaKeep(); };
+$("pkTheme").onchange = () => { if (THEMES[$("pkTheme").value]) { meta.theme = { ...THEMES[$("pkTheme").value] }; metaShow(); metaKeep(); } };
+$("pkPic").onclick = () => $("pkPicFile").click();
+$("pkPicDrawn").onclick = () => { meta.thumb = null; drawThumb(); metaKeep(); };
+$("pkPicFile").onchange = async (ev) => {
+  const f = ev.target.files[0]; ev.target.value = ""; if (!f) return;
+  const img = await createImageBitmap(f), c = document.createElement("canvas"); c.width = c.height = 512;
+  const s = Math.min(img.width, img.height);
+  c.getContext("2d").drawImage(img, (img.width - s) / 2, (img.height - s) / 2, s, s, 0, 0, 512, 512);
+  for (const q of [0.85, 0.7, 0.5, 0.35]) {
+    const b = await new Promise((r) => c.toBlob(r, "image/webp", q));
+    if (b && b.size <= 64 * 1024) { meta.thumb = new Uint8Array(await b.arrayBuffer()); break; }
+  }
+  drawThumb(); metaKeep();
+};
+for (const [id, key] of [["slLoop", "loop_steps"], ["slStart", "loop_start"], ["slPitch", "pitch"], ["slGain", "gain_db"]]) {
+  $(id).onchange = () => { if (cur >= 0) { slotOf(pack[cur])[key] = +$(id).value; refresh(); } };
+}
+const pickedBefore = packPick;
+packPick = async (i, play) => {           /* the break picked: its loop settings shown */
+  await pickedBefore(i, play);
+  const s = slotOf(pack[i]);
+  $("slLoop").value = String(s.loop_steps); $("slStart").value = s.loop_start; $("slPitch").value = s.pitch; $("slGain").value = s.gain_db;
+};
+$("pkUpload").onclick = async () => {
+  if (!onHub) { location.href = `${HUB}/hub/account#packs`; return; }
+  say($("pkState"), "Uploading…");
+  try {
+    const r = await fetch("/api/packs", { method: "POST", credentials: "same-origin", body: await packFile(),
+      headers: { "content-type": "application/vnd.choppah.pack", "x-hub": "1" } });
+    const d = await r.json();
+    if (r.status === 403) { say($("pkState"), `Sign in on the <a href="/hub/account">hub</a> first, then upload again.`, true); return; }
+    if (!r.ok) throw new Error(d.error);
+    say($("pkState"), `<b>${esc(d.pack.name)}</b> is on the hub (private): <a href="/hub/pack?id=${d.pack.id}">see it</a>, publish it from <a href="/hub/account#packs">your packs</a>.`);
+  } catch (e) { say($("pkState"), e.message, true); }
+};
+const refreshBefore = refresh;
+refresh = (store = true) => { refreshBefore(store); if (meta) { $("pkUpload").disabled = !pack.length; drawThumb(); } };
+
+async function fromHub() {                /* #hub=<id>: a pack from the hub into this browser */
+  const id = new URLSearchParams(location.hash.slice(1)).get("hub");
+  if (!id || !/^[0-9a-f-]{36}$/.test(id)) return;
+  if (pack.length && !confirm("Replace the pack in this browser with the one from the hub? Export yours first to keep it.")) return;
+  say($("packState"), "Fetching the pack from the hub…");
+  try {
+    const r = await fetch(`${onHub ? "" : HUB}/api/packs/${id}/file`, { credentials: onHub ? "same-origin" : "omit" });
+    if (!r.ok) throw new Error((await r.json()).error || `HTTP ${r.status}`);
+    const name = takePack(await r.arrayBuffer());
+    history.replaceState(null, "", location.pathname);
+    say($("packState"), `${name} from the hub: connect the FM-1 and send it.`);
+    $("h-pack").scrollIntoView();
+  } catch (e) { say($("packState"), "The hub's pack couldn't be read: " + e.message, true); }
+}
+(window.CHPK ? Promise.resolve() : new Promise((r) => window.addEventListener("chpk-ready", r, { once: true })))
+  .then(metaLoad).then(fromHub);
 </script>
 </body>
 </html>

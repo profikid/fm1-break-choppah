@@ -75,6 +75,15 @@ settings bytes reserved).
   (1.6), and a bank that doesn't check at COMMIT, or an FM-1 that restarted, is sent again from BEGIN (`sendBank`). The page's library is Cyberworm's Amens from breaks/
   (tools/site_style.py converts them at site build); a page-only change goes live by running pages.yml (version: the
   latest release, package-from: release), no firmware release needed.
+- **Packs v2 and the hub** (docs/PRD_PACKS.md): the pack file `.chpk` is `app/site/chpk.js` (MPL-2.0, no DOM: META,
+  BANK, SCNE, OVLY, THMB chunks; `tests/chpk.test.mjs`, its bank byte for byte = breaks.html's `buildBank`). The site
+  build copies it next to the builder (`breaks/chpk.js`, tools/site_style.py); the page's section 4 edits the pack's
+  name, author, tags, theme and picture, each break's loop settings (`e.slot`), exports / imports `.chpk` (a `.chb`
+  still reads), uploads to the hub and opens `#hub=<id>`. The hub is **choppah.app**, a private repo
+  (`profikid/choppah-hub`: a Cloudflare Worker, D1, R2, Email Service), which vendors chpk.js pinned to a commit
+  (`npm run vendor`) and proxies this site from GitHub Pages byte for byte. Change chpk.js here, never there.
+  The firmware reads none of v2 yet: Send still writes the v1 banks (slot settings, theme, scenes, overlay: PRD_PACKS
+  P1, P5, P6).
 - **Releases are tags, not merges** (since 6 Nov 2026): `scripts/release.sh` tags vX.Y and pushes it; the shared
   builder (`zvenson/fm1-build@v1`, via `.github/workflows/release.yml`) builds it on GitHub, signs the build
   provenance, publishes the release and rebuilds the site. The Firmware Hub only shows "Built from source" for
