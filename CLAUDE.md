@@ -86,6 +86,9 @@ settings bytes reserved).
   sendBank rules; `tests/fm1link.test.mjs` against `tests/page_send/fake_fm1.js`, which plays a 1.6 or a 1.7): the
   hub vendors it with chpk.js and installs a pack straight onto the FM-1 (PRD_PACKS §10.7; `installImages` in chpk.js;
   a pack's `.chpk` downloads only for its owner or when the owner allows it).
+  The builder's cut is `app/site/breakcut.js` (MPL-2.0, no DOM: level, slicePoints, warp copied from breaks.html
+  unchanged, `tests/breakcut.test.mjs` holds them equal; `cut`, `makeBreak`, `autoEdit`): the hub's library slicer
+  (PRD_PACKS §10.8) makes breaks from your samples with it. Change those functions in both places, or the test fails.
   The builder's ears are `app/site/beats.js` (no DOM: onsets, tempo, bars, `findLoops`, `stems` (harmonic /
   percussive), `seamless`; `tests/beats.test.mjs` on the classics) in a module Worker (`beats_worker.js`); on
   choppah.app the page also reads your hub library and saves to it (script 3 of breaks.html). `tests/page_pack.sh`:

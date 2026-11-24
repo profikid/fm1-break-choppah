@@ -349,6 +349,17 @@ name, tag, BPM, star, listen, take to the builder; 30 MB a file, 300 MB an accou
 The link is `app/site/fm1link.js` (MPL-2.0, no DOM: `FM1Link.open`, `status`, `install`; breaks.html's must /
 sendBank rules), vendored into the hub with chpk.js.
 
+### 10.8 The samples slicer and packs from samples (24 Nov 2026)
+
+| ID | Requirement | Priority | Status |
+| --- | --- | --- | --- |
+| PH-040 | Every sample in the library shows the builder's slicer inline: the whole file with the two bars chosen, the break with its sixteen slices (drag to move, click to hear), tempo (×2 ÷2), offset, which bars, hits or grid, level, warp, loop and chop | P0 | *Done; choppah-hub test/library_ui.mjs* |
+| PH-041 | A sample's edit **saves itself** (the sample's `edit`, a moment after the last change) and **Reset** goes back to what was heard (`auto`: tempo, first bar and best loop from beats.js, the waveform's peaks) | P0 | *Done* |
+| PH-042 | **One plays at a time**: starting a slicer stops any other | P0 | *Done* |
+| PH-043 | Select samples (several) → **New pack** from them, or **Add to** one of your packs; each becomes a break as the builder makes it (`breakcut.js` = breaks.html's level, slices, warp: tests/breakcut.test.mjs) | P0 | *Done* |
+| PH-044 | Every pack of yours shows its **room on the FM-1**: the bytes of its banks (as 1.7 gets them, `installImages`) of the two banks' 344 KB, and its breaks of 16; adding refuses what doesn't fit, before anything is made | P0 | *Done (`packs.flash_used`)* |
+| PH-045 | One header on every page of choppah.app (the site's pages too: the hub's navigation and the account link); the front page is a Three.js presentation: an FM-1 running CHOPPAH, turning | P1 | *Done* |
+
 ### 10.5 API (sketch)
 
 ```
