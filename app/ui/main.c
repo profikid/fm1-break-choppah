@@ -1084,6 +1084,11 @@ void app_frame(void)
             return;
         }
     }
+    if (th_dirty) {                      /* a pack's theme in or out: the whole screen in its colours */
+        th_dirty = 0u;
+        lcd_fill(0, 0, 240, 240, C_BLACK);
+        ui.redraw = RG_ALL;
+    }
     if ((ui.page == PG_TAP) != (ui.drawn_page == PG_TAP)) {   /* into or out of TAP: the whole screen again */
         lcd_fill(0, 44, 240, 148, C_BLACK);
         ui.redraw = RG_ALL;
@@ -1467,8 +1472,8 @@ int app_expect(const char *what, int *got)
                                     "mc_hats", "mc_percs", "mc_missing", "mc_adv", "mc_hits", "mq_key0", "mc_state0",
                                     "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next", "mc_math", "mc_base", "playing",
                                     "pk_tag", "mq_tag", "sc0_bars", "nslices", "brk_bpm", "slot_pitch", "tile",
-                                    "role0", "slot_swing"};
-    int v[76];
+                                    "role0", "slot_swing", "pal_hi", "th_bg"};
+    int v[78];
     uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
@@ -1562,7 +1567,9 @@ int app_expect(const char *what, int *got)
     }
     v[74] = roles_now[0];
     v[75] = slot_swing;
-    for (i = 0; i < 76u; i++)
+    v[76] = pal[4];
+    v[77] = th_bg;
+    for (i = 0; i < 78u; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;

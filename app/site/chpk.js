@@ -23,8 +23,9 @@ export const BANK_CAPS = [0xD6000 - 0x97000, 0xFC000 - 0xE5000];
 export const THUMB_MAX = 64 * 1024;
 export const FILE_MAX = 512 * 1024;
 export const THEME_KEYS = ["bg", "panel", "text", "dim", "hi", "mid", "wave", "warn"];
-export const THEME_AMBER = { bg: "#0e0d0b", panel: "#18181e", text: "#ede6d4", dim: "#6b6353", hi: "#ffb846",
-  mid: "#a36a1e", wave: "#ffb21a", warn: "#ff6848" };
+/* the factory's colours as the FM-1 draws them (gfx.c AMBER and CHOPPAH's blocks): a pack in these looks as CHOPPAH does */
+export const THEME_AMBER = { bg: "#000000", panel: "#18181e", text: "#96969e", dim: "#4a4a52", hi: "#ffb846",
+  mid: "#e8881e", wave: "#ffb846", warn: "#ff6848" };
 export const SLOT_DEFAULTS = { loop_steps: 32, loop_start: 0, bpm: null, gain_db: 0, pitch: 0, swing: null,
   pitch_mode: null, roles: null };
 

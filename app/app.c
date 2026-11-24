@@ -22,6 +22,13 @@
 #define CH_HAVE_BANK 0
 #endif
 
+/* the theme (PRD_PACKS PT-001, PT-002): a pack break's screen in its pack's colours (THEM), any other break's in the
+ * factory's amber. fm1-base keeps its five steps in RAM (gfx.c pal[]); the ground and the slice blocks are CHOPPAH's */
+static uint16_t th_bg, th_block = RGB(24, 24, 30), th_block_hi = RGB(255, 184, 70);
+static uint8_t th_dirty, th_pack;        /* th_dirty: the whole screen again */
+#undef C_BLACK
+#define C_BLACK th_bg
+
 /* ------------------------------------------------------------------ settings --- */
 #define NPFX 11u                         /* the ARP page's black keys: an effect slot each (PRD B-55) */
 #define SET_MAGIC 0x37504843u            /* "CHP7" (the soundboard gone, the drums and patterns in): another magic
@@ -753,6 +760,34 @@ static void mc_pack(void)
     brk_mc_scenes(mcs.sc);
 }
 
+static void theme_apply(uint32_t pack)
+{
+    const uint8_t *t = pack ? pk_them : 0;
+    uint32_t k;
+    uint16_t c[8];
+    if ((t != 0) == (th_pack != 0) && !t)
+        return;
+    if (t) {
+        for (k = 0; k < 8u; k++)
+            c[k] = (uint16_t)(t[2u * k] | t[2u * k + 1u] << 8);   /* bg panel text dim hi mid wave warn */
+        th_bg = c[0];
+        pal[0] = c[1];                   /* rules: the panel */
+        pal[1] = c[3];                   /* inactive */
+        pal[2] = c[2];                   /* labels: the text */
+        pal[3] = c[5];                   /* secondary: mid */
+        pal[4] = c[4];                   /* values, curves: hi */
+        th_block = c[1];
+        th_block_hi = c[6];
+    } else {
+        palette_set(APP_PALETTE);
+        th_bg = 0u;
+        th_block = RGB(24, 24, 30);
+        th_block_hi = RGB(255, 184, 70);
+    }
+    th_pack = t != 0;
+    th_dirty = 1u;
+}
+
 /* the Slice Map as the pack says (PS-004): a role set by hand wins over the one heard */
 static void slot_roles(uint32_t i, const brk_break_t *b)
 {
@@ -952,6 +987,7 @@ static const brk_break_t *break_load(uint32_t i)
         wave_build(b);
     mc_auto_roles(b, roles_now);         /* the Slice Map: the kicks, snares, hats and the rest, heard */
     slot_roles(i, b);
+    theme_apply(i < n_user);             /* the pack's colours while its breaks play (Q1: a built-in break, amber) */
     brk_roles(roles_now, BRK_MAX_SLICES);
     brk_pitch((float)(set.pitch + slot_pitch));
     brk_swing((float)(slot_swing ? slot_swing : set.swing) * 0.01f);

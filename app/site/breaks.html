@@ -1378,13 +1378,13 @@ window.dispatchEvent(new Event("chpk-ready"));
 /* ------------------------------------------------- the pack's details, its file (.chpk) and the hub (PRD_PACKS) */
 const HUB = "https://choppah.app";
 const onHub = location.origin === HUB;
-const THEMES = {
-  AMBER: { bg: "#0e0d0b", panel: "#18181e", text: "#ede6d4", dim: "#6b6353", hi: "#ffb846", mid: "#a36a1e", wave: "#ffb21a", warn: "#ff6848" },
-  ICE: { bg: "#070b10", panel: "#101823", text: "#e2f1ff", dim: "#5d7286", hi: "#7fd6ff", mid: "#2f6f99", wave: "#9ee4ff", warn: "#ff6b6b" },
-  ACID: { bg: "#080a05", panel: "#141a0c", text: "#efffd6", dim: "#6b7a52", hi: "#c6ff2e", mid: "#6f9a12", wave: "#a8ff3e", warn: "#ff5f3a" },
-  DIP: { bg: "#0d0712", panel: "#1b1024", text: "#ffe9fb", dim: "#7d5f86", hi: "#ff5fd2", mid: "#8d3aa8", wave: "#ffd166", warn: "#ff5a5a" },
-  TERMINAL: { bg: "#000000", panel: "#0b120b", text: "#c8ffc8", dim: "#3f6b3f", hi: "#39ff14", mid: "#1f8a1f", wave: "#39ff14", warn: "#ff3b30" },
-  PAPER: { bg: "#f1ece0", panel: "#e2dccd", text: "#1b1915", dim: "#7b7466", hi: "#d2461e", mid: "#8a6a3a", wave: "#1b1915", warn: "#c0262d" },
+const THEMES = {                         /* as the FM-1 draws them: the ground, the blocks, the labels, then the hues */
+  AMBER: { bg: "#000000", panel: "#18181e", text: "#96969e", dim: "#4a4a52", hi: "#ffb846", mid: "#e8881e", wave: "#ffb846", warn: "#ff6848" },
+  ICE: { bg: "#05080c", panel: "#121a24", text: "#9aa6b4", dim: "#46505c", hi: "#8fe0ff", mid: "#3c9ed2", wave: "#8fe0ff", warn: "#ff6b6b" },
+  ACID: { bg: "#050703", panel: "#141c0c", text: "#9cab8a", dim: "#48523a", hi: "#c8ff32", mid: "#78b414", wave: "#c8ff32", warn: "#ff5f3a" },
+  DIP: { bg: "#0a0510", panel: "#1e1028", text: "#b49cbe", dim: "#5a4664", hi: "#ff64d2", mid: "#a03cc8", wave: "#ffd166", warn: "#ff5a5a" },
+  TERMINAL: { bg: "#000000", panel: "#0a140a", text: "#78b478", dim: "#2f552f", hi: "#50ff50", mid: "#1e8c1e", wave: "#50ff50", warn: "#ff3b30" },
+  MONO: { bg: "#000000", panel: "#1a1a1e", text: "#a0a0a8", dim: "#4a4a52", hi: "#f0f0f4", mid: "#c4c4ca", wave: "#f0f0f4", warn: "#ff6848" },
 };
 const THEME_KEYS = ["bg", "panel", "text", "dim", "hi", "mid", "wave", "warn"];
 let meta = null;                         /* {id, name, author, description, tags[], theme{}, thumb: Uint8Array|null, created} */

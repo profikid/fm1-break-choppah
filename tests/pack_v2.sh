@@ -3,7 +3,7 @@
 # Packs v2 (docs/PRD_PACKS.md P1) in the host simulator: GETSET reads the scenes back; a v2 pack (app/site/chpk.js
 # deviceBanks, as the builder sends it to CHOPPAH 1.7) brings its own scenes (scene A's phrase changed), each break's
 # settings (a 1/2-bar window from step 8, -6 dB, +3 semitones, swing 62, the first four slices kicks; the second break's
-# tempo over its slot's; the window holds 5 of THINK's 16 slices, 4 times: 20) and an overlay in bank 2 alone; they hold through a reboot, and deleting the pack brings the
+# tempo over its slot's; its theme while its breaks play; the window holds 5 of THINK's 16 slices, 4 times: 20) and an overlay in bank 2 alone; they hold through a reboot, and deleting the pack brings the
 # factory scenes back. Needs ./build.sh --host first.
 #   tests/pack_v2.sh
 set -e
@@ -49,7 +49,7 @@ if (new DataView(scenes.buffer).getUint32(0, true) !== 0x3553434D) throw new Err
 const bars0 = scenes[4 + 96]; scenes[4 + 96] = bars0 === 8 ? 4 : 8;
 writeFileSync(`${o}/sc0.txt`, String(scenes[4 + 96]));
 const bk = P.readBank(new Uint8Array(readFileSync(`${o}/v1.bin`)));
-const meta = { id: P.uuid(), name: "V2 TEST", author: "CI", slots: [
+const meta = { id: P.uuid(), name: "V2 TEST", author: "CI", theme: { bg: "#101820", hi: "#33ffcc" }, slots: [
   { loop_steps: 8, loop_start: 8, gain_db: -6, pitch: 3, swing: 62, roles: "KKKK" }, { bpm: 150 }] };
 const ov = { rate: 11025, len: 30000, bpm: 113.78, bars: 4, data: P.adpcmEncode(new Float32Array(30000)) };
 const [b1, b2] = P.deviceBanks(bk.slots, 2, meta, { scenes, overlay: ov });
@@ -78,6 +78,8 @@ expect nslices 20
 expect slot_pitch 3
 expect slot_swing 62
 expect role0 1
+expect pal_hi 14329
+expect th_bg 4292
 turn ALGO 1
 wait 300
 expect brk 1
@@ -91,6 +93,12 @@ wait 300
 expect pk_tag 1
 expect sc0_bars $SC0
 expect tile 8
+expect pal_hi 14329
+turn ALGO 2
+wait 300
+expect brk 2
+expect pal_hi 64968
+expect th_bg 0
 sysex F0 7D 43 48 06 F7
 wait 300
 expect n_user 0
@@ -100,4 +108,4 @@ S
 } > "$O/s2.txt"
 $H "$O/s2.txt" app/build/scenarios > "$O/run2.log" 2>&1 || { grep -E "FAIL|host:" "$O/run2.log"; exit 1; }
 grep -q "EXPECTATIONS FAILED" "$O/run2.log" && { grep FAIL "$O/run2.log"; exit 1; }
-echo "pack_v2: GETSET read the scenes; a v2 pack's scenes (scene A $SC0 bars), a 1/2-bar window, -6 dB, +3, swing 62, kicks set by hand, a tempo over the slot's and an overlay alone in bank 2 read; kept at power-on; deleted: the factory's again"
+echo "pack_v2: GETSET read the scenes; a v2 pack's scenes (scene A $SC0 bars), a 1/2-bar window, -6 dB, +3, swing 62, kicks set by hand, a tempo over the slot's and an overlay alone in bank 2 read, the pack's colours (amber again on a built-in break); kept at power-on; deleted: the factory's again"
