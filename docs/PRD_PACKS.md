@@ -358,6 +358,9 @@ sendBank rules), vendored into the hub with chpk.js.
 | PH-042 | **One plays at a time**: starting a slicer stops any other | P0 | *Done* |
 | PH-043 | Select samples (several) → **New pack** from them, or **Add to** one of your packs; each becomes a break as the builder makes it (`breakcut.js` = breaks.html's level, slices, warp: tests/breakcut.test.mjs) | P0 | *Done* |
 | PH-044 | Every pack of yours shows its **room on the FM-1**: the bytes of its banks (as 1.7 gets them, `installImages`) of the two banks' 344 KB, and its breaks of 16; adding refuses what doesn't fit, before anything is made | P0 | *Done (`packs.flash_used`)* |
+| PH-046 | The pack maker **destems** (D1): a sample's break can be cut from the **drums alone** (the slicer's *Drums only*, the edit's `drums`: beats.js `stems` on its bars and half a second around them, at the break's rate), or every break of a new pack (*All from the drums only*) | P0 | *Done (24 Nov 2026); tests/breakcut.test.mjs, choppah-hub test/library_ui.mjs* |
+| PH-047 | The pack maker makes the pack's **overlay** (§7) from a sample: from bar *n* of its bar grid, 4 / 8 / 16 bars, the rest without its drums (the stems) or the whole mix, its seam crossfaded, levelled as the breaks, at the best of 22.05 / 16 / 11.025 kHz that fits beside the breaks (`breakcut.js makeOverlay`, the builder's step 2); heard first as the FM-1 plays it (ADPCM). Adding to a pack keeps its overlay unless a new one is chosen, and its chain and keys | P0 | *Done* |
+| PH-048 | A break slower than ~99.4 BPM keeps the rate that fits `CH_PCM_MAX` (`breakRate`, e.g. 22013 Hz at 99 BPM): chpk.js reads a break at any rate of 8000–22050 Hz (it refused all but 11025 / 16000 / 22050, while the FM-1 plays a slot at any rate) | P0 | *Done; tests/breakcut.test.mjs* |
 | PH-045 | One header on every page of choppah.app (the site's pages too: the hub's navigation and the account link); the front page is a Three.js presentation: an FM-1 running CHOPPAH, turning | P1 | *Done* |
 
 ### 10.9 The MATHCORE editor, scene sets, and samples in packs (24 Nov 2026)
@@ -388,11 +391,15 @@ token made on the Account page. Tools:
 | Area | Tools |
 | --- | --- |
 | MATHCORE | read the scenes of a pack, a set or the factory's (readable: letters, names, patterns `X..x`); edit a scene (name, bars, run on, once) and its lanes (every field); set the chain and the black keys; scene sets: list, create (from the factory's, a set or a pack), rename, delete; put a set's scenes into a pack of yours |
-| Packs | list yours, search the public ones, read one (breaks, room, settings); change its name, description, tags, theme; each break's settings (loop, start, pitch, gain, swing, roles); reorder and remove breaks; publish, unpublish, allow downloads; delete; make a pack from samples, add samples to a pack |
-| Samples | list (with their edits and packs), read one, rename, tag, star, change how its break is cut (tempo, start, bars, offset, hits or grid, level, warp, slices by hand), reset, delete |
+| Packs | list yours, search the public ones, read one (breaks, room, settings, the overlay); change its name, description, tags, theme (the builder's presets), its picture (drawn from the theme and the breaks as the builder does, and drawn again when they change; an image of yours; none); each break's name and settings (loop, start, pitch, gain, swing, roles); reorder and remove breaks (their samples kept); the overlay from a sample (the rest or the mix, 4 / 8 / 16 bars), or none; publish, unpublish, allow downloads; delete; copy ("save as"); import a `.chpk` or `.chb` (a link or bytes); make a pack from samples or add samples to one, the breaks from the drums alone if asked and an overlay with them; rate, report, star a pack or a break, the starred ones |
+| Samples | upload (a link or bytes; a WAV is listened to on the server at once: tempo, a track's first bar and best loop, the peaks, as the library does), list (with their edits and packs), rename, tag, star, change how its break is cut (the drums alone, tempo, start, bars, offset, hits or grid, level, warp, slices by hand), reset, delete |
 
-The tools act on the hub; the FM-1 follows through an editor open and connected (PH-062). A sample's break is made
-on the server only from WAV (the browser makes it from anything it decodes).
+The tools do what the hub's pages do (24 Nov 2026: parity, choppah-hub test/e2e.mjs), except what needs the browser:
+installing on an FM-1 (Web MIDI: the tools give the pack's page) and the MATHCORE editor live on one (PH-060), and
+the account (sign-in, passkeys, email, tokens, deleting it: a token can't). The FM-1 follows through an editor open
+and connected (PH-062). A sample's break, overlay and listening are made on the server only from WAV (the browser
+makes them from anything it decodes). The destemming runs on the server for the tools (beats.js `stems`, about a
+second a break, a few for a 16-bar overlay).
 
 ### 10.5 API (sketch)
 
