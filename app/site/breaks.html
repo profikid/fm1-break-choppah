@@ -167,12 +167,14 @@ computer.</p>
       <ol class="plist" id="trackLoops" aria-label="Loops found in the track"></ol>
       <div id="splitBox" class="hidden">
         <h3 class="hubh" id="spTitle">The loop, split in two</h3>
-        <p class="hint">The same bars, two stems: the <b>drums</b> are chopped into a break (its first two bars, sixteen
-        slices), the <b>rest</b> (bass, chords, vocals: what the drums aren't) becomes the pack's overlay, up to eight bars,
-        which CHOPPAH 1.7 plays under every break of the pack, on the bars, with its own fader.</p>
+        <p class="hint">The same bars, two stems: the <b>rest</b> (bass, chords, vocals: what the drums aren't) becomes
+        the pack's overlay, one long loop CHOPPAH 1.7 plays under every break of the pack, on the bars, with its own fader;
+        the <b>drums</b> of those bars are listened to two bars at a time and each different loop is chopped into a break
+        (sixteen slices) to play over it. How long the overlay can be is the FM-1's flash: about 16 bars at 170 BPM in
+        22 kHz, 22 in 16 kHz, 32 in 11 kHz, less with more breaks beside it (the line under the rest says what fits).</p>
         <div class="row">
           <label class="f">From bar<select id="spFrom"></select></label>
-          <label class="f">Bars<select id="spBars"><option>1</option><option>2</option><option>4</option><option selected>8</option></select></label>
+          <label class="f">Bars<select id="spBars"><option>1</option><option>2</option><option>4</option><option selected>8</option><option>12</option><option>16</option><option>24</option><option>32</option></select></label>
           <button id="spBoth" class="go">Hear both</button><button id="spStop">Stop</button>
         </div>
         <div class="stem"><div class="row"><b>Drums</b><span class="state" id="spDrumsFacts"></span><button id="spHearD">Hear</button></div>
@@ -180,8 +182,8 @@ computer.</p>
         <div class="stem"><div class="row"><b>The rest</b><span class="state" id="spRestFacts"></span><button id="spHearR">Hear</button></div>
           <div class="wave"><canvas id="spRest" width="1100" height="90" aria-label="The rest of the loop: the overlay, its bars"></canvas></div></div>
         <div class="row">
-          <button id="spMake" class="go">The drums to the pack, the rest as its overlay</button>
-          <button id="spDrumsOnly">Only the drums</button><button id="spRestOnly">Only the overlay</button>
+          <button id="spMake" class="go">The rest as the overlay, its drum loops as breaks</button>
+          <button id="spDrumsOnly">Only the drum loops</button><button id="spRestOnly">Only the overlay</button>
           <span class="state" id="spState" role="status"></span>
         </div>
       </div>
@@ -266,7 +268,7 @@ computer.</p>
   </div>
   <div id="ovBox">
     <h3 class="hubh">The overlay: a loop under the breaks</h3>
-    <p class="hint">Up to eight bars that CHOPPAH 1.7 plays under every break of the pack, on the bars, with the tempo,
+    <p class="hint">One loop, as many bars as the flash holds, that CHOPPAH 1.7 plays under every break of the pack, on the bars, with the tempo,
     HALF and the tape, and its own fader (MIXER). Here it plays under the previews of steps 2 and 3, in time, as on the FM-1.</p>
     <div class="row" id="ovNone"><span class="state">No overlay yet: split a loop of a track (step 2), or</span>
       <button id="ovFile">Use a file…</button></div>
@@ -1897,7 +1899,9 @@ window.addEventListener("pack-ready", () => setTimeout(contrastNote, 50));
  * become a break (its first two bars, chopped into sixteen slices), the rest the pack's overlay (up to eight bars).
  * The overlay plays under the players' previews (steps 2 and 3) as CHOPPAH plays it: each bar of the preview starts
  * its bar of the overlay (no drift), repitched with the tempo. */
-const OV_MAX_BARS = 8;
+const OV_MAX_BARS = 32, OV_BARS = [1, 2, 4, 8, 12, 16, 24, 32];   /* (its length: whole bars, as many as the flash holds) */
+const barChoices = (max, sel) => OV_BARS.filter((b) => b <= max).map((b) => `<option${b === sel ? " selected" : ""}>${b}</option>`).join("");
+const bestBars = (max, want) => OV_BARS.filter((b) => b <= Math.min(max, want)).pop() || 1;
 
 /* a waveform with its bars (and slices), part of it lit: [lo, hi) of 0..1, a playhead at at (0..1) */
 function waveBars(cv, x, bars, { slices = 0, lo = 0, hi = 1, at = -1 } = {}) {
@@ -1929,15 +1933,47 @@ function stemCut(sig, from, bars) {         /* bars of a stem from bar from, on 
 }
 function spCuts() {
   const from = +$("spFrom").value, bars = Math.min(OV_MAX_BARS, +$("spBars").value), brk = Math.min(2, bars);
-  return { from, bars, brk, drums: stemCut(spDrumSig(), from, brk), rest: stemCut(spRestSig(), from, bars) };
+  return { from, bars, brk, drums: stemCut(spDrumSig(), from, bars), rest: stemCut(spRestSig(), from, bars) };
+}
+/* the drums' loops in those bars: two bars at a time, each one that sounds different from those before (its hits'
+   loudness, step by step, against theirs) */
+function spLoops(c) {
+  const out = [], seen = [], sig = spDrumSig(), step = trackBarLen() / 16;
+  for (let b = 0; b + c.brk <= c.bars; b += c.brk) {
+    const t0 = track.bars[c.from] + b * trackBarLen();
+    if (t0 + c.brk * trackBarLen() > sig.length / track.rate + 0.02) break;
+    const env = [];
+    for (let k = 0; k < c.brk * 16; k++) {
+      const i0 = Math.round((t0 + k * step) * track.rate), i1 = Math.round((t0 + (k + 1) * step) * track.rate);
+      let e = 0; for (let i = i0; i < i1 && i < sig.length; i++) e += sig[i] * sig[i];
+      env.push(Math.sqrt(e / Math.max(1, i1 - i0)));
+    }
+    const norm = Math.hypot(...env) || 1, v = env.map((e) => e / norm);
+    if (seen.some((u) => u.reduce((a, x, k) => a + x * v[k], 0) > 0.97)) continue;
+    seen.push(v); out.push({ bar: c.from + b, x: BEATS.seamless(sig, track.rate, t0, t0 + c.brk * trackBarLen()) });
+  }
+  return out;
+}
+/* the overlay's rate that fits beside the pack's breaks and `room` more of len each: -> {rate, len} or null */
+function ovFit(n, rate, extra = []) {
+  const lens = [...pack.map((e) => lenAt(e, quality)), ...extra], caps = dev ? dev.caps : CAPS;
+  for (const r of [22050, 16000, 11025].filter((r) => r <= Math.max(rate, 11025))) {
+    const len = Math.round(n * r / rate);
+    if (len <= CHPK.OVLY_MAX_LEN && CHPK.packLayout(lens, caps, 16 + ((len + 1) >> 1))) return { rate: r, len };
+  }
+  return null;
 }
 function spDraw() {
   try {
     const c = spCuts();
-    waveBars($("spDrums"), c.drums, c.brk, { slices: 16 });
+    waveBars($("spDrums"), c.drums, c.bars);
     waveBars($("spRest"), c.rest, c.bars);
-    $("spDrumsFacts").textContent = `${c.brk} bar${c.brk > 1 ? "s" : ""} → a break of 16 slices${track.drums ? "" : " (no stems: the whole mix)"}`;
-    $("spRestFacts").textContent = `${c.bars} bar${c.bars > 1 ? "s" : ""} → the overlay${track.rest ? "" : " (no stems: the whole mix)"}`;
+    const loops = spLoops(c), brkLen = Math.round(c.brk * trackBarLen() * Math.min(quality, track.rate));
+    const fit = window.CHPK && ovFit(c.rest.length, track.rate, loops.map(() => brkLen)), fit1 = window.CHPK && ovFit(c.rest.length, track.rate);
+    $("spDrumsFacts").textContent = `${c.bars} bar${c.bars > 1 ? "s" : ""}: ${loops.length} different ${c.brk}-bar loop${loops.length > 1 ? "s" : ""} → ${loops.length > 1 ? "breaks" : "a break"} of 16 slices (bars ${loops.map((l) => l.bar + 1).join(", ")})${track.drums ? "" : " (no stems: the whole mix)"}`;
+    $("spRestFacts").innerHTML = `${c.bars} bar${c.bars > 1 ? "s" : ""} → the overlay${track.rest ? "" : " (no stems: the whole mix)"}: ` +
+      (fit ? `fits with all its loops, at ${(fit.rate / 1000).toFixed(2)} kHz` : fit1 ? `fits at ${(fit1.rate / 1000).toFixed(2)} kHz, with fewer of its loops beside it`
+        : `<span class="bad">too long for the FM-1 beside this pack: fewer bars</span>`);
     say($("spState"), "");
   } catch (e) { say($("spState"), e.message, true); }
 }
@@ -1951,10 +1987,10 @@ function spOpen(w, i) {
   spDraw();
   $("splitBox").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
-function spRoom(want) {                     /* only the lengths the track still has from that bar */
-  const room = track.bars.length - +$("spFrom").value;
+function spRoom(want) {                     /* only the lengths the track still has from that bar (at the tempo set) */
+  const room = Math.floor((spRestSig().length / track.rate - track.bars[+$("spFrom").value]) / trackBarLen() + 0.02);
   for (const o of $("spBars").options) o.disabled = +o.value > room;
-  $("spBars").value = String([8, 4, 2, 1].find((b) => b <= Math.min(room, want)) || 1);
+  $("spBars").value = String(bestBars(room, want));
 }
 $("spFrom").onchange = () => { spRoom(+$("spBars").value); spDraw(); }; $("spBars").onchange = spDraw;
 $("spHearD").onclick = () => { try { const c = spCuts(); hearLoop(c.drums, track.rate); } catch (e) { say($("spState"), e.message, true); } };
@@ -1963,7 +1999,7 @@ $("spBoth").onclick = () => {                /* the drums' bars looped over the 
   try {
     const c = spCuts(); hearStop();
     const a = audio(); a.resume();
-    const t = a.currentTime + 0.05, nodes = [c.drums, c.rest].map((x) => {
+    const t = a.currentTime + 0.05, nodes = [c.drums.subarray(0, Math.round(c.brk * trackBarLen() * track.rate)), c.rest].map((x) => {
       const b = a.createBuffer(1, x.length, track.rate); b.copyToChannel(x, 0);
       const s = a.createBufferSource(); s.buffer = b; s.loop = true; s.connect(a.destination); s.start(t); return s;
     });
@@ -1971,25 +2007,34 @@ $("spBoth").onclick = () => {                /* the drums' bars looped over the 
   } catch (e) { say($("spState"), e.message, true); }
 };
 $("spStop").onclick = hearStop;
-async function spDrumsIn(c, bpm) {          /* the drums: a break in the editor, then in the pack */
-  src = { x: c.drums, rate: track.rate, dur: c.drums.length / track.rate };
-  $("name").value = ((meta && meta.name ? meta.name : "CUT").slice(0, 6) + " " + (+$("spFrom").value + 1)).slice(0, 11);
-  setBars(c.brk); fillStart(); $("bpm").value = bpm.toFixed(2);
-  $("edit").classList.remove("hidden");
-  await make();
-  $("add").click();
+async function spDrumsIn(c, bpm, loops = spLoops(c)) {   /* the drum loops: each a break, made in the editor, into the pack while it fits */
+  let n = 0;
+  for (const l of loops) {
+    src = { x: l.x, rate: track.rate, dur: l.x.length / track.rate };
+    $("name").value = ((meta && meta.name ? meta.name : "CUT").slice(0, 6) + " " + (l.bar + 1)).slice(0, 11);
+    setBars(c.brk); fillStart(); $("bpm").value = bpm.toFixed(2);
+    $("edit").classList.remove("hidden");
+    await make();
+    const lens = [...pack.map((e) => lenAt(e, quality)), lenAt({ rate: made.rate, len: made.pcm.length }, quality)];
+    if (pack.length >= 16 || !CHPK.packLayout(lens, dev ? dev.caps : CAPS, CHPK.overlayBytes(meta.overlay))) break;
+    $("add").click(); n++;
+  }
+  return n;
 }
 $("spMake").onclick = async () => {
   try {
     const c = spCuts(), bpm = +$("trackBpm").value || track.bpm;
     hearStop();
-    await spDrumsIn(c, bpm);
-    await overlayFrom(c.rest, track.rate, c.bars, bpm);
-    say($("spState"), `In the pack: the drums as a break, the rest as the overlay (${c.bars} bars). Play the break in step 3 to hear them together.`);
+    const loops = spLoops(c), brkLen = Math.round(c.brk * trackBarLen() * Math.min(quality, track.rate));
+    let want = loops.length;                 /* the overlay at the best rate that still leaves room for its loops (at least one) */
+    while (want > 1 && !ovFit(c.rest.length, track.rate, Array(want).fill(brkLen))) want--;
+    await overlayFrom(c.rest, track.rate, c.bars, bpm, { extra: Array(want).fill(brkLen) });
+    const n = await spDrumsIn(c, bpm, loops);
+    say($("spState"), `In the pack: the overlay (${c.bars} bars at ${(meta.overlay.rate / 1000).toFixed(2)} kHz) and ${n} of its ${loops.length} drum loop${loops.length > 1 ? "s" : ""} as breaks${n < loops.length ? " (the rest didn't fit: fewer bars, or a lower quality in step 3)" : ""}. Play a break in step 3 to hear the overlay under it.`);
   } catch (e) { say($("spState"), e.message, true); }
 };
 $("spDrumsOnly").onclick = async () => {
-  try { const c = spCuts(); hearStop(); await spDrumsIn(c, +$("trackBpm").value || track.bpm); say($("spState"), "The drums are in the pack."); }
+  try { const c = spCuts(); hearStop(); const n = await spDrumsIn(c, +$("trackBpm").value || track.bpm); say($("spState"), `${n} drum loop${n === 1 ? " is" : "s are"} in the pack.`); }
   catch (e) { say($("spState"), e.message, true); }
 };
 $("spRestOnly").onclick = async () => {
@@ -1998,17 +2043,12 @@ $("spRestOnly").onclick = async () => {
 };
 
 /* audio x (at rate) -> the pack's overlay: levelled, at the best rate that still fits beside the breaks */
-async function overlayFrom(x, rate, bars, bpm, { keepLevel = false } = {}) {
+async function overlayFrom(x, rate, bars, bpm, { keepLevel = false, extra = [] } = {}) {
   if (!window.CHPK) throw new Error("the page is still loading");
   if (bars < 1 || bars > OV_MAX_BARS) throw new Error(`an overlay is 1 to ${OV_MAX_BARS} bars`);
   if (!keepLevel) x = level(x, rate);
-  const lens = pack.map((e) => lenAt(e, quality)), caps = dev ? dev.caps : CAPS;
-  let pick = null;
-  for (const r of [22050, 16000, 11025].filter((r) => r <= Math.max(rate, 11025))) {
-    const len = Math.round(x.length * r / rate);
-    if (CHPK.packLayout(lens, caps, 16 + ((len + 1) >> 1))) { pick = { rate: r, len }; break; }
-  }
-  if (!pick) throw new Error("no room beside these breaks: take a break out, or make the overlay shorter");
+  const pick = ovFit(x.length, rate, extra) || ovFit(x.length, rate);
+  if (!pick) throw new Error("too long for the FM-1 beside these breaks: fewer bars, or take a break out");
   if (pick.rate !== rate) {
     const oc = new OfflineAudioContext(1, pick.len, pick.rate), ab = oc.createBuffer(1, x.length, rate);
     ab.copyToChannel(x, 0); const n = oc.createBufferSource(); n.buffer = ab; n.connect(oc.destination); n.start();
@@ -2033,10 +2073,10 @@ function ovLoad() {                          /* the pack's overlay into the edit
   if (!o) { OV.base = OV.pcm = OV.buf = null; ovQuiet(); ovSoloStop(); return; }
   if (OV.base && OV.base.data === o.data) return;
   OV.base = { data: o.data, pcm: CHPK.adpcmDecode(o.data, o.len), rate: o.rate, bars: o.bars, bpm: o.bpm };
-  const opts = (m) => [1, 2, 4, 8].filter((b) => b <= m).map((b) => `<option>${b}</option>`).join("");
   $("ovEFrom").innerHTML = [...Array(o.bars).keys()].map((b) => `<option value="${b}">${b + 1}</option>`).join("");
-  $("ovEFrom").value = "0"; $("ovELen").innerHTML = opts(Math.min(OV_MAX_BARS, o.bars));
-  $("ovELen").value = String([8, 4, 2, 1].find((b) => b <= o.bars) || 1);
+  $("ovEFrom").value = "0";
+  $("ovELen").innerHTML = barChoices(o.bars, 0) + (OV_BARS.includes(o.bars) ? "" : `<option>${o.bars}</option>`);
+  $("ovELen").value = String(o.bars);
   $("ovEShift").value = "0"; $("ovEGain").value = "0"; $("ovESeam").value = "0";
   ovBuild(false);
 }
@@ -2130,8 +2170,8 @@ $("ovUnder").onchange = (e) => { if (!e.target.checked) { ovQuiet(); } };
 for (const id of ["ovEFrom", "ovELen", "ovEShift", "ovEGain", "ovESeam"]) $(id).addEventListener("change", () => {
   if (id === "ovEFrom") {                    /* the bars left from there */
     const m = Math.min(OV_MAX_BARS, OV.base.bars - +$("ovEFrom").value), was = +$("ovELen").value;
-    $("ovELen").innerHTML = [1, 2, 4, 8].filter((b) => b <= m).map((b) => `<option>${b}</option>`).join("");
-    $("ovELen").value = String([8, 4, 2, 1].find((b) => b <= Math.min(m, was)) || 1);
+    $("ovELen").innerHTML = barChoices(m, 0) + (OV_BARS.includes(m) ? "" : `<option>${m}</option>`);
+    $("ovELen").value = String(OV_BARS.includes(Math.min(m, was)) || Math.min(m, was) === m ? Math.min(m, was) : bestBars(m, was));
   }
   ovBuild();
 });
@@ -2157,11 +2197,12 @@ async function ovFromFile(f) {
     const n = ab.length, x = new Float32Array(n);
     for (let c = 0; c < ab.numberOfChannels; c++) { const d = ab.getChannelData(c); for (let i = 0; i < n; i++) x[i] += d[i] / ab.numberOfChannels; }
     const guess = pack.length ? pack[0].bpm : 170;
-    const bpm = +prompt("Its tempo (BPM)? It is cut to whole bars at this tempo, up to eight.", guess.toFixed(2));
+    const bpm = +prompt("Its tempo (BPM)? It is cut to whole bars at this tempo (as many as fit the FM-1, up to 32).", guess.toFixed(2));
     if (!(bpm >= 40 && bpm <= 300)) return;
     const barS = 240 / bpm, held = Math.floor(n / ab.sampleRate / barS + 0.05);
     if (held < 1) throw new Error("shorter than a bar at that tempo");
-    const bars = [8, 4, 2, 1].find((b) => b <= held);
+    let bars = bestBars(held, OV_MAX_BARS);
+    while (bars > 1 && !ovFit(Math.round(bars * barS * ab.sampleRate), ab.sampleRate)) bars = bestBars(bars - 1, bars - 1);
     const cut = BEATS.seamless(x, ab.sampleRate, 0, Math.min(n / ab.sampleRate, bars * barS));
     await overlayFrom(cut, ab.sampleRate, bars, bpm);
     say($("ovState"), `The overlay is ${f.name}: ${bars} bars at ${bpm.toFixed(2)} BPM.`);

@@ -85,14 +85,14 @@ export function bankSize(lens) {
 }
 /* the overlay's bytes in flash (OVLY: its 16-byte header and its ADPCM), kept at the end of bank 2 (PRD_PACKS 7) */
 export const overlayBytes = (ov) => ov ? 16 + ((ov.len + 1) >> 1) : 0;
+/* the overlay's most samples: the FM-1 marks where decoding may start every 4096 (brk.c OV_NCK × OV_CK) */
+export const OVLY_MAX_LEN = 160 * 4096;
 /* the pack over the FM-1's two banks: [breaks in bank 1, in bank 2], or null when it doesn't fit; reserve: bytes the
-   overlay takes, from bank 2 first, the rest from bank 1 */
+   overlay takes, all in one bank (deviceBanks): bank 2 when the breaks leave it room there, else bank 1 */
 export function packLayout(lens, caps = BANK_CAPS, reserve = 0) {
   if (reserve) {
-    caps = caps.slice();
-    const r2 = Math.min(reserve, caps[1] || 0);
-    caps[1] = (caps[1] || 0) - r2; caps[0] -= reserve - r2;
-    if (caps[0] < 0) return null;
+    const in2 = caps.length > 1 && reserve <= caps[1] ? packLayout(lens, [caps[0], caps[1] - reserve]) : null;
+    return in2 || (reserve <= caps[0] ? packLayout(lens, [caps[0] - reserve, ...caps.slice(1)]) : null);
   }
   for (let k = Math.min(lens.length, MAX_SLOTS); k >= 0; k--) {
     const a = lens.slice(0, k), b = lens.slice(k);
