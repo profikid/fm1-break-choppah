@@ -503,8 +503,18 @@ Demonstrate the following without a computer:
 | M7 Persistence | Done. SAVE writes the two objects only when they changed; checked on load (magic, ranges) |
 | M8 Hardening | Partly: engine tests (159 checks), host scenario `tests/scenarios/mathcore.txt`, manual, control map. Not yet: device acceptance (§11.3), the one-hour soak, a release |
 
-Not built: hold a black key to preview its scene (P1), per-event pitch / reverse locks (per lane only), scene names
-and colours (letters A–P), lanes of more than four.
+Not built: hold a black key to preview its scene (P1), per-event pitch / reverse locks (per lane only), scene
+colours (letters A–P), lanes of more than four.
+
+**Scene names** (1.7): a scene's name is a byte, an index into `MC_NAME` (app.c) and `NAMES` (app/site/mathcore.js,
+held equal by tests/mathcore.test.mjs), so OBJ_MC and a pack's SCNE keep their size and magic. The list only grows at
+the end, never reordered: 1–16 are the factory's, 17–53 added in 1.7 for the polyrhythms and more (HEMIOLA, POLY 3/2,
+4/3, 5/4, 7/4, 5/3, 7/8, AMEN 3/5, PRIME MATH, PHASE DRIFT, GHOST ROLLS, SHUFFLE VS 16, 3/4 IN 4/4, 6/8 STEPPER, AMEN IN
+5S, HALFTIME 7, TRIPLET HATS, JUNGLE, TWO STEP, HALFTIME, DOUBLE TIME, SHUFFLE, GHOST NOTES, BREAKBEAT, BROKEN BEAT, FOUR
+TO FLOOR, MINIMAL, STUTTER, GLITCH, REVERSE, CUT UP, HAT ROLL, KICK FILL, SNARE FILL, BUILD, INTRO, OUTRO). At most 14
+letters (LIVE's name line). An older CHOPPAH shows a name it doesn't know as blank (the scene plays the same). The names
+with numbers have their words in app/words.tsv. Names are picked on choppah.app (the MATHCORE editor, the MCP tools),
+not on the FM-1.
 
 ### 14.1 The controls as built (§7.2 reconciled with the panel)
 

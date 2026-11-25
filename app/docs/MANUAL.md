@@ -670,6 +670,11 @@ the others on a key: **L** STEPPER (half time), **M** DOUBLE, **N** 7/8 BOUNCE, 
 second half, so one launched late in a bar (it comes in on the next beat, where the bar is) still lands. A roll owns
 the break's voice until it's done: hats under it never cut it short. The macros are kept with SAVE.
 
+A scene's name is picked on choppah.app (the MATHCORE editor): besides the factory's sixteen there are polyrhythm
+names (HEMIOLA, POLY 3/2 to POLY 7/8, PRIME MATH, PHASE DRIFT, 3/4 IN 4/4 and more) and everyday ones (JUNGLE, TWO
+STEP, HALFTIME, BREAKBEAT, STUTTER, BUILD, INTRO, OUTRO and more). A CHOPPAH older than 1.7 shows the new names blank;
+the scene plays the same.
+
 ### The Slice Map, on HOME
 
 ![HOME: each slice block with what it was heard as: K kick, S snare, H hat, P the rest](img/screen-mc-roles.png "The Slice Map on HOME")

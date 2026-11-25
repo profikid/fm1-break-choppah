@@ -16,8 +16,14 @@ export const RATES = ["1/32", "1/16", "1/8", "1/4", "1/32T", "1/16T", "1/8T"], R
 export const MODES = ["FIXED", "ROUND", "RANDOM", "ALT", "ACCENT"];
 export const LF = { ON: 1, REV: 2, FREE: 4, SWELL: 8 };          /* a lane's flags */
 export const SF = { BREAK: 1, ONCE: 2 };                          /* a scene's: RUN ON (into the break), ONCE (a fill) */
-export const NAMES = ["", "ROLLER", "AMEN", "SNARE ROLLER", "SNARES", "MATH 5/7", "FILL", "TRIPLET ROLL", "SNARE RUSH",
-  "CHOP FILL", "RISER", "DROP", "STEPPER", "DOUBLE", "7/8 BOUNCE", "BREAKDOWN", "TRIPLET ROLLER"];
+/* app.c MC_NAME: a name is its index (append only) */
+export const NAMES = ["", "ROLLER", "AMEN", "SNARE ROLLER", "SNARES", "MATH 5/7", "FILL", "TRIPLET ROLL",
+  "SNARE RUSH", "CHOP FILL", "RISER", "DROP", "STEPPER", "DOUBLE", "7/8 BOUNCE", "BREAKDOWN", "TRIPLET ROLLER",
+  "HEMIOLA", "POLY 3/2", "POLY 4/3", "POLY 5/4", "POLY 7/4", "POLY 5/3", "POLY 7/8", "AMEN 3/5", "PRIME MATH",
+  "PHASE DRIFT", "GHOST ROLLS", "SHUFFLE VS 16", "3/4 IN 4/4", "6/8 STEPPER", "AMEN IN 5S", "HALFTIME 7",
+  "TRIPLET HATS", "JUNGLE", "TWO STEP", "HALFTIME", "DOUBLE TIME", "SHUFFLE", "GHOST NOTES", "BREAKBEAT",
+  "BROKEN BEAT", "FOUR TO FLOOR", "MINIMAL", "STUTTER", "GLITCH", "REVERSE", "CUT UP", "HAT ROLL", "KICK FILL",
+  "SNARE FILL", "BUILD", "INTRO", "OUTRO"];
 export const MATH_LEN = [[0, 0, 0, 0], [0, 0, 0, 12], [16, 0, 12, 10], [15, 0, 12, 7], [14, 16, 11, 7], [10, 14, 11, 13], [7, 12, 9, 5], [5, 7, 11, 13]];
 export const sceneLetter = (i) => String.fromCharCode(65 + i);
 

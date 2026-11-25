@@ -331,9 +331,17 @@ static void mc_lane_defaults(mc_lane_t *l, uint32_t role)
  * from the black keys. A lane is a string: x a hit, X an accented one, . none (its length the string's). They re-cut
  * the break on its own voice: the grooves run on into the break between their hits (MCS_BREAK), the fills, the riser
  * and the drop are dry chops; L..P are the grooves dry */
+/* a scene's name is its index here (mc_scene_t.name, a pack's SCNE): only ever append, never reorder; 17.. since
+ * 1.7, an older CHOPPAH shows them blank. At most 14 letters (LIVE's name line) */
 static const char *const MC_NAME[] = {"", "ROLLER", "AMEN", "SNARE ROLLER", "SNARES", "MATH 5/7", "FILL",
                                       "TRIPLET ROLL", "SNARE RUSH", "CHOP FILL", "RISER", "DROP", "STEPPER",
-                                      "DOUBLE", "7/8 BOUNCE", "BREAKDOWN", "TRIPLET ROLLER"};
+                                      "DOUBLE", "7/8 BOUNCE", "BREAKDOWN", "TRIPLET ROLLER", "HEMIOLA", "POLY 3/2",
+                                      "POLY 4/3", "POLY 5/4", "POLY 7/4", "POLY 5/3", "POLY 7/8", "AMEN 3/5",
+                                      "PRIME MATH", "PHASE DRIFT", "GHOST ROLLS", "SHUFFLE VS 16", "3/4 IN 4/4",
+                                      "6/8 STEPPER", "AMEN IN 5S", "HALFTIME 7", "TRIPLET HATS", "JUNGLE",
+                                      "TWO STEP", "HALFTIME", "DOUBLE TIME", "SHUFFLE", "GHOST NOTES", "BREAKBEAT",
+                                      "BROKEN BEAT", "FOUR TO FLOOR", "MINIMAL", "STUTTER", "GLITCH", "REVERSE",
+                                      "CUT UP", "HAT ROLL", "KICK FILL", "SNARE FILL", "BUILD", "INTRO", "OUTRO"};
 #define MC_NNAMES (sizeof MC_NAME / sizeof MC_NAME[0])
 typedef struct {
     uint8_t bars, flags;
