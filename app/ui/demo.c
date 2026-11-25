@@ -299,3 +299,153 @@ static void demo_leds(uint32_t now)
     plat_lights(b, k, (((1u << NB) - 1u) & ~(1u << B_PLAY)) | LED_PLAY_GREEN, kd & ~k, 1);
     plat_lights_mid(mid, km);
 }
+
+/* the pack arriving (PRD S-034): while the break manager or the hub writes a pack (app_sysex BEGIN, DATA, COMMIT), the
+ * demo's WORMHOLE rushes behind the pack's name and a bar of what has come, faster as it fills, the white keys filling
+ * with it; PACK LOADED when the last bank checks. BEGIN may carry {size, the pack's bytes in all, the bytes sent
+ * before this bank, the name (16)} (breaks.html and fm1link.js since 1.7.1); a page that sends the size alone gets the
+ * bank's own bar and "PACK". A touch while it comes hides it (and does nothing else: PLAY would stop the writes);
+ * once loaded a touch ends it and works as ever; nothing from the link for 5 s and it goes (the send died) */
+#define UP_IDLE_MS 5000u
+#define UP_DONE_MS 2500u
+#define UP_FRAME_MS 60u                  /* (a little slower than the demo's: the main loop also takes the frames) */
+static struct {
+    uint8_t on, done, hide, again;      /* again: a frame or a bank refused (the page sends it again) */
+    uint32_t t0, last, drawn, total, before, got;   /* the pack's bytes: in all, before this bank, come */
+    float run;                           /* the tunnel's beats, run on at the bar's pace */
+    char name[17];
+} up;
+
+static void up_end(void)
+{
+    if (!up.on)
+        return;
+    up.on = 0u;
+    lcd_fill(0, 0, 240, 240, C_BLACK);
+    ui.redraw = RG_ALL;
+}
+
+/* BEGIN: total and before the pack's bytes (0: this bank alone), name its 16 bytes (or none) */
+static void up_begin(uint32_t size, uint32_t total, uint32_t before, const uint8_t *name, uint32_t now)
+{
+    uint32_t i;
+    if (!before || up.done) {            /* a pack from its start */
+        up.hide = 0u;
+        up.done = 0u;
+        up.run = 16.0f;                  /* (the WORMHOLE's rings number from its beats: past the first 14) */
+        up.t0 = now;
+        up.name[0] = 0;
+    }
+    if (name) {
+        for (i = 0; i < 16u && name[i]; i++)
+            up.name[i] = name[i] >= 32u && name[i] < 127u ? (char)name[i] : '?';
+        up.name[i] = 0;
+        for (; i && up.name[i - 1u] == ' '; i--)
+            up.name[i - 1u] = 0;
+    }
+    if (!up.name[0])
+        text_cat(up.name, "PACK");
+    up.total = total > before ? total : before + size;
+    up.got = up.before = before;
+    up.last = now;
+    if (!up.on && !up.hide) {
+        up.on = 1u;
+        up.drawn = now - UP_FRAME_MS;
+        demo.t0 = now;                   /* (the WORMHOLE's own clock: the demo is off) */
+        lcd_fill(0, 0, 240, 240, C_BLACK);
+    }
+}
+static void up_data(uint32_t in_bank, uint32_t now)   /* DATA: this bank's bytes come so far */
+{
+    uint32_t got = up.before + in_bank;
+    up.again = 0u;
+    if (got > up.got)
+        up.got = got;
+    up.last = now;
+}
+static void up_commit(int ok, uint32_t size, uint32_t now)   /* COMMIT: the bank (size bytes) checked (ok) or not */
+{
+    up.again = (uint8_t)!ok;             /* (not: the page sends it again from BEGIN, or gives up: the 5 s) */
+    if (!ok)
+        return;
+    up_data(size, now);
+    if (up.got >= up.total) {
+        up.done = 1u;
+        up.got = up.total;
+    }
+}
+
+/* 1: the screen is the upload's this frame */
+static int up_frame(uint32_t now)
+{
+    float p;
+    int32_t top, w;
+    char t[8];
+    const char *hd;
+    if (!up.on)
+        return 0;
+    if (ui.touched) {                    /* receiving: hidden till the next pack, the touch nothing else (PLAY would stop
+                                          * the writes); loaded: gone, the touch does what it does */
+        up.hide = !up.done;
+        up_end();
+        if (up.hide)
+            ui.touched = 0u;
+        return up.hide;
+    }
+    if (now - up.last > (up.done ? UP_DONE_MS : UP_IDLE_MS)) {
+        up.hide = 0u;
+        up_end();
+        if (!up.done)
+            app_warn("PACK NOT LOADED", "SEND IT AGAIN");
+        return 0;
+    }
+    if (now - up.drawn < UP_FRAME_MS)
+        return 1;
+    p = up.total ? (float)up.got / (float)up.total : 0.0f;
+    up.run += (float)(now - up.drawn) * (up.done ? 0.008f : 0.0012f + 0.003f * p);
+    up.drawn = now;
+    demo.beat = up.run;
+    demo.frac = up.run - (float)(int32_t)up.run;
+    w = (int32_t)(196.0f * p);
+    pct_text(p, t);
+    hd = up.done ? "PACK LOADED" : up.again ? "TRYING AGAIN" : "RECEIVING PACK";
+    for (top = 0; top < 240; top += 60) {
+        const char *nm = up.name;
+        int32_t big = text2_w(&FONT_B, nm) <= 216;
+        cv_begin(240, 60, C_BLACK);
+        demo_wormhole(now, top);
+        cv_rect(12, 76 - top, 216, 92, C_BLACK);   /* the panel over the tunnel */
+        cv_frame(12, 76 - top, 216, 92, up.done ? C_WHITE : C_HI);
+        cv_text((240 - text_w(&FONT_T, hd)) / 2, 84 - top, &FONT_T, hd, up.done ? C_WHITE : C_AMB);
+        if (big)
+            cv_text2((240 - text2_w(&FONT_B, nm)) / 2, 100 - top, &FONT_B, nm, C_WHITE);
+        else
+            cv_text((240 - text_w(&FONT_B, nm)) / 2, 108 - top, &FONT_B, nm, C_WHITE);
+        cv_frame(20, 138 - top, 200, 12, C_HI);    /* the bar: what has come, its edge white */
+        cv_rect(22, 140 - top, w, 8, C_BLOCK_HI);
+        if (w > 2 && !up.done)
+            cv_rect(22 + w - 2, 140 - top, 2, 8, C_WHITE);
+        cv_text((240 - text_w(&FONT_XS, t)) / 2, 151 - top, &FONT_XS, t, C_GRAY);
+        cv_blit(0, (uint32_t)top);
+    }
+    return 1;
+}
+
+/* its lights: the white keys fill with the bar (the next one blinking), the buttons' comet; all of them on the beat
+ * once it's loaded */
+static void up_leds(uint32_t now)
+{
+    uint32_t t = now - up.t0, head = t / 70u % NB, b, k = 0u, km = 0u, i;
+    uint32_t n = up.total ? (uint32_t)(16.0f * (float)up.got / (float)up.total) : 0u;
+    b = 1u << PATH[head];
+    if (b & 1u << B_PLAY)
+        b = LED_PLAY_GREEN;
+    for (i = 0; i < 16u && i < n; i++)
+        k |= 1u << WK[i];
+    if (n < 16u && t / 150u % 2u)
+        km |= 1u << WK[n];
+    if (up.done && t / 200u % 2u)
+        k |= demo_keys(WK, 0u, 16u, 1u) | demo_keys(BK, 0u, 11u, 1u);
+    plat_lights(b, k, (((1u << NB) - 1u) & ~(1u << B_PLAY)) | LED_PLAY_GREEN, demo_keys(WK, 0u, 16u, 1u) & ~k, 1);
+    plat_lights_mid(0u, km);
+}

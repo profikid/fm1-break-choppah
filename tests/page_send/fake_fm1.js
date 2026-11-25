@@ -103,6 +103,8 @@
     if (F.playing && (cmd === 2 || cmd === 3 || cmd === 4 || cmd === 6)) return reply(c, 1);   /* writes only while stopped */
     if (cmd === 2 || cmd === 6) {
       st.cuSize = cmd === 2 ? rd32(u, 0) : 1; st.cuBank = k;
+      if (cmd === 2) (st.begins = st.begins || []).push({ k, size: rd32(u, 0), total: u.length >= 12 ? rd32(u, 4) : 0,   /* (1.7.1: */
+        before: u.length >= 12 ? rd32(u, 8) : 0, name: u.length >= 28 ? String.fromCharCode(...u.subarray(12, 28)).replace(/\0+$/, "") : null });   /* the upload screen's) */
       for (let i = 0; i < Math.ceil(st.cuSize / 4096); i++) flash[k].fill(0xFF, i * 4096, (i + 1) * 4096);
       if (cmd === 6) st.cuSize = 0;
       check(k);

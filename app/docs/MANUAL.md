@@ -149,8 +149,11 @@ computer:
 3. **Add it to the pack**, and make the next. **Add these to the pack** in the library adds every break the search
    shows (search "amen0", say, for Cyberworm's numbered ones). The pack lists them in the order the FM-1 will: rename
    one, move it up or down, hear it, take it out.
-4. **Connect** the FM-1 by USB, **stop** CHOPPAH, and **send the pack**. A full pack takes about half a minute; the FM-1
-   says RECEIVING A BREAK, then BREAK and the pack's first.
+4. **Connect** the FM-1 by USB, **stop** CHOPPAH, and **send the pack**. A full pack takes about half a minute. The FM-1
+   shows it arriving: RECEIVING PACK and the pack's name over a tunnel rushing at you, faster as the bar under the name
+   fills (the white keys fill with it), then PACK LOADED, and the slicer with the pack's first. Touching the FM-1
+   while it comes only hides the screen (the pack keeps coming; PLAY would stop it); if the send dies, it says PACK
+   NOT LOADED after a few seconds.
 
 The flash has **344 KB** for your breaks, in two banks (252 KB and 92 KB; the page lays the pack out over them and
 shows how full each is). A two-bar break takes about 5,300 KB ÷ its tempo at the pack's **quality**: at 22.05 kHz,

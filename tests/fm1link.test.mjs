@@ -64,6 +64,12 @@ for (const faults of [{ proto: 3, name: "CHOPPAH 1.7.0" },
   let last = 0;
   await link.install(imgs, (p) => { if (!faults.rebootAt) assert.ok(p >= last - 1e-9, "progress only goes up on a good link"); last = p; });
   assert.ok(same(F.flash[0], imgs[0]) && same(F.flash[1], imgs[1]), "both banks byte for byte " + JSON.stringify(faults));
+  {                                       /* BEGIN tells the upload screen the pack's name and where each bank is in it */
+    const bg = F.st.begins, tot = imgs[0].length + imgs[1].length;
+    assert.ok(bg && bg.length >= 2, "BEGIN seen");
+    assert.deepEqual(bg[0], { k: 0, size: imgs[0].length, total: tot, before: 0, name: "BIG PACK" });
+    assert.deepEqual(bg[bg.length - 1], { k: 1, size: imgs[1].length, total: tot, before: imgs[0].length, name: "BIG PACK" });
+  }
   st = await link.status();
   assert.equal(st.pack.id, big.meta.id); assert.equal(st.pack.name, "BIG PACK"); assert.equal(st.pack.author, big.meta.author.slice(0, 16));
   assert.equal(st.pack.theme.hi, "#00ffad", "the theme as the FM-1 keeps it (RGB565)");

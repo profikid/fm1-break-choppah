@@ -63,7 +63,8 @@ settings bytes reserved).
   `pk_at` refuses it, the page and `tools/cu_frames.py` nudge it out) (`PK_BASE`, `PK_SECT`, `pk_scan`: each bank
   checked whole), written over USB SysEx by the site's break manager (`app/site/breaks.html` -> site `breaks/`;
   `app_sysex` in ui/main.c: F0 7D 43 48 CMD 7-bit-packed DATA F7, the bank in CMD's bits 4-5; INFO version 2, 24
-  bytes, the first 12 as version 1); the pack comes first (`n_user`, `slot_of`: bank 1's, bank 2's, the built-in
+  bytes, the first 12 as version 1; BEGIN may also carry the pack's bytes, those before this bank and its name (16),
+  for the upload screen: `up_*` in ui/demo.c, PRD S-034, tests/pack_screen.sh); the pack comes first (`n_user`, `slot_of`: bank 1's, bank 2's, the built-in
   ones), its first always the break at power-on; a pack change sets the split's B back to 0. fm1-base's resource
   region can't hold it (it only takes the build's own payload). Tests: `tests/pack.sh` (both banks: order, play,
   reboot, read back, "AT" refused, delete), `tests/custom_break.sh` (a break of one, the 1.5 page's way),

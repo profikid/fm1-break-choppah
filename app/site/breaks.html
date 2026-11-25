@@ -1239,6 +1239,7 @@ $("send").onclick = async () => {
       : [L.k ? buildBank(bs.slice(0, L.k)) : null, L.m ? noAt(buildBank(bs.slice(L.k))) : null];
     const total = imgs.reduce((a, m) => a + (m ? m.length : 0), 0);
     let sent = 0, note = "";
+    const name = packNameOf(imgs.find((m) => m));
     onRetry = (t) => { note = ` · a frame lost on the way, sent again (${t})`; };
     for (let k = 0; k < dev.caps.length; k++) {
       const img = imgs[k], b = k << 4;
@@ -1250,7 +1251,7 @@ $("send").onclick = async () => {
         const p = (sent + off) / total;
         bar.style.width = (100 * p).toFixed(1) + "%";
         say(st, `Sending bank ${k + 1}${again ? ` again (try ${again})` : ""}… ${Math.round(100 * p)}%${note}`);
-      });
+      }, { total, before: sent, name });
       sent += img.length;
     }
     bar.style.width = "100%";
@@ -1267,15 +1268,38 @@ $("send").onclick = async () => {
 /* bank k written whole (img: the bank image) or emptied (null). The FM-1 checks the whole bank's CRC-32 when the header
    comes (COMMIT), so a bank either arrives exactly as sent or doesn't count: when it doesn't check, or the FM-1
    restarted on the way, the bank is sent again from BEGIN (which erases it), up to three times */
+/* BEGIN: the size, then (at) the pack's bytes in all, those before this bank and its name (16), for the FM-1's upload
+   screen (1.7.1; older firmware reads the size alone). As fm1link.js beginOf / packName */
+function beginOf(img, at) {
+  const d = u32(img.length);
+  if (!at) return d;
+  const nm = String(at.name || "").replace(/[^\x20-\x7E]/g, "?").slice(0, 16);
+  return [...d, ...u32(at.total || img.length), ...u32(at.before || 0), ...Array.from({ length: 16 }, (_, i) => (i < nm.length ? nm.charCodeAt(i) : 0))];
+}
+function packNameOf(img) {             /* a v2 bank's PACK name, else its first break's */
+  if (!img || img.length < 16 + 168) return "";
+  const v = new DataView(img.buffer, img.byteOffset, img.byteLength), n = v.getUint16(6, true), txt = (a, b) => {
+    let s = ""; for (let i = a; i < b && img[i]; i++) s += String.fromCharCode(img[i]); return s.trim(); };
+  if (v.getUint16(4, true) === 2) {
+    let at = 16 + 168 * n;
+    const nch = at + 4 <= img.length ? v.getUint32(at, true) : 0; at += 4;
+    for (let i = 0; i < nch && at + 8 <= img.length; i++) {
+      const len = v.getUint32(at + 4, true);
+      if (txt(at, at + 4) === "PACK" && at + 8 + 32 <= img.length) { const nm = txt(at + 24, at + 40); if (nm) return nm; }
+      at += 8 + len + (-len & 3);
+    }
+  }
+  return txt(16, 28);
+}
 const CHUNK = 448;                       /* DATA's bytes a frame: 521 bytes on the wire, well inside what the FM-1's
                                             USB buffer always takes (594; 512 a frame was exactly that) */
-async function sendBank(k, img, shown = () => {}) {
+async function sendBank(k, img, shown = () => {}, at = null) {
   const b = k << 4, fail = (r) => { throw new Error(ERR[r.code] || "code " + r.code); };
   for (let again = 0; ; again++) {
     try {
       if (!img) { const r = await must(6 | b, [], 8000); if (r.code) fail(r); return; }
       shown(0, again);
-      let r = await must(2 | b, u32(img.length), 20000);   /* the bank erased first: a moment */
+      let r = await must(2 | b, beginOf(img, at), 20000);   /* the bank erased first: a moment */
       if (r.code) fail(r);
       for (let off = 16; off < img.length; off += CHUNK) {
         r = await must(3 | b, [...u32(off), ...img.subarray(off, off + CHUNK)], 1000,

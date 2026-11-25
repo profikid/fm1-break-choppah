@@ -7,7 +7,8 @@
 // runs it against tests/page_send/fake_fm1.js.
 //
 // SysEx: F0 7D 43 48 CMD 7-bit-packed DATA F7, the bank in CMD's bits 4-5; answers F0 7D 43 48 0x40|CMD CODE DATA F7.
-// 1 INFO, 2 BEGIN {size}, 3 DATA {offset, bytes} -> {offset}, 4 COMMIT {header}, 5 READ {offset, count} ->
+// 1 INFO, 2 BEGIN {size[, the pack's bytes in all, those before this bank, its name (16)]} (the FM-1's upload screen,
+// 1.7.1; older firmware reads the size alone), 3 DATA {offset, bytes} -> {offset}, 4 COMMIT {header}, 5 READ {offset, count} ->
 // {offset, bytes}, 6 DELETE, 7 GETSET {offset, count} -> {offset, bytes} (the scenes 0..1603, the chain 1604..1691,
 // the LOOP settings), and from INFO version 4 (MATHCORE live, PRD_PACKS 10.10): 8 PUTSET {offset, bytes} -> {offset}
 // (the scenes and the chain into RAM, playing or not), 9 STATUS -> 32 bytes, 10 MCCTL {op, d0..d3} -> STATUS.
@@ -221,14 +222,14 @@ export class FM1Link {
 
   /* bank k written whole (img) or emptied (null). The FM-1 checks the bank's CRC-32 at COMMIT; when it doesn't
      check, or the FM-1 restarted on the way, the bank is sent again from BEGIN, up to three times.
-     shown(bytes sent, try) follows it */
-  async sendBank(k, img, shown = () => {}) {
+     shown(bytes sent, try) follows it; at {total, before, name}: where the bank is in the pack, for the FM-1's screen */
+  async sendBank(k, img, shown = () => {}, at = null) {
     const b = k << 4, fail = (r) => { throw new Error(ERR[r.code] || "code " + r.code); };
     for (let again = 0; ; again++) {
       try {
         if (!img) { const r = await this.must(6 | b, [], 8000); if (r.code) fail(r); return; }
         shown(0, again);
-        let r = await this.must(2 | b, u32(img.length), 20000);   /* the bank erased first: a moment */
+        let r = await this.must(2 | b, beginOf(img, at), 20000);   /* the bank erased first: a moment */
         if (r.code) fail(r);
         for (let off = 16; off < img.length; off += CHUNK) {
           r = await this.must(3 | b, [...u32(off), ...img.subarray(off, off + CHUNK)], 1000,
@@ -250,10 +251,11 @@ export class FM1Link {
 
   /* a pack's images (chpk.js installImages) onto the FM-1: each bank written or, when the pack doesn't need it,
      emptied; then INFO again to see it took. progress(fraction, words) */
-  async install(imgs, progress = () => {}) {
+  async install(imgs, progress = () => {}, name = null) {
     const dev = this.dev || await this.info();
     if (dev.playing) throw new Error(ERR[1]);
     const total = imgs.reduce((a, m) => a + (m ? m.length : 0), 0) || 1;
+    name = name || packName(imgs.find((m) => m));
     let sent = 0, note = "";
     this.onRetry = (t) => { note = ` · a frame lost on the way, sent again (${t})`; };
     try {
@@ -261,7 +263,8 @@ export class FM1Link {
         const img = imgs[k] || null;
         if (!img) { if (dev.counts[k]) await this.sendBank(k, null); continue; }
         await this.sendBank(k, img, (off, again) => progress((sent + off) / total,
-          `Writing bank ${k + 1}${again ? ` again (try ${again + 1})` : ""}… ${Math.round(100 * (sent + off) / total)}%${note}`));
+          `Writing bank ${k + 1}${again ? ` again (try ${again + 1})` : ""}… ${Math.round(100 * (sent + off) / total)}%${note}`),
+          { total, before: sent, name });
         sent += img.length;
       }
     } finally { this.onRetry = null; }
@@ -271,6 +274,23 @@ export class FM1Link {
     progress(1, "Done");
     return after;
   }
+}
+
+/* BEGIN's data: the size, then (at) the pack's bytes in all, those before this bank and the name, 16 bytes (printable
+   ASCII, the FM-1's font) */
+export function beginOf(img, at = null) {
+  const d = u32(img.length);
+  if (!at) return d;
+  const nm = String(at.name || "").replace(/[^\x20-\x7E]/g, "?").slice(0, 16);
+  return [...d, ...u32(at.total || img.length), ...u32(at.before || 0), ...Array.from({ length: 16 }, (_, i) => (i < nm.length ? nm.charCodeAt(i) : 0))];
+}
+
+/* a bank image's name for the screen: a v2 bank's pack, else its first break's */
+export function packName(img) {
+  if (!img || img.length < 16 + SLOT) return "";
+  const n = new DataView(img.buffer, img.byteOffset, img.byteLength).getUint16(6, true);
+  const p = new DataView(img.buffer, img.byteOffset, img.byteLength).getUint16(4, true) === 2 ? packOf(img, n) : null;
+  return (p && p.name) || str(img.subarray(16, 28));
 }
 
 /* a v2 bank 1's head: its PACK chunk (and THEM, when read) -> {id, name, author, created, updated, theme} or null */

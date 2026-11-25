@@ -270,7 +270,8 @@ static void input(void)
     kup = ui.keys & ~keys;
     if (keys != ui.keys || btn != ui.btn)
         ui.touched = 1u;                 /* (read here too between frames: app_input_only) */
-    if (ui.lobo_t || demo.on) {          /* RESET ALL's screen or the demo up: a press only ends it (app_frame) */
+    if (ui.lobo_t || demo.on || (up.on && !up.done)) {   /* RESET ALL's screen, the demo or a pack arriving up: a
+                                          * press only ends it (app_frame) */
         for (i = 0; i < 16u; i++)        /* (but what is let go is let go: no key loop or pad left on) */
             if (kup >> WK[i] & 1u)
                 brk_key((int)i, 0);
@@ -597,6 +598,11 @@ static void leds(void)
     static uint8_t after_intro;
     brk_status_t st;
     uint32_t b = 0u, k = 0u, i;
+    if (up.on) {                         /* a pack arriving (demo.c) */
+        up_leds(plat_ms());
+        after_intro = 1u;
+        return;
+    }
     if (demo.on) {                       /* the demo's own (demo.c) */
         demo_leds(plat_ms());
         after_intro = 1u;
@@ -1026,7 +1032,7 @@ static void speak(uint32_t now)
     static uint32_t ctx_was, play_was;
     static int32_t shown_was = -1;
     uint32_t ctx, play = (uint32_t)playing_now();
-    if (ann_on() && !ui.intro && !demo.on) {
+    if (ann_on() && !ui.intro && !demo.on && !(up.on && !up.done)) {
         ctx = ui.page | ui.gpage << 4 | ui.mpage << 6 | ui.seq_lane << 7 | ui.fx_focus << 10 | (uint32_t)FXPG << 13 |
               pfx_sel << 15 | (uint32_t)mc.part << 19 | (uint32_t)mc.kset << 21 | (uint32_t)mc.lane << 23 |
               ui.help << 26 | ui.key_layer << 27 | (uint32_t)mc.scene << 28;
@@ -1073,6 +1079,10 @@ void app_frame(void)
     if (ui.touched)                      /* (the time itself: "now | 1" was a millisecond ahead half the time, and
                                           * now - idle_t then wrapped round to the demo at once) */
         ui.idle_t = now;
+    if (up_frame(now)) {                 /* a pack arriving: its own screen (demo.c) */
+        leds();
+        return;
+    }
     if (demo.on) {                       /* the demo: until anything is touched (that touch does nothing else) */
         if (ui.touched) {
             ui.touched = 0u;
@@ -1082,7 +1092,7 @@ void app_frame(void)
             demo_frame(now);
             return;
         }
-    } else if (!ui.intro && !ui.lobo_t &&
+    } else if (!ui.intro && !ui.lobo_t && !up.on &&
                (int32_t)(now - ui.idle_t) > (int32_t)(playing_now() ? DEMO_IDLE_PLAY_MS : DEMO_IDLE_MS)) {
         slices_let_go(ui.keys);
         ui.help = 0u;
@@ -1463,8 +1473,12 @@ int app_sysex(const uint8_t *p, uint32_t n)
         mc_pack();
         set.split_b = 0u;
         break_ask(0u);
-        if (cmd == 2u)
-            app_say("RECEIVING", "A BREAK");
+        if (cmd == 2u && !code) {        /* the pack's screen (demo.c): BEGIN's {size, the pack's bytes, those before
+                                          * this bank, its name (16)}, when the page says them */
+            up_begin(cu_size, len >= 12u ? rd32(u + 4) : 0u, len >= 12u ? rd32(u + 8) : 0u, len >= 28u ? u + 12 : 0,
+                     plat_ms());
+            app_say("RECEIVING", up.name);
+        }
     } else if (cmd == 3u) {              /* DATA: after the header, into what BEGIN erased; answered with its offset (the
                                           * page sends a frame again when its answer is lost, and must tell a late answer
                                           * to an earlier try from this one's) */
@@ -1477,8 +1491,11 @@ int app_sysex(const uint8_t *p, uint32_t n)
             code = 3u;
         for (i = 0; i < 4u; i++)         /* (u is cu_reply's buffer too: the offset copied out first) */
             a[i] = u[i];
-        if (code > 1u)
+        if (code > 1u) {
+            up_commit(0, 0u, 0u);
             app_warn("BREAK NOT LOADED", "FLASH OR SIZE");
+        } else
+            up_data(off + len, plat_ms());
         cu_reply(p[3], code, a, 4u);
         return 1;
     } else if (cmd == 4u) {              /* COMMIT: the header last, then the whole checked */
@@ -1490,6 +1507,9 @@ int app_sysex(const uint8_t *p, uint32_t n)
             code = 4u;
         set.split_b = 0u;
         break_ask(0u);                   /* (the pack's first break, or the first of the bank) */
+        up_commit(!code, cu_size, plat_ms());
+        if (!code && up.done)
+            app_say("PACK LOADED", up.name);
     } else
         return 0;
     if (code > 1u)
