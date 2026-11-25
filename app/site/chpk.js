@@ -87,6 +87,7 @@ export function bankSize(lens) {
 export const overlayBytes = (ov) => ov ? 16 + ((ov.len + 1) >> 1) : 0;
 /* the overlay's most samples: the FM-1 marks where decoding may start every 4096 (brk.c OV_NCK × OV_CK) */
 export const OVLY_MAX_LEN = 160 * 4096;
+export const OVLY_MAX_BARS = 32;              /* (the FM-1 takes any; the builder and the hub make 1 to 32) */
 /* the pack over the FM-1's two banks: [breaks in bank 1, in bank 2], or null when it doesn't fit; reserve: bytes the
    overlay takes, all in one bank (deviceBanks): bank 2 when the breaks leave it room there, else bank 1 */
 export function packLayout(lens, caps = BANK_CAPS, reserve = 0) {
@@ -178,7 +179,8 @@ export function parsePack(bytes) {
     overlay = { rate: ovd.getUint32(0, true), len: ovd.getUint32(4, true), bpm: ovd.getUint32(8, true) / 100, bars: ov[12],
       data: ov.subarray(16) };
     if (!RATES.includes(overlay.rate)) fail(`overlay rate ${overlay.rate}`);
-    if (![4, 8, 16].includes(overlay.bars)) fail(`overlay of ${overlay.bars} bars (4, 8 or 16)`);
+    if (!(overlay.bars >= 1 && overlay.bars <= OVLY_MAX_BARS)) fail(`overlay of ${overlay.bars} bars (1 to ${OVLY_MAX_BARS})`);
+    if (overlay.len > OVLY_MAX_LEN) fail(`overlay of ${overlay.len} samples (at most ${OVLY_MAX_LEN})`);
     if (overlay.data.length !== (overlay.len + 1) >> 1) fail("overlay data");
   }
   if (!packLayout(slots.map((s) => s.len), BANK_CAPS, overlayBytes(overlay))) fail("the breaks and the overlay don't fit the FM-1's two banks");

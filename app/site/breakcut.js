@@ -226,7 +226,7 @@ async function drumsAround(x, rate, e, r, resample) {
 export const OVERLAY_RATES = [22050, 16000, 11025];
 export async function makeOverlay(x, rate, o, { fits = () => true, resample = resampleBest } = {}) {
   const bars = o.bars | 0, bpm = +o.bpm, take = o.take || "rest";
-  if (![4, 8, 16].includes(bars)) throw new Error("an overlay is 4, 8 or 16 bars");
+  if (!(bars >= 1 && bars <= 32)) throw new Error("an overlay is 1 to 32 bars (as many as the FM-1's flash holds: the caller's fits says)");
   if (!(bpm >= 40 && bpm <= 300)) throw new Error("the overlay's tempo: 40 to 300 BPM");
   const barLen = 240 / bpm, t0 = (o.offset || 0) + (o.start || 0) * barLen, t1 = t0 + bars * barLen, dur = x.length / rate;
   if (t1 > dur + 0.02) throw new Error(`the sample ends before bar ${(o.start || 0) + bars + 1}: start earlier or take fewer bars`);

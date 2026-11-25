@@ -79,7 +79,7 @@ ov = await C.makeOverlay(track, rate, { bpm: 120, start: 0, bars: 4 }, { resampl
 assert.equal(ov.rate, 16000, "the first rate that fits"); assert.equal(ov.len, 4 * 2 * 16000);
 await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, start: 7, bars: 4 }, lin), /ends before bar 12/);
 await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 4 }, { resample: lin.resample, fits: () => false }), /no room/);
-await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 3 }, lin), /4, 8 or 16/);
+await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 33 }, lin), /1 to 32/);
 
 /* a first edit: a loop file from its length, a track from its first bar and best loop */
 let e = C.autoEdit("think break.wav", 4.2);

@@ -54,6 +54,15 @@ assert.ok(Math.max(...x.slice(200).map((v, i) => Math.abs(v - y[i + 200]))) < 0.
   assert.ok(P.packLayout(Array(6).fill(100000), P.BANK_CAPS, 0)[1] > 0, "past bank 1: bank 2");
   assert.equal(P.packLayout(Array(6).fill(100000), P.BANK_CAPS, P.BANK_CAPS[1]), null, "with bank 2 full of overlay it doesn't fit");
   assert.equal(P.packLayout([60000], P.BANK_CAPS, P.BANK_CAPS[1])[0], 1, "bank 2 full of overlay: breaks in bank 1");
+  /* one long overlay (PH-049): 16 bars at 170 BPM in 22.05 kHz, alone, in bank 1 (bank 2 is too small); not split over both */
+  const long = { rate: 22050, bpm: 170, bars: 16, len: Math.round(16 * 240 / 170 * 22050) };
+  long.data = P.adpcmEncode(tone(long.len, 55));
+  assert.equal(P.parsePack(P.buildPack({ meta, bank, overlay: long })).overlay.bars, 16);
+  assert.equal(P.packLayout([], P.BANK_CAPS, P.overlayBytes(long))[0], 0, "a long overlay alone fits bank 1");
+  assert.equal(P.packLayout([], P.BANK_CAPS, P.BANK_CAPS[0] + 1), null, "an overlay never takes part of each bank");
+  const twelve = { ...ov, bars: 12 }, bad = { ...ov, bars: 33 };
+  assert.equal(P.parsePack(P.buildPack({ meta, bank, overlay: twelve })).overlay.bars, 12, "any whole bars, 1 to 32");
+  assert.throws(() => P.parsePack(P.buildPack({ meta, bank, overlay: bad })), /1 to 32/);
   const bigOv = { ...ov, len: 800000, data: new Uint8Array(400000) };
   assert.throws(() => P.parsePack(P.buildPack({ meta, bank, overlay: bigOv })), /don't fit|at most/);
 }
