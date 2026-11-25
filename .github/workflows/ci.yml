@@ -108,6 +108,8 @@ jobs:
           T="$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
                  "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://choppah.app" | jq -r .value)"
           S="$(git log -1 --format=%s | tr -d '\n' | jq -sRr @uri)"
-          curl -sSf --retry 3 --retry-all-errors -X PUT -H "Authorization: Bearer $T" -H "X-Beta-Version: $V" \
-            -H "X-Beta-Subject: $S" -H "Content-Type: application/octet-stream" \
-            --data-binary @app/build/choppah.fwsc https://choppah.app/api/beta | jq .
+          C="$(curl -sS --retry 3 -o beta.json -w '%{http_code}' -X PUT -H "Authorization: Bearer $T" -H "X-Hub: 1" \
+                 -H "X-Beta-Version: $V" -H "X-Beta-Subject: $S" -H "Content-Type: application/octet-stream" \
+                 --data-binary @app/build/choppah.fwsc https://choppah.app/api/beta)"
+          cat beta.json; echo
+          [ "$C" = 201 ] || { echo "::warning::the beta didn't go up on choppah.app (HTTP $C)"; exit 1; }
