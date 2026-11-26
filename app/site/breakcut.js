@@ -190,12 +190,16 @@ async function resampleBest(x, from, to) {
 
 /* the sample (mono x at rate) and its edit -> {name, bpm, rate, pcm, slices, auto}: the break as the FM-1 gets it
    (auto: the slices it would have without marks, for the slicer). marks: 17 sample positions in the break, or null */
-export async function makeBreak(x, rate, edit, { resample = resampleBest } = {}) {
+/* the stems a break or an overlay is cut from: split(x, rate) -> {drums, rest} (async). Here the harmonic / percussive
+   split (beats.js `stems`); the hub's server passes its own (Demucs on a GPU, src/stems.js) */
+export const splitHPSS = async (x, r) => stems(x, r);
+
+export async function makeBreak(x, rate, edit, { resample = resampleBest, split = splitHPSS } = {}) {
   const e = { ...EDIT_DEFAULTS, ...edit };
   const r = breakRate(e.bpm);
   let pcm;
   if (e.drums) {                         /* the drums alone: the bars and a little around them, at the break's rate, split */
-    const d = await drumsAround(x, rate, e, r, resample);
+    const d = await drumsAround(x, rate, e, r, resample, split);
     let y = cut(d.x, r, d.e);
     pcm = (e.level ? level(y, r) : peakNorm(y)).slice(0, MAX_LEN);
   } else {
@@ -213,10 +217,10 @@ export async function makeBreak(x, rate, edit, { resample = resampleBest } = {})
 /* the drum stem of a sample around its two bars (half a second either side, so the split has some context), at rate
    r: -> {x, e} with the edit's offset moved to match */
 const CONTEXT = 0.5;
-async function drumsAround(x, rate, e, r, resample) {
+async function drumsAround(x, rate, e, r, resample, split = splitHPSS) {
   const [a, b] = span(rate, e), pad = Math.round(CONTEXT * rate), lo = Math.max(0, a - pad), hi = Math.min(x.length, b + pad);
   const seg = await resample(x.slice(lo, Math.max(lo + 1, hi)), rate, r);
-  return { x: stems(seg, r).drums, e: { ...e, offset: (e.offset || 0) - lo / rate } };
+  return { x: (await split(seg, r)).drums, e: { ...e, offset: (e.offset || 0) - lo / rate } };
 }
 
 /* a pack's overlay (PRD_PACKS §7, the builder's step 2) from a sample: `bars` (4, 8, 16) from bar `start` (0-based, the
@@ -224,7 +228,7 @@ async function drumsAround(x, rate, e, r, resample) {
    crossfaded into its lead-in, levelled as the breaks; at the best of 22.05 / 16 / 11.025 kHz that `fits(len, rate)`.
    -> {rate, len, bpm, bars, pcm} (pcm at rate; the caller ADPCM-encodes it), or throws why not */
 export const OVERLAY_RATES = [22050, 16000, 11025];
-export async function makeOverlay(x, rate, o, { fits = () => true, resample = resampleBest } = {}) {
+export async function makeOverlay(x, rate, o, { fits = () => true, resample = resampleBest, split = splitHPSS } = {}) {
   const bars = o.bars | 0, bpm = +o.bpm, take = o.take || "rest";
   if (!(bars >= 1 && bars <= 32)) throw new Error("an overlay is 1 to 32 bars (as many as the FM-1's flash holds: the caller's fits says)");
   if (!(bpm >= 40 && bpm <= 300)) throw new Error("the overlay's tempo: 40 to 300 BPM");
@@ -233,7 +237,7 @@ export async function makeOverlay(x, rate, o, { fits = () => true, resample = re
   const R = OVERLAY_RATES[0], lead = 0.05;                /* the lead-in the seam fades into */
   const lo = Math.max(0, Math.floor((t0 - lead - CONTEXT) * rate)), hi = Math.min(x.length, Math.ceil((t1 + CONTEXT) * rate));
   let sig = await resample(x.slice(lo, hi), rate, R);
-  if (take === "rest") sig = stems(sig, R).rest; else if (take !== "mix") throw new Error('take: "rest" (no drums) or "mix"');
+  if (take === "rest") sig = (await split(sig, R)).rest; else if (take !== "mix") throw new Error('take: "rest" (no drums) or "mix"');
   const s0 = t0 - lo / rate;
   let y = level(seamless(sig, R, s0, Math.min(s0 + bars * barLen, sig.length / R)), R);
   const want = Math.round(bars * barLen * R);

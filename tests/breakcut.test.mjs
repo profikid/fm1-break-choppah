@@ -82,9 +82,21 @@ await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 4 }, { resampl
 await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 33 }, lin), /1 to 32/);
 
 /* a first edit: a loop file from its length, a track from its first bar and best loop */
+/* another split (the hub's Demucs on a GPU): makeBreak and makeOverlay take it, the drums or the rest from it */
+const calls = [];
+const silent = async (v, r) => { calls.push([v.length, r]); return { drums: new Float32Array(v.length).fill(0.25), rest: new Float32Array(v.length).fill(-0.125) }; };
+const own = await C.makeBreak(tone, rate, { bpm, level: false, drums: true }, { ...lin, split: silent });
+assert.equal(calls.length, 1); assert.equal(calls[0][1], own.rate, "split at the break's rate");
+assert.ok(own.pcm.every((v) => Math.abs(v - own.pcm[0]) < 1e-6), "the drums are the split's");
+const ovs = await C.makeOverlay(tone, rate, { bpm, bars: 1, take: "rest" }, { ...lin, split: silent });
+assert.equal(calls.length, 2); assert.equal(calls[1][1], 22050, "the overlay split at 22.05 kHz");
+await C.makeOverlay(tone, rate, { bpm, bars: 1, take: "mix" }, { ...lin, split: silent });
+assert.equal(calls.length, 2, "the mix: no split");
+assert.ok(ovs.pcm.length > 0);
+
 let e = C.autoEdit("think break.wav", 4.2);
 assert.equal(e.name, "THINK BREAK"); assert.ok(Math.abs(e.bpm - 114.29) < 0.01); assert.equal(e.once, false);
 e = C.autoEdit("track", 150, { bpm: 100, downbeat: 3.1, loops: [{ start: 3.1 + 2.4 * 7, bars: 2 }] });
 assert.equal(e.bpm, 100); assert.ok(Math.abs(e.offset - 0.7) < 1e-6); assert.equal(e.start, 8);
 
-console.log("breakcut: the builder's level, slices and warp, sample for sample; the cut, the rate (slow ones read back), marks, warp, the drums alone, the overlay, the first edit");
+console.log("breakcut: the builder's level, slices and warp, sample for sample; the cut, the rate (slow ones read back), marks, warp, the drums alone, the overlay, a split of its own, the first edit");
