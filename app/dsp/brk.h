@@ -280,6 +280,49 @@ void brk_sends(float *echo, float *verb);
 void brk_overlay(const uint8_t *adpcm, uint32_t len, uint32_t bars);
 void brk_overlay_on(int on);
 void brk_overlay_out(float *o);
+/* the layer (docs/PRD_LAYER.md): the pack's loops (up to BRK_LY_LOOPS, the overlay is loop 0) and one-shots (up to
+ * BRK_LY_SHOTS), both read from flash as they play, into brk_overlay_out's samples. A loop sounds while it is on, the
+ * transport plays and brk_overlay_on says so; on its own bars always (in phase), through its window. A shot plays
+ * from its start, at its rate (with the tempo when it has one), its pitch, decay, mode and choke; a CUT shot silences
+ * the break while it sounds (a fill), the break running on underneath. Main loop: brk_ly_loop / brk_ly_shot set the
+ * sources (0: none; a loop's walk marks where decoding can start), the *_cfg words their settings (BRK_LY_* fields),
+ * brk_ly_want turns a loop on or off at a quantise point (LYQ_*), brk_ly_hit fires a shot or lets its key go,
+ * brk_ly_voices the voices allowed (GLOBAL's LAYER: the render's cost, PRD_LAYER LY-053), brk_ly_gain the MIXER's
+ * loops and shots levels. brk_ly_clear: everything let go (before the flash it reads is erased) */
+#define BRK_LY_LOOPS 4u
+#define BRK_LY_LV 2u                     /* loop voices at most */
+#define BRK_LY_SHOTS 16u
+#define BRK_LY_SV 4u                     /* shot voices at most */
+enum { LYQ_NOW, LYQ_BEAT, LYQ_BAR, LYQ_LOOP, LYQ_N };   /* a loop's quantise: at once, the beat, the bar, its window */
+enum { SHQ_NOW, SHQ_16, SHQ_BEAT, SHQ_N };             /* a shot's */
+enum { SHM_ONE, SHM_GATE, SHM_LOOP, SHM_N };           /* a shot's mode: plays out, stops on release, loops held */
+/* a loop's cfg word: level 0..100 | (filter + 50) << 7 (-50 low-pass .. 0 open .. +50 high-pass) | window start bar
+ * << 14 (0..15) | window bars - 1 << 18 (0..15; past the loop's bars: all of it) | quantise << 23 | auto << 25 (on
+ * when PLAY starts) */
+#define BRK_LY_LCFG(lv, flt, ws, wl, q, au) ((uint32_t)(lv) | (uint32_t)((flt) + 50) << 7 | (uint32_t)(ws) << 14 | \
+                                             (uint32_t)((wl) - 1u) << 18 | (uint32_t)(q) << 23 | (uint32_t)(au) << 25)
+/* a shot's: level 0..100 | (pitch + 24) << 7 | decay << 13 (0 none, 1 long .. 31 short) | mode << 18 | choke << 20
+ * (0 none, 1..4) | quantise << 23 | cut << 25 (silences the break while it sounds) */
+#define BRK_LY_SCFG(lv, pt, dc, md, ch, q, cut) ((uint32_t)(lv) | (uint32_t)((pt) + 24) << 7 | (uint32_t)(dc) << 13 | \
+                                                 (uint32_t)(md) << 18 | (uint32_t)(ch) << 20 | (uint32_t)(q) << 23 | \
+                                                 (uint32_t)(cut) << 25)
+void brk_ly_loop(uint32_t i, const uint8_t *adpcm, uint32_t len, uint32_t bars);
+void brk_ly_loop_cfg(uint32_t i, uint32_t cfg);
+void brk_ly_want(uint32_t i, int on, uint32_t q);
+void brk_ly_shot(uint32_t i, const uint8_t *adpcm, uint32_t len, uint32_t rate, uint32_t bpm_x100);
+void brk_ly_shot_cfg(uint32_t i, uint32_t cfg);
+void brk_ly_hit(uint32_t i, int down);
+void brk_ly_voices(uint32_t loops, uint32_t shots);
+void brk_ly_gain(float loops, float shots);
+void brk_ly_clear(void);
+/* what the layer does, for the screen: loops on, waiting for their point, each one's place in its window (0..255),
+ * the shots sounding, the break cut */
+typedef struct {
+    uint8_t on, pend, cut, rsv;
+    uint8_t ph[BRK_LY_LOOPS];
+    uint16_t shots, rsv2;
+} brk_ly_status_t;
+void brk_ly_status(brk_ly_status_t *s);
 void brk_pad(int pad, int down);
 void brk_gen(const brk_gen_t *g);
 void brk_padset_defaults(brk_padset_t *p);

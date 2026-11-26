@@ -22,6 +22,11 @@
 #define CHK_THEM 0x4D454854u             /* "THEM": the screen's colours, 8 x RGB565 (bg panel text dim hi mid wave warn)
                                           * then 16 bytes reserved */
 #define CHK_OVLY 0x594C564Fu             /* "OVLY": the overlay, bank_ovly_t then its IMA ADPCM */
+#define CHK_LOOP 0x504F4F4Cu             /* "LOOP" (1.8, docs/PRD_LAYER.md 6): u32 n (<= 4), n x bank_loop_t, then the
+                                          * ADPCM of the loops not in OVLY; loop 0 may be OVLY's (LPF_OVLY) */
+#define CHK_SHOT 0x544F4853u             /* "SHOT" (1.8): u32 n (<= 16), n x bank_shot_t, then their ADPCM */
+#define CHK_PADS 0x53444150u             /* "PADS" (1.8): the ARP page's 11 effect pads, each brk_fxslot_t (20 B: rsv[0]
+                                          * its TARGET) then brk_fxx_t (36 B): 616 bytes. Without it: the FM-1's own */
 #define BANK_SLOTS 16u
 #define BANK_SLICES 32u
 
@@ -69,6 +74,30 @@ typedef struct {
     uint8_t rsv[3];
 } bank_ovly_t;                           /* 16 bytes, then (len + 1) / 2 bytes of ADPCM */
 
+enum { LPF_AUTO = 1, LPF_OVLY = 2 };    /* a loop on when PLAY starts; its ADPCM is the OVLY chunk's */
+typedef struct {
+    char name[8];                        /* NUL-padded, upper case */
+    uint32_t rate, len, bpm_x100;        /* Hz, samples, the tempo it was played at */
+    uint32_t data_off;                   /* its ADPCM: from the chunk's data (unused with LPF_OVLY) */
+    uint8_t bars, flags;                 /* 1..32; LPF_* */
+    uint8_t level;                       /* 0..100 % */
+    int8_t filter;                       /* -50 low-pass .. 0 .. +50 high-pass */
+    uint8_t quant;                       /* LYQ_* (brk.h) */
+    uint8_t wstart, wbars;               /* its window: first bar (0..), bars (0: all) */
+    uint8_t rsv;
+} bank_loop_t;                           /* 32 bytes */
+enum { SHF_CUT = 1 };                    /* the break silent while it sounds (a fill) */
+typedef struct {
+    char name[8];
+    uint32_t rate, len, bpm_x100;        /* bpm_x100 0: none (its pitch stays its own); else it follows the tempo */
+    uint32_t data_off;                   /* its ADPCM: from the chunk's data */
+    uint8_t level, mode, choke, quant;   /* 0..100; SHM_*; 0..4; SHQ_* */
+    int8_t pitch;                        /* -24..+24 */
+    uint8_t decay, flags, rsv;           /* 0 none, 1 long .. 31 short; SHF_* */
+} bank_shot_t;                           /* 32 bytes */
+
+_Static_assert(sizeof(bank_loop_t) == 32, "bank loop");
+_Static_assert(sizeof(bank_shot_t) == 32, "bank shot");
 _Static_assert(sizeof(bank_header_t) == 16, "bank header");
 _Static_assert(sizeof(bank_pack_t) == 56, "bank pack");
 _Static_assert(sizeof(bank_sset_t) == 40, "bank sset");

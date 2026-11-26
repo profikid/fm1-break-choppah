@@ -2453,6 +2453,187 @@ static void ov_render(float *out, float *ovo, uint32_t n)   /* blocks of BLOCK, 
         brk_render(out + i, n - i < BLOCK ? n - i : BLOCK);
     }
 }
+
+/* the layer (docs/PRD_LAYER.md): two loops, each on its own bar; a tap waits for the bar, an unquantised one comes in
+ * at once in phase; one loop voice: the newer loop takes it; a shot plays from its start, at +12 in half the time; a
+ * choke cuts the other; a CUT shot silences the break and lets it back; a GATE shot stops on release */
+static uint32_t ly_tone(uint8_t *d, uint32_t len, float cyc, float lvl)   /* a sweep of ADPCM */
+{
+    int16_t pred = 0;
+    uint8_t idx = 0;
+    uint32_t i;
+    memset(d, 0, (len + 1u) / 2u);
+    for (i = 0; i < len; i++) {
+        int16_t x = (int16_t)(lvl * sinf(6.2831853f * cyc * (float)i / (float)len) + 0.3f * lvl * (float)i / (float)len);
+        d[i >> 1] |= (uint8_t)(ov_enc(x, &pred, &idx) << (4u * (i & 1u)));
+    }
+    return len;
+}
+static float ly_peak(float *out, float *ovo, uint32_t n, uint32_t from)
+{
+    uint32_t i;
+    float pk = 0.0f;
+    ov_render(out, ovo, n);
+    for (i = from; i < n; i++)
+        pk = fmaxf(pk, fabsf(ovo[i]));
+    return pk;
+}
+static void test_layer(void)
+{
+    static uint8_t la[60000], lb[60000], sa[20000], sb[20000];
+    static int16_t dec[120000];
+    static float out[200000], ovo[200000];
+    uint32_t bar = (uint32_t)(BRK_SR * 240.0f / BPM + 0.5f), la_len = 4u * (uint32_t)(RATE * 240.0f / BPM);
+    uint32_t sl = (uint32_t)(RATE * 0.25f), i, t;
+    adpcm_state_t st = {0, 0, 0};
+    brk_ly_status_t ls;
+    float pk, e;
+    if (la_len > 2u * sizeof la)
+        la_len = 2u * (uint32_t)sizeof la;
+    ly_tone(la, la_len, 3.0f, 12000.0f);
+    ly_tone(lb, la_len / 2u, 5.0f, 9000.0f);
+    ly_tone(sa, sl, 40.0f, 14000.0f);
+    ly_tone(sb, sl, 70.0f, 14000.0f);
+    adpcm_decode(&st, la, dec, la_len);
+    fresh(2u);
+    brk_overlay_on(1);
+    brk_ly_voices(2u, 4u);
+    brk_ly_loop(0u, la, la_len, 4u);
+    brk_ly_loop_cfg(0u, BRK_LY_LCFG(100u, 0, 0u, 16u, LYQ_BAR, 0u));
+    brk_ly_loop(1u, lb, la_len / 2u, 2u);
+    brk_ly_loop_cfg(1u, BRK_LY_LCFG(100u, 0, 0u, 16u, LYQ_NOW, 0u));
+    brk_reset();
+    brk_play(1);
+    pk = ly_peak(out, ovo, 2048u, 0u);
+    CHECK(pk < 1e-6f, "no loop on: the layer silent (%g)", (double)pk);
+    ov_render(out, ovo, bar / 2u - 2048u);   /* mid bar 1: a tap on loop 0 (to the bar) */
+    brk_ly_want(0u, 1, LYQ_BAR);
+    pk = ly_peak(out, ovo, 4096u, 0u);
+    brk_ly_status(&ls);
+    CHECK(pk < 1e-6f && (ls.pend & 1u) && !(ls.on & 1u), "a tap waits for the bar (peak %g, pend %u)", (double)pk,
+          (unsigned)ls.pend);
+    {                                    /* to bar 2's first sample: loop 0 comes in on its bar 2 */
+        uint32_t done = bar / 2u + 2048u;
+        while (done + BLOCK <= bar + 300u) {
+            ov_render(out, ovo, BLOCK);
+            done += BLOCK;
+        }
+        brk_ly_status(&ls);
+        CHECK(ls.on & 1u, "on at the bar line (on %u)", (unsigned)ls.on);
+        ov_render(out, ovo, 2048u);
+        e = fabsf(ovo[2047] - (float)dec[la_len / 4u + (uint32_t)((float)(done + 2047u - bar) * RATE / BRK_SR)] / 32768.0f);
+        CHECK(e < 0.05f, "it plays its bar 2 (off by %g)", (double)e);
+    }
+    brk_ly_want(1u, 1, LYQ_NOW);         /* loop 1 at once (a hold): both sound, in phase */
+    pk = ly_peak(out, ovo, 4096u, 512u);
+    brk_ly_status(&ls);
+    CHECK((ls.on & 3u) == 3u && pk > 0.3f, "two loops at once (on %u, peak %g)", (unsigned)ls.on, (double)pk);
+    brk_ly_voices(1u, 4u);               /* one loop voice: one of them gives way */
+    ov_render(out, ovo, 4096u);
+    brk_ly_status(&ls);
+    CHECK((ls.on & 3u) == 1u || (ls.on & 3u) == 2u, "one voice: one loop (on %u)", (unsigned)ls.on);
+    brk_ly_want(0u, 1, LYQ_NOW);         /* a loop turned on takes the voice from the older */
+    ov_render(out, ovo, 4096u);
+    brk_ly_status(&ls);
+    CHECK((ls.on & 3u) == 1u, "the newer loop takes the voice (on %u)", (unsigned)ls.on);
+    brk_ly_want(0u, 0, LYQ_NOW);
+    brk_ly_want(1u, 0, LYQ_NOW);
+    pk = ly_peak(out, ovo, 2048u, 1024u);
+    CHECK(pk < 1e-4f, "off at once: silent in 5 ms (%g)", (double)pk);
+    /* the shots */
+    brk_ly_shot(0u, sa, sl, (uint32_t)RATE, 0u);
+    brk_ly_shot(1u, sb, sl, (uint32_t)RATE, 0u);
+    brk_ly_shot_cfg(0u, BRK_LY_SCFG(100u, 0, 0u, SHM_ONE, 1u, SHQ_NOW, 0u));
+    brk_ly_shot_cfg(1u, BRK_LY_SCFG(100u, 12, 0u, SHM_ONE, 1u, SHQ_NOW, 0u));
+    brk_ly_hit(0u, 1);
+    brk_ly_hit(0u, 0);
+    ov_render(out, ovo, BLOCK);
+    brk_ly_status(&ls);
+    CHECK(ls.shots & 1u, "a shot sounds (%04x)", (unsigned)ls.shots);
+    for (t = 0, i = 0; i < 40u && (ls.shots & 1u); i++) {
+        ov_render(out, ovo, BLOCK);
+        brk_ly_status(&ls);
+        t += BLOCK;
+    }
+    e = (float)t / ((float)sl * BRK_SR / RATE);
+    CHECK(e > 0.85f && e < 1.15f, "a one shot plays its length (%g of it)", (double)e);
+    brk_ly_hit(1u, 1);                   /* +12: half as long */
+    for (t = 0, i = 0; i < 40u; i++) {
+        ov_render(out, ovo, BLOCK);
+        brk_ly_status(&ls);
+        if (!(ls.shots & 2u))
+            break;
+        t += BLOCK;
+    }
+    e = (float)t / ((float)sl * BRK_SR / RATE);
+    CHECK(e > 0.35f && e < 0.65f, "at +12 it lasts half as long (%g)", (double)e);
+    brk_ly_hit(0u, 1);                   /* choke group 1: shot 1 cuts shot 0 */
+    ov_render(out, ovo, BLOCK);
+    brk_ly_hit(1u, 1);
+    ov_render(out, ovo, 2u * BLOCK);
+    brk_ly_status(&ls);
+    CHECK((ls.shots & 3u) == 2u, "a choke cuts the other within 5 ms (%04x)", (unsigned)ls.shots);
+    for (i = 0; i < 20u; i++)
+        ov_render(out, ovo, BLOCK);
+    /* a CUT shot: the break silent under it, back after */
+    brk_ly_shot_cfg(0u, BRK_LY_SCFG(100u, 0, 0u, SHM_ONE, 0u, SHQ_NOW, 1u));
+    {
+        float before = 0.0f, during = 0.0f, after = 0.0f;
+        ov_render(out, ovo, 4096u);
+        for (i = 0; i < 4096u; i++)
+            before = fmaxf(before, fabsf(out[i]));
+        brk_ly_hit(0u, 1);
+        ov_render(out, ovo, 4096u);
+        for (i = 1024u; i < 4096u; i++)
+            during = fmaxf(during, fabsf(out[i]));
+        for (i = 0; i < 40u; i++)
+            ov_render(out, ovo, BLOCK);
+        ov_render(out, ovo, 8192u);
+        for (i = 0; i < 8192u; i++)
+            after = fmaxf(after, fabsf(out[i]));
+        CHECK(before > 0.05f && during < 1e-4f && after > 0.05f, "a CUT shot silences the break, then lets it back "
+              "(%g, %g, %g)", (double)before, (double)during, (double)after);
+    }
+    brk_ly_shot_cfg(1u, BRK_LY_SCFG(100u, -12, 0u, SHM_GATE, 0u, SHQ_NOW, 0u));   /* a GATE shot let go: gone */
+    brk_ly_hit(1u, 1);
+    ov_render(out, ovo, 2u * BLOCK);
+    brk_ly_hit(1u, 0);
+    ov_render(out, ovo, 2u * BLOCK);
+    brk_ly_status(&ls);
+    CHECK(!(ls.shots & 2u), "a GATE shot stops on release (%04x)", (unsigned)ls.shots);
+    brk_ly_shot_cfg(1u, BRK_LY_SCFG(100u, 0, 0u, SHM_ONE, 0u, SHQ_BEAT, 0u));   /* to the beat */
+    for (i = 0; i < 4u * 8u; i++) {
+        brk_status_t bs;
+        ov_render(out, ovo, 64u);
+        brk_status(&bs);
+        if ((bs.bar16 & 3) == 1)
+            break;
+    }
+    brk_ly_hit(1u, 1);
+    ov_render(out, ovo, BLOCK);
+    brk_ly_status(&ls);
+    CHECK(!(ls.shots & 2u), "a shot on the beat waits for it (%04x)", (unsigned)ls.shots);
+    for (i = 0; i < 4u * 120u && !(ls.shots & 2u); i++) {
+        ov_render(out, ovo, 64u);
+        brk_ly_status(&ls);
+    }
+    CHECK(ls.shots & 2u, "then sounds on it");
+    brk_play(0);                         /* stopped: the loops off */
+    ov_render(out, ovo, BLOCK);
+    brk_ly_loop_cfg(0u, BRK_LY_LCFG(100u, 0, 0u, 16u, LYQ_BAR, 1u));   /* AUTO: on when PLAY starts */
+    brk_play(1);
+    pk = ly_peak(out, ovo, 8192u, 4096u);
+    brk_ly_status(&ls);
+    CHECK((ls.on & 1u) && pk > 0.1f, "an AUTO loop comes on with PLAY (on %u, peak %g)", (unsigned)ls.on, (double)pk);
+    brk_play(0);
+    ov_render(out, ovo, BLOCK);
+    brk_ly_status(&ls);
+    CHECK(!ls.on, "stop: every loop off (%u)", (unsigned)ls.on);
+    brk_ly_clear();
+    brk_overlay_out(0);
+    brk_ly_voices(1u, 3u);
+}
+
 static void test_overlay(void)
 {
     static uint8_t ov[60000];
@@ -2554,6 +2735,7 @@ int main(int argc, char **argv)
     test_styles();
     test_pad_fx();
     test_overlay();
+    test_layer();
     printf("%d of %d checks passed\n", checks - fails, checks);
     return fails ? 1 : 0;
 }

@@ -11,15 +11,15 @@ static void mix_value(uint32_t h, int i, char *t)
             int_text(set.swing, t);
             text_cat(t, "%");
         } else if (i == 1)
-            text_cat(t, !pk_ovly ? "NONE" : set.ov_route ? "AROUND" : "CHAIN");
+            text_cat(t, !(ly_nl || ly_ns) ? "NONE" : set.ov_route ? "AROUND" : "CHAIN");
         return;
     }
     if (i == 0) {
         int_text(set.brk_level, t);
         text_cat(t, "%");
-    } else if (i == 1) {                 /* the pack's overlay: its fader, or none */
-        if (pk_ovly) {
-            int_text(set.lane_level, t);
+    } else if (i == 1 || i == 2) {       /* the pack's loops, its shots: their faders, or none */
+        if (i == 1 ? ly_nl : ly_ns) {
+            int_text(i == 1 ? set.lane_level : set.shot_level, t);
             text_cat(t, "%");
         } else
             text_cat(t, "NONE");
@@ -54,7 +54,7 @@ static void mix_fader(int32_t x, float v, int on)   /* 0..1 from the bottom */
 }
 static void mix_picture(int32_t top)
 {
-    static const char *const NAME[2][4] = {{"BREAK", "OVERLAY", "", "FX"}, {"SWING", "OVL ROUTE", "", ""}};
+    static const char *const NAME[2][4] = {{"BREAK", "LOOPS", "SHOTS", "FX"}, {"SWING", "OVL ROUTE", "", ""}};
     uint32_t c;
     cv_oy = -top;                        /* (this strip's rows of the picture) */
     for (c = 0; c < 4u; c++) {
@@ -71,10 +71,12 @@ static void mix_picture(int32_t top)
     }
     mix_fader(10, (float)set.brk_level * 0.01f, set.brk_level > 0u);
     mix_meter(30, meter_brk);
-    if (pk_ovly) {                       /* the pack's overlay: its fader and meter */
-        mix_fader(70, (float)set.lane_level * 0.01f, set.lane_level > 0u);
+    if (ly_nl || ly_ns)                  /* the pack's layer: its meter; the loops' and the shots' faders */
         mix_meter(90, meter_ov);
-    }
+    if (ly_nl)
+        mix_fader(70, (float)set.lane_level * 0.01f, set.lane_level > 0u);
+    if (ly_ns)
+        mix_fader(130, (float)set.shot_level * 0.01f, set.shot_level > 0u);
     mix_fader(190, set.fx.wet, set.fx.wet > 0.005f);
     for (c = 0; c < BRK_FX_SLOTS; c++) { /* the chain's four slots, lit while on */
         const brk_fxslot_t *sl = &set.fx.slot[c];

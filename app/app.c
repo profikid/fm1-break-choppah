@@ -94,6 +94,11 @@ typedef struct {
     uint8_t ov_route;                    /* the overlay through the FX chain (0) or around it (1) (PO-005) */
     uint8_t mc_rsv[2];
     uint8_t mc_macro[4];                 /* MATHCORE LIVE's K1-K4: DENSITY, MATH, SPEED, CHAOS (0..100) */
+    /* (appended 26 Nov 2026: the layer, docs/PRD_LAYER.md; older saves get the defaults) */
+    uint8_t ly_lv;                       /* GLOBAL's LAYER: loop voices, 1..2 (LY-053: 1, the fallback) */
+    uint8_t ly_sv;                       /* shot voices, 1..4 (3) */
+    uint8_t shot_level;                  /* the MIXER's SEL + K2: the shots' level, 0..100 % */
+    uint8_t ly_hold;                     /* a loop key held this long (x 10 ms) plays while held; shorter: a tap */
 } settings_t;
 #define SET_SIZE_MIN offsetof(settings_t, rsv2)   /* the shortest save that loads: CHP7's first size */
 _Static_assert(offsetof(settings_t, rsv2) == 524u && offsetof(settings_t, mbc) == 552u,
@@ -124,6 +129,10 @@ static void settings_defaults(void)
     set.brk_level = 100u;
     set.drums_chain = 1u;
     set.lane_level = 100u;
+    set.ly_lv = 1u;
+    set.ly_sv = 3u;
+    set.shot_level = 100u;
+    set.ly_hold = 25u;
     set.mc_macro[0] = 50u;               /* DENSITY as written, MATH off, SPEED as written, no CHAOS */
     set.mc_macro[1] = 0u;
     set.mc_macro[2] = 50u;
@@ -293,7 +302,19 @@ static struct {
     mc_scene_t sc[MC_SCENES];
 } mcs;
 _Static_assert(sizeof mcs <= 3840u, "a store object holds 3840 bytes");
-static struct {
+/* the layer's settings as ARP edits them (docs/PRD_LAYER.md 3.3), a loop's and a shot's: the pack's when it came */
+typedef struct {
+    uint8_t level;                       /* 0..100 */
+    int8_t filter;                       /* -50 .. +50 */
+    uint8_t quant, wstart, wbars, au;    /* LYQ_*; the window (wbars 0: all); on when PLAY starts */
+    uint8_t rsv[2];
+} ly_lset_t;
+typedef struct {
+    uint8_t level, mode, choke, quant;   /* 0..100, SHM_*, 0..4, SHQ_* */
+    int8_t pitch;                        /* -24..24 */
+    uint8_t decay, cut, rsv;             /* 0..31; the break silent under it */
+} ly_sset_t;
+typedef struct {
     uint32_t magic;
     uint8_t n;                           /* entries queued */
     uint8_t rsv[3];
@@ -302,8 +323,20 @@ static struct {
     uint8_t rsv2[5];
     bank_sset_t ss[BANK_SLOTS];          /* (1.7, PRD_PACKS PS-003, PE-001) each pack break's settings as edited on
                                           * HOME's LOOP: the pack's own (its SSET) when it came, saved with SAVE */
-} mq;
+    /* (1.8, docs/PRD_LAYER.md) the layer as ARP edits it, and the pack's effect pads (PADS, D5), the pack's own when
+     * it came (ly_from_pack); a 1.7 save loads into the front (MQ_SIZE_17) */
+    uint8_t ly_pads;                     /* 1: ARP plays the pack's pads below (while its breaks play), 0: the FM-1's */
+    uint8_t ly_rsv[3];
+    ly_lset_t lset[BRK_LY_LOOPS];
+    ly_sset_t sset[BRK_LY_SHOTS];
+    brk_fxslot_t pfx[NPFX];
+    brk_fxx_t pfxx[NPFX];
+} mq_t;
+static mq_t mq;
 #define MQ_SIZE_16 88u                   /* the queue as 1.5.5 - 1.6 saved it: it loads into the front */
+#define MQ_SIZE_17 offsetof(mq_t, ly_pads)   /* as 1.7 saved it (728 B): the layer from the pack */
+_Static_assert(offsetof(mq_t, ly_pads) == 728u, "1.7's queue keeps its size");
+static uint8_t ly_init;                  /* the layer's settings not loaded: the pack's (mc_pack) */
 _Static_assert(sizeof mq <= 3840u, "a store object holds 3840 bytes");
 static uint8_t roles_now[BRK_MAX_SLICES];   /* the Slice Map of the break playing (heard: mc_auto_roles) */
 
@@ -533,11 +566,13 @@ static void mc_load(void)                /* boot: the saved scenes and queue, ch
     mq_defaults();                       /* (a 1.6 save fills the front: the settings after it stay as they are) */
     {
         int got = plat_store_load(OBJ_MQ, &mq, sizeof mq);
-        if ((got != (int)sizeof mq && got != (int)MQ_SIZE_16) || mq.magic != MQ_MAGIC || mq.n > MC_QUEUE)
+        if ((got != (int)sizeof mq && got != (int)MQ_SIZE_16 && got != (int)MQ_SIZE_17) || mq.magic != MQ_MAGIC ||
+            mq.n > MC_QUEUE)
             mq_defaults();
         else if (got == (int)MQ_SIZE_16)
             for (i = 0; i < BANK_SLOTS; i++)
                 ss_defaults(&mq.ss[i]);
+        ly_init = got != (int)sizeof mq;
     }
     for (i = 0; i < mq.n; i++)           /* (an entry out of range: the first scene) */
         if (mq.q[i] >= MC_SCENES)
@@ -649,6 +684,8 @@ static const bank_sset_t *pk_sset;
 static uint32_t pk_nsset;
 static const uint8_t *pk_scne, *pk_them, *pk_chan;
 static const bank_ovly_t *pk_ovly;
+static const uint8_t *pk_loop, *pk_shot, *pk_pads;   /* the layer (1.8): LOOP, SHOT, PADS; pk_layer: their banks */
+static uint32_t pk_loop_len, pk_shot_len, pk_layer;
 static uint32_t pk_scne_len, pk_tag;     /* pk_tag: the pack's id, hashed (0: no pack of v2) */
 static void pk_chunks(const uint8_t *p, uint32_t size)
 {
@@ -678,6 +715,16 @@ static void pk_chunks(const uint8_t *p, uint32_t size)
         else if (tag == CHK_OVLY && len >= sizeof(bank_ovly_t) &&
                  len - sizeof(bank_ovly_t) >= (((const bank_ovly_t *)d)->len + 1u) / 2u)
             pk_ovly = (const bank_ovly_t *)d;
+        else if (tag == CHK_LOOP && len >= 4u && !pk_loop) {
+            pk_loop = d;
+            pk_loop_len = len;
+        } else if (tag == CHK_SHOT && len >= 4u && !pk_shot) {
+            pk_shot = d;
+            pk_shot_len = len;
+        } else if (tag == CHK_PADS && len >= NPFX * (sizeof(brk_fxslot_t) + sizeof(brk_fxx_t)))
+            pk_pads = d;
+        if (tag == CHK_OVLY || tag == CHK_LOOP || tag == CHK_SHOT)
+            pk_layer |= 1u << (p == plat_data(PK_BASE[1]));
         at += 8u + len + (-len & 3u);
     }
 }
@@ -686,7 +733,8 @@ static void pk_scan(void)
     uint32_t k, i;
     n_user = 0u;
     pk_pack = 0; pk_sset = 0; pk_scne = 0; pk_them = 0; pk_ovly = 0; pk_chan = 0;
-    pk_nsset = pk_scne_len = pk_tag = 0u;
+    pk_loop = pk_shot = pk_pads = 0;
+    pk_nsset = pk_scne_len = pk_tag = pk_loop_len = pk_shot_len = pk_layer = 0u;
     for (k = 0; k < PK_BANKS; k++) {
         const uint8_t *p = plat_data(PK_BASE[k]);
         const bank_header_t *h = (const bank_header_t *)p;
@@ -790,18 +838,18 @@ static void slot_apply(brk_break_t *d, int16_t *pcm, uint32_t i)
 
 /* the pack's scenes (PRD_PACKS PM-001, PM-002): a pack of v2 brings its own (or the factory's); the scenes and chain
  * saved are the pack's they were made with (its id hashed into mq.rsv), so another pack never inherits them */
-static void mc_pack(void)
+static int mc_pack_core(void)            /* 1: the pack's own came in (another pack, or the first) */
 {
     uint32_t tag = pk_tag & 0xFFFFFFu, had = mq.rsv[0] | mq.rsv[1] << 8 | (uint32_t)mq.rsv[2] << 16, i;
     if (tag == had)
-        return;
+        return 0;
     if (!had && !pk_pack && !pk_scne) {  /* saved before 1.7 with a pack of v1: those scenes are this pack's */
         for (i = 0; i < BANK_SLOTS; i++)
             ss_from_pack(i);
         mq.rsv[0] = (uint8_t)tag;
         mq.rsv[1] = (uint8_t)(tag >> 8);
         mq.rsv[2] = (uint8_t)(tag >> 16);
-        return;
+        return 1;
     }
     if (pk_scne && pk_scne_len == sizeof mcs && rd32le(pk_scne) == MCS_MAGIC) {
         uint8_t *z = (uint8_t *)&mcs;
@@ -823,6 +871,155 @@ static void mc_pack(void)
     mq.rsv[1] = (uint8_t)(tag >> 8);
     mq.rsv[2] = (uint8_t)(tag >> 16);
     brk_mc_scenes(mcs.sc);
+    return 1;
+}
+
+/* ------------------------------------------------------------------ the layer --- */
+/* docs/PRD_LAYER.md: the pack's loops (L1..L4: LOOP's, or 1.7's OVLY as L1) and one-shots (S1..S16, SHOT's), from the
+ * flash; their settings in mq (ly_lset_t, ly_sset_t), the pack's when it came; ARP plays them (ui/arp.c) */
+static struct { const uint8_t *d; uint32_t len, bars; char name[9]; } lyL[BRK_LY_LOOPS];
+static struct { const uint8_t *d; uint32_t len, rate, bpm; char name[9]; } lyS[BRK_LY_SHOTS];
+static uint32_t ly_nl, ly_ns;            /* loops, shots: the keys up to them have one */
+static const bank_loop_t *ly_lrec(uint32_t i)
+{
+    return pk_loop && i < rd32le(pk_loop) && 4u + 32u * (i + 1u) <= pk_loop_len ?
+           (const bank_loop_t *)(pk_loop + 4u + 32u * i) : 0;
+}
+static const bank_shot_t *ly_srec(uint32_t i)
+{
+    return pk_shot && i < rd32le(pk_shot) && 4u + 32u * (i + 1u) <= pk_shot_len ?
+           (const bank_shot_t *)(pk_shot + 4u + 32u * i) : 0;
+}
+static void ly_name(char *t, const char *n)
+{
+    uint32_t k;
+    for (k = 0; k < 8u && n[k] >= ' ' && n[k] < 127; k++)
+        t[k] = n[k];
+    t[k] = 0;
+}
+BRK_COLD static void ly_scan(void)       /* the sources, checked (after pk_scan) */
+{
+    uint32_t i;
+    ly_nl = ly_ns = 0u;
+    for (i = 0; i < BRK_LY_LOOPS; i++) {
+        const bank_loop_t *r = ly_lrec(i);
+        lyL[i].d = 0;
+        lyL[i].name[0] = 0;
+        if (r && r->flags & LPF_OVLY && pk_ovly) {   /* its ADPCM: OVLY's */
+            lyL[i].d = (const uint8_t *)(pk_ovly + 1);
+            lyL[i].len = pk_ovly->len;
+        } else if (r && r->data_off < pk_loop_len && (r->len + 1u) / 2u <= pk_loop_len - r->data_off) {
+            lyL[i].d = pk_loop + r->data_off;
+            lyL[i].len = r->len;
+        } else if (!pk_loop && !i && pk_ovly) {   /* 1.7's overlay: L1 */
+            lyL[i].d = (const uint8_t *)(pk_ovly + 1);
+            lyL[i].len = pk_ovly->len;
+            lyL[i].bars = pk_ovly->bars;
+            ly_name(lyL[i].name, "OVERLAY");
+        }
+        if (r && lyL[i].d) {
+            lyL[i].bars = r->bars;
+            ly_name(lyL[i].name, r->name);
+        }
+        if (lyL[i].d && lyL[i].bars && lyL[i].len >= 64u)
+            ly_nl = i + 1u;
+        else
+            lyL[i].d = 0;
+    }
+    for (i = 0; i < BRK_LY_SHOTS; i++) {
+        const bank_shot_t *r = ly_srec(i);
+        lyS[i].d = 0;
+        lyS[i].name[0] = 0;
+        if (r && r->len >= 2u && r->data_off < pk_shot_len && (r->len + 1u) / 2u <= pk_shot_len - r->data_off) {
+            lyS[i].d = pk_shot + r->data_off;
+            lyS[i].len = r->len;
+            lyS[i].rate = r->rate;
+            lyS[i].bpm = r->bpm_x100;
+            ly_name(lyS[i].name, r->name);
+            ly_ns = i + 1u;
+        }
+    }
+}
+BRK_COLD static void ly_from_pack(void)  /* the layer's settings and the effect pads as the pack has them */
+{
+    uint32_t i, k;
+    for (i = 0; i < BRK_LY_LOOPS; i++) {
+        const bank_loop_t *r = ly_lrec(i);
+        ly_lset_t *l = &mq.lset[i];
+        l->level = r ? (r->level > 100u ? 100u : r->level) : 100u;
+        l->filter = r ? (int8_t)(r->filter < -50 ? -50 : r->filter > 50 ? 50 : r->filter) : 0;
+        l->quant = r ? (uint8_t)(r->quant % LYQ_N) : LYQ_BAR;
+        l->wstart = r ? r->wstart : 0u;
+        l->wbars = r ? r->wbars : 0u;
+        l->au = r ? (uint8_t)(r->flags & LPF_AUTO) : (uint8_t)(!pk_loop && !i && pk_ovly);   /* (1.7's: always on) */
+        l->rsv[0] = l->rsv[1] = 0u;
+    }
+    for (i = 0; i < BRK_LY_SHOTS; i++) {
+        const bank_shot_t *r = ly_srec(i);
+        ly_sset_t *t = &mq.sset[i];
+        t->level = r ? (r->level > 100u ? 100u : r->level) : 100u;
+        t->mode = r ? (uint8_t)(r->mode % SHM_N) : SHM_ONE;
+        t->choke = r ? (uint8_t)(r->choke > 4u ? 0u : r->choke) : 0u;
+        t->quant = r ? (uint8_t)(r->quant % SHQ_N) : SHQ_NOW;
+        t->pitch = r ? (int8_t)(r->pitch < -24 ? -24 : r->pitch > 24 ? 24 : r->pitch) : 0;
+        t->decay = r ? (uint8_t)(r->decay & 31u) : 0u;
+        t->cut = r ? (uint8_t)(r->flags & SHF_CUT) : 0u;
+        t->rsv = 0u;
+    }
+    mq.ly_pads = pk_pads != 0;
+    for (i = 0; pk_pads && i < NPFX; i++) {   /* PADS: each pad's slot, then its extras (an effect it can't be: empty) */
+        const uint8_t *q = pk_pads + i * (sizeof(brk_fxslot_t) + sizeof(brk_fxx_t));
+        for (k = 0; k < sizeof(brk_fxslot_t); k++)
+            ((uint8_t *)&mq.pfx[i])[k] = q[k];
+        for (k = 0; k < sizeof(brk_fxx_t); k++)
+            ((uint8_t *)&mq.pfxx[i])[k] = q[sizeof(brk_fxslot_t) + k];
+        if (mq.pfx[i].type >= BRK_NFXT || mq.pfx[i].type == FXT_MBCOMP)
+            mq.pfx[i].type = FXT_EMPTY;
+        mq.pfx[i].rsv[0] = 0u;           /* (TARGET: the whole mix, until LY-035) */
+    }
+}
+static uint32_t ly_lcfg(uint32_t i)
+{
+    const ly_lset_t *l = &mq.lset[i % BRK_LY_LOOPS];
+    uint32_t wb = l->wbars ? l->wbars : 16u;
+    return BRK_LY_LCFG(l->level, l->filter, l->wstart & 15u, wb > 16u ? 16u : wb, l->quant & 3u, l->au & 1u);
+}
+static uint32_t ly_scfg(uint32_t i)
+{
+    const ly_sset_t *t = &mq.sset[i % BRK_LY_SHOTS];
+    return BRK_LY_SCFG(t->level, t->pitch, t->decay & 31u, t->mode % SHM_N, t->choke & 7u, t->quant % SHQ_N,
+                       t->cut & 1u);
+}
+BRK_COLD static void ly_apply(void)      /* the layer to the engine: the sources, their settings, the voices */
+{
+    uint32_t i;
+    for (i = 0; i < BRK_LY_LOOPS; i++) {
+        brk_ly_loop_cfg(i, ly_lcfg(i));
+        brk_ly_loop(i, lyL[i].d, lyL[i].len, lyL[i].bars);
+    }
+    for (i = 0; i < BRK_LY_SHOTS; i++) {
+        brk_ly_shot_cfg(i, ly_scfg(i));
+        brk_ly_shot(i, lyS[i].d, lyS[i].len, lyS[i].rate, lyS[i].bpm);
+    }
+    brk_ly_voices(set.ly_lv ? set.ly_lv : 1u, set.ly_sv ? set.ly_sv : 3u);
+}
+static void arp_pads_changed(void);      /* (ui/arp.c: the pads' table changed: the held and latched ones let go) */
+/* the ARP page's effect pads (D5): the pack's while its breaks play, when it brought its own; else the FM-1's */
+static int pfx_pack(void) { return mq.ly_pads && set.brk < n_user; }
+static brk_fxslot_t *pfx_at(uint32_t i) { return pfx_pack() ? &mq.pfx[i % NPFX] : &set.pfx[i % NPFX]; }
+static brk_fxx_t *pfxx_at(uint32_t i) { return pfx_pack() ? &mq.pfxx[i % NPFX] : &set.pfxx[i % NPFX]; }
+static void mc_pack(void)                /* the pack's scenes, chain, loop settings, layer and pads */
+{
+    uint8_t sig = (uint8_t)(1u | (pk_loop != 0) << 1 | (pk_shot != 0) << 2 | (pk_pads != 0) << 3 | (pk_ovly != 0) << 4);
+    int core = mc_pack_core(), boot = ly_init;
+    if (core || boot || mq.ly_rsv[0] != sig)   /* (a pack's banks come one by one: its layer as it lands) */
+        ly_from_pack();
+    mq.ly_rsv[0] = sig;
+    if (boot && !core)                   /* (a save without the layer: the pack's, nothing new to write) */
+        mq_saved = crc32_of((const uint8_t *)&mq, sizeof mq);
+    ly_init = 0u;
+    ly_apply();
+    arp_pads_changed();
 }
 
 static void theme_apply(uint32_t pack)
@@ -892,10 +1089,7 @@ static void breaks_count(void)
 {
     const uint8_t *bk;
     pk_scan();
-    if (pk_ovly)                         /* the pack's overlay, read from the flash as it plays (PO-001) */
-        brk_overlay((const uint8_t *)(pk_ovly + 1), pk_ovly->len, pk_ovly->bars);
-    else
-        brk_overlay(0, 0u, 0u);
+    ly_scan();                           /* the pack's loops and shots (to the engine: mc_pack's ly_apply) */
     n_breaks = 0u;
     while (n_breaks < BANK_SLOTS && slot_of(n_user + n_breaks, &bk))
         n_breaks++;
@@ -1057,6 +1251,13 @@ static const brk_break_t *break_load(uint32_t i)
     mc_auto_roles(b, roles_now);         /* the Slice Map: the kicks, snares, hats and the rest, heard */
     slot_roles(i, b);
     theme_apply(i < n_user);             /* the pack's colours while its breaks play (Q1: a built-in break, amber) */
+    {                                    /* the pack's pads, or the FM-1's: on the way from one to the other, let go */
+        static int pw = -1;
+        if (pfx_pack() != pw) {
+            pw = pfx_pack();
+            arp_pads_changed();
+        }
+    }
     brk_overlay_on(i < n_user);          /* its overlay under its breaks only */
     brk_roles(roles_now, BRK_MAX_SLICES);
     brk_pitch((float)(set.pitch + slot_pitch));
@@ -1328,15 +1529,7 @@ void app_render(int32_t *lr, uint32_t n, uint32_t master_q12)
             }
             meter_brk = meter(mono, m, meter_brk);
         }
-        {                                /* the MIXER's OVERLAY fader (eased) */
-            static float olv = 1.0f;
-            float want = (float)set.lane_level * 0.01f;
-            for (i = 0; i < m; i++) {
-                olv += (want - olv) * 0.002f;
-                ovl[i] *= olv;
-            }
-            meter_ov = meter(ovl, m, meter_ov);
-        }
+        meter_ov = meter(ovl, m, meter_ov);   /* (the layer: its LOOPS and SHOTS faders in the engine, brk_ly_gain) */
         if (set.clk_out) {               /* clock out: each tick due as its sample plays (a block from now) */
             uint16_t off[16];
             uint32_t k, nt = brk_clock_ticks(off, 16u);

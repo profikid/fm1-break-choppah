@@ -3,13 +3,24 @@
  * the split. (Part of app.c's unity: included there in order.) */
 
 static void reset_all(void);             /* (below, with the break's change) */
-#define GPARTS 3u                        /* MIDI, PITCH, CHANNEL */
+#define GPARTS 4u                        /* MIDI, PITCH, CHANNEL, LAYER */
 static const char *const MO_NAME[3] = {"NOTES", "CC", "PC"};
 /* the GLOBAL page's knobs: clock in, clock out, Bluetooth, where MIDI goes */
 static const char *const MIDI_TO_NAME[3] = {"USB+BT", "USB", "BT"};
 static void global_value(int i, char *t)
 {
     t[0] = 0;
+    if (ui.gpage == 3u) {                /* LAYER (docs/PRD_LAYER.md LY-053): the voices the layer may use, the hold */
+        if (i == 0)
+            int_text(set.ly_lv ? set.ly_lv : 1, t);
+        else if (i == 1)
+            int_text(set.ly_sv ? set.ly_sv : 3, t);
+        else if (i == 2) {
+            int_text((set.ly_hold ? set.ly_hold : 25) * 10, t);
+            text_cat(t, " MS");
+        }
+        return;
+    }
     if (ui.gpage == 2u) {                /* CHANNEL: in (and out), and what goes out */
         if (i == 0) {
             if (set.midi_ch)
@@ -40,6 +51,22 @@ static void global_turn(int i, int32_t d)
 {
     static const char *const NAME[4] = {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"};
     char t[16];
+    if (ui.gpage == 3u) {                /* LAYER: K1 loop voices 1..2, K2 shot voices 1..4, K3 a loop key's hold */
+        if (i == 0)
+            set.ly_lv = (uint8_t)clamp((int32_t)(set.ly_lv ? set.ly_lv : 1u) + (d > 0 ? 1 : -1), 1, BRK_LY_LV);
+        else if (i == 1)
+            set.ly_sv = (uint8_t)clamp((int32_t)(set.ly_sv ? set.ly_sv : 3u) + (d > 0 ? 1 : -1), 1, BRK_LY_SV);
+        else if (i == 2)
+            set.ly_hold = (uint8_t)clamp((int32_t)(set.ly_hold ? set.ly_hold : 25u) + d * 5, 10, 60);
+        else
+            return;
+        brk_ly_voices(set.ly_lv, set.ly_sv);
+        global_value(i, t);
+        app_say(i == 0 ? "LOOP VOICES" : i == 1 ? "SHOT VOICES" : "HOLD", t);
+        ui.redraw |= RG_BLOCKS;
+        changed();
+        return;
+    }
     if (ui.gpage == 2u) {                /* K1 the channel (OMNI, 1..16), K2..K4 notes, CC, program changes out */
         if (i == 0)
             set.midi_ch = (uint8_t)clamp((int32_t)set.midi_ch + d, 0, 16);
@@ -106,6 +133,27 @@ static void draw_global(const brk_status_t *st)
     char t[32], v[16];
     uint32_t p;
     int bs = plat_ble_state();
+    if (ui.gpage == 3u) {                /* LAYER: the voices, and what they cost */
+        static const char *const L[3] = {"LOOP VOICES", "SHOT VOICES", "HOLD"};
+        uint32_t k;
+        cv_begin(240, 52, C_BLACK);
+        for (k = 0; k < 3u; k++) {
+            cv_text(6, (int32_t)k * 16 + 2, &FONT_T, L[k], C_GRAY);
+            global_value((int)k, t);
+            cv_text(120, (int32_t)k * 16 + 2, &FONT_T, t, C_HI);
+        }
+        cv_blit(0, 88);
+        cv_begin(240, 52, C_BLACK);
+        cv_text(6, 2, &FONT_XS, "MORE VOICES COST MORE OF THE CPU:", C_DIM);
+        cv_text(6, 16, &FONT_XS, "OVERLOAD IN THE HEADER: FEWER", C_DIM);
+        cv_text(6, 30, &FONT_XS, "A LOOP KEY HELD THIS LONG PLAYS WHILE HELD", C_DIM);
+        cv_blit(0, 140);
+        (void)st;
+        (void)v;
+        (void)p;
+        (void)bs;
+        return;
+    }
     if (ui.gpage == 2u) {                /* CHANNEL: the channel, what goes out, the map */
         cv_begin(240, 52, C_BLACK);
         cv_text(6, 2, &FONT_T, "CHANNEL", C_GRAY);

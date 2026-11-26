@@ -13,8 +13,8 @@ static uint8_t pfx_owner[BRK_PAD_V];     /* each voice's key + 1 (0: free) */
 static uint32_t pfx_age[BRK_PAD_V];      /* when it was given (a fifth key takes the oldest) */
 static uint32_t pfx_on(void) { return (uint32_t)(pfx_held | pfx_latched); }
 static uint32_t fxk(void) { return ui.page == PG_ARP ? BRK_FX_SLOTS + pfx_sel % NPFX : ui.fx_focus & 3u; }
-static brk_fxslot_t *usl(uint32_t k) { return k < BRK_FX_SLOTS ? &set.fx.slot[k] : &set.pfx[(k - BRK_FX_SLOTS) % NPFX]; }
-static brk_fxx_t *uxx(uint32_t k) { return k < BRK_FX_SLOTS ? &set.fxx[k] : &set.pfxx[(k - BRK_FX_SLOTS) % NPFX]; }
+static brk_fxslot_t *usl(uint32_t k) { return k < BRK_FX_SLOTS ? &set.fx.slot[k] : pfx_at(k - BRK_FX_SLOTS); }
+static brk_fxx_t *uxx(uint32_t k) { return k < BRK_FX_SLOTS ? &set.fxx[k] : pfxx_at(k - BRK_FX_SLOTS); }
 static uint32_t eng_slot(uint32_t k)     /* the engine's slot for k: the chain's own, a key's voice (BRK_FX_ALL: none) */
 {
     if (k < BRK_FX_SLOTS)

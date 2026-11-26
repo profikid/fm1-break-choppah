@@ -124,17 +124,54 @@ static uint16_t ev_off[EV_MAX];          /* the last render's steps: offsets and
 static uint8_t ev_idx[EV_MAX];
 static uint32_t ev_cnt;
 static uint32_t steps_total;             /* steps begun since the reset (the outside clock counts from its start) */
-/* the overlay (brk_overlay): the data in flash, decoded OVB samples at a time; where decoding may start, every OV_CK */
+/* the layer (docs/PRD_LAYER.md): the loops (the overlay is loop 0) and the one-shots, read from the flash as they
+ * play. Each voice decodes two blocks of OVB ahead (ly_dec_t), so a sample and the next are always in hand; a loop's
+ * jump starts from the mark before it (every OV_CK, all the loops' marks in ly_ck) */
 #define OVB 64u
 #define OV_CK 4096u
-#define OV_NCK 160u                      /* (655,360 samples at most: 16 bars at 22.05 kHz down to 64 BPM) */
-static const uint8_t *volatile p_ov;
-static volatile uint32_t p_ov_len, p_ov_bars, p_ov_gen, p_ov_on;
-static adpcm_state_t ov_ck[OV_NCK];
-static uint32_t ov_gen_seen, ov_b0 = 0xFFFFFFFFu;
-static adpcm_state_t ov_st;
-static int16_t ov_buf[OVB];
-static float ov_pos, ov_amp, *ov_out;
+#define LY_NCK 192u                      /* (786,432 samples of loops: more than the flash holds) */
+#define LY_FADE (1.0f / 220.0f)          /* 5 ms */
+#define LY_NONE 0xFFFFFFFFu
+typedef struct {
+    adpcm_state_t st;                    /* after the two blocks in buf */
+    uint32_t b0;                         /* buf[0] is sample b0 (LY_NONE: nothing yet) */
+    int16_t buf[2u * OVB];
+} ly_dec_t;
+typedef struct {
+    const uint8_t *d;
+    uint32_t len, bars, ck0;             /* ck0: its first mark in ly_ck */
+} ly_src_t;
+typedef struct {
+    float pos, amp, lp;                  /* its place (samples), its fade, its filter */
+    uint32_t age;                        /* when it came on (renders): the oldest gives up its voice */
+    uint8_t on, pend, pon, pq;           /* on; a change waiting (pon at quantise pq) */
+    int8_t vox;                          /* its voice, or -1 */
+} ly_loop_t;
+typedef struct {
+    float pos, inc, amp, env, dk;
+    uint32_t age;
+    int8_t shot;                         /* -1: free */
+    uint8_t held, rel, cut;
+    ly_dec_t dec;
+} ly_shot_t;
+static ly_src_t ly_src[BRK_LY_LOOPS];
+static adpcm_state_t ly_ck[LY_NCK];
+static volatile uint32_t p_ly_gen, p_lcfg[BRK_LY_LOOPS], p_lwant[BRK_LY_LOOPS], p_scfg[BRK_LY_SHOTS];
+static volatile uint32_t p_ly_nv = 1u | 3u << 4;   /* loop voices | shot voices << 4: GLOBAL's LAYER (the fallback) */
+static volatile float p_ly_lg = 1.0f, p_ly_sg = 1.0f;
+static uint32_t ly_gen_seen, lwant_seen[BRK_LY_LOOPS];
+static ly_loop_t ly_l[BRK_LY_LOOPS];
+static ly_dec_t ly_ld[BRK_LY_LV];        /* the loop voices' decoders */
+static int8_t ly_lv_loop[BRK_LY_LV] = {-1, -1};
+static struct { const uint8_t *d; uint32_t len, rate, bpm_x100; } sh_src[BRK_LY_SHOTS];
+static ly_shot_t ly_s[BRK_LY_SV];
+static struct { int8_t shot; uint8_t q; } sh_pend[BRK_LY_SV];
+#define SQ_LEN 16u
+static volatile uint8_t sq[SQ_LEN];      /* the shots' keys: shot | down << 4 */
+static volatile uint32_t sq_w, sq_r;
+static float ly_cut = 1.0f, ly_lgain = 1.0f, ly_sgain = 1.0f, *ov_out;
+static volatile uint32_t p_ov_on;
+static brk_ly_status_t ly_st;
 static int was_playing;                  /* the transport at the last render: a stop fades the break out */
 static volatile uint32_t n_renders;
 /* MATHCORE: the roles, the lanes' voices, the scene playing */
@@ -1091,44 +1128,406 @@ static void voice_tick(const brk_break_t *b, voice_t *o, float inc, float pf, fl
 }
 
 static const brk_break_t *swap_now(void);
-void brk_overlay(const uint8_t *adpcm, uint32_t len, uint32_t bars)
+
+/* sample j of a source: the two blocks in hand moved on, or (a jump) decoded again from the mark before j (a shot,
+ * without marks: from its start) */
+static int16_t ly_at(ly_dec_t *v, const uint8_t *d, uint32_t len, uint32_t j, const adpcm_state_t *ck)
+{
+    uint32_t k, a;
+    if (j - v->b0 < 2u * OVB && v->b0 != LY_NONE)
+        return v->buf[j - v->b0];
+    if (j >= len)
+        return 0;
+    if (v->b0 != LY_NONE && j - v->b0 < 3u * OVB) {   /* the next block: one decoded */
+        for (k = 0; k < OVB; k++)
+            v->buf[k] = v->buf[OVB + k];
+        v->b0 += OVB;
+        a = v->b0 + OVB;
+    } else {                             /* a jump: from the mark (or the start), to j's block */
+        a = j & ~(OVB - 1u);
+        k = ck ? a / OV_CK : 0u;
+        if (ck)
+            v->st = ck[k];
+        else
+            v->st.pred = 0, v->st.index = 0;
+        for (k *= OV_CK; ck && k < a; k += OVB) {
+            int16_t tmp[OVB];
+            adpcm_decode(&v->st, d + k / 2u, tmp, OVB);
+        }
+        if (!ck && a) {                  /* (a shot: decoded on from its start) */
+            int16_t tmp[OVB];
+            for (k = 0; k < a; k += OVB)
+                adpcm_decode(&v->st, d + k / 2u, tmp, OVB);
+        }
+        v->b0 = a;
+        for (k = 0; k < OVB; k++)
+            v->buf[k] = 0;
+        if (a < len)
+            adpcm_decode(&v->st, d + a / 2u, v->buf, len - a < OVB ? len - a : OVB);
+        a += OVB;
+    }
+    for (k = 0; k < OVB; k++)
+        v->buf[OVB + k] = 0;
+    if (a < len)
+        adpcm_decode(&v->st, d + a / 2u, v->buf + OVB, len - a < OVB ? len - a : OVB);
+    return v->buf[j - v->b0];
+}
+
+/* main loop: loop i's source (its marks made by walking it once) */
+BRK_COLD void brk_ly_loop(uint32_t i, const uint8_t *adpcm, uint32_t len, uint32_t bars)
 {
     adpcm_state_t st = {0, 0, 0};
     int16_t tmp[OVB];
-    uint32_t at;
-    p_ov = 0;                            /* (the render lets go first) */
-    if (!adpcm || len < OVB || len > OV_NCK * OV_CK || !bars)
+    uint32_t at, ck0 = 0u, k;
+    if (i >= BRK_LY_LOOPS)
         return;
-    for (at = 0; at < len; at += OVB) {  /* the state at every OV_CK: where a jump starts decoding */
+    ly_src[i].d = 0;                     /* (the render lets go first) */
+    p_ly_gen++;
+    for (k = 0; k < BRK_LY_LOOPS; k++)   /* its marks after the other loops' */
+        if (k != i && ly_src[k].d)
+            ck0 = ck0 > ly_src[k].ck0 + (ly_src[k].len + OV_CK - 1u) / OV_CK ? ck0
+                  : ly_src[k].ck0 + (ly_src[k].len + OV_CK - 1u) / OV_CK;
+    if (!adpcm || len < OVB || !bars || ck0 + (len + OV_CK - 1u) / OV_CK > LY_NCK)
+        return;
+    for (at = 0; at < len; at += OVB) {
         if (!(at % OV_CK))
-            ov_ck[at / OV_CK] = st;
+            ly_ck[ck0 + at / OV_CK] = st;
         adpcm_decode(&st, adpcm + at / 2u, tmp, len - at < OVB ? len - at : OVB);
     }
-    p_ov_len = len;
-    p_ov_bars = bars;
-    p_ov_gen++;
-    p_ov = adpcm;
+    ly_src[i].len = len;
+    ly_src[i].bars = bars;
+    ly_src[i].ck0 = ck0;
+    ly_src[i].d = adpcm;
+    p_ly_gen++;
+}
+BRK_COLD void brk_ly_loop_cfg(uint32_t i, uint32_t cfg) { if (i < BRK_LY_LOOPS) p_lcfg[i] = cfg; }
+void brk_ly_want(uint32_t i, int on, uint32_t q)
+{
+    if (i < BRK_LY_LOOPS)
+        p_lwant[i] = ((p_lwant[i] >> 8) + 1u) << 8 | (q & 3u) << 1 | (on != 0);
+}
+BRK_COLD void brk_ly_shot(uint32_t i, const uint8_t *adpcm, uint32_t len, uint32_t rate, uint32_t bpm_x100)
+{
+    if (i >= BRK_LY_SHOTS)
+        return;
+    sh_src[i].d = 0;
+    sh_src[i].len = len;
+    sh_src[i].rate = rate >= 4000u && rate <= 48000u ? rate : 22050u;
+    sh_src[i].bpm_x100 = bpm_x100;
+    if (adpcm && len >= 2u)
+        sh_src[i].d = adpcm;
+}
+BRK_COLD void brk_ly_shot_cfg(uint32_t i, uint32_t cfg) { if (i < BRK_LY_SHOTS) p_scfg[i] = cfg; }
+void brk_ly_hit(uint32_t i, int down)
+{
+    if (i >= BRK_LY_SHOTS || sq_w - sq_r >= SQ_LEN)
+        return;
+    sq[sq_w % SQ_LEN] = (uint8_t)(i | (down ? 16u : 0u));
+    sq_w++;
+}
+BRK_COLD void brk_ly_voices(uint32_t loops, uint32_t shots)
+{
+    loops = loops < 1u ? 1u : loops > BRK_LY_LV ? BRK_LY_LV : loops;
+    shots = shots < 1u ? 1u : shots > BRK_LY_SV ? BRK_LY_SV : shots;
+    p_ly_nv = loops | shots << 4;
+}
+BRK_COLD void brk_ly_gain(float loops, float shots) { p_ly_lg = loops; p_ly_sg = shots; }
+BRK_COLD void brk_ly_clear(void)
+{
+    uint32_t i;
+    for (i = 0; i < BRK_LY_LOOPS; i++)
+        ly_src[i].d = 0;
+    for (i = 0; i < BRK_LY_SHOTS; i++)
+        sh_src[i].d = 0;
+    p_ly_gen++;
+}
+void brk_ly_status(brk_ly_status_t *s) { *s = ly_st; }
+
+/* the overlay of 1.7 (PRD_PACKS 7): loop 0, all of it on its bars, on whenever PLAY plays */
+BRK_COLD void brk_overlay(const uint8_t *adpcm, uint32_t len, uint32_t bars)
+{
+    brk_ly_loop_cfg(0u, BRK_LY_LCFG(100u, 0, 0u, 16u, LYQ_NOW, 1u));
+    brk_ly_loop(0u, adpcm, len, bars);
+    brk_ly_want(0u, 1, LYQ_NOW);
 }
 void brk_overlay_on(int on) { p_ov_on = on != 0; }
 void brk_overlay_out(float *o) { ov_out = o; }
 
-/* overlay sample j (0..len-1): the next OVB decoded in turn, or from the mark before j after a jump */
-static int16_t ov_at(const uint8_t *d, uint32_t len, uint32_t j)
+/* a loop's window: its first bar and its bars (cfg), inside the loop */
+static uint32_t ly_win(uint32_t i, uint32_t *wl)
 {
-    if (j - ov_b0 >= OVB) {
-        if (j - ov_b0 >= 2u * OVB || ov_b0 >= len) {   /* a jump: from the mark */
-            uint32_t k = j / OV_CK;
-            ov_st = ov_ck[k];
-            ov_b0 = k * OV_CK;
-            while (j - ov_b0 >= OVB) {
-                adpcm_decode(&ov_st, d + ov_b0 / 2u, ov_buf, OVB);
-                ov_b0 += OVB;
-            }
-        } else
-            ov_b0 += OVB;
-        adpcm_decode(&ov_st, d + ov_b0 / 2u, ov_buf, len - ov_b0 < OVB ? len - ov_b0 : OVB);
+    uint32_t c = p_lcfg[i], bars = ly_src[i].bars, ws = c >> 14 & 15u, w = (c >> 18 & 15u) + 1u;
+    if (ws >= bars)
+        ws = 0u;
+    if (w > bars - ws)
+        w = bars - ws;
+    *wl = w;
+    return ws;
+}
+/* loop i's place at the bar line beginning now: its window's bar for the transport's bar */
+static void ly_bar(uint32_t i, uint32_t bar_n)
+{
+    uint32_t wl, ws = ly_win(i, &wl);
+    if (ly_src[i].d)
+        ly_l[i].pos = (float)(ws + bar_n % wl) * (float)ly_src[i].len / (float)ly_src[i].bars;
+}
+static void ly_start_shot(uint32_t s)
+{
+    uint32_t c = p_scfg[s], nv = p_ly_nv >> 4, v, best = 0u, ch = c >> 20 & 7u;
+    ly_shot_t *o;
+    float sec;
+    if (!sh_src[s].d)
+        return;
+    for (v = 0; v < nv && v < BRK_LY_SV; v++) {   /* the shot again, or its choke group: those let go */
+        ly_shot_t *x = &ly_s[v];
+        if (x->shot >= 0 && (x->shot == (int8_t)s || (ch && (p_scfg[x->shot] >> 20 & 7u) == ch)))
+            x->rel = 1u;
     }
-    return ov_buf[j - ov_b0];
+    for (v = 0; v < nv && v < BRK_LY_SV; v++) {   /* a free voice, else the oldest */
+        if (ly_s[v].shot < 0) {
+            best = v;
+            break;
+        }
+        if ((int32_t)(ly_s[v].age - ly_s[best].age) < 0)
+            best = v;
+    }
+    o = &ly_s[best];
+    o->shot = (int8_t)s;
+    o->pos = 0.0f;
+    o->amp = 0.0f;
+    o->env = 1.0f;
+    o->held = 1u;
+    o->rel = 0u;
+    o->cut = (uint8_t)(c >> 25 & 1u);
+    o->age = n_renders;
+    o->dec.b0 = LY_NONE;
+    sec = (c >> 13 & 31u) ? 0.03f * brk_exp2f_c((float)(31u - (c >> 13 & 31u)) * 0.25f) : 0.0f;
+    o->dk = sec > 0.0f ? brk_exp2f_c(-1.4427f / (sec * (float)BRK_SR)) : 1.0f;
+    o->inc = (float)sh_src[s].rate / (float)BRK_SR * brk_exp2f_c((float)((int32_t)(c >> 7 & 63u) - 24) * (1.0f / 12.0f));
+    if (sh_src[s].bpm_x100 >= 4000u)     /* a tempo: it follows the tempo (a fill) */
+        o->inc *= p_tempo * 100.0f / (float)sh_src[s].bpm_x100;
+}
+/* the keys of the shots, and the voices for the loops: at each render's start */
+static void ly_block(int playing)
+{
+    uint32_t i, v, nlv = p_ly_nv & 15u, nsv = p_ly_nv >> 4;
+    if (p_ly_gen != ly_gen_seen) {       /* new sources: every voice from its mark again */
+        ly_gen_seen = p_ly_gen;
+        for (v = 0; v < BRK_LY_LV; v++)
+            ly_ld[v].b0 = LY_NONE;
+        for (i = 0; i < BRK_LY_LOOPS; i++)
+            ly_bar(i, steps_total ? (steps_total - 1u) >> 4 : 0u);
+        for (v = 0; v < BRK_LY_SV; v++)
+            if (ly_s[v].shot >= 0 && !sh_src[ly_s[v].shot].d)
+                ly_s[v].shot = -1;
+    }
+    for (i = 0; i < BRK_LY_LOOPS; i++) { /* the main loop's wants: at once, or at their point (stopped: at once) */
+        uint32_t w = p_lwant[i];
+        if (w >> 8 == lwant_seen[i])
+            continue;
+        lwant_seen[i] = w >> 8;
+        ly_l[i].pon = (uint8_t)(w & 1u);
+        ly_l[i].pq = (uint8_t)(w >> 1 & 3u);
+        ly_l[i].pend = 1u;
+        if (!playing || !ly_l[i].pq || ly_l[i].pon == ly_l[i].on) {
+            ly_l[i].pend = 0u;
+            if (ly_l[i].pon && !ly_l[i].on)
+                ly_l[i].age = n_renders;
+            ly_l[i].on = ly_l[i].pon;
+        }
+    }
+    for (v = 0; v < BRK_LY_LV; v++)      /* a voice quiet whose loop is off (or beyond the voices allowed): free */
+        if (ly_lv_loop[v] >= 0) {
+            ly_loop_t *l = &ly_l[ly_lv_loop[v]];
+            if ((!l->on || !ly_src[ly_lv_loop[v]].d || v >= nlv) && l->amp <= 0.0f) {
+                l->vox = -1;
+                ly_lv_loop[v] = -1;
+            } else if (v >= nlv)
+                l->on = 0u;
+        }
+    for (i = 0; i < BRK_LY_LOOPS; i++) { /* a loop on without a voice: a free one, else the oldest gives its up */
+        ly_loop_t *l = &ly_l[i];
+        int32_t old = -1;
+        if (!l->on || l->vox >= 0 || !ly_src[i].d)
+            continue;
+        for (v = 0; v < nlv; v++)
+            if (ly_lv_loop[v] < 0)
+                break;
+        if (v < nlv) {
+            ly_lv_loop[v] = (int8_t)i;
+            l->vox = (int8_t)v;
+            l->amp = 0.0f;
+            ly_ld[v].b0 = LY_NONE;
+            continue;
+        }
+        for (v = 0; v < nlv; v++)
+            if (ly_l[ly_lv_loop[v]].on &&
+                (old < 0 || (int32_t)(ly_l[ly_lv_loop[v]].age - ly_l[ly_lv_loop[old]].age) < 0))
+                old = (int32_t)v;
+        if (old >= 0 && (int32_t)(ly_l[ly_lv_loop[old]].age - l->age) < 0)
+            ly_l[ly_lv_loop[old]].on = 0u;   /* (it fades, then its voice is this one's) */
+    }
+    while (sq_r != sq_w) {               /* the shots' keys */
+        uint32_t e = sq[sq_r % SQ_LEN], s = e & 15u, q = p_scfg[s] >> 23 & 3u, md = p_scfg[s] >> 18 & 3u;
+        sq_r++;
+        if (e & 16u) {
+            if (!playing || q == SHQ_NOW)
+                ly_start_shot(s);
+            else {
+                for (v = 0; v < BRK_LY_SV; v++)
+                    if (sh_pend[v].shot < 0 || sh_pend[v].shot == (int8_t)s)
+                        break;
+                if (v < BRK_LY_SV) {
+                    sh_pend[v].shot = (int8_t)s;
+                    sh_pend[v].q = (uint8_t)q;
+                }
+            }
+        } else {
+            for (v = 0; v < BRK_LY_SV; v++) {
+                if (ly_s[v].shot == (int8_t)s)
+                    ly_s[v].held = 0u;
+                if (sh_pend[v].shot == (int8_t)s && md != SHM_ONE)
+                    sh_pend[v].shot = -1;   /* (let go before its point: never heard) */
+            }
+        }
+    }
+    for (v = nsv; v < BRK_LY_SV; v++)    /* the voices beyond those allowed: quiet */
+        if (ly_s[v].shot >= 0)
+            ly_s[v].rel = 1u;
+}
+/* a step begins (playing): the loops' and shots' points, the loops on their bars */
+static void ly_step(uint32_t st)
+{
+    uint32_t i, wl;
+    for (i = 0; i < BRK_LY_LOOPS; i++) {
+        ly_loop_t *l = &ly_l[i];
+        if (l->pend) {
+            uint32_t q = l->pq;
+            ly_win(i, &wl);
+            if ((q == LYQ_BEAT && !(st & 3u)) || (q == LYQ_BAR && !(st & 15u)) ||
+                (q == LYQ_LOOP && !(st % (16u * (ly_src[i].d ? wl : 1u))))) {
+                l->pend = 0u;
+                if (l->pon && !l->on)
+                    l->age = n_renders;
+                l->on = l->pon;
+            }
+        }
+        if (!(st & 15u))
+            ly_bar(i, st >> 4);
+    }
+    for (i = 0; i < BRK_LY_SV; i++)
+        if (sh_pend[i].shot >= 0 && (sh_pend[i].q == SHQ_16 || !(st & 3u))) {
+            ly_start_shot((uint32_t)sh_pend[i].shot);
+            sh_pend[i].shot = -1;
+        }
+}
+/* one sample of the layer (and the break's cut), the transport's speed sp (HALF and the tape) */
+static float ly_sample(int playing, float sl, float half, float tape)
+{
+    float y = 0.0f, ys = 0.0f, cut = 1.0f;
+    uint32_t i, v, nsv = p_ly_nv >> 4;
+    for (i = 0; i < BRK_LY_LOOPS; i++) {
+        ly_loop_t *l = &ly_l[i];
+        const uint8_t *d = ly_src[i].d;
+        uint32_t c = p_lcfg[i];
+        if (!d)
+            continue;
+        if (l->vox >= 0) {
+            float want = l->on && playing && p_ov_on ? (float)(c & 127u) * 0.01f : 0.0f, x;
+            int32_t f = (int32_t)(c >> 7 & 127u) - 50;
+            uint32_t len = ly_src[i].len, ip;
+            l->amp += l->amp < want ? LY_FADE : l->amp > want ? -LY_FADE : 0.0f;
+            if (l->amp < 0.0f || (want <= 0.0f && l->amp < LY_FADE))
+                l->amp = l->amp < 0.0f || want <= 0.0f ? 0.0f : l->amp;
+            if (l->amp > 0.0f) {
+                ly_dec_t *dv = &ly_ld[l->vox];
+                const adpcm_state_t *ck = ly_ck + ly_src[i].ck0;
+                float fr;
+                if (l->pos >= (float)len || l->pos < 0.0f)
+                    l->pos = 0.0f;
+                ip = (uint32_t)l->pos;
+                fr = l->pos - (float)ip;
+                x = (float)ly_at(dv, d, len, ip, ck);
+                if (ip + 1u < len)
+                    x += ((float)ly_at(dv, d, len, ip + 1u, ck) - x) * fr;
+                if (f) {                 /* its filter: one pole, low-pass 16 kHz .. 90 Hz, high-pass 30 Hz .. 5 kHz */
+                    float a = (f < 0 ? 16000.0f : 30.0f) * brk_exp2f((float)f * 0.15f) * 1.4247e-4f;
+                    l->lp += (x - l->lp) * (a < 1.0f ? a : 1.0f);
+                    x = f < 0 ? l->lp : x - l->lp;
+                }
+                y += x * l->amp;
+            }
+        }
+        if (playing)                     /* on the bars, with the tempo, HALF and the tape */
+            l->pos += (float)ly_src[i].len / ((float)ly_src[i].bars * 16.0f * sl) * half * tape;
+    }
+    for (v = 0; v < nsv && v < BRK_LY_SV; v++) {
+        ly_shot_t *o = &ly_s[v];
+        uint32_t c, len, ip, md;
+        const uint8_t *d;
+        float x, fr;
+        if (o->shot < 0)
+            continue;
+        c = p_scfg[o->shot];
+        d = sh_src[o->shot].d;
+        len = sh_src[o->shot].len;
+        md = c >> 18 & 3u;
+        if (!d) {
+            o->shot = -1;
+            continue;
+        }
+        if (o->rel || (!o->held && md != SHM_ONE)) {
+            o->amp -= LY_FADE;
+            if (o->amp <= 0.0f) {
+                o->shot = -1;
+                continue;
+            }
+        } else if (o->amp < 1.0f)
+            o->amp = o->amp + 0.05f > 1.0f ? 1.0f : o->amp + 0.05f;
+        if (o->cut && !o->rel && (o->held || md == SHM_ONE))
+            cut = 0.0f;
+        ip = (uint32_t)o->pos;
+        fr = o->pos - (float)ip;
+        x = (float)ly_at(&o->dec, d, len, ip, 0);
+        if (ip + 1u < len)
+            x += ((float)ly_at(&o->dec, d, len, ip + 1u, 0) - x) * fr;
+        ys += x * o->amp * o->env * (float)(c & 127u) * 0.01f;
+        o->env *= o->dk;
+        o->pos += o->inc * tape * (sh_src[o->shot].bpm_x100 >= 4000u ? half : 1.0f);
+        if (o->pos >= (float)len) {
+            if (md == SHM_LOOP && o->held && !o->rel) {
+                o->pos -= (float)len;
+                o->dec.b0 = LY_NONE;
+                o->env = 1.0f;
+            } else
+                o->shot = -1;
+        }
+    }
+    ly_cut += cut > ly_cut ? LY_FADE : cut < ly_cut ? -LY_FADE : 0.0f;
+    if (ly_cut < 0.0f)
+        ly_cut = 0.0f;
+    if (ly_cut > 1.0f)
+        ly_cut = 1.0f;
+    ly_lgain += (p_ly_lg - ly_lgain) * 0.002f;
+    ly_sgain += (p_ly_sg - ly_sgain) * 0.002f;
+    return y * ly_lgain + ys * ly_sgain;
+}
+static void ly_status(void)
+{
+    uint32_t i, wl, v;
+    ly_st.on = ly_st.pend = 0u;
+    for (i = 0; i < BRK_LY_LOOPS; i++) {
+        uint32_t ws = ly_win(i, &wl);
+        float a = ly_src[i].d ? (float)ly_src[i].len / (float)ly_src[i].bars : 1.0f;
+        ly_st.on |= (uint8_t)((ly_l[i].on && ly_src[i].d) << i);
+        ly_st.pend |= (uint8_t)(ly_l[i].pend << i);
+        ly_st.ph[i] = (uint8_t)brk_clampf((ly_l[i].pos / a - (float)ws) / (float)wl * 256.0f, 0.0f, 255.0f);
+    }
+    ly_st.shots = 0u;
+    for (v = 0; v < BRK_LY_SV; v++)
+        if (ly_s[v].shot >= 0)
+            ly_st.shots |= (uint16_t)(1u << ly_s[v].shot);
+    ly_st.cut = ly_cut < 0.5f;
 }
 
 void brk_render(float *out, uint32_t n)
@@ -1160,13 +1559,10 @@ void brk_render(float *out, uint32_t n)
                 role_hit(b, r);
             }
     }
-    if (p_ov_gen != ov_gen_seen) {       /* a new overlay: its decoding from the mark, its place from the bar */
-        ov_gen_seen = p_ov_gen;
-        ov_b0 = 0xFFFFFFFFu;
-        ov_pos = p_ov_bars ? (float)((steps_total / 16u) % p_ov_bars) * (float)p_ov_len / (float)p_ov_bars : 0.0f;
-    }
+    ly_block(playing);
     if (p_reset != reset_seen) {
-        ov_pos = 0.0f;
+        for (i = 0; i < BRK_LY_LOOPS; i++)
+            ly_l[i].pos = 0.0f;
         reset_seen = p_reset;
         step = -1;
         bar = 0u;
@@ -1181,6 +1577,8 @@ void brk_render(float *out, uint32_t n)
         roll_arm = 0u;
         rat_count = 0u;
         mc_cur = -1;                     /* the scenes stop with the transport */
+        for (j = 0; j < BRK_LY_LOOPS; j++)   /* (the loops too: PLAY starts the AUTO ones again) */
+            ly_l[j].on = ly_l[j].pend = 0u;
         for (j = 0; j < MC_LANES; j++)
             mr_count[j] = 0u;
         for (j = 0; j < 2u; j++) {
@@ -1195,6 +1593,14 @@ void brk_render(float *out, uint32_t n)
                     }
                 }
         }
+    }
+    if (!was_playing && playing) {       /* started: the AUTO loops on (the overlay of 1.7 is one) */
+        uint32_t j;
+        for (j = 0; j < BRK_LY_LOOPS; j++)
+            if (p_lcfg[j] >> 25 & 1u && ly_src[j].d && !ly_l[j].on) {
+                ly_l[j].on = 1u;
+                ly_l[j].age = n_renders;
+            }
     }
     was_playing = playing;
     while (q_r != q_w) {                 /* the keys */
@@ -1267,8 +1673,7 @@ void brk_render(float *out, uint32_t n)
                     ev_off[ev_cnt] = (uint16_t)i;
                     ev_idx[ev_cnt++] = (uint8_t)(steps_total & 15u);
                 }
-                if (p_ov && !(steps_total & 15u))   /* a bar line: the overlay on its bar (no drift, ever) */
-                    ov_pos = (float)((steps_total >> 4) % p_ov_bars) * (float)p_ov_len / (float)p_ov_bars;
+                ly_step(steps_total);   /* the layer's points; the loops on their bars (no drift, ever) */
                 steps_total++;
                 to_next += len;
                 if (!(step & 1)) {       /* MIDI clock: twelve straight ticks over each pair of 16ths */
@@ -1402,24 +1807,15 @@ void brk_render(float *out, uint32_t n)
         {
             float k = (1.0f / 32768.0f) * gate_amp * mute_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
             out[i] = acc * k;
-            if (ov_out) {                /* the overlay: on the bars, with the tempo, HALF and the tape; STOP fades it */
-                const uint8_t *od = p_ov;
-                float y = 0.0f;
-                ov_amp += ((od && p_ov_on && playing ? 1.0f : 0.0f) - ov_amp) * 0.0015f;
-                if (od && ov_amp > 0.0005f) {
-                    uint32_t len = p_ov_len, ip;
-                    float fr;
-                    if (ov_pos >= (float)len || ov_pos < 0.0f)
-                        ov_pos = 0.0f;
-                    ip = (uint32_t)ov_pos;
-                    fr = ov_pos - (float)ip;
-                    y = (float)ov_at(od, len, ip);
-                    if (ip + 1u < len)
-                        y += ((float)ov_at(od, len, ip + 1u) - y) * fr;
-                    if (playing)
-                        ov_pos += (float)len / ((float)p_ov_bars * 16.0f * sl) * half * tape;
-                }
-                ov_out[i] = y * (1.0f / 32768.0f) * ov_amp * mute_amp * (tape < 0.02f ? tape * 50.0f : 1.0f);
+            if (ov_out)                  /* the layer: the loops on their bars, the shots; STOP fades it */
+                ov_out[i] = ly_sample(playing, sl, half, tape) * (1.0f / 32768.0f) * mute_amp *
+                            (tape < 0.02f ? tape * 50.0f : 1.0f);
+            else
+                (void)ly_sample(playing, sl, half, tape);
+            if (ly_cut < 1.0f) {         /* a CUT shot sounding: the break silent under it (a fill) */
+                out[i] *= ly_cut;
+                ea *= ly_cut;
+                va *= ly_cut;
             }
             if (send_echo)               /* the slices' throws, for the effects' delay and reverb */
                 send_echo[i] = ea * k;
@@ -1427,6 +1823,7 @@ void brk_render(float *out, uint32_t n)
                 send_verb[i] = va * k;
         }
     }
+    ly_status();
     status.step = step;
     status.slice = v[cur].active ? v[cur].slice : -1;
     status.bar = bar;
@@ -1483,7 +1880,24 @@ BRK_COLD static void pattern_defaults(void)
 /* boot (and the tests): everything back to the start, the render's state too (call it with no render running) */
 BRK_COLD void brk_init(void)
 {
+    uint32_t j;
     pattern_defaults();
+    for (j = 0; j < BRK_LY_LOOPS; j++) { /* the layer: nothing on, nothing sounding */
+        ly_l[j].vox = -1;
+        ly_l[j].on = ly_l[j].pend = 0u;
+        ly_src[j].d = 0;
+        lwant_seen[j] = p_lwant[j] >> 8;
+    }
+    for (j = 0; j < BRK_LY_LV; j++)
+        ly_lv_loop[j] = -1;
+    for (j = 0; j < BRK_LY_SV; j++) {
+        ly_s[j].shot = -1;
+        sh_pend[j].shot = -1;
+    }
+    for (j = 0; j < BRK_LY_SHOTS; j++)
+        sh_src[j].d = 0;
+    sq_r = sq_w;
+    ly_cut = 1.0f;
     v[0].active = v[1].active = lv[0].active = lv[1].active = 0u;
     v[0].loop = v[1].loop = lv[0].loop = lv[1].loop = 0u;
     {

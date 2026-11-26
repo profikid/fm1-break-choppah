@@ -43,8 +43,11 @@ static void tap_knob(int k, int32_t d)   /* TAP: K1 the tempo, K2 finer, K3 half
 static void knob_turn(int k, int32_t d)
 {
     brk_fx_t *f = &set.fx;
-    if (ui.page == PG_ARP) {             /* the shown black key's effect (as the FX page's view) */
-        fx_knob_turn(fxk(), k - EN_K1, d);
+    if (ui.page == PG_ARP) {             /* the shown black key's effect (as the FX page's view), loop or shot */
+        if (arp_kind != AK_PAD)
+            ly_turn((uint32_t)(k - EN_K1), d);
+        else
+            fx_knob_turn(fxk(), k - EN_K1, d);
         return;
     }
     if (ui.page == PG_TAP) {
@@ -77,7 +80,7 @@ static void knob_turn(int k, int32_t d)
             if (k == EN_K1) {
                 set.swing = (uint8_t)clamp((int32_t)set.swing + d, 50, 75);
                 say_int("SWING", set.swing, "%");
-            } else if (k == EN_K2 && pk_ovly) {   /* the overlay: through the chain, or around it */
+            } else if (k == EN_K2 && (ly_nl || ly_ns)) {   /* the layer: through the chain, or around it */
                 set.ov_route = d > 0 ? 1u : 0u;
                 app_say("OVL ROUTE", set.ov_route ? "AROUND" : "CHAIN");
             } else
@@ -85,10 +88,11 @@ static void knob_turn(int k, int32_t d)
         } else if (k == EN_K1) {
             set.brk_level = (uint8_t)clamp((int32_t)set.brk_level + d * 2, 0, 100);
             say_int("BREAK", set.brk_level, "%");
-        } else if (k == EN_K2 && pk_ovly) {   /* the pack's overlay */
-            set.lane_level = (uint8_t)clamp((int32_t)set.lane_level + d * 2, 0, 100);
-            say_int("OVERLAY", set.lane_level, "%");
-        } else if (k != EN_K4) {         /* (K3: nothing; K2 without an overlay) */
+        } else if ((k == EN_K2 && ly_nl) || (k == EN_K3 && ly_ns)) {   /* the pack's loops, its shots */
+            uint8_t *lv = k == EN_K3 ? &set.shot_level : &set.lane_level;
+            *lv = (uint8_t)clamp((int32_t)*lv + d * 2, 0, 100);
+            say_int(k == EN_K3 ? "SHOTS" : "LOOPS", *lv, "%");
+        } else if (k != EN_K4) {         /* (K2, K3 without loops or shots) */
             (void)t;
             return;
         } else {                         /* FX: the whole chain against the dry sound */
@@ -286,7 +290,7 @@ static void input(void)
         ui.btn = btn;
         return;
     }
-    arp_keys(kdn, kup, btn, now);        /* the ARP page's black keys (and the latched ones, any page) */
+    arp_keys(&kdn, &kup, btn, now);      /* the ARP page's keys: its pads, loops and shots (ARP held: any page) */
     if (mc_black(kdn, kup, btn, now))    /* MATHCORE's LIVE and SCENE: the black keys play and assign scenes */
         for (i = 0; i < 11u; i++)
             kdn &= ~(1u << BK[i]);
@@ -428,14 +432,23 @@ static void input(void)
         set_dirty = 1u;
         app_say("RANDOMIZE", "");
         ui.redraw |= RG_BLOCKS;
-    } else if (bdn & 1u << B_ARP) {      /* ARP: the black keys' effects; again, the shown key's next part */
+    } else if (bdn & 1u << B_ARP) {      /* ARP: the black keys' effects; again, the shown key's next part; held on
+                                          * another page: its keys while held (LY-024), let go alone: the page */
         if (ui.page == PG_ARP)
             arp_next_part();
         else {
-            ui.page = PG_ARP;
-            page_say();
+            arp_mom = 1u;
+            arp_used = 0u;
         }
         ui.redraw |= RG_FOOT | RG_BLOCKS;
+    }
+    if (arp_mom && !(btn & 1u << B_ARP)) {
+        arp_mom = 0u;
+        if (!arp_used) {
+            ui.page = PG_ARP;
+            page_say();
+            ui.redraw |= RG_FOOT | RG_BLOCKS;
+        }
     }
     if (bdn & 1u << B_FX && key_tuned() >= 0) {   /* FX with a key held: its knobs, loop <-> slice effect */
         ui.key_layer ^= 1u;
@@ -571,7 +584,7 @@ static void input(void)
             }
         } else if (k == EN_PRESET && btn & 1u << B_SEL)
             pattern_pick(d);             /* SEL held: the pattern, on any page */
-        else if (k == EN_PRESET && (ui.page == PG_FX || ui.page == PG_ARP))
+        else if (k == EN_PRESET && (ui.page == PG_FX || (ui.page == PG_ARP && arp_kind == AK_PAD)))
             fx_type_turn(d);             /* the focused slot's effect (ARP: the shown key's) */
         else if (k == EN_PRESET && ui.page == PG_MC)
             mc_presets(d);               /* MATHCORE: LIVE moves the entry, LANE its knob sets */
@@ -631,11 +644,26 @@ static void leds(void)
         for (i = 0; i < 16u; i++)
             if (m >> i & 1u)
                 k |= 1u << WK[i];
+    } else if (arp_here() && ly_ns) {    /* ARP with shots: the shots sounding */
+        brk_ly_status_t ls;
+        brk_ly_status(&ls);
+        for (i = 0; i < 16u; i++)
+            if (ls.shots >> i & 1u)
+                k |= 1u << WK[i];
     } else if (st.slice >= 0 && st.slice < 16)
         k |= 1u << WK[st.slice];
     for (i = 0; i < 11u; i++)            /* (ARP: the keys' effects on; MATHCORE's LIVE and SCENE: their scenes) */
-        if ((ui.page == PG_ARP ? pfx_on() : !pads_page() ? mc_black_lit(&st) : st.pads) >> i & 1u)
+        if ((arp_here() ? pfx_on() : !pads_page() ? mc_black_lit(&st) : st.pads) >> i & 1u)
             k |= 1u << BK[i];
+    if (arp_here() && ly_loopkeys()) {   /* ARP's loops: lit on, blinking while they wait for their point */
+        brk_ly_status_t ls;
+        brk_ly_status(&ls);
+        for (i = 0; i < BRK_LY_LOOPS; i++) {
+            k &= ~(1u << BK[i]);
+            if (ls.on >> i & 1u || (ls.pend >> i & 1u && (plat_ms() >> 7 & 1u)))
+                k |= 1u << BK[i];
+        }
+    }
     {                                    /* MATHCORE's LIVE and SCENE: the keys with a scene glow */
         static uint32_t mid_was;
         uint32_t mid = ui.page == PG_MC && !pads_page() ? mc_black_mid() : 0u;
@@ -652,7 +680,10 @@ static void knob_value(int i, char *t)  /* the page's knob i (0..3), as shown un
 {
     t[0] = 0;
     if (ui.page == PG_ARP) {
-        fx_value(fxk(), i, t);
+        if (arp_kind != AK_PAD)
+            ly_value((uint32_t)i, t);
+        else
+            fx_value(fxk(), i, t);
         return;
     }
     if (ui.page == PG_TAP) {
@@ -730,7 +761,7 @@ static int32_t tab(int32_t x, const char *s, int on)
 }
 /* the pages' buttons as printed, GLOBAL's parts, SEQ's lanes: for the tabs and the header (page_say) */
 static const char *const BTN[NPAGES] = {"HOME", "HOME", "FX", "GLO", "EDIT", "LFO", "SEQ", "HOME", "ENV", "ARP", "HOME"};
-static const char *const GPART[GPARTS] = {"MIDI", "PITCH", "CHANNEL"};
+static const char *const GPART[GPARTS] = {"MIDI", "PITCH", "CHANNEL", "LAYER"};
 static const char *const SEQL[NSEQL] = {"1-16", "17-32", "KICK", "SNARE", "HAT"};
 static void draw_tabs(void)
 {
@@ -748,14 +779,24 @@ static void draw_tabs(void)
     }
     else if (ui.page == PG_TAP)
         tab(x, "TAP TEMPO", 1);
-    else if (ui.page == PG_ARP) {        /* the key shown, "< FILTER MORE >" */
+    else if (ui.page == PG_ARP) {        /* the key shown, "< FILTER MORE >", "< BOMBACLOT MORE >" */
         char pn[8] = "PAD ";
-        int_text((int32_t)pfx_sel + 1, pn + 4);
-        tab(x, pn, 1);
-        text_cat(part, BRK_FXT_NAME[usl(fxk())->type % BRK_NFXT]);
-        if (FXPG) {
-            text_cat(part, " ");
-            text_cat(part, fx_part_name());
+        if (arp_kind != AK_PAD) {
+            pn[0] = arp_kind == AK_LOOP ? 'L' : 'S';
+            pn[1] = 0;
+            int_text((int32_t)(arp_kind == AK_LOOP ? arp_li : arp_si) + 1, pn + 1);
+            tab(x, pn, 1);
+            text_cat(part, arp_kind == AK_LOOP ? lyL[arp_li].name : lyS[arp_si].name);
+            if (ly_part)
+                text_cat(part, " MORE");
+        } else {
+            int_text((int32_t)pfx_sel + 1, pn + 4);
+            tab(x, pn, 1);
+            text_cat(part, BRK_FXT_NAME[usl(fxk())->type % BRK_NFXT]);
+            if (FXPG) {
+                text_cat(part, " ");
+                text_cat(part, fx_part_name());
+            }
         }
     }
     else if (ui.page == PG_GLOBAL)
@@ -810,6 +851,15 @@ static void page_say(void)
     case PG_SEQ: text_cat(t, SEQL[ui.seq_lane % NSEQL]); break;
     case PG_TAP: text_cat(t, "TAP TEMPO"); break;
     case PG_ARP:
+        if (arp_kind != AK_PAD) {        /* "LOOP 1 BASS", "SHOT 3 BOMBACLOT MORE" */
+            text_cat(t, arp_kind == AK_LOOP ? "LOOP " : "SHOT ");
+            int_text((int32_t)(arp_kind == AK_LOOP ? arp_li : arp_si) + 1, t + 5);
+            text_cat(t, " ");
+            text_cat(t, arp_kind == AK_LOOP ? lyL[arp_li].name : lyS[arp_si].name);
+            if (ly_part)
+                text_cat(t, " MORE");
+            break;
+        }
         text_cat(t, "PAD ");
         int_text((int32_t)pfx_sel + 1, t + 4);
         text_cat(t, " ");
@@ -882,7 +932,7 @@ static const char *foot_knob(uint32_t i, char *t)
                                               {"P1", "P2", "P3", "MIX"},
                                               {"CLOCK IN", "CLOCK OUT", "BLUETOOTH", "MIDI TO"},
                                               {"", "", "", ""},
-                                              {"BREAK", "OVERLAY", "", "FX"},
+                                              {"BREAK", "LOOPS", "SHOTS", "FX"},
                                               {"SLICE", "PITCH", "HITS", "REVERSE"},
                                               {"LENGTH", "FROM", "PITCH", "GAIN"},
                                               {"TEMPO", "FINE", "HALF / X2", "CLICK"},
@@ -891,8 +941,10 @@ static const char *foot_knob(uint32_t i, char *t)
     static const char *const KN_PITCH[4] = {"PITCH", "GRAIN", "SNAP", "RESET ALL"};
     static const char *const KN_GROOVE[4] = {"SWING", "OVL ROUTE", "", ""};
     static const char *const KN_CHAN[4] = {"CHANNEL", "NOTES OUT", "CC OUT", "PC OUT"};
+    static const char *const KN_LAYER[4] = {"LOOPS", "SHOTS", "HOLD", ""};
     static const char *const KN_LANE[4] = {"FILL", "ROTATE", "CLR / 4X4", "COPY"};
-    const char *name = ui.page == PG_GLOBAL && ui.gpage == 2u ? KN_CHAN[i] : ui.page == PG_GLOBAL && ui.gpage
+    const char *name = ui.page == PG_GLOBAL && ui.gpage == 3u ? KN_LAYER[i] : ui.page == PG_GLOBAL && ui.gpage == 2u
+                       ? KN_CHAN[i] : ui.page == PG_GLOBAL && ui.gpage
                        ? KN_PITCH[i] : ui.page == PG_MIX && ui.mpage
                        ? KN_GROOVE[i] : KN[ui.page][i];
     t[0] = 0;
@@ -912,7 +964,9 @@ static const char *foot_knob(uint32_t i, char *t)
         pad_knob_value(ui.shown, (int)i, t);
         return name;
     }
-    if (ui.page == PG_FX || ui.page == PG_ARP)   /* the focused slot's effect: its settings, then MIX */
+    if (ui.page == PG_ARP && arp_kind != AK_PAD)   /* a loop or a shot: its knobs */
+        name = ly_knob_name(i);
+    else if (ui.page == PG_FX || ui.page == PG_ARP)   /* the focused slot's effect: its settings, then MIX */
         name = fx_param_name(fxk(), (int)i);
     else if (ui.page == PG_MC)
         name = mc_knob_name(i);
@@ -935,6 +989,18 @@ static void draw_foot(const brk_status_t *st)
         int on = arp ? (int)(pfx_on() >> i & 1u) : (int)(st->pads >> i & 1u);
         const char *nm = arp ? pfx_short(i) : PAD_NAME[i];
         int32_t x = 2 + (int32_t)i * 21;
+        if (arp && ly_loopkeys() && i < BRK_LY_LOOPS) {   /* (ARP's loops: L1..L4, lit while on) */
+            static const char *const LN[BRK_LY_LOOPS] = {"L1", "L2", "L3", "L4"};
+            brk_ly_status_t ls;
+            brk_ly_status(&ls);
+            on = (int)(ls.on >> i & 1u);
+            nm = i < ly_nl && lyL[i].d ? LN[i] : "";
+            cv_rect(x, 0, 20, 14, on ? C_HI : C_BLOCK);
+            cv_text(x + (20 - text_w(&FONT_T, nm)) / 2, 1, &FONT_T, nm, on ? C_BLACK : C_GRAY);
+            if (arp_kind == AK_LOOP && arp_li == i)
+                cv_rect(x, 12, 20, 2, C_WHITE);
+            continue;
+        }
         if (scn) {                       /* MATHCORE: the keys' scenes, their states */
             mc_draw_pad(i, st, x);
             continue;
@@ -943,15 +1009,15 @@ static void draw_foot(const brk_status_t *st)
         cv_text(x + (20 - text_w(&FONT_T, nm)) / 2, 1, &FONT_T, nm, on ? C_BLACK : arp && i == pfx_sel ? C_WHITE : C_GRAY);
         if (arp && pfx_latched >> i & 1u)
             cv_rect(x, 12, 20, 2, C_AMB);
-        else if (arp && i == pfx_sel)
+        else if (arp && i == pfx_sel && arp_kind == AK_PAD)
             cv_rect(x, 12, 20, 2, C_WHITE);
     }
     for (i = 0; i < 4u; i++) {
         const char *name = foot_knob(i, t);
         if (!name)
             continue;
-        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.shown >= 0 ? C_HI : ui.page == PG_FX || ui.page == PG_ARP
-                ? (usl(fxk())->on ? C_HI : C_DIM) : C_GRAY);
+        cv_text(4 + (int32_t)i * 60, 18, &FONT_T, name, ui.shown >= 0 ? C_HI : ui.page == PG_ARP && arp_kind != AK_PAD
+                ? C_HI : ui.page == PG_FX || ui.page == PG_ARP ? (usl(fxk())->on ? C_HI : C_DIM) : C_GRAY);
         cv_text(4 + (int32_t)i * 60, 30, &FONT_XS, t, C_WHITE);
     }
     cv_blit(0, 192);
@@ -1075,6 +1141,7 @@ void app_frame(void)
     uint32_t now = plat_ms(), hdr;
     input();
     break_poll();
+    brk_ly_gain((float)set.lane_level * 0.01f, (float)set.shot_level * 0.01f);   /* the MIXER's LOOPS, SHOTS */
     speak(now);                          /* (the screen reader: what this frame's input changed) */
     if (ui.touched)                      /* (the time itself: "now | 1" was a millisecond ahead half the time, and
                                           * now - idle_t then wrapped round to the demo at once) */
@@ -1173,7 +1240,11 @@ void app_frame(void)
     brk_fx_watch(ui.page == PG_FX || ui.page == PG_ARP ? eng_slot(fxk()) : BRK_FX_ALL);   /* (the engine meters it alone) */
     {                                    /* ARP: a key on or let go, a voice quiet: its view and the foot */
         static uint32_t pfx_seen;
-        uint32_t pv = pfx_on() | brk_fx_pad_busy() << 16 | (uint32_t)(eng_slot(fxk()) < BRK_FX_ALL) << 24;
+        brk_ly_status_t ls;
+        uint32_t pv;
+        brk_ly_status(&ls);
+        pv = (pfx_on() | brk_fx_pad_busy() << 16 | (uint32_t)(eng_slot(fxk()) < BRK_FX_ALL) << 24) ^
+             (uint32_t)(ls.on | ls.pend << 4) << 25;
         if (pv != pfx_seen && ui.page == PG_ARP)
             ui.redraw |= RG_BLOCKS | RG_FOOT;
         pfx_seen = pv;
@@ -1185,8 +1256,9 @@ void app_frame(void)
             app_warn("OVERLOAD", "FX SLOT BYPASSED");
         shed_seen = sh;
     }
-    if ((ui.page == PG_FX || ui.page == PG_ARP) && usl(fxk())->type != FXT_EMPTY && now - ui.panel_drawn >= 66u)
-        ui.redraw |= RG_BLOCKS;          /* an effect focused: its picture and meters, about 15 times a second */
+    if ((ui.page == PG_FX || ui.page == PG_ARP) && (usl(fxk())->type != FXT_EMPTY || arp_kind != AK_PAD) &&
+        now - ui.panel_drawn >= 66u)
+        ui.redraw |= RG_BLOCKS;          /* an effect focused (or the layer): its picture, about 15 times a second */
     if (foot_dirty) {
         foot_dirty = 0u;
         ui.redraw |= RG_FOOT;
@@ -1258,7 +1330,10 @@ void app_frame(void)
     }
     if (ui.redraw & RG_BLOCKS) {
         if (ui.page == PG_ARP) {
-            draw_chain();                /* the shown key's effect, as the FX page draws a slot */
+            if (arp_kind != AK_PAD)
+                draw_layer();            /* a loop or a shot shown: the layer */
+            else
+                draw_chain();            /* the shown key's effect, as the FX page draws a slot */
             ui.panel_drawn = now;
         } else if (ui.page == PG_TAP) {
             draw_tap(&st, now, (ui.redraw & RG_ALL) == RG_ALL);
@@ -1383,7 +1458,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
         if (cmd == 1u) {
             const bank_header_t *h0 = (const bank_header_t *)plat_data(PK_BASE[0]);
             const bank_header_t *h1 = (const bank_header_t *)plat_data(PK_BASE[1]);
-            uint32_t v[6] = {4u | (uint32_t)playing_now() << 8 | n_user << 16 | PK_SECT[0] << 24, PK_CAP(0),
+            uint32_t v[6] = {5u | (uint32_t)playing_now() << 8 | n_user << 16 | PK_SECT[0] << 24, PK_CAP(0),
                              pk_n[0] ? 16u + h0->data_size : 0u, PK_BANKS | pk_n[0] << 8 | pk_n[1] << 16, PK_CAP(1),
                              pk_n[1] ? 16u + h1->data_size : 0u};
             cu_reply(p[3], 0u, (const uint8_t *)v, 24u);
@@ -1461,7 +1536,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
     if (cmd == 2u || cmd == 6u) {        /* BEGIN, DELETE: room made, the bank's breaks gone */
         cu_size = cmd == 2u ? rd32(u) : 1u;
         cu_bank = bank;
-        brk_overlay(0, 0u, 0u);          /* (it reads the flash about to be erased) */
+        brk_ly_clear();                  /* (the layer reads the flash about to be erased) */
         if (cu_size < 16u + 168u && cmd == 2u)
             code = 2u;
         for (i = 0; !code && i < (cu_size + 4095u) / 4096u; i++)
@@ -1503,7 +1578,7 @@ int app_sysex(const uint8_t *p, uint32_t n)
             code = 3u;
         breaks_count();
         mc_pack();
-        if (!code && !pk_n[bank] && !(bank && pk_ovly))   /* (bank 2 may hold the overlay alone) */
+        if (!code && !pk_n[bank] && !(pk_layer >> bank & 1u))   /* (a bank may hold the layer alone) */
             code = 4u;
         set.split_b = 0u;
         break_ask(0u);                   /* (the pack's first break, or the first of the bank) */
@@ -1552,8 +1627,10 @@ int app_expect(const char *what, int *got)
                                     "mc_hats", "mc_percs", "mc_missing", "mc_adv", "mc_hits", "mq_key0", "mc_state0",
                                     "mc_cursor", "mq_first", "mq_last", "lane_level", "mc_next", "mc_math", "mc_base", "playing",
                                     "pk_tag", "mq_tag", "sc0_bars", "nslices", "brk_bpm", "slot_pitch", "tile",
-                                    "role0", "slot_swing", "pal_hi", "th_bg", "ov_have", "ov_loud", "ss0_steps", "brk_wait"};
-    int v[82];
+                                    "role0", "slot_swing", "pal_hi", "th_bg", "ov_have", "ov_loud", "ss0_steps", "brk_wait",
+                                    "ly_nl", "ly_ns", "ly_on", "ly_shots", "ly_cut", "ly_lat", "arp_kind", "ly_pads",
+                                    "pfx0_type"};
+    int v[91];
     uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
@@ -1580,7 +1657,7 @@ int app_expect(const char *what, int *got)
     v[20] = set.mbc[ui.fx_focus & 3u].solo;
     v[21] = (int)(brk_mb_thr_db(set.mbc[ui.fx_focus & 3u].thr[MB_LOW]) - 0.5f);   /* whole dB */
     v[22] = (int)(brk_mb_thr_db(set.mbc[1].thr[MB_LOW]) - 0.5f);
-    v[23] = set.pfx[pfx_sel % NPFX].type;
+    v[23] = pfx_at(pfx_sel)->type;
     v[24] = 0;
     for (i = 0; i < BRK_PAD_V; i++)      /* the voices given to keys */
         v[24] += pfx_owner[i] != 0u;
@@ -1653,7 +1730,20 @@ int app_expect(const char *what, int *got)
     v[79] = meter_ov > 0.05f;            /* the overlay heard (over -26 dBFS) */
     v[80] = mq.ss[0].loop_steps;         /* break 1's window as LOOP has it */
     v[81] = brk_next;                    /* a break asked for, not in yet (-1 none) */
-    for (i = 0; i < 82u; i++)
+    {                                    /* the layer (docs/PRD_LAYER.md) */
+        brk_ly_status_t ls;
+        brk_ly_status(&ls);
+        v[82] = (int)ly_nl;
+        v[83] = (int)ly_ns;
+        v[84] = ls.on;
+        v[85] = ls.shots;
+        v[86] = ls.cut;
+        v[87] = ly_lat;
+        v[88] = arp_kind;
+        v[89] = pfx_pack();
+        v[90] = pfx_at(0)->type;
+    }
+    for (i = 0; i < sizeof W / sizeof W[0]; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];
             return 1;
