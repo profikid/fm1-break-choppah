@@ -40,6 +40,24 @@ and fire over the break without leaving HOME (LY-024).
 | D3 | Loops **hold**: playing while a key is held is a first-class gesture, beside latching |
 | D4 | On the hub a sample's **type** is chosen when it is uploaded: break loop, one-shot, overlay loop, … (§8) |
 | D5 | **Each pack carries its own effect pads** (all 11: effect, settings, mix, MOD), so a pack plays with the pads it was made for (§3.6) |
+| D6 | **Voices are a GLOBAL setting**, the fallback by default: GLOBAL's fourth part LAYER, K1 LOOPS 1–2 (default 1), K2 SHOTS 1–4 (default 3), K3 HOLD 100–600 ms (the tap / hold line, default 250). Raised once CPU is measured on the FM-1 (Q1) |
+| D7 | **A shot can CUT the break** (a fill) or play OVER it (a shout): per shot, its K4 BREAK. While a CUT shot sounds the break (and the split's layer) is silent, the loops and the chain go on; it comes back with a 5 ms fade when the shot ends |
+
+### 1.3 As built (firmware 1.8, branch `layer`, 26 Nov 2026)
+
+Built: LY-001, 002, 005 (with D6's limits), 006, 007, 010, 011, 012, 013, 020, 023, 024, 030 (no reader words yet),
+036 (as below), 037, 038, 050–052, 060–062, D7. The image: 577,804 of 581,564 B (**3.7 KB left**); RAM .data+.bss
+95,692 of 98,304 B; `.ram_text` 17,284 of 32,768 B. Not yet: LY-003, 004, 014, 021, 022, 025, 035, 039–043, 054,
+063, the hub (§8), the screen reader's words.
+
+| As built | |
+| --- | --- |
+| Loop knobs | MAIN: K1 LEVEL, K2 FILTER (LP ← 0 → HP), K3 QUANT (NOW / BEAT / BAR / LOOP), K4 AUTO. MORE: K1 BARS (the window), K2 FROM (its start bar) |
+| Shot knobs | MAIN: K1 LEVEL, K2 PITCH (±24), K3 DECAY (OFF … 30 ms), K4 BREAK (OVER / CUT). MORE: K1 MODE (ONE / GATE / LOOP), K2 CHOKE (0–4), K3 QUANT (NOW / 1/16 / BEAT) |
+| Levels | MIXER K2 LOOPS (the old OVERLAY fader, `lane_level`), K3 SHOTS (`set.shot_level`) |
+| Keys | black 1–4 (L1–L4) and the white keys (S1–S16) on ARP; SEL + a loop key: off at once; hold ARP on any page: ARP's keys while held |
+| Kept per pack | `OBJ_MQ` grown (1.7's 728-byte saves load into its front): the loops' and shots' settings and the pack's pads, by pack id |
+| Tests | `./build.sh test` (test_layer), `tests/chpk.test.mjs` (the layer), `tests/layer.sh` (host: shots, CUT, GATE, tap / hold, hold-ARP, a decay edit through SAVE + reboot, pack pads), pack_v2 / pack / custom_break at INFO 5 |
 
 ---
 
@@ -93,7 +111,7 @@ pads 1–4 come back when the pack has no loops.
 | LY-002 | **Hold** (≥ 250 ms) plays it **while held**: in at once **in phase** (where the transport says it would be, a 5 ms fade), out on release (5 ms). A latched loop held: plays on while held, stops on release (a "cut" gesture) | P0 | Host scenario: held from bar 3 beat 2 of an 8-bar loop, it sounds its own bar 3 beat 2; the release is click-free |
 | LY-003 | **SEL + a loop key**: the loop restarts from its bar 1 at the next bar (a drop) and latches | P1 | |
 | LY-004 | **Groups**: each loop has a group (A–D, default each its own). Latching a loop stops the playing loop of its group at the same quantise point (a clip-launcher column: verse bass → chorus bass) | P1 | Two loops of group A never sound together |
-| LY-005 | **At most 2 loops at once** (two streaming voices). A third latched takes the voice of the oldest latched (it stops on the same quantise point), a held one the oldest of all | P0 | |
+| LY-005 | **At most 2 loops at once** (two streaming voices; GLOBAL LAYER K1, 1 by default, D6). A third latched takes the voice of the oldest latched (it stops on the same quantise point), a held one the oldest of all | P0 | |
 | LY-006 | **AUTO start** (per loop, default on for L1 when the pack came from a 1.7 overlay, off otherwise): the loop latches itself when PLAY starts, so an overlay pack plays as on 1.7 | P0 | A 1.7 overlay pack on 1.8: the overlay sounds from PLAY with no key pressed |
 | LY-007 | PLAY's stop and HOME + PLAY stop every loop; TAPE STOP, HALF and STOP reach the loops as they reach the overlay today (PO-004) | P0 | |
 
@@ -104,7 +122,7 @@ pads 1–4 come back when the pack has no loops.
 | LY-010 | A white key fires its shot. Quantise per shot (§3.3 MORE): OFF (at once, the default), 1/16 or a beat | P0 | |
 | LY-011 | **Modes** per shot: ONE SHOT (plays to its end; the key again restarts it), GATE (stops on release, 5 ms), LOOP (repeats its length while held) | P0 | |
 | LY-012 | **Choke groups** (0 none, 1–4): a shot cuts the others of its group (5 ms), so two shouts never pile up | P1 | |
-| LY-013 | **4 voices**; a fifth hit takes the oldest. The overload guard (E-7) sheds shot voices first (oldest first), then the effect pads, then the chain | P0 | Engine test: 16 hits a beat, render bounded |
+| LY-013 | **4 voices** (GLOBAL LAYER K2; 3 by default, D6); one more hit takes the oldest. The overload guard (E-7) sheds shot voices first (oldest first), then the effect pads, then the chain | P0 | Engine test: 16 hits a beat, render bounded |
 | LY-014 | **SEL + a white key** plays the slice instead, so the break stays playable on ARP | P1 | |
 | LY-015 | Velocity sets the level (`APP_TOUCH`, when it works on the device) | P2 | |
 
@@ -161,7 +179,7 @@ empty; the effect pads as B-55.
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
 | LY-035 | Each effect pad gets a **TARGET**: MIX (today's: the whole mix after the chain), LAYER (the loops and shots only), BREAK (everything but the layer) | P1 | Engine test: a LAYER low-pass leaves the break untouched |
-| LY-036 | The MIXER's K2 OVERLAY fader becomes the **loops'** level; SEL + K2 the **shots'** level (a settings byte appended) | P0 | |
+| LY-036 | The MIXER's K2 OVERLAY fader becomes the **loops'** level (LOOPS); K3 the **shots'** level (SHOTS, a settings byte appended) | P0 | |
 
 ### 3.6 The pack's effect pads (D5)
 
@@ -281,9 +299,9 @@ as it reads any v2 pack.
 
 | # | Question | Default if not decided |
 | --- | --- | --- |
-| Q1 | 2 loop voices and 4 shot voices: does the FM-1 hold them (LY-053)? | Measure PO-002 first; fall back to 1 loop + 3 shots |
+| Q1 | 2 loop voices and 4 shot voices: does the FM-1 hold them (LY-053)? | 1.8 ships the fallback (1 loop + 3 shots) as GLOBAL LAYER's default (D6); raise it there and measure |
 | Q2 | With a shots pack, do the white keys stay shots on ARP, or slices with the shots on SEL? | Shots on the keys, slices on SEL (LY-014) |
-| Q3 | Flash for the code (LY-055): what leaves if 1.8 doesn't fit? | Ask Laurens |
+| Q3 | Flash for the code (LY-055): what leaves if 1.8 doesn't fit? | It fits with 3.7 KB to spare; the P1 items will need room: ask Laurens |
 | Q4 | Shots longer than 4 s (a full acapella phrase): a shot, or a loop of type LOOP without a tempo? | ≤ 4 s; longer is a LOOP |
 
 ---
