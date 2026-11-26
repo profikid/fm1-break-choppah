@@ -112,6 +112,11 @@ assert.ok((await C.makeOverlay(tone, rate, { bpm, bars: 1, take: "mix" }, { resa
   assert.ok(Math.abs(st.drums[100] - x[100] / 2) < 1e-6 && Math.abs(st.rest[100] - x[100] / 2) < 1e-6);
   const p16 = await B.splitServer({ fetchFn: fake(200), pcm16: true })(x, 22050);
   assert.ok(Math.abs(p16.drums[100] - x[100] / 2) < 1e-3, "16-bit up");
+  const sp = B.splitServer({ fetchFn: fake(200) }), n0 = seen.length;
+  const a1 = await sp(x, 22050), a2 = await sp(x, 22050);
+  assert.equal(seen.length, n0 + 1, "the same audio again: kept, not asked twice");
+  a1.drums[0] = 9; assert.notEqual(a2.drums[0], 9, "each answer its own copy");
+  await sp(x.map((v) => v * 0.9), 22050); assert.equal(seen.length, n0 + 2, "other audio: asked");
   await assert.rejects(B.splitServer({ fetchFn: fake(401) })(x, 22050), /sign in/);
   await assert.rejects(B.splitServer({ fetchFn: fake(404) })(x, 22050), /choppah\.app/); }
 

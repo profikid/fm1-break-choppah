@@ -252,8 +252,20 @@ export function monoWav(bytes) {
   throw new DestemError("the destemmer's WAV has no audio");
 }
 /* -> async (x, rate) => {drums, rest}, by the hub's /api/destem (Demucs). Throws DestemError saying why */
-export function splitServer({ url = DESTEM_URL, fetchFn = (...a) => fetch(...a), pcm16 = false } = {}) {
+export function splitServer({ url = DESTEM_URL, fetchFn = (...a) => fetch(...a), pcm16 = false, keep = 8 } = {}) {
+  /* the last few answers kept: the slicer cuts the same bars again on every change (a slice moved, the level) */
+  const kept = new Map();
+  const key = (x, rate) => { let h = 2166136261 >>> 0; const step = Math.max(1, Math.floor(x.length / 4096)), f = new Float32Array(1), u = new Uint32Array(f.buffer);
+    for (let i = 0; i < x.length; i += step) { f[0] = x[i]; h = Math.imul(h ^ u[0], 16777619) >>> 0; } return `${rate}:${x.length}:${h}`; };
+  const copy = (s) => ({ drums: s.drums.slice(), rest: s.rest.slice() });
   return async (x, rate) => {
+    const k = key(x, rate);
+    if (kept.has(k)) { const s = kept.get(k); kept.delete(k); kept.set(k, s); return copy(s); }
+    const s = await ask(x, rate);
+    if (keep > 0) { kept.set(k, copy(s)); while (kept.size > keep) kept.delete(kept.keys().next().value); }
+    return s;
+  };
+  async function ask(x, rate) {
     let r;
     try {
       r = await fetchFn(url, { method: "POST", credentials: "same-origin", body: floatWav(x, rate, { pcm16 }),
@@ -268,7 +280,7 @@ export function splitServer({ url = DESTEM_URL, fetchFn = (...a) => fetch(...a),
     drums.set(w.x.subarray(0, x.length));
     for (let i = 0; i < x.length; i++) rest[i] = x[i] - drums[i];
     return { drums, rest };
-  };
+  }
 }
 
 /* the harmonic / percussive split (Fitzgerald 2010): a measure of how much is drums (guessType), not a stem to cut from.
