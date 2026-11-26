@@ -271,9 +271,11 @@ export function splitServer({ url = DESTEM_URL, fetchFn = (...a) => fetch(...a),
       r = await fetchFn(url, { method: "POST", credentials: "same-origin", body: floatWav(x, rate, { pcm16 }),
         headers: { "content-type": "audio/wav", "x-hub": "1" } });
     } catch { throw new DestemError("the destemmer can't be reached: splitting the drums runs on choppah.app (signed in)"); }
-    if (r.status === 401) throw new DestemError("splitting the drums runs on choppah.app's GPU: sign in there to use it");
+    const signIn = "splitting the drums runs on choppah.app's GPU: sign in there to use it";
+    if (r.status === 401) throw new DestemError(signIn);
     if (r.status === 404 || r.status === 405) throw new DestemError("splitting the drums runs on choppah.app (signed in): open the builder there");
-    if (!r.ok) { let m = ""; try { m = (await r.json()).error; } catch { /* not JSON */ } throw new DestemError(m || `the destemmer: HTTP ${r.status}`); }
+    if (!r.ok) { let m = ""; try { m = (await r.json()).error || ""; } catch { /* not JSON */ }
+      throw new DestemError(r.status === 403 && /sign in/i.test(m) ? signIn : m || `the destemmer: HTTP ${r.status}`); }
     const w = monoWav(new Uint8Array(await r.arrayBuffer()));
     if (w.rate !== rate || Math.abs(w.x.length - x.length) > 8) throw new DestemError(`the destemmer answered ${w.x.length} samples at ${w.rate} Hz for ${x.length} at ${rate}`);
     const drums = new Float32Array(x.length), rest = new Float32Array(x.length);

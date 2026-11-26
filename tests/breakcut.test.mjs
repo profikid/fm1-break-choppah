@@ -118,6 +118,8 @@ assert.ok((await C.makeOverlay(tone, rate, { bpm, bars: 1, take: "mix" }, { resa
   a1.drums[0] = 9; assert.notEqual(a2.drums[0], 9, "each answer its own copy");
   await sp(x.map((v) => v * 0.9), 22050); assert.equal(seen.length, n0 + 2, "other audio: asked");
   await assert.rejects(B.splitServer({ fetchFn: fake(401) })(x, 22050), /sign in/);
+  const f403 = async () => new Response(JSON.stringify({ error: "sign in first" }), { status: 403 });
+  await assert.rejects(B.splitServer({ fetchFn: f403 })(x, 22050), /choppah\.app's GPU: sign in/);
   await assert.rejects(B.splitServer({ fetchFn: fake(404) })(x, 22050), /choppah\.app/); }
 
 let e = C.autoEdit("think break.wav", 4.2);
