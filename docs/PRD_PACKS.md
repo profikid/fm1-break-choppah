@@ -183,7 +183,7 @@ bands, the K S H P letters) stay fixed for legibility, or are derived from `hi` 
 ## 7. Overlay loop (`OVLY`)
 
 *26 Nov 2026: [PRD_LAYER.md](PRD_LAYER.md) proposes up to 4 loops and 16 one-shots per pack, played on ARP; the OVLY
-chunk stays as its loop 1.*
+chunk stays as its loop 1. A pack also carries its own 11 effect pads (`PADS`, PRD_LAYER §3.6).*
 
 A longer loop (4, 8 or 16 bars) under the breaks: a bass line, a pad, a vocal bed, typically the destemmed rest of
 the track the breaks came from (§9). It is **not** a lane over the break (PRD_MATHCORE §16): it doesn't chop,

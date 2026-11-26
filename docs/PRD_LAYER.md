@@ -2,7 +2,7 @@
 
 **Feature PRD** · v0.1 · 26 Nov 2026 · Owner: Laurens (Sylverline)  
 **Parent PRDs:** [PRD.md](PRD.md) (ARP, B-55 effect pads) · [PRD_PACKS.md](PRD_PACKS.md) (§7 the overlay, §10 the hub)  
-**Status:** proposed, nothing built. Decisions so far in §1.2; open questions in §10.
+**Status:** proposed, nothing built. Decisions so far in §1.2 (later on 26 Nov 2026: D5, the pack's own effect pads); open questions in §10.
 
 ---
 
@@ -39,6 +39,7 @@ and fire over the break without leaving HOME (LY-024).
 | D2 | A pack can hold **one-shots and overlay loops** beside its breaks |
 | D3 | Loops **hold**: playing while a key is held is a first-class gesture, beside latching |
 | D4 | On the hub a sample's **type** is chosen when it is uploaded: break loop, one-shot, overlay loop, … (§8) |
+| D5 | **Each pack carries its own effect pads** (all 11: effect, settings, mix, MOD), so a pack plays with the pads it was made for (§3.6) |
 
 ---
 
@@ -76,8 +77,8 @@ ARP keeps its effect pads (B-55) and gains the layer. Which keys do what depends
 | loops and shots | **one-shots S1–S16** | **loops L1–L4** | effect pads 5–11 |
 
 Fixed positions, so the hands learn them: L1–L4 are always black keys 1–4 (F#3 G#3 A#3 C#4), a loop key without a
-loop is dark and silent, a shot key without a shot too. Black keys 5–11 keep the effect pads 5–11 of `set.pfx[]` as
-they are today; pads 1–4 come back when the pack has no loops.
+loop is dark and silent, a shot key without a shot too. Black keys 5–11 play the **pack's** effect pads 5–11 (§3.6);
+pads 1–4 come back when the pack has no loops.
 
 ```
  black:  [L1] [L2] [L3]   [L4] [FX5]   [FX6] [FX7] [FX8]   [FX9] [FX10]   [FX11]
@@ -162,6 +163,19 @@ empty; the effect pads as B-55.
 | LY-035 | Each effect pad gets a **TARGET**: MIX (today's: the whole mix after the chain), LAYER (the loops and shots only), BREAK (everything but the layer) | P1 | Engine test: a LAYER low-pass leaves the break untouched |
 | LY-036 | The MIXER's K2 OVERLAY fader becomes the **loops'** level; SEL + K2 the **shots'** level (a settings byte appended) | P0 | |
 
+### 3.6 The pack's effect pads (D5)
+
+A pack carries the 11 effect pads it was made for: each pad's effect, its three settings, its mix, its MORE and MOD
+(`brk_fxslot_t` + `brk_fxx_t`, as `set.pfx[]` / `set.pfxx[]` hold them) and its TARGET (LY-035). Loading the pack's
+break loads its pads, as it loads its theme and its scenes (PRD_PACKS principle 1).
+
+| ID | Requirement | Pri | Acceptance |
+| --- | --- | --- | --- |
+| LY-037 | When the pack changes, ARP's pads become the pack's (`PADS` chunk, §6). A pack without `PADS` (any 1.7 pack, the built-in bank) plays the **FM-1's own pads** (`set.pfx[]` as saved today); going back to such a pack brings the FM-1's own back. Latched pads let go when the pads change | P0 | Host scenario: pack A's pad 6 is a REVERB, pack B's a CRUNCH; switching packs switches the pad; a pack without PADS gets the saved pads |
+| LY-038 | Pads edited on the FM-1 (PRESETS, K1–K4, MORE, MOD) while a pack with pads is on are kept **for that pack** (by pack id, beside its scenes and LOOP settings: `OBJ_MQ` grown, or an object of its own if it doesn't fit 3840 B), never written over the FM-1's own; SEL + a knob: back to the pack's value | P0 | Edit pack A's pad, switch to B and back: A's edit is there, B's pads untouched |
+| LY-039 | GETSET / PUTSET carry the pads, so **Pull edits** (PE-003) takes the FM-1's pad edits into the pack and the hub's editor can send pads live (PH-060) | P1 | `tests/pack_v2.sh`: a pad edited on the host comes back in GETSET byte for byte |
+| LY-03A | With loops in the pack (black keys 1–4 are L1–L4), the pack's pads 1–4 are kept, unheard; the builder and hub say so when pads 1–4 are set in a pack with loops | P2 | |
+
 ---
 
 ## 4. Recording the layer
@@ -197,13 +211,14 @@ as it reads any v2 pack.
 | --- | --- |
 | `OVLY` | unchanged: **loop 1**'s header and ADPCM. 1.7 plays it as its overlay |
 | `LOOP` | `n` (≤ 4), then a 32-byte record per loop: `name[8]`, `rate`, `len`, `bpm_x100`, `bars`, `group`, `flags` (AUTO, quantise), `level`, the default MAIN/MORE settings, the offset of its ADPCM (loop 1's: 0 = the OVLY chunk's own); loops 2–4's ADPCM follows the records |
+| `PADS` | the 11 effect pads (D5, §3.6): per pad its `brk_fxslot_t` (20 B: type, on, TARGET in `rsv[0]`, p[3], mix) and `brk_fxx_t` (36 B: MORE and MOD), 616 B. Without it: the FM-1's own pads |
 | `SHOT` | `n` (≤ 16), then a 32-byte record per shot: `name[8]`, `rate`, `len`, `level`, `pitch`, `decay`, `mode`, `choke`, `quant`, the offset of its ADPCM in the chunk; the ADPCM follows the records (trimmed, faded and levelled by the builder: start = sample 0) |
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| LY-060 | `chpk.js` writes and reads LOOP and SHOT; `packLayout` places them over both banks (a chunk never spans a bank) | P0 | `tests/chpk.test.mjs`: a pack with 3 loops and 16 shots round-trips byte for byte |
-| LY-061 | The firmware reads them (`pk_chunks`, `brk_bank.h` `bank_loop_t`, `bank_shot_t`, `_Static_assert`ed) | P0 | `tests/pack_v2.sh` grows a layer pack |
-| LY-062 | **INFO version 5** says the FM-1 plays the layer; `installImages` sends LOOP and SHOT to 5 only (a 1.7 gets OVLY alone, said in the install dialog, PH-031) | P0 | `tests/fm1link.test.mjs` with the fake FM-1 at 4 and 5 |
+| LY-060 | `chpk.js` writes and reads LOOP, SHOT and PADS; `packLayout` places them over both banks (a chunk never spans a bank) | P0 | `tests/chpk.test.mjs`: a pack with 3 loops and 16 shots round-trips byte for byte |
+| LY-061 | The firmware reads them (`pk_chunks`, `brk_bank.h` `bank_loop_t`, `bank_shot_t`, `bank_pads_t`, `_Static_assert`ed; PADS's floats as the FM-1 stores them, little-endian IEEE 754) | P0 | `tests/pack_v2.sh` grows a layer pack |
+| LY-062 | **INFO version 5** says the FM-1 plays the layer; `installImages` sends LOOP, SHOT and PADS to 5 only (a 1.7 gets OVLY alone, said in the install dialog, PH-031) | P0 | `tests/fm1link.test.mjs` with the fake FM-1 at 4 and 5 |
 | LY-063 | The FM-1's own edits to loops and shots (their settings, LY-022) are kept by pack id (`OBJ_MQ` grown: 4 × 16 + 16 × 16 B) and come back by GETSET / go by PUTSET, so Pull edits (PE-003) takes them | P1 | |
 
 ---
@@ -245,6 +260,8 @@ as it reads any v2 pack.
 | LY-091 | The pack page shows three sections (breaks, loops, shots): play a shot by clicking, a loop with the breaks' preview transport; reorder within a section, move a sample between sections (it is cut again for its new place) | P1 | |
 | LY-092 | Today's overlay (`pack_overlay`, `makeOverlay`) becomes **L1** of the pack: same cut, same rate rules (PB-011, PB-012) | P0 | An overlay pack made before 1.8 opens with its overlay as L1, AUTO on |
 | LY-093 | MCP parity (PRD_PACKS §10.11): `pack_get` lists loops and shots with their settings; tools for a loop's and a shot's settings (as `pack_break_settings`) and their order (as `pack_breaks`); a sample's one-shot cut (trim, fade, level, name, rate) and loop cut (bars, start, rest / mix) | P0 | choppah-hub test/e2e.mjs |
+| LY-095 | **The pack's effect pads on the hub**: the pack page (owner) and the builder's section 4 show the 11 pads, each with its effect (the FX library, as PRESETS lists it), its settings, mix, MORE and MOD with the FM-1's names and ranges, and TARGET; start from the FM-1's factory pads, from another pack of yours or a public one, or none (the pack then plays the FM-1's own); MCP: `pack_pads` reads and sets them (one pad or all, or copied from a pack) | P0 | choppah-hub test/e2e.mjs |
+| LY-096 | Packs made by the pack maker get the factory pads unless asked otherwise (`pads_from`: another pack's) | P1 | |
 | LY-094 | **Turn a pack's breaks into shots**: a break whose sample is a ONE-SHOT is cut again as a shot (one click on the pack page, a tool for the MCP), so the ragga packs of 26 Nov 2026 become breaks + shots | P1 | |
 
 ---
@@ -253,10 +270,10 @@ as it reads any v2 pack.
 
 | Phase | Scope | Exit |
 | --- | --- | --- |
-| **L1 Types and format** (hub + `chpk.js`) | Sample types, the guess, the one-shot and loop editors, LOOP / SHOT chunks, packs from typed samples, the room bar. Ships before the firmware: a 1.7 plays L1 and ignores the rest | LY-060, LY-070, LY-080–083, LY-090, LY-092, LY-093 |
-| **L2 ARP plays the layer** (firmware 1.8) | Shot voices, 2 loop voices, tap / hold / in phase, AUTO, the page and its screen, hold-ARP from any page, INFO 5 | LY-001, 002, 005–007, 010, 011, 013, 020, 023, 024, 030, 036, 050–055, 061, 062 |
-| **L3 Play it deeper** | Groups, restart, choke, slices on SEL, effect pad TARGET, MIDI notes, the looper and SEQ's SHOTS lane, the FM-1's edits pulled back, breaks into shots | LY-003, 004, 012, 014, 021, 022, 025, 035, 040, 041, 063, 071, 091, 094 |
-| **L4 Later** | Patterns launching loops, MATHCORE shots, velocity | LY-015, 042, 043 |
+| **L1 Types and format** (hub + `chpk.js`) | Sample types, the guess, the one-shot and loop editors, LOOP / SHOT / PADS chunks, the pads editor, packs from typed samples, the room bar. Ships before the firmware: a 1.7 plays L1 and ignores the rest | LY-060, LY-070, LY-080–083, LY-090, LY-092, LY-093, LY-095 |
+| **L2 ARP plays the layer** (firmware 1.8) | Shot voices, 2 loop voices, tap / hold / in phase, AUTO, the page and its screen, hold-ARP from any page, INFO 5 | LY-001, 002, 005–007, 010, 011, 013, 020, 023, 024, 030, 036, 037, 038, 050–055, 061, 062 |
+| **L3 Play it deeper** | Groups, restart, choke, slices on SEL, effect pad TARGET, MIDI notes, the looper and SEQ's SHOTS lane, the FM-1's edits pulled back, breaks into shots | LY-003, 004, 012, 014, 021, 022, 025, 035, 039, 040, 041, 063, 071, 091, 094, 096 |
+| **L4 Later** | Patterns launching loops, MATHCORE shots, velocity, the pads-1–4 notice | LY-015, 03A, 042, 043 |
 
 ---
 
@@ -266,9 +283,8 @@ as it reads any v2 pack.
 | --- | --- | --- |
 | Q1 | 2 loop voices and 4 shot voices: does the FM-1 hold them (LY-053)? | Measure PO-002 first; fall back to 1 loop + 3 shots |
 | Q2 | With a shots pack, do the white keys stay shots on ARP, or slices with the shots on SEL? | Shots on the keys, slices on SEL (LY-014) |
-| Q3 | Black keys 1–4 as loops cost effect pads 1–4 when a pack has loops: keep the 7 the pack's author chose, or let the pack carry its own 7? | The FM-1's pads 5–11 as they are |
-| Q4 | Flash for the code (LY-055): what leaves if 1.8 doesn't fit? | Ask Laurens |
-| Q5 | Shots longer than 4 s (a full acapella phrase): a shot, or a loop of type LOOP without a tempo? | ≤ 4 s; longer is a LOOP |
+| Q3 | Flash for the code (LY-055): what leaves if 1.8 doesn't fit? | Ask Laurens |
+| Q4 | Shots longer than 4 s (a full acapella phrase): a shot, or a loop of type LOOP without a tempo? | ≤ 4 s; longer is a LOOP |
 
 ---
 
