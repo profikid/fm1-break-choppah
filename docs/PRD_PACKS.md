@@ -39,6 +39,7 @@ destemmed, tempo found, loops found) and shared on a **pack hub**.
 | D4 | Uploads are **private by default**; the owner can **publish**; signed-in users can **rate** published packs |
 | D5 | The hub's code lives in a **separate private repository** (§10.1) |
 | D6 | A pack is **installed from the hub** in one click (§10.7); its `.chpk` downloads only when the owner allows it (off by default) or for the owner (24 Nov 2026) |
+| D7 | The hub's **tools** (the pack builder at choppah.app/breaks/, the MATHCORE editor) are for **signed-in accounts**: signed out, their page sends you to sign in (a passkey, or an account made by email link) and back to the tool after. The site (emulator, installer, manual) and the packs stay open (26 Nov 2026; choppah-hub src/gate.js) |
 
 ---
 
