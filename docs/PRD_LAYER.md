@@ -2,7 +2,8 @@
 
 **Feature PRD** · v0.1 · 26 Nov 2026 · Owner: Laurens (Sylverline)  
 **Parent PRDs:** [PRD.md](PRD.md) (ARP, B-55 effect pads) · [PRD_PACKS.md](PRD_PACKS.md) (§7 the overlay, §10 the hub)  
-**Status:** L2 (the firmware) built on main for 1.8, see §1.3; L1 (the hub) and L3 to do. Decisions in §1.2 (D1–D7); open questions in §10.
+**Status:** L2 (the firmware) built on main for 1.8, see §1.3; L1 on the hub (choppah.app) built, see §8.4; the
+builder's side (breaks.html) and L3 to do. Decisions in §1.2 (D1–D7); open questions in §10.
 
 ---
 
@@ -281,6 +282,18 @@ as it reads any v2 pack.
 | LY-095 | **The pack's effect pads on the hub**: the pack page (owner) and the builder's section 4 show the 11 pads, each with its effect (the FX library, as PRESETS lists it), its settings, mix, MORE and MOD with the FM-1's names and ranges, and TARGET; start from the FM-1's factory pads, from another pack of yours or a public one, or none (the pack then plays the FM-1's own); MCP: `pack_pads` reads and sets them (one pad or all, or copied from a pack) | P0 | choppah-hub test/e2e.mjs |
 | LY-096 | Packs made by the pack maker get the factory pads unless asked otherwise (`pads_from`: another pack's) | P1 | |
 | LY-094 | **Turn a pack's breaks into shots**: a break whose sample is a ONE-SHOT is cut again as a shot (one click on the pack page, a tool for the MCP), so the ragga packs of 26 Nov 2026 become breaks + shots | P1 | |
+
+### 8.4 As built on the hub (26 Nov 2026, choppah-hub b5093f9)
+
+Built: LY-070 (the room bar split: breaks, loops, one-shots, the rest), LY-080 (each file heard in the browser and
+typed before it is uploaded; the MCP's `type`), LY-081 (`layer.js guessType`: under 1.2 s, or under 4 s with one or two
+hits: ONE-SHOT; the drum stem's share of the energy ≥ 25 %: BREAK; 20–60 s with 25–50 %: TRACK; over 60 s: TRACK;
+else LOOP. Checked on the firmware's 70 breaks: 64 BREAK, the six heavily processed Amens (30–39 % drums) LOOP),
+LY-082, LY-083, LY-090, LY-091 (sections, hearing, settings, reorder; not yet: moving a sample between sections), LY-092,
+LY-093, LY-094, LY-095 (the pack page; not yet: the builder's section 4, a public pack as the start), LY-096 (the
+factory pads for new packs; `pads_from` in the MCP). The library is an overview (a row a sample) and a page a sample
+(`/hub/sample?id=`: only its waveforms, its type's editor). Not yet: LY-071's "what would make it fit" suggestions
+(it refuses with the reason), the DOA folder check of LY-081 (the Mac was offline).
 
 ---
 
