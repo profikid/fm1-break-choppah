@@ -388,6 +388,7 @@ sendBank rules), vendored into the hub with chpk.js.
 | PH-061 | Connected, **the FM-1 plays**: Scene, Chain, a scene launched as a black key would (a groove on the bar, a fill on the beat), Stop, the macros and each lane's mute and solo drive the FM-1 (MCCTL, 10); the editor shows what it plays, its scene, each lane's event and the chain's entry (STATUS, 9, ~8 times a second); the scene picked in the browser is the one the FM-1's own pages show | P0 | *Done* |
 | PH-062 | Changes made elsewhere (a scene set or pack edited through the MCP server, another tab) reach the open editor and, connected, the FM-1 | P1 | *Done: the editor follows its set or pack (polled)* |
 | PH-063 | INFO says version 4 (1.7 with these); older ones edit and play in the browser only | P0 | *Done* |
+| PH-064 | **The editor looks like the FM-1** (26 Nov 2026): each scene a wheel as LIVE draws it (mc.c `mc_live_picture`): a ring a lane (the kick inside, the hat outside; the events from the top, clockwise; hits, accents, DENSITY's added and dropped, the event playing and its trail, CHAOS shaking it), and round them the break's waveform with its slices' roles, the slice sounding lit and its playhead running; the macros as LIVE's gauges and foot; a lane's fields as LANE's knob sets (RHYTHM SOUND FEEL MORE, and EXTRA for the hub's SEED FREE SWELL) on four knobs (drag, scroll, arrow keys); the scenes as pads. Shared look: choppah-hub `public/hub/fmui.js` | P1 | *Done; choppah-hub test/mathcore_ui.mjs, test/mathcore_live_ui.mjs* |
 
 ### 10.11 The MCP server (24 Nov 2026)
 
