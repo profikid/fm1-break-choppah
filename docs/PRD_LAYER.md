@@ -204,7 +204,7 @@ break loads its pads, as it loads its theme and its scenes (PRD_PACKS principle 
 
 ## 6. The pack format
 
-Bank v2's chunk directory (PRD_PACKS §3.2) takes two new chunks; unknown tags are skipped, so 1.7 reads a layer pack
+Bank v2's chunk directory (PRD_PACKS §3.2) takes three new chunks; unknown tags are skipped, so 1.7 reads a layer pack
 as it reads any v2 pack.
 
 | Tag | Content |
