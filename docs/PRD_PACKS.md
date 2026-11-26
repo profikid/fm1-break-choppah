@@ -8,7 +8,7 @@ built for the device by CI (image 562 KB of 581.5). To check on an FM-1 before t
 cost (PO-002). Earlier the same day: the hub is **live on choppah.app** (§10, all PH-* rows; repo `profikid/choppah-hub`), the
 `.chpk` file (PK-010, PK-011: `app/site/chpk.js`) and the builder's pack details, export / import, upload and open from
 the hub (PB-020–025) are built; the builder's tempo, bars, loop finder, stems (v1) and overlay (PB-001–012) too, and the hub's pack manager (§10.6) with the builder inside the hub (§9.4). Not yet: the firmware side (PK-001–004, PS, PT, PM, PO, PE),
-Demucs stems (PB-002 v2), the destem server (PB-003: endpoint built, no GPU provider). Decisions in §1.2; open questions in §11.
+Demucs stems (PB-002 v2), the destem server's deploy (PB-003: built 26 Nov 2026, Demucs htdemucs_ft's drums on Modal, choppah-hub gpu/destem; live once DESTEM_URL is set). Decisions in §1.2; open questions in §11.
 
 ---
 
@@ -241,7 +241,7 @@ the browser; heavy work in Web Workers.
 | --- | --- | --- | --- |
 | PB-001 | Import any audio the browser decodes (WAV, AIFF, FLAC, MP3, M4A), up to 10 minutes | P0 | *Done (24 Nov 2026): anything decodeAudioData reads* |
 | PB-002 | **Destem** (D1), in the browser: v1 (24 Nov 2026) a harmonic / percussive split (median-filtered spectrogram, Fitzgerald 2010; `stems()` in beats.js, in a Web Worker): drums for the breaks, the rest for the overlay; no download, no server. v2: Demucs (htdemucs, MIT) through ONNX Runtime Web on WebGPU for four stems | P0 | *v1 done: tests/beats.test.mjs (a pad 97 % to the rest), tests/page_pack.sh in Chrome. v2 open* |
-| PB-003 | **Server fallback** (D1) when WebGPU is missing or too slow: a hub Worker forwards to a GPU endpoint (provider to choose, Q5); signed-in users only, a daily quota, the audio deleted when the stems are returned | P1 | No audio kept server-side (R2 lifecycle 1 h) |
+| PB-003 | **Server fallback** (D1) when WebGPU is missing or too slow: a hub Worker forwards to a GPU endpoint (Modal, Q5: htdemucs_ft's drums model, choppah-hub gpu/destem; the hub's own tools split with it too, src/stems.js, the HPSS split when it's missing or fails); signed-in users only, a daily quota, the audio deleted when the stems are returned | P1 | No audio kept server-side (R2 lifecycle 1 h). *Built 26 Nov 2026 (choppah-hub 5cbfb10, test/stems.test.mjs): drums SDR 10.3 dB against the HPSS split's 6.1 on the Amen under a bass line and a pad, the kick's low end kept; to deploy (gpu/destem/README.md)* |
 | PB-004 | **Tempo**: beat tracking on the drum stem (spectral-flux onsets → tempogram), the 80–180 prior and ×2 / ÷2 as today; tap to correct | P0 | *Done: app/site/beats.js (spectral-flux onsets, autocorrelation, a comb refined to 0.01 BPM, a tempo prior; loops of 1/2/4/8/16 bars exact); tests/beats.test.mjs: the 10 classics within 1.5 %, a track at 99.88 for 99.81* |
 | PB-005 | **Downbeat**: bar phase from the kick band and the snare's backbeat; nudge by a beat | P0 | *Done: kicks on 1 and 3, snares on 2 and 4; a loop starts on its 1; the test track's bars 100 % on the break's* |
 | PB-006 | **Loop finder**: every 1- and 2-bar window scored (drum energy, self-similarity with the next window, no vocal/bleed) → the best 8 as cards to audition and add | P0 | *Done: findLoops (onset density, the next bar alike, drum share); the test's best loop on a bar line inside the break* |
@@ -406,8 +406,8 @@ The tools do what the hub's pages do (24 Nov 2026: parity, choppah-hub test/e2e.
 installing on an FM-1 (Web MIDI: the tools give the pack's page) and the MATHCORE editor live on one (PH-060), and
 the account (sign-in, passkeys, email, tokens, deleting it: a token can't). The FM-1 follows through an editor open
 and connected (PH-062). A sample's break, overlay and listening are made on the server only from WAV (the browser
-makes them from anything it decodes). The destemming runs on the server for the tools (beats.js `stems`, about a
-second a break, a few for a 16-bar overlay).
+makes them from anything it decodes). The destemming runs on the server for the tools: Demucs on the GPU endpoint (PB-003, src/stems.js), the HPSS split
+(beats.js `stems`) when it isn't set or fails.
 
 ### 10.5 API (sketch)
 
@@ -437,7 +437,7 @@ GET  /api/me/packs            the owner's packs
 | Q2 | Which pads reach the overlay? | PO-004's default |
 | Q3 | One pack on the FM-1 at a time, or several sharing the 16 slots (each slot its pack's id and theme)? | One pack (v1); several later if wanted |
 | Q4 | Mail provider for the links | Resend (simple API, works from Workers) |
-| Q5 | GPU provider for the destem fallback (Cloudflare has no Demucs runtime of its own that we know of: check) | Replicate or Modal behind the Worker |
+| Q5 | GPU provider for the destem fallback (Cloudflare has no Demucs runtime of its own that we know of: check) | **Decided 26 Nov 2026: Modal** (a T4, scales to zero; choppah-hub gpu/destem) |
 | Q6 | Hub domain: the GitHub Pages site, or a subdomain on Cloudflare Pages? | A subdomain on Cloudflare, linked from the site |
 
 ---
