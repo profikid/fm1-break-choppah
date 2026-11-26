@@ -1629,8 +1629,8 @@ int app_expect(const char *what, int *got)
                                     "pk_tag", "mq_tag", "sc0_bars", "nslices", "brk_bpm", "slot_pitch", "tile",
                                     "role0", "slot_swing", "pal_hi", "th_bg", "ov_have", "ov_loud", "ss0_steps", "brk_wait",
                                     "ly_nl", "ly_ns", "ly_on", "ly_shots", "ly_cut", "ly_lat", "arp_kind", "ly_pads",
-                                    "pfx0_type"};
-    int v[91];
+                                    "pfx0_type", "ly_s2_decay"};
+    int v[92];
     uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
@@ -1742,6 +1742,7 @@ int app_expect(const char *what, int *got)
         v[88] = arp_kind;
         v[89] = pfx_pack();
         v[90] = pfx_at(0)->type;
+        v[91] = mq.sset[2].decay;
     }
     for (i = 0; i < sizeof W / sizeof W[0]; i++)
         if (!strcmp(what, W[i])) {

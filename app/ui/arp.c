@@ -15,6 +15,7 @@ static uint8_t arp_kind, arp_li, arp_si, ly_part;   /* the key ARP shows (a pad:
 static uint8_t arp_mom, arp_used;        /* ARP held on another page: its keys meanwhile; a key played meanwhile */
 static uint8_t lk_mode[BRK_LY_LOOPS];    /* a loop key: 0 up, 1 down (a tap so far), 2 held (playing while held) */
 static uint32_t lk_t[BRK_LY_LOOPS];      /* when it went down */
+static uint32_t lk_sent[BRK_LY_LOOPS];   /* when its last change went to the engine */
 static uint8_t ly_lat;                   /* the loops latched (by taps; AUTO's at PLAY) */
 static uint32_t arp_wk, arp_bk;          /* the white and black keys ARP took down (their release is ARP's too) */
 static int arp_here(void) { return ui.page == PG_ARP || arp_mom; }
@@ -102,6 +103,7 @@ static void ly_loop_key(uint32_t i, int down, uint32_t btn, uint32_t now)
         ui.redraw |= RG_BLOCKS | RG_FOOT;
         return;
     }
+    lk_sent[i] = now;
     if (lk_mode[i] == 1u) {              /* a tap: latched, or let go, at its point */
         ly_lat ^= b;
         brk_ly_want(i, ly_lat & b, mq.lset[i].quant);
@@ -122,15 +124,13 @@ static void ly_frame(uint32_t now)       /* every input: a loop key held long en
             brk_ly_want(i, 1, LYQ_NOW);  /* (in phase, at once) */
             app_say(lyL[i].name, "HELD");
         }
-    {                                    /* the latches as the engine has them (AUTO at PLAY, every loop off at STOP) */
+    {                                    /* the latches as the engine has them (AUTO at PLAY, every loop off at STOP,
+                                          * a voice given to another loop): each once its change is in */
         brk_ly_status_t ls;
-        uint8_t held = 0u;
         brk_ly_status(&ls);
         for (i = 0; i < BRK_LY_LOOPS; i++)
-            if (lk_mode[i])
-                held |= (uint8_t)(1u << i);
-        if (!ls.pend)
-            ly_lat = (uint8_t)((ly_lat & held) | (ls.on & ~held));
+            if (!lk_mode[i] && !(ls.pend >> i & 1u) && now - lk_sent[i] > 100u)
+                ly_lat = (uint8_t)((ly_lat & ~(1u << i)) | (ls.on & 1u << i));
     }
 }
 

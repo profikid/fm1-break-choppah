@@ -101,3 +101,37 @@ console.log("chpk: all good");
   assert.equal(String.fromCharCode(...b2.subarray(16 + 4, 16 + 8)), "OVLY");
   console.log("chpk: v2 banks");
 }
+// the layer (docs/PRD_LAYER.md 6): loops (the first the overlay's), one-shots and the pads: through the .chpk and back,
+// into the FM-1's banks for INFO 5, and left out for a 1.7 (INFO 3, 4)
+{
+  const bs = [brk("AMEN", 40000), brk("THINK", 30000)];
+  const meta = { id: P.uuid(), name: "layer", author: "me" };
+  const bank = P.buildBank(bs);
+  const ov = { rate: 16000, len: 30000, bpm: 170, bars: 4, data: new Uint8Array(15000).fill(0x11) };
+  const loops = [{ name: "bass", rate: 16000, len: 30000, bpm: 170, bars: 4, auto: true, quant: "bar" },
+    { name: "vox bed", rate: 11025, len: 20000, bpm: 170, bars: 8, level: 80, filter: -20, quant: "loop", data: new Uint8Array(10000).fill(0x22) }];
+  const shots = [{ name: "bombaclot", rate: 16000, len: 9000, data: new Uint8Array(4500).fill(0x33), choke: 1 },
+    { name: "fill", rate: 22050, len: 30000, bpm: 170, data: new Uint8Array(15000).fill(0x44), cut: true, quant: "beat", mode: "gate", pitch: -3, decay: 4 }];
+  const pads = P.factoryPads(); pads[5] = { ...P.padDefaults(8), mix: 0.7 };
+  const pk = P.parsePack(P.buildPack({ meta, bank, overlay: ov, loopChunk: P.loopChunk(loops, true), shotChunk: P.shotChunk(shots),
+    padsChunk: P.padsChunk(pads) }));
+  assert.equal(pk.loops.length, 2); assert.ok(pk.loops[0].fromOverlay && pk.loops[0].auto); assert.equal(pk.loops[0].data.length, 15000);
+  assert.deepEqual([pk.loops[1].name, pk.loops[1].bars, pk.loops[1].level, pk.loops[1].filter, pk.loops[1].quant], ["VOX BED", 8, 80, -20, "loop"]);
+  assert.deepEqual([pk.shots[0].name, pk.shots[0].choke, pk.shots[1].cut, pk.shots[1].mode, pk.shots[1].quant, pk.shots[1].pitch, pk.shots[1].decay, pk.shots[1].bpm],
+    ["BOMBACLO", 1, true, "gate", "beat", -3, 4, 170]);
+  assert.equal(pk.shots[1].data[0], 0x44);
+  assert.equal(pk.pads[5].type, 8); assert.ok(Math.abs(pk.pads[5].mix - 0.7) < 1e-6); assert.equal(pk.pads[0].type, 1);
+  assert.throws(() => P.parsePack(P.buildPack({ meta, bank, loopChunk: P.loopChunk(loops, true) })), /overlay/);
+  const i5 = P.installImages(pk, 5), tags = (img) => {
+    const d = new DataView(img.buffer, img.byteOffset), n = d.getUint16(6, true); let at = 16 + 168 * n; const c = d.getUint32(at, true), t = [];
+    at += 4; for (let i = 0; i < c; i++) { const len = d.getUint32(at + 4, true); t.push(String.fromCharCode(...img.subarray(at, at + 4))); at += 8 + len + (-len & 3); } return t; };
+  const all5 = [...tags(i5[0]), ...(i5[1] ? tags(i5[1]) : [])];
+  for (const t of ["OVLY", "LOOP", "SHOT", "PADS"]) assert.ok(all5.includes(t), `INFO 5 gets ${t}`);
+  assert.ok(tags(i5[0]).includes("PADS"), "PADS in bank 1");
+  const all3 = [...tags(P.installImages(pk, 3)[0]), ...(P.installImages(pk, 3)[1] ? tags(P.installImages(pk, 3)[1]) : [])];
+  assert.ok(all3.includes("OVLY") && !all3.includes("SHOT") && !all3.includes("LOOP"), "a 1.7 gets the overlay alone");
+  /* too much: the room for the breaks taken */
+  const big = Array.from({ length: 16 }, (_, i) => ({ name: "s" + i, rate: 22050, len: 44100, data: new Uint8Array(22050) }));
+  assert.throws(() => P.parsePack(P.buildPack({ meta, bank, shotChunk: P.shotChunk(big) })), /don't fit/);
+  console.log("chpk: the layer");
+}
