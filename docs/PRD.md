@@ -6,6 +6,8 @@ Status: revised product direction · Repository: `profikid/fm1-break-choppah`
 **New feature roadmap:** [MATHCORE — Queue & Layered Sample Engine](PRD_MATHCORE.md) · v1.0 · 22 Nov 2026 · built on
 the `mathcore` branch (22 Nov 2026), released in v1.5.5 (23 Nov 2026): see its §14–19
 
+**Proposed:** [The Layer — overlay loops and one-shots on ARP](PRD_LAYER.md) · v0.1 · 26 Nov 2026
+
 ---
 
 ## 1. Product definition
@@ -97,7 +99,7 @@ The following are the current project constraints and must be revalidated agains
 | REC | Record sample-trigger gestures into the event loop; overdub |
 | SEQ | Sample-event pattern editor |
 | EDIT | Break selection, waveform, slice markers, trimming and slice mapping |
-| ARP | Performance FX / sample manipulation pad page; not a synth arpeggiator |
+| ARP | Performance FX / sample manipulation pad page; not a synth arpeggiator. Proposed: also plays the pack's layer, loops on black keys 1–4 and one-shots on the white keys ([PRD_LAYER.md](PRD_LAYER.md)) |
 | FX | Sample bus effect chain |
 | ENV | Slice amplitude envelope / gate / transient shaping; no synthesized envelopes |
 | LFO | Modulation of sample playback and FX parameters |

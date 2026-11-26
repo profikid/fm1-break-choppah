@@ -1,7 +1,7 @@
 # CHOPPAH — Packs, the Pack Builder and the Pack Hub
 
 **Feature PRD** · v0.1 · 24 Nov 2026 · Owner: Laurens (Sylverline)  
-**Parent product PRD:** [PRD.md](PRD.md) (S-003, §10) · related: [PRD_MATHCORE.md](PRD_MATHCORE.md)  
+**Parent product PRD:** [PRD.md](PRD.md) (S-003, §10) · related: [PRD_MATHCORE.md](PRD_MATHCORE.md) · [PRD_LAYER.md](PRD_LAYER.md) (loops and one-shots)  
 **Status:** 24 Nov 2026 (later): the FM-1 side is built for **CHOPPAH 1.7** (branch `packs-v2`, merged): pack v2,
 the slot settings and HOME's LOOP, scenes per pack, the theme, the overlay, GETSET; tested in the host simulator and
 built for the device by CI (image 562 KB of 581.5). To check on an FM-1 before the 1.7 release: the overlay's render
@@ -181,6 +181,9 @@ bands, the K S H P letters) stay fixed for legibility, or are derived from `hi` 
 ---
 
 ## 7. Overlay loop (`OVLY`)
+
+*26 Nov 2026: [PRD_LAYER.md](PRD_LAYER.md) proposes up to 4 loops and 16 one-shots per pack, played on ARP; the OVLY
+chunk stays as its loop 1.*
 
 A longer loop (4, 8 or 16 bars) under the breaks: a bass line, a pad, a vocal bed, typically the destemmed rest of
 the track the breaks came from (§9). It is **not** a lane over the break (PRD_MATHCORE §16): it doesn't chop,
