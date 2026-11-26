@@ -578,11 +578,21 @@ export function installImages(pk, proto, caps = BANK_CAPS) {
   const lens = pk.slots.map((s) => s.len), v2 = proto >= 3, ly = proto >= 5;   /* (5: CHOPPAH 1.8, the layer) */
   const L = packLayout(lens, caps, v2 ? [overlayBytes(pk.overlay), ly ? chunkBytes(pk.loopChunk) : 0, ly ? chunkBytes(pk.shotChunk) : 0] : 0);
   if (!L) throw new Error("the pack doesn't fit this FM-1's banks");
-  const [k] = L;
-  const imgs = v2
-    ? deviceBanks(pk.slots, k, pk.meta, { scenes: pk.scenes, overlay: pk.overlay, chain: pk.chain, caps,
-      loopChunk: ly ? pk.loopChunk : null, shotChunk: ly ? pk.shotChunk : null, padsChunk: ly ? pk.padsChunk : null })
-    : [buildBank(pk.slots.slice(0, k)), k < pk.slots.length ? buildBank(pk.slots.slice(k)) : null];
+  const [k0] = L;
+  /* the layout counts the breaks and the big chunks; bank 1 also carries the pack's own (PACK, THEM, SSET, SCNE, CHAN,
+     PADS: a few KB). When they tip it over, a break moves to bank 2, and another, until it fits */
+  let imgs = null, why = null;
+  for (let k = k0; k >= 0 && !imgs; k--) {
+    if (pk.slots.length - k > MAX_SLOTS || (k < pk.slots.length && caps.length < 2)) break;
+    try {
+      imgs = v2
+        ? deviceBanks(pk.slots, k, pk.meta, { scenes: pk.scenes, overlay: pk.overlay, chain: pk.chain, caps,
+          loopChunk: ly ? pk.loopChunk : null, shotChunk: ly ? pk.shotChunk : null, padsChunk: ly ? pk.padsChunk : null })
+        : [buildBank(pk.slots.slice(0, k)), k < pk.slots.length ? buildBank(pk.slots.slice(k)) : null];
+    } catch (e) { why = e; }
+    if (!v2) break;
+  }
+  if (!imgs) throw why || new Error("the pack doesn't fit the FM-1's banks");
   if (imgs[1]) noAt(imgs[1]);
   return imgs;
 }

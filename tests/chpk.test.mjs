@@ -130,6 +130,13 @@ console.log("chpk: all good");
   assert.ok(tags(i5[0]).includes("PADS"), "PADS in bank 1");
   const all3 = [...tags(P.installImages(pk, 3)[0]), ...(P.installImages(pk, 3)[1] ? tags(P.installImages(pk, 3)[1]) : [])];
   assert.ok(all3.includes("OVLY") && !all3.includes("SHOT") && !all3.includes("LOOP"), "a 1.7 gets the overlay alone");
+  /* bank 1 also carries the pack's own chunks (the scenes ~1.6 KB): when the layout's bank 1 is too full for them, a
+     break moves to bank 2 (a pack that only failed once its MATHCORE scenes were added, 26 Nov 2026) */
+  { const three = [brk("A", 30000), brk("B", 30000), brk("C", 30000)], lens = three.map((b) => b.pcm.length);
+    const caps = [P.bankSize(lens) + 200, 200000], pk3 = P.parsePack(P.buildPack({ meta, bank: P.buildBank(three), scenes: new Uint8Array(1604) }));
+    assert.equal(P.packLayout(lens, caps)[0], 3, "the layout alone: all three in bank 1");
+    const [b1, b2] = P.installImages(pk3, 3, caps);
+    assert.ok(b1.length <= caps[0] && b2 && new DataView(b2.buffer, b2.byteOffset).getUint16(6, true) === 1, "one break moved to bank 2, the scenes fit"); }
   /* too much: the room for the breaks taken */
   const big = Array.from({ length: 16 }, (_, i) => ({ name: "s" + i, rate: 22050, len: 44100, data: new Uint8Array(22050) }));
   assert.throws(() => P.parsePack(P.buildPack({ meta, bank, shotChunk: P.shotChunk(big) })), /don't fit/);
