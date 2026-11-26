@@ -1,0 +1,49 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: MPL-2.0 -->
+<!-- tests/emu_install.sh: a page of the same site installing a pack into the emulator through its port part -->
+<meta charset="utf-8"><title>emu install</title>
+<script type="module">
+import * as P from "/site/chpk.js";
+import { FM1Link } from "/site/fm1link.js";
+import { emuAccess } from "/emu/parts/port_client.js";
+
+let seed = 7;
+const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+const noise = (n) => Float32Array.from({ length: n }, (_, i) => 0.6 * Math.sin(i / (3 + (i >> 12) % 5)) * (0.3 + rnd()));
+const brk = (name, n) => ({ name, bpm: 136.9, rate: 22050, pcm: noise(n), slices: Array.from({ length: 17 }, (_, i) => Math.floor(n * i / 16)) });
+const ID = "0f1e2d3c-4b5a-4968-8776-655443322110";
+function pack() {
+  const names = ["AMEN", "THINK", "APACHE", "WORM", "SPORT", "COLD"];
+  const bank = P.buildBank(names.map((x) => brk(x, 100000)));
+  const ov = { rate: 22050, len: 80000, bpm: 136.9, bars: 4, data: P.adpcmEncode(noise(80000)) };
+  const meta = { id: ID, name: "EMU PACK", author: "CI", theme: { hi: "#00ffaa", bg: "#101820" }, slots: names.map(() => ({})) };
+  return P.parsePack(P.buildPack({ meta, bank, overlay: ov }));
+}
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+async function link() {
+  const access = emuAccess();
+  for (let t = 0; t < 40 && !access.outputs.size; t++) await wait(250);
+  if (!access.outputs.size) throw new Error("no emulator on the port");
+  const l = await FM1Link.open(access);
+  if (!l) throw new Error("the emulator didn't answer INFO");
+  return l;
+}
+async function readBack(l, imgs) {        /* one command at a time: the link waits for one answer */
+  const same = [];
+  for (let k = 0; k < imgs.length; k++) same.push(!imgs[k] || (await l.read(k, 0, imgs[k].length)).every((v, i) => v === imgs[k][i]));
+  return same;
+}
+window.install = async () => {
+  const l = await link(), t0 = performance.now();
+  const before = await l.status();
+  const imgs = P.installImages(pack(), before.proto, before.caps);
+  await l.install(imgs);
+  const after = await l.status();
+  return { port: l.out.name, before: { proto: before.proto, n: before.breaks.length, pack: before.pack },
+    after: { proto: after.proto, n: after.breaks.length, pack: after.pack, names: after.breaks.map((b) => b.name) },
+    same: await readBack(l, imgs),
+    secs: ((performance.now() - t0) / 1000).toFixed(1) };
+};
+window.check = async () => { const s = await (await link()).status(); return { n: s.breaks.length, pack: s.pack }; };
+window.ready = true;
+</script>

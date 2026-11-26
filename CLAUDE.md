@@ -87,6 +87,11 @@ settings bytes reserved).
   sendBank rules; `tests/fm1link.test.mjs` against `tests/page_send/fake_fm1.js`, which plays a 1.6 or a 1.7): the
   hub vendors it with chpk.js and installs a pack straight onto the FM-1 (PRD_PACKS §10.7; `installImages` in chpk.js;
   a pack's `.chpk` downloads only for its owner or when the owner allows it).
+  **The emulator takes packs too** (PRD_PACKS PH-035): `app/fm1.toml` `emu = ["midi", "port", "data"]` (fm1-base
+  web/emu/parts: its USB MIDI with SysEx into `app_sysex`, a BroadcastChannel port for the site's other pages, the
+  data area kept in IndexedDB), so the hub installs with fm1link.js into `/emu/` as onto an FM-1 (`tests/emu_install.sh`:
+  the real emulator in Chrome, a pack over both banks byte for byte, still there after a reload). ci.yml also sends
+  main's emulator to choppah.app/beta/emu/ (PH-036).
   The builder's cut is `app/site/breakcut.js` (MPL-2.0, no DOM: level, slicePoints, warp copied from breaks.html
   unchanged, `tests/breakcut.test.mjs` holds them equal; `cut`, `makeBreak`, `autoEdit`): the hub's library slicer
   (PRD_PACKS §10.8) makes breaks from your samples with it. Change those functions in both places, or the test fails.

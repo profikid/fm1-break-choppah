@@ -113,3 +113,32 @@ jobs:
                  --data-binary @app/build/choppah.fwsc https://choppah.app/api/beta)"
           cat beta.json; echo
           [ "$C" = 201 ] || { echo "::warning::the beta didn't go up on choppah.app (HTTP $C)"; exit 1; }
+
+      # choppah.app/beta/emu/ follows main too: this run's browser emulator (app/build/emu above, in the site's look,
+      # tools/site_style.py), file by file, then the list of them, which switches /beta/emu/ to this build (choppah-hub
+      # src/beta.js, the same OIDC token check). The hub's packs go into it (PRD_PACKS PH-035, PH-036): the release's
+      # /emu/ takes them from the next release on (fm1.toml emu = midi, port, data). A failure doesn't fail the build.
+      - name: Beta emulator on choppah.app
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          rm -rf build/beta_site && mkdir -p build/beta_site
+          cp -r app/build/emu build/beta_site/emu
+          /usr/bin/python3 -c 'import sys; sys.path.insert(0, "tools"); import site_style; from pathlib import Path; site_style.emu(Path("build/beta_site"))'
+          V="$(sh scripts/bump_version.sh minor)"
+          T="$(curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                 "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://choppah.app" | jq -r .value)"
+          S="$(git log -1 --format=%s | tr -d '\n' | jq -sRr @uri)"
+          cd build/beta_site/emu
+          find . -type f ! -path './o2/*' ! -path './web/*' ! -name '*.o' | sed 's|^\./||' | sort > ../files.txt
+          while read -r f; do
+            C="$(curl -sS --retry 3 -o /dev/null -w '%{http_code}' -X PUT -H "Authorization: Bearer $T" -H "X-Hub: 1" \
+                   -H "Content-Type: application/octet-stream" --data-binary @"$f" \
+                   "https://choppah.app/api/beta/emu/file?path=$(printf %s "$f" | jq -sRr @uri)")"
+            [ "$C" = 201 ] || { echo "::warning::the beta emulator's $f didn't go up on choppah.app (HTTP $C)"; exit 1; }
+          done < ../files.txt
+          C="$(jq -Rn '{files: [inputs]}' ../files.txt | curl -sS --retry 3 -o ../emu.json -w '%{http_code}' -X PUT \
+                 -H "Authorization: Bearer $T" -H "X-Hub: 1" -H "X-Beta-Version: $V" -H "X-Beta-Subject: $S" \
+                 -H "Content-Type: application/json" --data-binary @- https://choppah.app/api/beta/emu)"
+          cat ../emu.json; echo
+          [ "$C" = 201 ] || { echo "::warning::the beta emulator didn't switch on choppah.app (HTTP $C)"; exit 1; }
