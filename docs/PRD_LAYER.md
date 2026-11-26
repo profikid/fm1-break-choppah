@@ -287,8 +287,8 @@ as it reads any v2 pack.
 
 Built: LY-070 (the room bar split: breaks, loops, one-shots, the rest), LY-080 (each file heard in the browser and
 typed before it is uploaded; the MCP's `type`), LY-081 (`layer.js guessType`: under 1.2 s, or under 4 s with one or two
-hits: ONE-SHOT; the drum stem's share of the energy ≥ 25 %: BREAK; 20–60 s with 25–50 %: TRACK; over 60 s: TRACK;
-else LOOP. Checked on the firmware's 70 breaks: 64 BREAK, the six heavily processed Amens (30–39 % drums) LOOP),
+hits and under 35 % drums: ONE-SHOT; the drum stem's share of the energy ≥ 25 %: BREAK; 20–60 s with 25–50 %: TRACK; over 60 s: TRACK;
+else LOOP. Checked on the firmware's 70 breaks: 67 BREAK; a drum roll and a distorted one-bar Amen ONE-SHOT, a filtered Amen LOOP),
 LY-082, LY-083, LY-090, LY-091 (sections, hearing, settings, reorder; not yet: moving a sample between sections), LY-092,
 LY-093, LY-094, LY-095 (the pack page; not yet: the builder's section 4, a public pack as the start), LY-096 (the
 factory pads for new packs; `pads_from` in the MCP). The library is an overview (a row a sample) and a page a sample
