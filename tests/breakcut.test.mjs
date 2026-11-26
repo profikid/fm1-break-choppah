@@ -39,7 +39,10 @@ assert.equal(y.length, 2 * bar, "padded to two bars");
 assert.equal(C.barsIn(16.1, { bpm: 120, offset: 0 }), 8);
 
 /* the break: its rate, its length, sixteen slices; marks kept, warp on the grid */
-const lin = { resample: async (s, a, b) => (a === b ? s : Float32Array.from({ length: Math.round(s.length * b / a) }, (_, i) => s[Math.min(s.length - 1, Math.round(i * a / b))])) };
+/* a split for the tests: the harmonic / percussive measure stands in for Demucs (the hub's GPU), offline */
+const B = await import("../app/site/beats.js");
+const hp = async (v, r) => B.stems(v, r);
+const lin = { split: hp, resample: async (s, a, b) => (a === b ? s : Float32Array.from({ length: Math.round(s.length * b / a) }, (_, i) => s[Math.min(s.length - 1, Math.round(i * a / b))])) };
 const loop = hits(bar * 2, rate, bpm);
 let b = await C.makeBreak(loop, rate, { name: "amen-ish!", bpm }, lin);
 assert.equal(b.name, "AMEN ISH ");
@@ -73,12 +76,12 @@ assert.equal(once.pcm.length, both.pcm.length, "one bar twice, from the drums");
 
 /* the overlay: bars on the grid, the rest or the mix, the best rate that fits, the reasons it can't */
 const track = Float32Array.from({ length: rate * 20 }, (_, i) => 0.3 * Math.sin(2 * Math.PI * 110 * i / rate) + (i % (rate / 2) < 200 ? 0.8 * rnd() : 0));
-let ov = await C.makeOverlay(track, rate, { bpm: 120, offset: 0.25, start: 1, bars: 4, take: "mix" }, { resample: lin.resample });
+let ov = await C.makeOverlay(track, rate, { bpm: 120, offset: 0.25, start: 1, bars: 4, take: "mix" }, { resample: lin.resample, split: hp });
 assert.equal(ov.rate, 22050); assert.equal(ov.len, 4 * 2 * 22050); assert.equal(ov.pcm.length, ov.len); assert.equal(ov.bars, 4); assert.equal(ov.bpm, 120);
-ov = await C.makeOverlay(track, rate, { bpm: 120, start: 0, bars: 4 }, { resample: lin.resample, fits: (len, r) => r < 22050 });
+ov = await C.makeOverlay(track, rate, { bpm: 120, start: 0, bars: 4 }, { resample: lin.resample, split: hp, fits: (len, r) => r < 22050 });
 assert.equal(ov.rate, 16000, "the first rate that fits"); assert.equal(ov.len, 4 * 2 * 16000);
 await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, start: 7, bars: 4 }, lin), /ends before bar 12/);
-await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 4 }, { resample: lin.resample, fits: () => false }), /no room/);
+await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 4 }, { resample: lin.resample, split: hp, fits: () => false }), /no room/);
 await assert.rejects(C.makeOverlay(track, rate, { bpm: 120, bars: 33 }, lin), /1 to 32/);
 
 /* a first edit: a loop file from its length, a track from its first bar and best loop */
@@ -94,9 +97,27 @@ await C.makeOverlay(tone, rate, { bpm, bars: 1, take: "mix" }, { ...lin, split: 
 assert.equal(calls.length, 2, "the mix: no split");
 assert.ok(ovs.pcm.length > 0);
 
+/* only Demucs: with no hub to ask (here, node), the drums aren't made from anything else: it says why */
+await assert.rejects(C.makeBreak(tone, rate, { bpm, drums: true }, { resample: lin.resample }), (e) => e instanceof B.DestemError && /choppah\.app/.test(e.message));
+await assert.rejects(C.makeOverlay(tone, rate, { bpm, bars: 1, take: "rest" }, { resample: lin.resample }), B.DestemError);
+assert.ok((await C.makeOverlay(tone, rate, { bpm, bars: 1, take: "mix" }, { resample: lin.resample })).pcm.length, "the mix needs no split");
+/* splitServer: a WAV up (x-hub, the session's cookie), the drums back, the rest the mix less them; 401 says sign in */
+{ const seen = [];
+  const fake = (status) => async (url, init) => { seen.push({ url, h: init.headers, cred: init.credentials });
+    if (status !== 200) return new Response("{}", { status });
+    const w = B.monoWav(init.body); return new Response(B.floatWav(w.x.map((v) => v * 0.5), w.rate)); };
+  const x = Float32Array.from({ length: 4410 }, (_, i) => Math.sin(i / 7));
+  const st = await B.splitServer({ fetchFn: fake(200) })(x, 22050);
+  assert.equal(seen[0].url, "/api/destem"); assert.equal(seen[0].h["x-hub"], "1"); assert.equal(seen[0].cred, "same-origin");
+  assert.ok(Math.abs(st.drums[100] - x[100] / 2) < 1e-6 && Math.abs(st.rest[100] - x[100] / 2) < 1e-6);
+  const p16 = await B.splitServer({ fetchFn: fake(200), pcm16: true })(x, 22050);
+  assert.ok(Math.abs(p16.drums[100] - x[100] / 2) < 1e-3, "16-bit up");
+  await assert.rejects(B.splitServer({ fetchFn: fake(401) })(x, 22050), /sign in/);
+  await assert.rejects(B.splitServer({ fetchFn: fake(404) })(x, 22050), /choppah\.app/); }
+
 let e = C.autoEdit("think break.wav", 4.2);
 assert.equal(e.name, "THINK BREAK"); assert.ok(Math.abs(e.bpm - 114.29) < 0.01); assert.equal(e.once, false);
 e = C.autoEdit("track", 150, { bpm: 100, downbeat: 3.1, loops: [{ start: 3.1 + 2.4 * 7, bars: 2 }] });
 assert.equal(e.bpm, 100); assert.ok(Math.abs(e.offset - 0.7) < 1e-6); assert.equal(e.start, 8);
 
-console.log("breakcut: the builder's level, slices and warp, sample for sample; the cut, the rate (slow ones read back), marks, warp, the drums alone, the overlay, a split of its own, the first edit");
+console.log("breakcut: the builder's level, slices and warp, sample for sample; the cut, the rate (slow ones read back), marks, warp, the drums alone, the overlay, a split of its own, only Demucs (splitServer), the first edit");

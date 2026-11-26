@@ -153,7 +153,7 @@ computer.</p>
     <h3 class="hubh">Find the loops: the drums for breaks, the rest for the overlay</h3>
     <p class="sub" id="trackFacts"></p>
     <div class="row">
-      <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="trackSplit" checked> Split the drums from the rest (stems)</label>
+      <label class="f" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="trackSplit" checked> Split the drums from the rest (Demucs, on choppah.app: signed in)</label>
       <button id="trackGo" class="go">Find the breaks</button>
       <div class="meter" aria-hidden="true" style="flex:1"><i id="trackBar"></i></div>
     </div>
@@ -1661,10 +1661,25 @@ function trackOffer() {
   $("track").classList.toggle("hidden", !long);
   if (long) $("trackFacts").textContent = `${Math.floor(src.dur / 60)}:${String(Math.round(src.dur % 60)).padStart(2, "0")} of audio: too long for one break. Let the builder find the tempo, the bars and the loops worth cutting${$("trackSplit").checked ? ", with the drums split from the rest" : ""}.`;
 }
-$("trackGo").onclick = () => {
+$("trackGo").onclick = async () => {
   if (!src) return;
   const id = ++jobs, split = $("trackSplit").checked;
-  $("trackGo").disabled = true; say($("trackState"), split ? "Splitting the drums from the rest, then listening for the beat…" : "Listening for the beat…");
+  $("trackGo").disabled = true; say($("trackState"), split ? "Splitting the drums from the rest with Demucs, on choppah.app's GPU…" : "Listening for the beat…");
+  /* the stems: only Demucs (beats.js splitServer: the hub's /api/destem, signed in), at the worker's 22.05 kHz */
+  let stems = null;
+  if (split) {
+    const y = BEATS.resample(src.x, src.rate, 22050);
+    $("trackBar").style.width = "10%";
+    try { stems = await BEATS.splitServer({ pcm16: true })(y, 22050); }
+    catch (err) {
+      $("trackGo").disabled = false; $("trackBar").style.width = "0";
+      const here = location.hostname === "choppah.app";
+      say($("trackState"), esc(err.message) + (here ? "" : ` <a href="${HUB}/breaks/">Open the builder on choppah.app</a>, or untick the split to cut from the whole mix.`), true);
+      return;
+    }
+    $("trackBar").style.width = "80%"; say($("trackState"), "Split. Listening for the beat…");
+    stems.y = y;
+  }
   const w = trackWorker();
   w.onmessage = (e) => {
     const m = e.data;
@@ -1680,8 +1695,8 @@ $("trackGo").onclick = () => {
     trackList();
     $("trackOut").classList.remove("hidden");
   };
-  const copy = src.x.slice();
-  w.postMessage({ id, x: copy, rate: src.rate, split }, [copy.buffer]);
+  if (stems) w.postMessage({ id, x: stems.y, rate: 22050, drums: stems.drums, rest: stems.rest }, [stems.y.buffer, stems.drums.buffer, stems.rest.buffer]);
+  else { const copy = src.x.slice(); w.postMessage({ id, x: copy, rate: src.rate }, [copy.buffer]); }
 };
 function trackBarLen() { return 240 / (+$("trackBpm").value || track.bpm); }
 function trackCut(w, from) {                 /* a loop's audio from the stem chosen, at the track's rate */

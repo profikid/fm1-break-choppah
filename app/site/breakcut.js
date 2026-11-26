@@ -6,10 +6,10 @@
 // the break fits at, sixteen slices on the hits (or the grid, or placed by hand), warped onto the grid if asked. The
 // level, slice and warp functions are breaks.html's, copied unchanged (tests/breakcut.test.mjs holds them equal).
 // The hub's library slicer uses it (PRD_PACKS §10.8), and the hub's pack maker (the browser's and the MCP server's):
-// a break cut from the drums alone (the stems: beats.js `stems`), and the pack's overlay (`makeOverlay`, as the
+// a break cut from the drums alone (the stems: Demucs, beats.js `splitServer`), and the pack's overlay (`makeOverlay`, as the
 // builder's step 2 makes it: bars on the break's grid, the rest of the track or the mix, its seam smoothed, levelled,
 // at the best rate that fits beside the breaks).
-import { resample as resampleLinear, stems, seamless } from "./beats.js";
+import { resample as resampleLinear, seamless, splitServer } from "./beats.js";
 
 export const RATE = 22050, MAX_LEN = 106496, NSLICES = 16;
 
@@ -190,11 +190,11 @@ async function resampleBest(x, from, to) {
 
 /* the sample (mono x at rate) and its edit -> {name, bpm, rate, pcm, slices, auto}: the break as the FM-1 gets it
    (auto: the slices it would have without marks, for the slicer). marks: 17 sample positions in the break, or null */
-/* the stems a break or an overlay is cut from: split(x, rate) -> {drums, rest} (async). Here the harmonic / percussive
-   split (beats.js `stems`); the hub's server passes its own (Demucs on a GPU, src/stems.js) */
-export const splitHPSS = async (x, r) => stems(x, r);
+/* the stems a break or an overlay is cut from: split(x, rate) -> {drums, rest} (async). Only Demucs (26 Nov 2026):
+   in the browser the hub's /api/destem (beats.js splitServer), on the hub's server its own (src/stems.js) */
+export const splitDemucs = splitServer();
 
-export async function makeBreak(x, rate, edit, { resample = resampleBest, split = splitHPSS } = {}) {
+export async function makeBreak(x, rate, edit, { resample = resampleBest, split = splitDemucs } = {}) {
   const e = { ...EDIT_DEFAULTS, ...edit };
   const r = breakRate(e.bpm);
   let pcm;
@@ -217,7 +217,7 @@ export async function makeBreak(x, rate, edit, { resample = resampleBest, split 
 /* the drum stem of a sample around its two bars (half a second either side, so the split has some context), at rate
    r: -> {x, e} with the edit's offset moved to match */
 const CONTEXT = 0.5;
-async function drumsAround(x, rate, e, r, resample, split = splitHPSS) {
+async function drumsAround(x, rate, e, r, resample, split = splitDemucs) {
   const [a, b] = span(rate, e), pad = Math.round(CONTEXT * rate), lo = Math.max(0, a - pad), hi = Math.min(x.length, b + pad);
   const seg = await resample(x.slice(lo, Math.max(lo + 1, hi)), rate, r);
   return { x: (await split(seg, r)).drums, e: { ...e, offset: (e.offset || 0) - lo / rate } };
@@ -228,7 +228,7 @@ async function drumsAround(x, rate, e, r, resample, split = splitHPSS) {
    crossfaded into its lead-in, levelled as the breaks; at the best of 22.05 / 16 / 11.025 kHz that `fits(len, rate)`.
    -> {rate, len, bpm, bars, pcm} (pcm at rate; the caller ADPCM-encodes it), or throws why not */
 export const OVERLAY_RATES = [22050, 16000, 11025];
-export async function makeOverlay(x, rate, o, { fits = () => true, resample = resampleBest, split = splitHPSS } = {}) {
+export async function makeOverlay(x, rate, o, { fits = () => true, resample = resampleBest, split = splitDemucs } = {}) {
   const bars = o.bars | 0, bpm = +o.bpm, take = o.take || "rest";
   if (!(bars >= 1 && bars <= 32)) throw new Error("an overlay is 1 to 32 bars (as many as the FM-1's flash holds: the caller's fits says)");
   if (!(bpm >= 40 && bpm <= 300)) throw new Error("the overlay's tempo: 40 to 300 BPM");

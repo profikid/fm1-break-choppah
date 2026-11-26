@@ -1,14 +1,14 @@
 /* SPDX-License-Identifier: MPL-2.0 */
-/* the pack builder's heavy listening, off the page's thread: a track in, its stems, tempo, bars and loops out */
-import { resample, stems, analyse, findLoops } from "./beats.js";
+/* the pack builder's heavy listening, off the page's thread: a track in (and its stems, split by Demucs on the hub's
+   GPU before: beats.js splitServer), its tempo, bars and loops out */
+import { resample, analyse, findLoops } from "./beats.js";
 
 const RATE = 22050;
 self.onmessage = (e) => {
-  const { id, x, rate, split } = e.data;
+  const { id, x, rate, drums = null, rest = null } = e.data;
   try {
-    const y = resample(x, rate, RATE);
-    let drums = null, rest = null;
-    if (split) ({ drums, rest } = stems(y, RATE, { onProgress: (p) => self.postMessage({ id, progress: p * 0.85 }) }));
+    const y = rate === RATE ? x : resample(x, rate, RATE);
+    if (drums && (rate !== RATE || drums.length !== y.length)) throw new Error("the stems must come at 22.05 kHz, as long as the track");
     self.postMessage({ id, progress: 0.9 });
     const a = analyse(drums || y, RATE);
     const loops = findLoops(y, RATE, a, { drums, n: 10 });

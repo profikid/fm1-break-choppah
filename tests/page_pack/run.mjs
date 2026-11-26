@@ -12,6 +12,18 @@ page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error" && !/Web MIDI|favicon|fonts\.g|Failed to load resource/.test(m.text())) errors.push(m.text()); });
 /* the site build adds the library (lib/) and the fonts; served raw, only those may be missing */
 page.on("response", (r) => { if (r.status() >= 400 && !/\/lib\/|favicon|fonts\.g/.test(r.url())) errors.push(`${r.status()} ${r.url()}`); });
+/* the destemmer (choppah.app's /api/destem, Demucs on a GPU): a stand-in in the page that answers with the drums
+   as the harmonic / percussive measure finds them, so the page's split runs as on the hub */
+await page.evaluateOnNewDocument(() => {
+  const real = window.fetch; window.__destems = [];
+  window.fetch = async (url, init = {}) => {
+    if (!String(url).endsWith("/api/destem")) return real(url, init);
+    const B = await import(new URL("beats.js", location.href).href);
+    const w = B.monoWav(init.body), { drums } = B.stems(w.x, w.rate);
+    window.__destems.push({ rate: w.rate, n: w.x.length, hub: init.headers && init.headers["x-hub"] });
+    return new Response(B.floatWav(drums, w.rate), { status: 200, headers: { "content-type": "audio/wav" } });
+  };
+});
 const out = { ok: false };
 try {
   await page.goto(url, { waitUntil: "load" });
@@ -26,8 +38,11 @@ try {
   out.loops = await page.$$eval("#trackLoops li", (l) => l.length);
   await page.click('#trackLoops li:first-child button[data-a="add"]');
   await page.waitForFunction(() => pack.length === 1, { timeout: 30000 });
-  await page.click("#ovMake");
-  await page.waitForFunction(() => meta.overlay || /no room|ends before/.test(document.getElementById("trackState").textContent), { timeout: 30000 });
+  /* the overlay from the rest (the stems): a loop's Split, then the rest alone into the pack (PH-049) */
+  await page.click('#trackLoops li:first-child button[data-a="split"]');
+  await page.waitForFunction(() => !document.getElementById("splitBox").classList.contains("hidden"), { timeout: 10000 });
+  await page.click("#spRestOnly");
+  await page.waitForFunction(() => meta.overlay || /no room|ends before|fewer/.test(document.getElementById("spState").textContent), { timeout: 30000 });
   out.overlay = await page.evaluate(() => meta.overlay && { bars: meta.overlay.bars, rate: meta.overlay.rate, len: meta.overlay.len });
   await page.$eval("#pkName", (e) => { e.value = "Test Pack"; e.dispatchEvent(new Event("change")); });
   await page.$eval("#slLoop", (e) => e.value);       /* the loop settings exist */
@@ -40,7 +55,8 @@ try {
       thumb: p.thumbType, size: bytes.length, again: pack.length, againOv: !!meta.overlay, againLoop: pack[0].slot.loop_steps };
   });
   out.file = f;
-  out.ok = Math.abs(out.bpm - 99.81) < 0.6 && out.loops > 0 && !!out.overlay && f.name === "TEST PACK" && f.n === 1 && f.ov && f.loop === 16
+  const destems = out.destems = await page.evaluate(() => window.__destems);
+  out.ok = destems.length === 1 && destems[0].rate === 22050 && destems[0].hub === "1" && Math.abs(out.bpm - 99.81) < 0.6 && out.loops > 0 && !!out.overlay && f.name === "TEST PACK" && f.n === 1 && f.ov && f.loop === 16
     && f.again === 1 && f.againOv && f.againLoop === 16;
 } catch (e) { out.error = String(e); }
 out.errors = errors;

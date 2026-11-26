@@ -2,8 +2,9 @@
 /* The pack builder's ears (docs/PRD_PACKS.md PB-002..006, PB-010): from any track to breaks and an overlay.
  * No DOM, no libraries: runs in the page, in a Web Worker (beats_worker.js) and in plain `node` (tests/beats.test.mjs).
  *
- *   stems(x, rate)            harmonic / percussive separation (median filtering of the spectrogram, Fitzgerald 2010):
- *                             {drums, rest}, the drums for the breaks, the rest for the overlay
+ *   splitServer()             the stems to cut from: Demucs on choppah.app's GPU (/api/destem), the only splitter
+ *   stems(x, rate)            harmonic / percussive measure (median filtering of the spectrogram, Fitzgerald 2010):
+ *                             how much of a sound is drums; nothing is cut from it any more (splitServer is)
  *   analyse(x, rate)          tempo (BPM to 0.01), the beat grid, the downbeats (bar 1 = a kick, 2 and 4 the snare)
  *   findLoops(x, rate, a, n)  the best 1-, 2- and 4-bar windows to cut: drum energy, how well a bar repeats, little else
  *
@@ -209,7 +210,69 @@ export function findLoops(x, rate, a, { n = 8, lengths = [2, 1, 4], drums = null
 }
 
 /* ---------------------------------------------------------------- stems */
-/* -> {drums, rest} at rate, the same length as x: soft masks from median-filtered magnitudes (percussive = vertical,
+/* ---- the stems for what is cut (PRD_PACKS PB-002 / PB-003, 26 Nov 2026): only Demucs, on choppah.app's GPU.
+ * `stems` below (the harmonic / percussive split) no longer makes anything heard: it only measures how much of a
+ * sound is drums (layer.js guessType). splitServer posts a mono WAV to the hub (signed in: the session's cookie) and
+ * takes the drums back, as long; the rest is the mix less them. On another origin (GitHub Pages) it can't sign in
+ * and says where it runs. */
+export const DESTEM_URL = "/api/destem";
+export class DestemError extends Error {}
+/* x (mono, -1..1) at rate -> a WAV, float 32 (16-bit with pcm16: half the bytes up, for a whole track) */
+export function floatWav(x, rate, { pcm16 = false } = {}) {
+  const n = x.length, bps = pcm16 ? 2 : 4, b = new ArrayBuffer(44 + n * bps), dv = new DataView(b);
+  const tag = (o, s) => { for (let i = 0; i < 4; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  tag(0, "RIFF"); dv.setUint32(4, 36 + n * bps, true); tag(8, "WAVE");
+  tag(12, "fmt "); dv.setUint32(16, 16, true); dv.setUint16(20, pcm16 ? 1 : 3, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, rate, true); dv.setUint32(28, rate * bps, true); dv.setUint16(32, bps, true); dv.setUint16(34, bps * 8, true);
+  tag(36, "data"); dv.setUint32(40, n * bps, true);
+  if (pcm16) { for (let i = 0; i < n; i++) dv.setInt16(44 + 2 * i, Math.max(-32768, Math.min(32767, Math.round(x[i] * 32767))), true); }
+  else new Float32Array(b, 44, n).set(x);
+  return new Uint8Array(b);
+}
+/* a mono WAV, float 32 or 16-bit PCM (what the destemmer answers) -> {x, rate} */
+export function monoWav(bytes) {
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const tag = (o) => String.fromCharCode(b[o], b[o + 1], b[o + 2], b[o + 3]);
+  if (b.length < 12 || tag(0) !== "RIFF" || tag(8) !== "WAVE") throw new DestemError("the destemmer didn't answer with a WAV");
+  let fmt = null;
+  for (let o = 12; o + 8 <= b.length;) {
+    const id = tag(o), len = dv.getUint32(o + 4, true), d = o + 8;
+    if (id === "fmt ") fmt = { code: dv.getUint16(d, true), ch: dv.getUint16(d + 2, true), rate: dv.getUint32(d + 4, true), bits: dv.getUint16(d + 14, true) };
+    if (id === "data" && fmt) {
+      const n = Math.floor(Math.min(len, b.length - d) / (fmt.bits / 8) / fmt.ch), x = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const at = d + i * fmt.ch * (fmt.bits / 8);
+        x[i] = fmt.code === 3 && fmt.bits === 32 ? dv.getFloat32(at, true) : fmt.bits === 16 ? dv.getInt16(at, true) / 32768 : NaN;
+      }
+      if (x.length && Number.isNaN(x[0])) throw new DestemError("the destemmer's WAV: float 32 or 16-bit only");
+      return { x, rate: fmt.rate };
+    }
+    o = d + len + (len & 1);
+  }
+  throw new DestemError("the destemmer's WAV has no audio");
+}
+/* -> async (x, rate) => {drums, rest}, by the hub's /api/destem (Demucs). Throws DestemError saying why */
+export function splitServer({ url = DESTEM_URL, fetchFn = (...a) => fetch(...a), pcm16 = false } = {}) {
+  return async (x, rate) => {
+    let r;
+    try {
+      r = await fetchFn(url, { method: "POST", credentials: "same-origin", body: floatWav(x, rate, { pcm16 }),
+        headers: { "content-type": "audio/wav", "x-hub": "1" } });
+    } catch { throw new DestemError("the destemmer can't be reached: splitting the drums runs on choppah.app (signed in)"); }
+    if (r.status === 401) throw new DestemError("splitting the drums runs on choppah.app's GPU: sign in there to use it");
+    if (r.status === 404 || r.status === 405) throw new DestemError("splitting the drums runs on choppah.app (signed in): open the builder there");
+    if (!r.ok) { let m = ""; try { m = (await r.json()).error; } catch { /* not JSON */ } throw new DestemError(m || `the destemmer: HTTP ${r.status}`); }
+    const w = monoWav(new Uint8Array(await r.arrayBuffer()));
+    if (w.rate !== rate || Math.abs(w.x.length - x.length) > 8) throw new DestemError(`the destemmer answered ${w.x.length} samples at ${w.rate} Hz for ${x.length} at ${rate}`);
+    const drums = new Float32Array(x.length), rest = new Float32Array(x.length);
+    drums.set(w.x.subarray(0, x.length));
+    for (let i = 0; i < x.length; i++) rest[i] = x[i] - drums[i];
+    return { drums, rest };
+  };
+}
+
+/* the harmonic / percussive split (Fitzgerald 2010): a measure of how much is drums (guessType), not a stem to cut from.
+ * -> {drums, rest} at rate, the same length as x: soft masks from median-filtered magnitudes (percussive = vertical,
  *    harmonic = horizontal), done in overlapping chunks so a whole track fits in memory. onProgress(0..1) */
 export function stems(x, rate, { frame = 2048, hop = 512, kernel = 17, power = 2, onProgress } = {}) {
   const win = hann(frame), nb = frame / 2 + 1, half = kernel >> 1;

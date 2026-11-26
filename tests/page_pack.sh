@@ -1,7 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: MPL-2.0
 # The pack builder (app/site/breaks.html, beats.js, chpk.js) in Chrome: a made-up track (a pad, then FUNKY DRUMMER
-# twice over it) in; its tempo, bars and loops found with the stems split; a loop cut into the pack; an overlay made
+# twice over it) in; its stems split (choppah.app's Demucs, a stand-in here), its tempo, bars and loops found; a loop
+# cut into the pack; an overlay made
 # from the rest; the pack's name and a break's loop settings; the .chpk out and back in. Needs node and Chrome
 # (CHROME=path); puppeteer-core as tests/page_send.sh installs it.
 #   tests/page_pack.sh
