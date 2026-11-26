@@ -2,7 +2,7 @@
 
 **Feature PRD** · v0.1 · 26 Nov 2026 · Owner: Laurens (Sylverline)  
 **Parent PRDs:** [PRD.md](PRD.md) (ARP, B-55 effect pads) · [PRD_PACKS.md](PRD_PACKS.md) (§7 the overlay, §10 the hub)  
-**Status:** proposed, nothing built. Decisions so far in §1.2 (later on 26 Nov 2026: D5, the pack's own effect pads); open questions in §10.
+**Status:** L2 (the firmware) built on main for 1.8, see §1.3; L1 (the hub) and L3 to do. Decisions in §1.2 (D1–D7); open questions in §10.
 
 ---
 
