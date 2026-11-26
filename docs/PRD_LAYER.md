@@ -60,7 +60,7 @@ and fire over the break without leaving HOME (LY-024).
 | **Total** | | **~315 KB of 344** |
 
 Vocals and stabs sound right at 16 kHz and mostly at 11.025; the builder picks the best rate that fits for each
-part, shots first down to 11.025, then loops (§8.3).
+part, shots first down to 11.025, then loops (§7, LY-071).
 
 ---
 
@@ -88,7 +88,7 @@ they are today; pads 1–4 come back when the pack has no loops.
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| LY-001 | **Tap** (pressed < 250 ms) **latches** a loop: on at its quantise point (LY-031: beat, bar or its length; default bar), tap again: off at the same point. Queued, its LED and its row blink | P0 | Host scenario: a tap mid-bar starts on the next bar's 1; a second tap stops on the following 1 |
+| LY-001 | **Tap** (pressed < 250 ms) **latches** a loop: on at its quantise point (§3.3 MORE: beat, bar or its length; default bar), tap again: off at the same point. Queued, its LED and its row blink | P0 | Host scenario: a tap mid-bar starts on the next bar's 1; a second tap stops on the following 1 |
 | LY-002 | **Hold** (≥ 250 ms) plays it **while held**: in at once **in phase** (where the transport says it would be, a 5 ms fade), out on release (5 ms). A latched loop held: plays on while held, stops on release (a "cut" gesture) | P0 | Host scenario: held from bar 3 beat 2 of an 8-bar loop, it sounds its own bar 3 beat 2; the release is click-free |
 | LY-003 | **SEL + a loop key**: the loop restarts from its bar 1 at the next bar (a drop) and latches | P1 | |
 | LY-004 | **Groups**: each loop has a group (A–D, default each its own). Latching a loop stops the playing loop of its group at the same quantise point (a clip-launcher column: verse bass → chorus bass) | P1 | Two loops of group A never sound together |
@@ -100,7 +100,7 @@ they are today; pads 1–4 come back when the pack has no loops.
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| LY-010 | A white key fires its shot. Quantise per shot (LY-041): OFF (at once, the default), 1/16 or a beat | P0 | |
+| LY-010 | A white key fires its shot. Quantise per shot (§3.3 MORE): OFF (at once, the default), 1/16 or a beat | P0 | |
 | LY-011 | **Modes** per shot: ONE SHOT (plays to its end; the key again restarts it), GATE (stops on release, 5 ms), LOOP (repeats its length while held) | P0 | |
 | LY-012 | **Choke groups** (0 none, 1–4): a shot cuts the others of its group (5 ms), so two shouts never pile up | P1 | |
 | LY-013 | **4 voices**; a fifth hit takes the oldest. The overload guard (E-7) sheds shot voices first (oldest first), then the effect pads, then the chain | P0 | Engine test: 16 hits a beat, render bounded |
