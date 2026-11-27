@@ -188,7 +188,12 @@ export class FM1Link {
     const v = r.data, i8 = (x) => (x > 127 ? x - 256 : x);
     return { playing: !!v[1], on: v[2], scene: i8(v[3]), next: i8(v[4]), edit: v[5], lane: v[6], part: v[7] === 255 ? -1 : v[7],
       step: v[8] | v[9] << 8, pos: [...v.subarray(10, 14)], hits: [...v.subarray(14, 18)], missing: v[18], qpos: v[19], n: v[20],
-      macros: [...v.subarray(21, 25)], bar16: i8(v[25]), state: [...v.subarray(26, 30)].map(i8), base: v[30], bar: v[31] };
+      macros: [...v.subarray(21, 25)], bar16: i8(v[25]), state: [...v.subarray(26, 30)].map(i8), base: v[30], bar: v[31],
+      /* the groove-event layer (PRD_MATHCORE_GROOVE.md): what the device can do */
+      lane_slices: [92, 93, 94, 95].map((i) => i8(v[i])),
+      caps: { velocity: !!(v[96] & 1), micro: !!(v[96] & 2), articulation: !!(v[96] & 4),
+        timbre: !!(v[96] & 8), layering: !!(v[96] & 16), early: !!(v[96] & 32) },
+      resolution_us: v[97] * 100 };
   }
   mc(op, ...args) { return this.mcStatus(op, args); }   /* MCCTL: 0 stop, 1 scene s, 2 the chain, 3 launch s, 4 macros d m s c, 5 edit s l, 6 lane l state */
   stop() { return this.mc(0); }

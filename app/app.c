@@ -683,10 +683,12 @@ static const bank_pack_t *pk_pack;
 static const bank_sset_t *pk_sset;
 static uint32_t pk_nsset;
 static const uint8_t *pk_scne, *pk_them, *pk_chan;
+static const uint8_t *pk_gruv, *pk_evnt;      /* the groove-event layer (PRD_MATHCORE_GROOVE.md) */
 static const bank_ovly_t *pk_ovly;
 static const uint8_t *pk_loop, *pk_shot, *pk_pads;   /* the layer (1.8): LOOP, SHOT, PADS; pk_layer: their banks */
 static uint32_t pk_loop_len, pk_shot_len, pk_layer;
 static uint32_t pk_scne_len, pk_tag;     /* pk_tag: the pack's id, hashed (0: no pack of v2) */
+static uint32_t pk_gruv_len, pk_evnt_len;
 static void pk_chunks(const uint8_t *p, uint32_t size)
 {
     const bank_header_t *h = (const bank_header_t *)p;
@@ -708,6 +710,12 @@ static void pk_chunks(const uint8_t *p, uint32_t size)
         } else if (tag == CHK_SCNE) {
             pk_scne = d;
             pk_scne_len = len;
+        } else if (tag == CHK_GRUV) {
+            pk_gruv = d;
+            pk_gruv_len = len;
+        } else if (tag == CHK_EVNT) {
+            pk_evnt = d;
+            pk_evnt_len = len;
         } else if (tag == CHK_THEM && len >= 16u)
             pk_them = d;
         else if (tag == CHK_CHAN && len >= 80u)
@@ -732,9 +740,10 @@ static void pk_scan(void)
 {
     uint32_t k, i;
     n_user = 0u;
-    pk_pack = 0; pk_sset = 0; pk_scne = 0; pk_them = 0; pk_ovly = 0; pk_chan = 0;
+    pk_pack = 0; pk_sset = 0; pk_scne = 0; pk_them = 0; pk_ovly = 0; pk_chan = 0; pk_gruv = 0; pk_evnt = 0;
     pk_loop = pk_shot = pk_pads = 0;
     pk_nsset = pk_scne_len = pk_tag = pk_loop_len = pk_shot_len = pk_layer = 0u;
+    pk_gruv_len = pk_evnt_len = 0u;
     for (k = 0; k < PK_BANKS; k++) {
         const uint8_t *p = plat_data(PK_BASE[k]);
         const bank_header_t *h = (const bank_header_t *)p;
@@ -871,6 +880,7 @@ static int mc_pack_core(void)            /* 1: the pack's own came in (another p
     mq.rsv[1] = (uint8_t)(tag >> 8);
     mq.rsv[2] = (uint8_t)(tag >> 16);
     brk_mc_scenes(mcs.sc);
+    brk_mc_groove(pk_gruv, pk_gruv_len, pk_evnt, pk_evnt_len);   /* the groove beside the scenes */
     return 1;
 }
 

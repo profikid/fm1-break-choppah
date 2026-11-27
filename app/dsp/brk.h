@@ -140,6 +140,7 @@ typedef struct {
     uint8_t mc_pos[4];                   /* each lane's place in its cycle (0..len-1) */
     uint8_t mc_hits[4];                  /* each lane's hits (a count: the screen flashes on a change) */
     uint8_t mc_missing;                  /* bit l: lane l (or the role hit) found no slice of its role: silent */
+    int8_t mc_slice[4];                  /* each lane's last slice (the lanes sound together: MG-001) */
 } brk_status_t;
 
 /* ---------------------------------------------------------------- MATHCORE --- */
@@ -153,6 +154,32 @@ typedef struct {
 #define MC_EVENTS 32u                    /* a lane's cycle: 1..32 events */
 #define MC_SCENES 16u                    /* scenes A..P */
 #define MC_TICKS 12u                     /* master ticks in a 16th: 1/32 is 6, 1/16T 8, 1/32T 4 */
+/* the groove-event layer (docs/PRD_MATHCORE_GROOVE.md): the events beside the scenes. GRUV: the context and the
+   scene map (8 bytes, then 4 a scene). EVNT: the events, ten bytes each. GROO: a break's own groove, so it
+   travels in the file and not only in the hub's database (the SSET is in the device's saved state: it stays) */
+#define MC_GRUV_BYTES 8u
+#define MC_EVNT_BYTES 10u
+#define MCE_F_GHOST 1u                   /* a groove event's flags (the kinds have MCE_ of their own) */
+#define MCE_F_ACCENT 2u
+#define MCE_F_ART 0x30u                  /* the articulation: bits 4-5 */
+#define MCE_F_LANE 0xC0u                 /* the lane: bits 6-7 */
+typedef struct __attribute__((packed)) {
+    uint8_t flags;                       /* the ghost, the accent, the articulation, the lane */
+    uint8_t velocity;                    /* 0..127 */
+    int16_t micro_us;                    /* the offset from the grid, signed (negative: early) */
+    int8_t pitch;                        /* -24..+24 */
+    uint8_t slice;                       /* the source slice */
+    uint8_t timbre;                      /* 0..255 */
+    uint8_t gate;                        /* 0..100 */
+    uint8_t pos;                         /* the lane's event index */
+    uint8_t rsv;
+} mc_event_t;                           /* 10 bytes */
+#define MC_CAPS_VELOCITY 1u              /* what the device can do (the status' last bytes) */
+#define MC_CAPS_MICRO 2u
+#define MC_CAPS_ARTICULATION 4u
+#define MC_CAPS_TIMBRE 8u
+#define MC_CAPS_LAYERING 16u
+#define MC_CAPS_EARLY 32u
 enum { ROLE_KICK, ROLE_SNARE, ROLE_HAT, ROLE_PERC, MC_ROLES };   /* bit 1 << role in a slice's role byte */
 enum { MCR_32, MCR_16, MCR_8, MCR_4, MCR_32T, MCR_16T, MCR_8T, MC_RATES };   /* a lane's event: 1/32 .. 1/4 */
 extern const uint8_t MC_RATE_TICKS[MC_RATES];
@@ -211,6 +238,9 @@ void brk_drum_lanes(uint16_t kick, uint16_t snare, uint16_t hat);   /* the patte
                                           * replaces the pattern */
 void brk_role_hit(uint32_t role);        /* the role's first slice on the break's voice, at the next render (MIDI) */
 void brk_mc_scenes(const mc_scene_t *s); /* the scene table (MC_SCENES), read by the render; edited in place */
+void brk_mc_groove(const uint8_t *gruv, uint32_t gruv_len, const uint8_t *evnt, uint32_t evnt_len);
+                                        /* the groove-event layer: the context and the events (null: none) */
+uint8_t brk_mc_caps(void);               /* what the device can do (the bits above) */
 void brk_mc_start(int scene);            /* the scene to play from the next step (with brk_play: the first); -1 none */
 void brk_mc_next(int scene);             /* the scene after the one playing (-1: the lanes stop at its end) */
 void brk_mc_mute(uint32_t mute, uint32_t solo);   /* lanes muted (bit l) and soloed: their phase runs on */

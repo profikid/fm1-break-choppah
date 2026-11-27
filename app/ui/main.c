@@ -1629,8 +1629,9 @@ int app_expect(const char *what, int *got)
                                     "pk_tag", "mq_tag", "sc0_bars", "nslices", "brk_bpm", "slot_pitch", "tile",
                                     "role0", "slot_swing", "pal_hi", "th_bg", "ov_have", "ov_loud", "ss0_steps", "brk_wait",
                                     "ly_nl", "ly_ns", "ly_on", "ly_shots", "ly_cut", "ly_lat", "arp_kind", "ly_pads",
-                                    "pfx0_type", "ly_s2_decay"};
-    int v[92];
+                                    "pfx0_type", "ly_s2_decay", "mc_slice0", "mc_slice1", "mc_slice2",
+                                    "mc_slice3", "mc_caps", "mc_res"};
+    int v[98];
     uint8_t rl[BRK_MAX_SLICES];
     uint32_t i;
     brk_status_t st;
@@ -1744,6 +1745,10 @@ int app_expect(const char *what, int *got)
         v[90] = pfx_at(0)->type;
         v[91] = mq.sset[2].decay;
     }
+    for (i = 0; i < 4u; i++)             /* the lanes' last slices (the lanes sound together) */
+        v[92 + i] = (int)st.mc_slice[i];
+    v[96] = (int)brk_mc_caps();           /* what the device can do (the groove-event layer) */
+    v[97] = 120;                          /* the timing resolution, in 100 microseconds */
     for (i = 0; i < sizeof W / sizeof W[0]; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];

@@ -19,6 +19,9 @@
                                           * them after its magic: n, rsv[3], q[64] (scenes 0..15), key[11] (0xFF none),
                                           * rsv: 80 bytes. Without it a pack gets the factory's chain and keys */
 #define CHK_SCNE 0x454E4353u             /* "SCNE": MATHCORE's scenes as OBJ_MC holds them (magic, 16 x mc_scene_t) */
+#define CHK_GRUV 0x56555247u             /* "GRUV": the groove's context (the timebase, the swing, the scene map) */
+#define CHK_EVNT 0x544E5645u             /* "EVNT": the groove's events (mc_event_t) */
+#define CHK_GROO 0x4F4F5247u             /* "GROO": a break's own groove (the per-slice character) */
 #define CHK_THEM 0x4D454854u             /* "THEM": the screen's colours, 8 x RGB565 (bg panel text dim hi mid wave warn)
                                           * then 16 bytes reserved */
 #define CHK_OVLY 0x594C564Fu             /* "OVLY": the overlay, bank_ovly_t then its IMA ADPCM */

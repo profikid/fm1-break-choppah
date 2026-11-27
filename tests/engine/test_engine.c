@@ -2241,6 +2241,61 @@ static void test_mc_play(void)
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
+    /* the lanes sound together (MG-001): each lane has its own voice, so a hit does not cut another lane's */
+    {
+        mc_scene_init(&mc_sc[6], 1u);
+        mc_sc[6].lane[0].flags = MCL_ON;
+        mc_sc[6].lane[0].role = ROLE_KICK;
+        mc_sc[6].lane[0].hits = 0xFFu;
+        mc_sc[6].lane[0].len = 8u;
+        mc_sc[6].lane[0].rate = MCR_8;
+        mc_sc[6].lane[1].flags = MCL_ON;
+        mc_sc[6].lane[1].role = ROLE_SNARE;
+        mc_sc[6].lane[1].hits = 0xFFu;
+        mc_sc[6].lane[1].len = 8u;
+        mc_sc[6].lane[1].rate = MCR_8;
+        brk_mc_start(6);
+        brk_mc_next(6);
+        brk_play(1);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_status(&st);
+        CHECK(st.mc_slice[0] >= 0 && st.mc_slice[1] >= 0, "the lanes sound together: each has its own slice (%d, %d)",
+              st.mc_slice[0], st.mc_slice[1]);
+        CHECK(st.mc_slice[0] != st.mc_slice[1], "and they are different slices (%d, %d)", st.mc_slice[0], st.mc_slice[1]);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
+    /* the groove-event layer (MG-004, MG-005): the event has its own velocity and its own time */
+    {
+        static const uint8_t gruv[MC_GRUV_BYTES + 4u] = { 1u, 12u, 50u, 0u, 0u, 0u, 1u, 0u, 7u, 1u, 0u, 0u };
+        static const uint8_t evnt[MC_EVNT_BYTES] = { 0u, 20u, 0x88u, 0x13u, 0u, 3u, 128u, 100u, 0u, 0u };
+        float p1 = 0.0f, p2 = 0.0f, po = 0.0f, pl = 0.0f;
+        mc_scene_init(&mc_sc[7], 1u);
+        mc_sc[7].lane[0].flags = MCL_ON;
+        mc_sc[7].lane[0].role = ROLE_KICK;
+        mc_sc[7].lane[0].hits = 1u;
+        mc_sc[7].lane[0].len = 8u;
+        mc_sc[7].lane[0].rate = MCR_8;
+        mc_sc[7].lane[0].level = 100u;
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_mc_start(7);
+        brk_mc_next(7);
+        brk_play(1);
+        mc_run(BLOCK * 4u, &po, &pl);
+        p1 = po > pl ? po : pl;
+        /* the same lane, without the event: its pattern plays at the lane's level */
+        brk_mc_groove(0, 0, 0, 0);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(7);
+        brk_play(1);
+        mc_run(BLOCK * 4u, &po, &pl);
+        p2 = po > pl ? po : pl;
+        CHECK(p1 > 0.0f, "the event is heard (%.3f)", p1);
+        CHECK(p1 < p2 * 0.8f, "at its own velocity: quieter than the pattern's (%.3f < %.3f)", p1, p2);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
     /* a triplet roll: a snare lane at 1/8 with ratchet x3 under hats at 1/16T: 24 snare hits a bar, the hats
      * between never cutting it short; SWELL climbs without speeding up */
     {
@@ -2263,7 +2318,7 @@ static void test_mc_play(void)
         for (t2 = 0; t2 < 16u * sl; t2 += 64u) {   /* the voice's slice every 64 samples: a snare's */
             mc_run(64u, 0, 0);
             brk_status(&st);
-            snares += st.slice >= 0 && (r[st.slice] >> ROLE_SNARE & 1u);
+            snares += st.mc_slice[1] >= 0 && (r[st.mc_slice[1]] >> ROLE_SNARE & 1u);
             last++;
         }
         CHECK(snares * 100u >= last * 97u, "triplet roll: the hats never cut it (%u of %u looks a snare)", snares, last);
