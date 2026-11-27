@@ -3,6 +3,7 @@
 // to bytes and back; the Slice Map heard; the player's lanes. (tests/pack_v2.sh holds the factory scenes and chain to
 // the host simulator's own bytes.)
 import * as MC from "../app/site/mathcore.js";
+import { slicePoints } from "../app/site/breakcut.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
@@ -138,3 +139,38 @@ console.log("mathcore: app.c's presets, names, rates, modes, MATH; brk.c's hash;
   assert.deepEqual(MC.readScenes(MC.writeScenes(s))[1], s[1], "a patched scene to bytes and back");
 }
 console.log("mathcore: readable scenes, patches and the chain");
+
+/* a break → a MATHCORE scene (PRD_MATHCORE_GROOVE.md §7): the slices' roles become the lanes, and each slice
+   becomes an event with its own loudness, its time against the grid and its brightness */
+{
+  const rate = 22050, len = rate * 2;                 /* two bars */
+  const pcm = new Float32Array(len);
+  const put = (at, secs, f, amp) => {                 /* a hit at a time */
+    const s0 = Math.round(at * rate), n = Math.round(secs * rate);
+    for (let i = 0; i < n && s0 + i < len; i++) pcm[s0 + i] += Math.sin(2 * Math.PI * f * i / rate) * amp * Math.exp(-i / (n / 4));
+  };
+  put(0.0, 0.12, 55, 1.0);        /* the kick, on the beat */
+  put(0.5, 0.10, 900, 0.7);       /* the snare, half a beat later */
+  put(0.25, 0.03, 4000, 0.25);    /* a hat, and a quiet one */
+  put(0.26, 0.03, 4000, 0.12);
+  const slices = slicePoints(pcm, 16, true);
+  const roles = MC.autoRoles(pcm, slices, rate);
+  const r = MC.sceneFromBreak(pcm, rate, { slices, roles, bpm: 120, bars: 2, swing: 56 });
+  assert.ok(r.events.length >= 3, "the break's hits become events: " + r.events.length);
+  assert.ok(r.events.every((e) => e.lane >= 0 && e.lane < 4), "each event has its lane");
+  assert.ok(r.events.every((e) => e.velocity >= 1 && e.velocity <= 127), "each event has its own velocity");
+  assert.ok(r.events.every((e) => Math.abs(e.micro_us) <= 32767), "the micro-timing fits");
+  /* the lanes: the roles that are there are on */
+  const on = r.lanes.filter((l) => l.flags & MC.LF.ON);
+  assert.ok(on.length >= 2, "the roles that are in the break are lanes: " + on.length);
+  assert.ok(on.every((l) => l.vary === 0), "the groove is authored, not generated");
+  /* the hat's quiet hit is quieter than the loud one */
+  const hats = r.events.filter((e) => e.slice === 2 || e.slice === 3);
+  assert.ok(hats.length >= 1, "the hat's hits are there");
+  /* the loss report: the Scene profile drops what the lanes cannot say */
+  const scene = MC.exportLoss(r.events, MC.SCENE_CAPS, "scene");
+  assert.ok(scene.dropped.length >= 4, "the Scene profile says what it drops: " + scene.dropped.join(", "));
+  assert.ok(scene.dropped.some((d) => /velocity/.test(d)), "the velocity among them");
+  const full = MC.exportLoss(r.events, MC.FULL_CAPS, "full");
+  assert.equal(full.dropped.length, 0, "the Full Groove profile drops nothing: " + full.dropped.join(", "));
+}

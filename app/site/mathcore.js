@@ -321,7 +321,97 @@ export class Player {
   }
 }
 
-/* --- readable scenes (the MCP server's, PRD_PACKS 10.11): letters, names and patterns for the numbers --- */
+/* --- a break → a MATHCORE scene (PRD_MATHCORE_GROOVE.md §7) ---
+   The break's own slices, heard for their roles (the Slice Map), become the four lanes; each slice's loudness,
+   its time against the grid, its brightness and its place become an event. Nothing is invented: what the lanes
+   cannot say is listed in the loss report. */
+export const ROLE_LANE = [0, 1, 2, 3];              /* the lanes: kick, snare, hat, perc */
+
+/* a slice's loudness (0..1) and its brightness (0..255, a coarse one: the crossings in it) */
+export function sliceStats(pcm, a, b) {
+  let peak = 0, zc = 0, last = 0, n = 0;
+  const hi = Math.min(b, pcm.length);
+  for (let i = Math.max(0, a); i < hi; i++) {
+    const v = pcm[i], av = v < 0 ? -v : v;
+    if (av > peak) peak = av;
+    if (i > a && (v >= 0) !== (last >= 0)) zc++;
+    last = v; n++;
+  }
+  return { peak, bright: n > 1 ? Math.min(255, Math.round(255 * Math.min(1, (zc / n) * 4))) : 0 };
+}
+
+/* what a device can do (MCCTL op 7): the export asks, and says what it could not carry */
+export const FULL_CAPS = { velocity: true, micro: true, articulation: true, timbre: true, layering: true, early: true,
+  voices: 4, max_events: 64, resolution_us: 100 };
+export const SCENE_CAPS = { velocity: false, micro: false, articulation: false, timbre: false, layering: false, early: false,
+  voices: 1, max_events: 32, resolution_us: 0 };
+
+/* what the export could not carry, for the caps it was given */
+export function exportLoss(events, caps = SCENE_CAPS, profile = "scene") {
+  const dropped = [], kept = [];
+  const has = (k) => !!(caps && caps[k]);
+  if (events.length) {
+    if (has("velocity")) kept.push("the per-event velocity"); else dropped.push("the per-event velocity (the lanes have one level)");
+    if (has("micro")) kept.push("the micro-timing"); else dropped.push("the micro-timing (the events are on the grid)");
+    if (has("articulation")) kept.push("the articulation (the ghosts are events)"); else dropped.push("the articulation (the ghosts are plain hits)");
+    if (has("timbre")) kept.push("the timbre"); else dropped.push("the timbre (one pitch and one filter a lane)");
+    if (has("layering")) kept.push("the lanes together"); else dropped.push("the lanes together (one hit at a time)");
+    if (has("early")) kept.push("the early events"); else dropped.push("the early events (everything lands on the grid or later)");
+  }
+  if (!has("layering") && events.length) dropped.push("only one hit at a time: the lanes take turns");
+  if (caps && caps.max_events && events.length > caps.max_events)
+    dropped.push(`${events.length - caps.max_events} events over the device's ${caps.max_events}`);
+  return { profile, events: events.length, kept, dropped, voices: (caps && caps.voices) || 1 };
+}
+
+/* the break → the scene, the events and the context (GRUV)
+   o: {pcm, rate, slices, roles, bpm, bars, swing, offset, name} */
+export function sceneFromBreak(pcm, rate, o = {}) {
+  const sl = o.slices, roles = o.roles;
+  if (!sl || sl.length < 2) throw new Error("the break: its slices");
+  if (!roles) throw new Error("the break: its roles (the Slice Map)");
+  const bpm = o.bpm || 120, bars = o.bars || 2, offset = o.offset || 0;
+  const sixteenth = 60 / bpm / 4, total = Math.min(EVENTS, bars * 4 * 16);   /* the 16ths in the phrase */
+  /* the slices of each role, with their loudness and brightness */
+  const perRole = [[], [], [], []], stats = [];
+  for (let i = 0; i < sl.length - 1; i++) {
+    const st = sliceStats(pcm, sl[i], sl[i + 1]);
+    stats.push(st);
+    for (let r = 0; r < 4; r++) if (roles[i] >> r & 1) perRole[r].push(i);
+  }
+  const loudest = Math.max(1e-6, ...stats.map((s) => s.peak));
+  const events = [], lanes = [];
+  for (let r = 0; r < 4; r++) {
+    const L = laneDefaults(r);
+    L.flags = 0; L.role = r; L.rate = 1; L.len = Math.max(1, total); L.level = 100; L.vary = 0; L.mode = 0;
+    L.prob = 100; L.gate = 100; L.hits = 0; L.accent = 0;
+    if (!perRole[r].length) { lanes.push(L); continue; }
+    L.flags = LF.ON;
+    for (const i of perRole[r]) {
+      const at = (sl[i] - offset) / rate;                       /* the slice's time in the break */
+      if (at < 0) continue;
+      const pos = Math.max(0, Math.min(total - 1, Math.round(at / sixteenth)));
+      const micro = Math.round((at - pos * sixteenth) * 1e6);
+      const st = stats[i];
+      const vel = Math.max(1, Math.min(127, Math.round(127 * st.peak / loudest)));
+      L.hits |= 1 << pos;
+      events.push({ flags: r << 6, velocity: vel, micro_us: Math.max(-32767, Math.min(32767, micro)),
+        pitch: 0, slice: i, timbre: st.bright, gate: 100, pos, lane: r });
+    }
+    lanes.push(L);
+  }
+  const scene = { bars, flags: SF.BREAK, name: 0, rsv: 0, lane: lanes };
+  const gruv = { ticks_per_16th: TICKS, swing: o.swing || 50, flags: 0, bpm,
+    scenes: events.length ? [{ scene: 0, events: events.length, first: 0 }] : [] };
+  return { scene, events, gruv, lanes, roles, slices: sl };
+}
+
+/* the scene, the events and the context, as a pack's chunks (and a scene set's) */
+export function grooveChunks(gruv, events) {
+  return { gruv, events };
+}
+
+
 const flag = (v, b) => !!(v & b);
 export function laneToJSON(L, l) {
   return { lane: l + 1, on: flag(L.flags, LF.ON), role: ROLES[L.role % 4], pattern: toPattern(L), rate: RATES[L.rate] || "1/16",
