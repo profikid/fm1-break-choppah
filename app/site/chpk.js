@@ -468,7 +468,7 @@ const pad16 = (s) => { const b = new Uint8Array(16); for (let i = 0; i < 16 && i
 function uuidBytes(id) { const h = id.replace(/-/g, ""); return Uint8Array.from({ length: 16 }, (_, i) => parseInt(h.slice(2 * i, 2 * i + 2), 16)); }
 
 /* the device chunks of a pack: PACK, SSET, THEM, SCNE (bank 1) and OVLY (bank 2 when it fits there, else bank 1) */
-export function deviceChunks(meta, nbreaks, scenes, overlay, chain = null) {
+export function deviceChunks(meta, nbreaks, scenes, overlay, chain = null, groove = null) {
   const m = checkMeta(meta);
   const pk = new Uint8Array(56), pv = new DataView(pk.buffer);
   pk.set(uuidBytes(m.id), 0); pk.set(pad16(m.name), 16); pk.set(pad16(m.author), 32);
@@ -484,6 +484,8 @@ export function deviceChunks(meta, nbreaks, scenes, overlay, chain = null) {
   THEME_KEYS.forEach((k, i) => tv.setUint16(2 * i, rgb565(m.theme[k]), true));
   const c1 = [{ tag: "PACK", data: pk }, { tag: "SSET", data: ss }, { tag: "THEM", data: th }];
   if (scenes) c1.push({ tag: "SCNE", data: scenes });
+  if (groove && groove.gruv) c1.push({ tag: "GRUV", data: groove.gruv instanceof Uint8Array ? groove.gruv : writeGruv(groove.gruv) });
+  if (groove && groove.events && groove.events.length) c1.push({ tag: "EVNT", data: groove.events instanceof Uint8Array ? groove.events : writeEvnt(groove.events) });
   if (chain) c1.push({ tag: "CHAN", data: chain });   /* (CHOPPAH 1.7 reads it; before: the factory's chain) */
   let ov = null;
   if (overlay) {
@@ -528,8 +530,8 @@ export function buildBankV2(list, chunks) {
 /* the two images the builder sends to a CHOPPAH of 1.7 and up (INFO version 3): bank 1 with the pack's chunks, the
  * overlay in bank 2 when it fits there. k: the breaks in bank 1 (packLayout's first). -> [bank 1, bank 2 or null] */
 export function deviceBanks(breaks, k, meta, { scenes = null, overlay = null, chain = null, caps = BANK_CAPS,
-  loopChunk = null, shotChunk = null, padsChunk = null } = {}) {
-  const ch = deviceChunks(meta, breaks.length, scenes, overlay, chain);
+  groove = null, loopChunk = null, shotChunk = null, padsChunk = null } = {}) {
+  const ch = deviceChunks(meta, breaks.length, scenes, overlay, chain, groove);
   const b1 = breaks.slice(0, k), b2 = breaks.slice(k);
   const base = padsChunk ? [...ch.bank1, { tag: "PADS", data: padsChunk }] : ch.bank1;
   const big = [ch.overlay, loopChunk && { tag: "LOOP", data: loopChunk }, shotChunk && { tag: "SHOT", data: shotChunk }].filter(Boolean);
@@ -714,6 +716,7 @@ export function installImages(pk, proto, caps = BANK_CAPS) {
     try {
       imgs = v2
         ? deviceBanks(pk.slots, k, pk.meta, { scenes: pk.scenes, overlay: pk.overlay, chain: pk.chain, caps,
+          groove: pk.gruv || pk.events ? { gruv: pk.gruv, events: pk.events } : null,
           loopChunk: ly ? pk.loopChunk : null, shotChunk: ly ? pk.shotChunk : null, padsChunk: ly ? pk.padsChunk : null })
         : [buildBank(pk.slots.slice(0, k)), k < pk.slots.length ? buildBank(pk.slots.slice(k)) : null];
     } catch (e) { why = e; }
