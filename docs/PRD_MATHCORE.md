@@ -8,6 +8,8 @@ and §15 for the revision to a played instrument (the same evening)
 
 ---
 
+> **Groove fidelity and Choppah Hub export:** see [PRD_MATHCORE_GROOVE.md](PRD_MATHCORE_GROOVE.md) for the proposed event-based groove layer, exact timing, per-hit dynamics, articulations, timbre, polyphonic playback, export profiles and implementation roadmap. This is a proposed extension; it is not yet implemented.
+
 ## 1. Purpose
 
 MATHCORE turns CHOPPAH from a break slicer with a single pattern sequencer into a playable, sample-only rhythm instrument. It combines:
