@@ -208,9 +208,25 @@ export function parsePack(bytes) {
   if (scenes && scenes.length !== 4 + 16 * 100) fail("SCNE: 16 scenes of 100 bytes and their magic");
   const chain = one("CHAN");
   if (chain && chain.length !== CHAN_BYTES) fail(`CHAN: the chain and the keys, ${CHAN_BYTES} bytes`);
+  /* the groove-event layer (PRD_MATHCORE_GROOVE.md): the context, the events, the breaks' own grooves */
+  const gruvB = one("GRUV"), evntB = one("EVNT"), grooB = one("GROO");
+  const gruv = gruvB ? readGruv(gruvB) : null;
+  const events = evntB ? readEvnt(evntB) : [];
+  const grooves = grooB ? readGsoo(grooB) : null;
+  if (gruv) {
+    let n = 0;
+    for (const sc of gruv.scenes) {
+      if (sc.scene > 15) fail("GRUV: the scene's index");
+      if (sc.first + sc.events > events.length) fail("GRUV: a scene's events are past the end");
+      n += sc.events;
+    }
+    if (n !== events.length) fail("GRUV: the events and the scene map do not agree");
+  } else if (events.length) fail("EVNT without a GRUV");
+  if (grooves && grooves.length !== slots.length) fail("GROO: one groove a break");
   if (meta.slots.length !== slots.length) meta.slots = slots.map((_, i) => ({ ...SLOT_DEFAULTS, ...(meta.slots[i] || {}) }));
   return { meta, bank, slots, scenes, chain, overlay, thumb, thumbType: thumb ? imageType(thumb) : null, chunks,
-    loops, shots, loopChunk: loopB, shotChunk: shotB, pads: padsB ? readPads(padsB) : null, padsChunk: padsB };
+    loops, shots, loopChunk: loopB, shotChunk: shotB, pads: padsB ? readPads(padsB) : null, padsChunk: padsB,
+    gruv, events, grooves };
 }
 
 export function imageType(b) {
@@ -259,6 +275,114 @@ export function checkSlot(s) {
   };
 }
 
+/* --- the groove-event layer (docs/PRD_MATHCORE_GROOVE.md): the groove beside the arrangement ---
+   GRUV: the context (the timebase, the swing, the scene map). EVNT: the events, eight bytes each.
+   GROO: a break's own groove, so it travels in the file and not only in the hub's database.
+   The old chunks are untouched, and a device that does not know these plays the scene as it always did. */
+export const GRUV_BYTES = 8, EVNT_BYTES = 10, GROO_HEAD = 2, GROO_SLICE_BYTES = 5;
+export const ART = ["NONE", "MAIN", "GHOST", "GRACE_NOTE"];         /* the articulation (the flags' bits 4-5) */
+export const EFLAGS = { GHOST: 1, ACCENT: 2, FLAM: 4, DRAG: 8 };   /* an event's flags */
+
+/* GRUV: the context, then the scene map (which scene, how many events, where they start) */
+export function readGruv(b) {
+  const fail = (m) => { throw new Error("GRUV: " + m); };
+  if (!b || b.length < GRUV_BYTES) fail("too short");
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  if (b[0] !== 1) fail(`version ${b[0]}: this page knows 1`);
+  const n = dv.getUint16(6, true);
+  if (b.length !== GRUV_BYTES + n * 4) fail("the scene map");
+  const scenes = [];
+  for (let i = 0; i < n; i++) {
+    const o = GRUV_BYTES + i * 4;
+    scenes.push({ scene: b[o], events: b[o + 1], first: dv.getUint16(o + 2, true) });
+  }
+  return { ticks_per_16th: b[1] || 12, swing: b[2], flags: b[3], bpm: dv.getUint16(4, true) / 100, scenes };
+}
+export function writeGruv(g) {
+  const fail = (m) => { throw new Error("GRUV: " + m); };
+  const sc = g.scenes || [];
+  if (sc.length > 255) fail("too many scenes");
+  const b = new Uint8Array(GRUV_BYTES + sc.length * 4), dv = new DataView(b.buffer);
+  b[0] = 1; b[1] = g.ticks_per_16th || 12; b[2] = Math.max(50, Math.min(75, g.swing || 50)); b[3] = g.flags || 0;
+  dv.setUint16(4, Math.round((g.bpm || 0) * 100), true); dv.setUint16(6, sc.length, true);
+  sc.forEach((s, i) => {
+    const o = GRUV_BYTES + i * 4;
+    b[o] = s.scene & 0xFF; b[o + 1] = s.events & 0xFF; dv.setUint16(o + 2, s.first || 0, true);
+  });
+  return b;
+}
+/* EVNT: the events, eight bytes each */
+export function readEvnt(b) {
+  const fail = (m) => { throw new Error("EVNT: " + m); };
+  if (!b || b.length % EVNT_BYTES) fail("not a whole number of events");
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const out = [];
+  for (let o = 0; o < b.length; o += EVNT_BYTES)
+    out.push({ flags: b[o], velocity: b[o + 1], micro_us: dv.getInt16(o + 2, true), pitch: dv.getInt8(o + 4),
+      slice: b[o + 5], timbre: b[o + 6], gate: b[o + 7], pos: b[o + 8], lane: (b[o] >> 6) & 3 });
+  return out;
+}
+export function writeEvnt(events) {
+  const list = events || [];
+  const b = new Uint8Array(list.length * EVNT_BYTES), dv = new DataView(b.buffer);
+  list.forEach((e, i) => {
+    const o = i * EVNT_BYTES;
+    b[o] = (e.flags || 0) | ((e.lane == null ? 0 : e.lane & 3) << 6);
+    b[o + 1] = Math.max(0, Math.min(127, Math.round(e.velocity == null ? 127 : e.velocity)));
+    dv.setInt16(o + 2, Math.max(-32767, Math.min(32767, Math.round(e.micro_us || 0))), true);
+    dv.setInt8(o + 4, Math.max(-24, Math.min(24, Math.round(e.pitch || 0))));
+    b[o + 5] = Math.max(0, Math.min(31, e.slice || 0));
+    b[o + 6] = Math.max(0, Math.min(255, e.timbre || 0));
+    b[o + 7] = Math.max(0, Math.min(100, e.gate == null ? 100 : e.gate));
+    b[o + 8] = Math.max(0, Math.min(31, e.pos || 0));
+    b[o + 9] = 0;
+  });
+  return b;
+}
+/* GROO: a break's own groove, the breaks in order */
+export function readGsoo(b) {
+  const fail = (m) => { throw new Error("GROO: " + m); };
+  if (!b || b.length < GROO_HEAD) fail("too short");
+  if (b[0] !== 1) fail(`version ${b[0]}: this page knows 1`);
+  const dv = new DataView(b.buffer, b.byteOffset, b.byteLength);
+  const out = [];
+  let at = GROO_HEAD;
+  for (let i = 0; i < b[1]; i++) {
+    if (at >= b.length) fail("a break's slices");
+    const ns = b[at++];
+    if (at + ns * GROO_SLICE_BYTES > b.length) fail("a break's slices");
+    const slices = [];
+    for (let k = 0; k < ns; k++) {
+      const o = at + k * GROO_SLICE_BYTES;
+      slices.push({ velocity: b[o], flags: b[o + 1], micro_us: dv.getInt16(o + 2, true), timbre: b[o + 4] });
+    }
+    at += ns * GROO_SLICE_BYTES;
+    out.push(slices);
+  }
+  if (at !== b.length) fail("trailing bytes");
+  return out;
+}
+export function writeGsoo(grooves) {
+  const list = grooves || [];
+  const size = list.reduce((n, g) => n + 1 + (g || []).length * GROO_SLICE_BYTES, GROO_HEAD);
+  const b = new Uint8Array(size), dv = new DataView(b.buffer);
+  b[0] = 1; b[1] = list.length;
+  let at = GROO_HEAD;
+  list.forEach((g) => {
+    const sl = g || [];
+    b[at++] = sl.length;
+    sl.forEach((s, k) => {
+      const o = at + k * GROO_SLICE_BYTES;
+      b[o] = Math.max(0, Math.min(127, Math.round(s.velocity == null ? 255 : s.velocity)));
+      b[o + 1] = s.flags || 0;
+      dv.setInt16(o + 2, Math.max(-32767, Math.min(32767, Math.round(s.micro_us || 0))), true);
+      b[o + 4] = Math.max(0, Math.min(255, s.timbre || 0));
+    });
+    at += sl.length * GROO_SLICE_BYTES;
+  });
+  return b;
+}
+
 /* {meta, bank, scenes?, overlay?, thumb?, extra?: [{tag, data}]} -> a .chpk */
 export function buildPack(p) {
   const meta = checkMeta({ ...p.meta, updated: p.meta.updated || Math.floor(Date.now() / 1000) });
@@ -277,7 +401,10 @@ export function buildPack(p) {
   if (p.shotChunk) chunks.push({ tag: "SHOT", data: p.shotChunk });
   if (p.padsChunk) { if (p.padsChunk.length !== PADS_BYTES) throw new Error(`PADS: ${PADS_BYTES} bytes`); chunks.push({ tag: "PADS", data: p.padsChunk }); }
   if (p.thumb) chunks.push({ tag: "THMB", data: p.thumb });
-  for (const c of p.extra || []) if (!["META", "BANK", "SCNE", "CHAN", "OVLY", "LOOP", "SHOT", "PADS", "THMB"].includes(c.tag)) chunks.push(c);
+  if (p.gruv) chunks.push({ tag: "GRUV", data: p.gruv instanceof Uint8Array ? p.gruv : writeGruv(p.gruv) });
+  if (p.events) { const e = p.events instanceof Uint8Array ? p.events : writeEvnt(p.events); if (e.length) chunks.push({ tag: "EVNT", data: e }); }
+  if (p.grooves) { const g = p.grooves instanceof Uint8Array ? p.grooves : writeGsoo(p.grooves); if (g.length > GROO_HEAD) chunks.push({ tag: "GROO", data: g }); }
+  for (const c of p.extra || []) if (!["META", "BANK", "SCNE", "CHAN", "OVLY", "LOOP", "SHOT", "PADS", "THMB", "GRUV", "EVNT", "GROO"].includes(c.tag)) chunks.push(c);
   let len = 0;
   for (const c of chunks) len += 8 + c.data.length + (-c.data.length & 3);
   const out = new Uint8Array(16 + len), dv = new DataView(out.buffer);

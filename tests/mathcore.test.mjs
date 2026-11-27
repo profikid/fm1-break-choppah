@@ -65,13 +65,20 @@ assert.deepEqual(MC.rolesWith([1, 2, 4], "-KS"), [1, 1, 2], "a pack's roles set 
 const r16 = [1, 4, 2, 4, 1, 4, 2, 4, 1, 4, 2, 4, 1, 4, 2, 8];
 const run = (sc, steps, mac) => {
   const p = new MC.Player(MC.factoryScenes(), r16, mac); p.start(sc); const out = [];
-  for (let s = 0; s < steps; s++) { p.step(s); for (let k = 0; k < MC.TICKS; k++) { const h = p.tick(s * MC.TICKS + k); if (h) out.push([s * MC.TICKS + k, h.lane, h.slice, +h.gain.toFixed(3), h.extra]); } }
+  for (let s = 0; s < steps; s++) { p.step(s); for (let k = 0; k < MC.TICKS; k++) { for (const h of p.tick(s * MC.TICKS + k)) out.push([s * MC.TICKS + k, h.lane, h.slice, +h.gain.toFixed(3), h.extra]); } }
   return out;
 };
 const a = run(1, 32), a2 = run(1, 32);
 assert.deepEqual(a, a2, "the same scene, the same hits");
-assert.ok(a.every(([t]) => t % 12 === 0), "AMEN on its 16ths");
+assert.ok(a.some(([t, l]) => l === 0 && t % 12 === 0), "the kick on its 16ths");
+assert.ok(a.some(([t, l]) => l === 2 && t % 8 === 0), "the hat on its triplet 16ths");
 assert.ok(a.some(([, l, s]) => l === 0 && [0, 4, 8, 12].includes(s)) && a.some(([, l, s]) => l === 1 && [2, 6, 10].includes(s)), "kicks on kick slices, snares on snare slices");
+/* the lanes sound together (MM-LE-001, MG-001): two lanes on one tick */
+{
+  const byTick = new Map();
+  for (const [t, l] of a) { if (!byTick.has(t)) byTick.set(t, []); byTick.get(t).push(l); }
+  assert.ok([...byTick.values()].some((ls) => ls.length > 1), "two lanes on one tick: they sound together");
+}
 const roll = run(6, 16);                         /* G TRIPLET ROLL: ratchets x3 on its 8ths */
 assert.ok(roll.some(([, l, , , x]) => l === 1 && x === 2), "the triplet roll's ratchets");
 const dense = run(1, 32, { density: 100 }), sparse = run(1, 32, { density: 0 });
@@ -81,6 +88,38 @@ let seen = new Set(); for (let s = 0; s < 40; s++) seen.add(p.step(s));
 assert.deepEqual([...seen], [10, 0], "a phrase done: the next scene");
 
 console.log("mathcore: app.c's presets, names, rates, modes, MATH; brk.c's hash; scenes and chain to bytes and back; the Slice Map; the lanes played");
+
+/* the groove-event layer (PRD_MATHCORE_GROOVE.md): the events carry the velocity, the time, the pitch and the
+   timbre; the ghosts are events; the lanes with events play them instead of their pattern */
+{
+  const sc = MC.factoryScenes();
+  const L = sc[1].lane[0];
+  L.hits = 0b1010; L.accent = 0b1000; L.len = 4; L.level = 100;   /* the kick's lane: two hits */
+  const evs = [
+    { flags: (0 << 6), velocity: 120, micro_us: 0, pitch: 0, slice: 0, timbre: 200, gate: 100, pos: 0 },
+    { flags: 1, velocity: 30, micro_us: -7000, pitch: 2, slice: 4, timbre: 40, gate: 60, pos: 2 },
+  ];
+  const p = new MC.Player(sc, r16, {}, { swing: 50, bpm: 120, events: { 1: evs } });
+  p.start(1);
+  const out = [];
+  for (let s = 0; s < 8; s++) { p.step(s); for (let k = 0; k < MC.TICKS; k++) for (const h of p.tick(s * MC.TICKS + k)) out.push(h); }
+  const kicks = out.filter((h) => h.lane === 0);
+  assert.ok(kicks.length >= 2, "the lane with events plays its events: " + kicks.length);
+  assert.ok(kicks.every((h) => h.event), "they are the events, not the pattern");
+  assert.equal(kicks[0].gain.toFixed(2), "0.94", "the event's own velocity (120 of 127)");
+  assert.equal(kicks[1].micro_us, -7000, "the ghost is early by 7 ms");
+  assert.equal(kicks[1].gain.toFixed(2), "0.24", "and quiet (30 of 127)");
+  assert.equal(kicks[1].pitch, 2, "its own pitch");
+  assert.equal(kicks[1].timbre, 40, "its own timbre");
+  assert.equal(kicks[1].gate, 60, "its own gate");
+  /* the early event sounds before its grid position: its own tick, less its micro */
+  const ghost = kicks.find((h) => h.micro_us < 0);
+  assert.ok(ghost, "the ghost is there");
+  assert.ok(ghost.at_tick >= 0, "it has a tick: " + ghost.at_tick);
+  const before = ghost.at_tick * (60 / 120 / 4 / MC.TICKS) + ghost.micro_us / 1e6;
+  const on = ghost.at_tick * (60 / 120 / 4 / MC.TICKS);
+  assert.ok(before < on, "and it is early: " + before + " < " + on);
+}
 
 /* readable scenes (the MCP server's) */
 {

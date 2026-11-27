@@ -193,15 +193,22 @@ const PRIO = [3, 4, 1, 2];
    (more hits in the event), every (their spacing, ticks), late (16ths), runOn} or null. next(scene): what follows
    its phrase (a scene, or -1: silence) */
 export class Player {
-  constructor(scenes, roles, macros = {}) {
+  /* The reference player (PRD_MATHCORE_GROOVE.md §8): what the browser plays, the device plays.
+     scenes: the 16 scenes; roles: the break's slice map; groove: {swing, bpm, events: {scene: [event]}}.
+     tick() returns the hits of a tick — every lane's, not only the best one: the lanes sound together. */
+  constructor(scenes, roles, macros = {}, groove = null) {
     this.scenes = scenes; this.roles = roles; this.mac = { density: 50, math: 0, speed: 50, chaos: 0, ...macros };
     this.cur = -1; this.go = -1; this.next = (s) => s; this.n = [0, 0, 0, 0];
+    this.groove = groove || null;                 /* the groove-event layer */
+    this.bpm = (groove && groove.bpm) || 120;     /* the master: the micro-timing is measured against it */
+    this.said = new Set();                        /* the events already returned (the early ones) */
   }
   start(s) { this.go = s; }
   begin(s, at) {
     this.cur = s >= 0 && s < SCENES ? s : -1; this.steps = 0; this.base = at;
     this.n = this.n.map((v, l) => (this.cur >= 0 && this.scenes[this.cur].lane[l].flags & LF.FREE ? v : 0));
     this.hold = [0, 0, 0, 0]; this.score = [0, 0, 0, 0];
+    this.said = new Set();
   }
   step(at) {                                      /* 16th at begins (mc_step): a start, or the phrase done */
     if (this.go !== -1) { this.begin(this.go, at); this.go = -1; }
@@ -213,11 +220,24 @@ export class Player {
     return this.cur;
   }
   list(role) { const out = []; this.roles.forEach((v, i) => { if (v >> role & 1) out.push(i); }); return out; }
+  /* the groove's events of a lane (the ones with a position are the lane's hits; the rest are the pattern's) */
+  evs(l) {
+    const g = this.groove && this.groove.events;
+    if (!g) return null;
+    const list = g[this.cur];
+    if (!list) return null;
+    const out = list.filter((e) => (((e.flags >> 6) & 3) === l));
+    return out.length ? out : null;
+  }
+  /* the tick's length in seconds (the master: 12 ticks a 16th) */
+  tickSec() { return 60 / (this.bpm || 120) / 4 / TICKS; }
+  /* the micro-timing in microseconds, and the late (in 16ths) as microseconds too */
+  usOf(ticks) { return Math.round(ticks * (60 / (this.bpm || 120) / 4) * 1e6); }
   tick(t) {
-    if (this.cur < 0) return null;
+    const out = [];
+    if (this.cur < 0) return out;
     const sc = this.scenes[this.cur], { density: dens, math, speed: spd, chaos } = this.mac;
     const mlen = MATH_LEN[Math.floor(Math.min(100, math) * (MATH_LEN.length - 1) / 100)];
-    let win = -1, winScore = 0, w = null;
     for (let l = 0; l < LANES; l++) {
       const L = sc.lane[l];
       if (!(L.flags & LF.ON)) continue;
@@ -229,9 +249,32 @@ export class Player {
       if (rel % r) continue;
       const e = rel / r;
       if (mlen[l]) len = mlen[l];
-      const pos = (e + L.phase) % len, acc = L.accent >>> (pos % ll) & 1, kind = eventKind(L, l, pos, dens);
+      const pos = (e + L.phase) % len;
+      const acc = L.accent >>> (pos % ll) & 1;
+      const list = this.list(role);
+
+      /* the groove's events: this lane's hits, with their own velocity, time, pitch and timbre */
+      const evs = this.evs(l);
+      if (evs) {
+        for (const ev of evs) {
+          if (ev.pos !== pos) continue;
+          const key = `${l}:${ev.pos}:${ev.slice}:${ev.micro_us}`;
+          if (this.said.has(key)) continue;
+          this.said.add(key);
+          let g = Math.min(100, L.level) * 0.01 * (ev.velocity == null ? 1 : ev.velocity / 127);
+          const pt = L.pitch + (ev.pitch || 0);
+          const gate = Math.max(5, Math.min(100, (L.gate || 100) * (ev.gate == null ? 100 : ev.gate) / 100));
+          out.push({ lane: l, slice: ev.slice, gain: g, pitch: pt, flags: L.flags, rat: 1, r, late: 0,
+            micro_us: ev.micro_us || 0, at_tick: t, pos, gate, timbre: ev.timbre || 0, rev: !!(L.flags & LF.REV),
+            runOn: !!(sc.flags & SF.BREAK), event: ev, extra: 0, every: 0 });
+        }
+        continue;                                   /* the lane's events are its hits */
+      }
+
+      /* the lane's pattern, as it always was */
+      let kind = eventKind(L, l, pos, dens);
       let hit = kind === HIT || kind === ACCENT || kind === ADDED, ghost = false, late = 0;
-      if (vary && this.steps > (barsOf(sc) - 1) * STEPS_PER_BAR) vary = Math.min(100, Math.floor(vary * 3 / 2) + 20);
+      if (vary && this.steps > (barsOf(sc) - 1) * STEPS_PER_BAR) vary = Math.min(100, Math.floor(vary * 1.5) + 20);
       if (vary) {
         const h = hash(L.seed + 21, l, e) % 100, nb = ((L.hits >>> ((pos + 1) % ll)) | (L.hits >>> ((pos + ll - 1) % ll))) & 1;
         if (!hit && (role === 1 || role === 3) && (nb || pos & 1) && h < Math.floor(vary * (nb ? 40 : 12) / 100)) hit = ghost = true;
@@ -240,7 +283,6 @@ export class Player {
       }
       if (!hit) continue;
       if (!ghost && L.prob < 100 && hash(L.seed, l, e) % 100 >= L.prob) continue;
-      const list = this.list(role);
       if (!list.length) continue;
       let k;
       switch (L.mode) {
@@ -260,28 +302,22 @@ export class Player {
       }
       if (chaos) {
         const h = hash(L.seed + 5, l, e) % 100, c2 = hash(L.seed + 9, l, e) % 100;
-        if (h < Math.floor(chaos * 6 / 10)) k = hash(L.seed + 11, l, e);
-        if (c2 < Math.floor(chaos * 3 / 10)) rat = 2 + c2 % 2;
-        if (h % 7 === 3 && c2 < Math.floor(chaos * 15 / 100)) fl ^= LF.REV;
+        if (h < Math.floor(chaos * 0.6)) k = hash(L.seed + 11, l, e);
+        if (c2 < Math.floor(chaos * 0.3)) rat = 2 + c2 % 2;
+        if (h % 7 === 3 && c2 < Math.floor(chaos * 0.15)) fl ^= LF.REV;
       }
-      const s = list[k % list.length];
+      const sl = list[k % list.length];
       this.n[l]++;
       let g = Math.min(100, L.level) * 0.01 * (L.accent && !acc ? 0.55 : 1);
       if (ghost) g *= role === 0 ? 0.6 : 0.3;
-      if (vary) { g *= 1 - vary * 0.0035 * ((hash(L.seed + 41, l, e) & 1023) / 1023); if (role === 2 && pos & 1) g *= 1 - vary * 0.003; }
+      if (vary) { g *= 1 - vary * 0.0035 * ((hash(L.seed + 41, l, e) & 1023) / 1023); if (role === 2 && (pos & 1)) g *= 1 - vary * 0.003; }
       let pt = L.pitch;
       if (L.rise) { const pr = (this.steps ? this.steps - 1 : 0) / (barsOf(sc) * STEPS_PER_BAR); pt += L.rise * pr; g *= 0.35 + 0.65 * pr; }
-      const score = ghost ? 0 : (acc ? 16 : 0) + PRIO[role] * 2 + (rat > 1 ? 1 : 0);
-      if (score > winScore || win < 0) { win = l; winScore = score; w = { lane: l, slice: s, gain: g, pitch: pt, flags: fl, rat, r, late, pos }; }
+      const extra = rat > 1 ? Math.min(3, rat - 1) : 0;
+      out.push({ lane: l, slice: sl, gain: g, pitch: pt, flags: fl, rat, r, late, micro_us: 0, at_tick: t, pos,
+        gate: L.gate || 100, timbre: 0, rev: !!(fl & LF.REV), runOn: !!(sc.flags & SF.BREAK), extra, every: extra ? r / (extra + 1) : 0 });
     }
-    if (win < 0) return null;
-    for (let k = 0; k < LANES; k++) if (this.hold[k] > t && this.score[k] > winScore) return null;
-    this.score[win] = winScore;
-    const extra = w.rat > 1 ? Math.min(3, w.rat - 1) : 0;
-    this.hold = this.hold.map(() => 0); this.hold[win] = extra ? t + w.r : 0;
-    const gate = sc.lane[win].gate || 100;
-    return { lane: win, slice: w.slice, gain: w.gain, rev: !!(w.flags & LF.REV), gate, pitch: w.pitch, extra, every: extra ? w.r / (extra + 1) : 0,
-      late: w.rat < 2 ? w.late : 0, runOn: !!(sc.flags & SF.BREAK), pos: w.pos };
+    return out;
   }
 }
 
