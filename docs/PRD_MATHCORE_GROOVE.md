@@ -4,9 +4,7 @@
 **Parent:** [PRD_MATHCORE.md](PRD_MATHCORE.md)  
 **Related product:** Choppah Hub — Audio & Groove Intelligence  
 **Repository:** `profikid/fm1-break-choppah`  
-**Implementation status (28 Nov 2026): partial.** The ten-byte GRUV/EVNT/GROO container, reference player,
-scene export, cross-lane firmware playback, velocity, slice, gate, signed micro-timing, pitch and timbre paths exist.
-This does **not** mean the full target in this PRD is implemented. Same-lane duplicate event handling, early-event identity, malformed chunk bounds and pending-queue saturation are fixed in draft firmware PR #14 and pass current-head host CI; the Hub duplicate-event reference-player and swung-grid export fixes are in draft PR #28. The Hub now carries the measured swung-grid index, preserves ghost/accent flags, allows gate editing, and aligns the event position and microtiming to the same swing template. Firmware still does not interpret ghost/accent flags, has two voices per lane and a four-entry pending queue; full Hub event provenance and lossless round-trip remain incomplete; real-FM-1 voice/CPU/memory headroom has not been measured.
+**Implementation status (28 Nov 2026): partial; firmware PR #14 and Hub PR #28 are merged.** The ten-byte GRUV/EVNT/GROO container, reference player, scene export, cross-lane firmware playback, velocity, slice, gate, signed micro-timing, pitch and timbre paths exist. The merged changes fix same-lane event iteration, early-event identity, key GRUV/EVNT bounds, late-queue saturation fallback, browser duplicate-event identity and swung-grid export alignment. The Hub carries the measured swung-grid index, preserves ghost/accent flags, allows gate editing, and aligns event position and microtiming to the same swing template. Firmware still does not interpret ghost/accent flags, has two voices per lane and a four-entry pending queue; full Hub event provenance and lossless round-trip remain incomplete; real-FM-1 voice/CPU/memory headroom has not been measured.
 
 **What is built**
 
@@ -67,7 +65,7 @@ with the pack, as scene A, and not only the break's audio.
 The following distinctions are intentional:
 
 - **Implemented subset:** the current firmware can play multiple role lanes together, and each EVNT record supplies velocity, slice, gate, signed microtiming, pitch and timbre. The browser reference player also consumes event records.
-- **Fixed in draft firmware PR #14 (host CI green, not merged):** the firmware now iterates all records for a lane/position, tracks early scheduling by event-record index, validates GRUV/EVNT ranges and falls back when the late-event queue is full. The old implementation returned only the first matching record and collapsed multiple early events at the same position.
+- **Fixed in merged firmware PR #14 (host CI green on the exact PR head):** the firmware now iterates all records for a lane/position, tracks early scheduling by event-record index, validates GRUV/EVNT ranges and falls back when the late-event queue is full. The old implementation returned only the first matching record and collapsed multiple early events at the same position.
 - **Not advertised after PR #14:** articulation capability. The renderer does not yet interpret the event ghost/accent/articulation flags, so the capability bit is removed rather than making a false promise.
 - **Bounded playback:** the current firmware has a two-voice pool per lane and a four-entry pending microtiming queue per lane. This is not unlimited same-lane polyphony. Any increase needs target-device measurements.
 - **Not equivalent:** lane-level procedural variation, accent masks and a two-voice lane pool do not equal an editable, source-faithful event timeline with independent articulation and timbre provenance.
