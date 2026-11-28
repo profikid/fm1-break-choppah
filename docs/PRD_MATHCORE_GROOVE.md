@@ -17,9 +17,16 @@ This does **not** mean the full target in this PRD is implemented. Same-lane dup
 | The export: a break → a scene, with the loss report and the capabilities | `app/site/mathcore.js` (`sceneFromBreak`, `exportLoss`) |
 | The firmware: the chunk reader, a voice pool a lane, the events' velocity, slice, gate, micro-timing (early and late), timbre and pitch | `app/dsp/brk.c`, `app/app.c` |
 | The capabilities: the status says what the device can do | `brk_mc_caps()`, `app/ui/main.c` |
-| The Hub: the break → scene action, the scene sets and the packs carry the groove, and the analysis measures it | `choppah-hub`: `public/hub/sample.html`, `public/hub/groove.js`, `src/mathcore.js`, `src/mcp.js` |
+| The Hub: the break → scene action, the scene sets and the packs carry the groove, the analysis measures it, and the analysed events become the device's groove | `choppah-hub`: `public/hub/sample.html`, `public/hub/groove.js`, `src/groove.js`, `src/mathcore.js`, `src/mcp.js` |
 
 **Not yet complete:** device-side interpretation/display of ghost/accent flags (velocity still carries the audible dynamics); higher same-lane polyphony; complete event-level provenance round-trip; per-event gate analysis (the exporter defaults to 100% unless explicitly edited); complete Full/Scene/Hybrid export parity; and measured hardware voice/CPU/memory budget.
+
+**The analysis reaches the device (28 Nov 2026).** The Hub's Audio Intelligence reads a track for its groove (every
+hit: its role, its loudness, its time against the grid, its ghosts — the source coordinates never quantized), and
+those events become the device's groove: each one lands on the break's slice and on the grid of the break's tempo,
+and becomes an event the FM-1 plays (its velocity, its micro-timing, its ghost, its accent). Two events at the same
+grid position are two events (a flam's grace note and its main hit), and the device plays both. The scene set is
+saved in the library, and the pack carries the scene (`SCNE`, `GRUV`, `EVNT`) so the groove travels with the break.
 
 **The timing resolution:** the sample (1/44100 s, 22.7 µs). The render counts the waiting hits one sample at a
 time, so an event's micro-timing lands on the sample it belongs to — the render's block is not the resolution
