@@ -111,6 +111,14 @@ expect ly_on 3
 key b1 up
 wait 100
 expect ly_on 1
+# LY-054: stop transport, then receive the same pack while its loop source is still resident.
+tap PLAY
+wait 100
+S
+up "$O/b1.bin" 1 >> "$O/s.txt"
+[ -f "$O/b2.bin" ] && up "$O/b2.bin" 2 >> "$O/s.txt"
+cat <<S
+expect ly_on 0
 key b0 down
 wait 60
 key b0 up
