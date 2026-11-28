@@ -463,7 +463,7 @@ export function patchLane(L, p) {
   if (p.role !== undefined) L.role = pick(ROLES, p.role === "K" ? "KICK" : p.role === "S" ? "SNARE" : p.role === "H" ? "HAT" : p.role === "P" ? "PERC" : p.role, "role");
   if (p.rate !== undefined) L.rate = pick(RATES, p.rate, "rate");
   if (p.mode !== undefined) L.mode = pick(MODES, p.mode, "mode");
-  for (const [k, lo, hi] of [["phase", 0, 31], ["prob", 0, 100], ["ratchet", 1, 4], ["pitch", -12, 12], ["pick", 0, 31], ["gate", 5, 100],
+  for (const [k, lo, hi] of [["phase", 0, 31], ["prob", 0, 100], ["ratchet", 1, 8], ["pitch", -12, 12], ["pick", 0, 31], ["gate", 5, 100],
     ["level", 0, 100], ["seed", 0, 255], ["rise", -24, 24], ["vary", 0, 100]]) if (p[k] !== undefined) L[k] = range(p[k], lo, hi, k);
   return L;
 }
