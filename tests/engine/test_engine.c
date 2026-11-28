@@ -2047,7 +2047,7 @@ static void test_mc_lanes(void)
         brk_play(1);
         mc_run(16u * sl, &po, &pl);
         mc_count();
-        CHECK(pl < 4.0f && pl > 0.1f, "dense: four lanes of 1/32T x4 ratchets stay bounded (%.3f)", pl);
+        CHECK(pl < 4.0f && pl > 0.1f, "dense: four lanes of 1/32T x8 ratchets stay bounded (%.3f)", pl);
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
