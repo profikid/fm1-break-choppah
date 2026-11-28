@@ -349,7 +349,7 @@ void brk_ly_clear(void);
 /* what the layer does, for the screen: loops on, waiting for their point, each one's place in its window (0..255),
  * the shots sounding, the break cut */
 typedef struct {
-    uint8_t on, pend, cut, rsv;
+    uint8_t on, pend, cut, busy;             /* busy: any layer voice still sounding / fading */
     uint8_t ph[BRK_LY_LOOPS];
     uint16_t shots, rsv2;
 } brk_ly_status_t;
