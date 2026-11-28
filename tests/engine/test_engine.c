@@ -2384,7 +2384,7 @@ static void test_mc_play(void)
         mc_scene_init(&mc_sc[10], 1u);
         mc_sc[10].lane[0].flags = MCL_ON;
         mc_sc[10].lane[0].role = ROLE_KICK;
-        mc_sc[10].lane[0].hits = 1u;
+        mc_sc[10].lane[0].hits = 0u;   /* the EVNT records are the entire lane for this scene */
         mc_sc[10].lane[0].len = 8u;
         mc_sc[10].lane[0].rate = MCR_8;
         mc_sc[10].lane[0].level = 100u;
