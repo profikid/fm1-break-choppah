@@ -2,12 +2,14 @@
 # CHOPPAH on main: build and test every merge. A merge does not release any more: a release is a tag
 # (vX.Y), built and attested by .github/workflows/release.yml, so the Firmware Hub can show it as built from source.
 #
-# This workflow is the check on every push to main: the engine's tests (plain cc, no toolchain), the firmware build
-# itself (the JieLi toolchain and the AC79 SDK), and the browser emulator's build.
+# This workflow checks pull requests and pushes to main: engine tests (plain cc), firmware build (JieLi/AC79),
+# and browser emulator build. Deployment of beta firmware/emulator is restricted to pushes to main.
 name: Build and test
 
 on:
   push:
+    branches: [main]
+  pull_request:
     branches: [main]
   workflow_dispatch:
 
@@ -101,6 +103,7 @@ jobs:
       # main and this workflow). The version is the next minor's (1.6 -> "1.7-beta (sha7)"). A failure here
       # doesn't fail the build; the beta stays at the last one that arrived.
       - name: Beta on choppah.app
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true
         run: |
           set -euo pipefail
@@ -119,6 +122,7 @@ jobs:
       # src/beta.js, the same OIDC token check). The hub's packs go into it (PRD_PACKS PH-035, PH-036): the release's
       # /emu/ takes them from the next release on (fm1.toml emu = midi, port, data). A failure doesn't fail the build.
       - name: Beta emulator on choppah.app
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         continue-on-error: true
         run: |
           set -euo pipefail
