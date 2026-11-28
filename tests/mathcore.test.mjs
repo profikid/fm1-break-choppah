@@ -122,6 +122,21 @@ console.log("mathcore: app.c's presets, names, rates, modes, MATH; brk.c's hash;
   assert.ok(before < on, "and it is early: " + before + " < " + on);
 }
 
+/* event identity is not event content: two identical records at the same lane/position both play */
+{
+  const sc = MC.factoryScenes();
+  const evs = [
+    { flags: 0, velocity: 96, micro_us: -2500, pitch: 0, slice: 4, timbre: 80, gate: 100, pos: 0, lane: 0 },
+    { flags: 0, velocity: 48, micro_us: -2500, pitch: 0, slice: 4, timbre: 80, gate: 100, pos: 0, lane: 0 },
+  ];
+  const p = new MC.Player(sc, r16, {}, { bpm: 120, events: { 1: evs } });
+  p.start(1);
+  p.step(0);
+  const hits = p.tick(0).filter((h) => h.lane === 0);
+  assert.equal(hits.length, 2, "two identical same-position event records remain two hits");
+  assert.deepEqual(hits.map((h) => h.gain.toFixed(2)), ["0.76", "0.38"], "each record keeps its own velocity");
+}
+ 
 /* readable scenes (the MCP server's) */
 {
   const s = MC.factoryScenes();
