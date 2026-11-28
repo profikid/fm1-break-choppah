@@ -3,8 +3,7 @@
 **Feature PRD and implementation roadmap** · v1.0 · 22 Nov 2026  
 **Parent product PRD:** [PRD.md](PRD.md)  
 **Repository:** `profikid/fm1-break-choppah`  
-**Status:** Released in v1.5.5 (23 Nov 2026, Laurens's call), built on the `mathcore` branch. See §14,
-and §15 for the revision to a played instrument (the same evening)
+**Status (28 Nov 2026): core sample-only MATHCORE is released; the groove-event extension is partial.** Firmware PR #14 and Hub PR #28 are merged. Same-position event iteration, early-event identity, bounded chunk reads, late-queue fallback and swung-grid export fixes are in main. Ghost/accent articulation is not rendered by the firmware; the capability is no longer advertised. Physical FM-1 timing/resource acceptance and the remaining groove fidelity requirements are still open. See [PRD_MATHCORE_GROOVE.md](PRD_MATHCORE_GROOVE.md) and the [release delta](https://github.com/profikid/choppah-hub/blob/main/docs/release/RELEASE_DELTA_2026-11-28.md).
 
 ---
 
