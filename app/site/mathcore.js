@@ -399,9 +399,9 @@ export function sceneFromBreak(pcm, rate, o = {}) {
       /* The event position is the nearest point on the *same swung grid* used by grooveOf. A straight-grid
          round() here can put a late drag on the wrong side of the midpoint between two swung steps. */
       const g = o.groove && o.groove[i] ? o.groove[i] : null;
+      const measuredGrid = g && (g.grid_swing == null || g.grid_swing === swing);
       let pos = -1, nearest = Infinity;
-      if (g && Number.isInteger(g.grid_pos) && g.grid_pos >= 0 && g.grid_pos < total &&
-          (g.grid_swing == null || g.grid_swing === swing)) pos = g.grid_pos;
+      if (measuredGrid && Number.isInteger(g.grid_pos) && g.grid_pos >= 0 && g.grid_pos < total) pos = g.grid_pos;
       if (pos < 0) for (let k = 0; k < total; k++) {
         const d = Math.abs(at - gridAt(k));
         if (d < nearest) { nearest = d; pos = k; }
@@ -414,7 +414,7 @@ export function sceneFromBreak(pcm, rate, o = {}) {
       L.hits |= 1 << pos;
       events.push({ flags: (r << 6) | (g ? (g.flags & (MCE_F_GHOST | MCE_F_ACCENT)) : 0),
         velocity: g ? Math.max(1, Math.min(127, g.velocity)) : vel,
-        micro_us: g ? Math.max(-32767, Math.min(32767, g.micro_us)) : Math.max(-32767, Math.min(32767, micro)),
+        micro_us: measuredGrid ? Math.max(-32767, Math.min(32767, g.micro_us)) : Math.max(-32767, Math.min(32767, micro)),
         pitch: 0, slice: i, timbre: g ? Math.max(0, Math.min(255, g.timbre)) : st.bright,
         gate: g && Number.isFinite(g.gate) ? Math.max(1, Math.min(100, Math.round(g.gate))) : 100, pos, lane: r });
     }
