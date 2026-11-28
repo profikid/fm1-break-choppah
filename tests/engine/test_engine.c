@@ -2296,6 +2296,80 @@ static void test_mc_play(void)
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
+    /* the early and the late events (MG-005): an event whose micro-timing is off its grid tick is heard
+       there (the countdown is in samples, so the hit lands on the sample it belongs to) */
+    {
+        static const uint8_t gruv[MC_GRUV_BYTES + 4u] = { 1u, 12u, 50u, 0u, 0u, 0u, 1u, 0u, 8u, 1u, 0u, 0u };
+        static uint8_t evnt[MC_EVNT_BYTES] = { 0u, 110u, 0u, 0u, 0u, 3u, 128u, 100u, 1u, 0u };
+        static float buf[65536];
+        int32_t on0 = -1, on1 = -1, on2 = -1;
+        uint32_t n = 65536u, i, m;
+        mc_scene_init(&mc_sc[8], 1u);
+        mc_sc[8].lane[0].flags = MCL_ON;
+        mc_sc[8].lane[0].role = ROLE_KICK;
+        mc_sc[8].lane[0].hits = 2u;                /* the event is at position 1: there is a tick before it */
+        mc_sc[8].lane[0].len = 8u;
+        mc_sc[8].lane[0].rate = MCR_8;
+        mc_sc[8].lane[0].level = 100u;
+        /* on the grid */
+        evnt[2] = 0u;
+        evnt[3] = 0u;
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_mc_start(8);
+        brk_mc_next(8);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(8);
+        brk_play(1);
+        for (i = 0; i < n; i += BLOCK) {
+            m = n - i > BLOCK ? BLOCK : n - i;
+            brk_render(buf + i, m);
+        }
+        for (i = 0; i < n; i++)
+            if (fabsf(buf[i]) > 0.05f) {
+                on0 = (int32_t)i;
+                break;
+            }
+        /* five milliseconds early: the micro-timing is a signed 16-bit, little endian */
+        evnt[2] = 0x78u;
+        evnt[3] = 0xECu;                     /* -5000 µs */
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(8);
+        brk_play(1);
+        for (i = 0; i < n; i += BLOCK) {
+            m = n - i > BLOCK ? BLOCK : n - i;
+            brk_render(buf + i, m);
+        }
+        for (i = 0; i < n; i++)
+            if (fabsf(buf[i]) > 0.05f) {
+                on1 = (int32_t)i;
+                break;
+            }
+        /* five milliseconds late */
+        evnt[2] = 0x88u;
+        evnt[3] = 0x13u;                     /* +5000 µs */
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(8);
+        brk_play(1);
+        for (i = 0; i < n; i += BLOCK) {
+            m = n - i > BLOCK ? BLOCK : n - i;
+            brk_render(buf + i, m);
+        }
+        for (i = 0; i < n; i++)
+            if (fabsf(buf[i]) > 0.05f) {
+                on2 = (int32_t)i;
+                break;
+            }
+        CHECK(on0 > 0 && on1 > 0 && on2 > 0, "the event is heard (%d, %d, %d)", on0, on1, on2);
+        CHECK(on0 - on1 >= 215 && on0 - on1 <= 226, "five milliseconds early (220 samples): %d vs %d", on0, on1);
+        CHECK(on2 - on0 >= 215 && on2 - on0 <= 226, "five milliseconds late (220 samples): %d vs %d", on2, on0);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
     /* a triplet roll: a snare lane at 1/8 with ratchet x3 under hats at 1/16T: 24 snare hits a bar, the hats
      * between never cutting it short; SWELL climbs without speeding up */
     {

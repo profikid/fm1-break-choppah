@@ -1748,7 +1748,7 @@ int app_expect(const char *what, int *got)
     for (i = 0; i < 4u; i++)             /* the lanes' last slices (the lanes sound together) */
         v[92 + i] = (int)st.mc_slice[i];
     v[96] = (int)brk_mc_caps();           /* what the device can do (the groove-event layer) */
-    v[97] = 120;                          /* the timing resolution, in 100 microseconds */
+    v[97] = 23;                           /* the timing resolution, in microseconds (the sample: 1/44100 s) */
     for (i = 0; i < sizeof W / sizeof W[0]; i++)
         if (!strcmp(what, W[i])) {
             *got = v[i];

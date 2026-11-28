@@ -210,11 +210,19 @@ static uint32_t mc_gruv_len, mc_evnt_len;
 #endif
 static voice_t mv[MC_LANES][MC_LANE_VOICES];
 static int mcur[MC_LANES];
-/* a lane's hit that waits (the event's late micro-timing): the render's block is the resolution */
-static float ml_left[MC_LANES], ml_len[MC_LANES], ml_gain[MC_LANES];
+/* a lane's hit that waits (the event's micro-timing, early or late): the countdown is in samples, so the
+   hit lands on the sample it belongs to (the render's block is not the resolution: the render counts one
+   a sample) */
+#define MC_PEND 4u                        /* the hits a lane can have waiting (a lane's early events, its late) */
+typedef struct {
+    int32_t left;                         /* the samples still to wait */
+    float gain;
+    uint8_t slice, gate, rev, used;
+} mc_pend_t;
+static mc_pend_t mc_pend[MC_LANES][MC_PEND];
+static uint8_t mc_pend_n[MC_LANES];       /* the hits waiting, a lane (the loop skips the lanes without) */
 static int32_t mc_last_slice = -1;       /* the scene's last slice (the lanes' voices) */
-static int32_t ml_slice[MC_LANES];
-static uint32_t ml_gate[MC_LANES], ml_count[MC_LANES], ml_rev[MC_LANES];
+static uint32_t mc_early[MC_LANES];       /* the positions already scheduled early (the event's micro-timing) */
 static uint32_t mr_count[MC_LANES];      /* a lane's ratchet: hits still to come, every mr_len samples */
 static float mr_left[MC_LANES], mr_len[MC_LANES], mr_gain[MC_LANES];
 static int32_t mr_slice[MC_LANES];
@@ -701,10 +709,13 @@ static void mc_voices_stop(void)
             mv[l][k].active = 0u;
             mv[l][k].loop = 0u;
         }
-        ml_count[l] = 0u;
+        for (k = 0; k < MC_PEND; k++)
+            mc_pend[l][k].used = 0u;
+        mc_pend_n[l] = 0u;
         mr_count[l] = 0u;
         mr_hold[l] = 0u;
         status.mc_slice[l] = -1;
+        mc_early[l] = 0u;
     }
     mc_last_slice = -1;
 }
@@ -793,28 +804,37 @@ void brk_mc_groove(const uint8_t *gruv, uint32_t gruv_len, const uint8_t *evnt, 
     mc_evnt = evnt;
     mc_evnt_len = evnt_len;
 }
-/* what the device can do: the velocity, the late micro-timing, the articulation and the layering. The timbre and
-   the early events are not (the pitch is the step's, and the render's block is the resolution) */
+/* what the device can do: the velocity, the micro-timing (early and late), the articulation and the layering.
+   The timbre is not (the pitch is the step's, and the voice's filter is the slice's) */
 uint8_t brk_mc_caps(void)
 {
-    return (uint8_t)(MC_CAPS_VELOCITY | MC_CAPS_MICRO | MC_CAPS_ARTICULATION | MC_CAPS_LAYERING);
+    return (uint8_t)(MC_CAPS_VELOCITY | MC_CAPS_MICRO | MC_CAPS_ARTICULATION | MC_CAPS_LAYERING | MC_CAPS_EARLY);
 }
 /* the event of a lane at a position, or null: the GRUV's scene map, then the EVNT's records */
-static const mc_event_t *mc_event_at(int32_t scene, uint32_t lane, uint32_t pos)
+static uint32_t mc_scene_evs(int32_t scene, uint32_t *first)
 {
-    const uint8_t *g = mc_gruv, *e = mc_evnt;
-    uint32_t i, n, first = 0u, cnt = 0u;
-    if (!g || !e || g[0] != 1u || scene < 0 || (g[6] == 0u && g[7] == 0u))
-        return 0;
+    const uint8_t *g = mc_gruv;
+    uint32_t i, n;
+    *first = 0u;
+    if (!g || g[0] != 1u || scene < 0)
+        return 0u;
     n = (uint32_t)g[6] | ((uint32_t)g[7] << 8);
     for (i = 0; i < n; i++) {
         const uint8_t *m = g + MC_GRUV_BYTES + i * 4u;
         if (m[0] == (uint8_t)scene) {
-            first = (uint32_t)m[2] | ((uint32_t)m[3] << 8);
-            cnt = m[1];
-            break;
+            *first = (uint32_t)m[2] | ((uint32_t)m[3] << 8);
+            return m[1];
         }
     }
+    return 0u;
+}
+static const mc_event_t *mc_event_at(int32_t scene, uint32_t lane, uint32_t pos)
+{
+    const uint8_t *g = mc_gruv, *e = mc_evnt;
+    uint32_t i, first = 0u, cnt = 0u;
+    if (!g || !e || g[0] != 1u || scene < 0 || (g[6] == 0u && g[7] == 0u))
+        return 0;
+    cnt = mc_scene_evs(scene, &first);
     for (i = 0; i < cnt; i++) {
         const uint8_t *r = e + (first + i) * MC_EVNT_BYTES;
         if (r[8] == (uint8_t)pos && (uint32_t)((r[0] & MCE_F_LANE) >> 6) == lane)
@@ -822,21 +842,37 @@ static const mc_event_t *mc_event_at(int32_t scene, uint32_t lane, uint32_t pos)
     }
     return 0;
 }
+/* a hit that waits (the event's micro-timing): the countdown is in samples, the render counts one a sample */
+static int mc_pend_push(uint32_t l, int32_t samples, uint8_t slice, float gain, uint8_t gate, uint8_t rev)
+{
+    uint32_t k;
+    for (k = 0; k < MC_PEND; k++) {
+        mc_pend_t *q = &mc_pend[l][k];
+        if (!q->used) {
+            q->used = 1u;
+            q->left = samples;
+            q->slice = slice;
+            q->gain = gain;
+            q->gate = gate;
+            q->rev = rev;
+            mc_pend_n[l]++;
+            return 1;
+        }
+    }
+    return 0;
+}
 
-/* a lane's hit: on its own voice (the lanes sound together, MG-001). The late waits: the render's block is the
-   resolution, so it is rounded to it */
+/* a lane's hit: on its own voice (the lanes sound together, MG-001). The late waits: the countdown is in
+   samples, so it lands on the sample it belongs to */
 static void mc_lane_hit(const brk_break_t *b, uint32_t l, int32_t s, uint32_t rev, float g, uint32_t gate, float late, float sl)
 {
     voice_t *n;
+    (void)sl;
     if (s < 0 || (uint32_t)s >= b->nslices)
         return;
-    if (late > 0.0f) {                          /* later than now: it waits (the ratchet slot, the lane's own) */
-        ml_count[l] = 1u;
-        ml_left[l] = ml_len[l] = late * (1.0f / sl) * (float)MC_TICKS;
-        ml_slice[l] = s;
-        ml_gain[l] = g;
-        ml_gate[l] = gate;
-        ml_rev[l] = rev;
+    if (late > 0.0f) {                          /* later than now: it waits (the lane's own slot) */
+        if (!mc_pend_push(l, (int32_t)(late * (float)BRK_SR + 0.5f), (uint8_t)s, g, (uint8_t)gate, (uint8_t)(rev != 0u)))
+            return;                             /* no room: it plays now */
         return;
     }
     voice_start_in(mv[l], &mcur[l], b, s, rev, -1.0f, g);
@@ -893,10 +929,46 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
         mc_pos[l] = (uint8_t)pos;
         acc = L->accent >> (pos % (L->len ? L->len : 1u)) & 1u;
         {   /* the groove's events: this lane's hit, with its own velocity, slice, gate and time */
+            /* the early ones: their micro-timing is before their grid tick. They are scheduled ahead of it
+               (the countdown is in samples), so they are heard where they belong and not on the grid: the
+               lane's events are looked at whole, so an event is known before its own tick comes */
+            {
+                uint32_t first = 0u, cnt = mc_evnt ? mc_scene_evs(mc_cur, &first) : 0u, i;
+                float period = (float)r * sl / (float)MC_TICKS;   /* the grid period, in samples */
+                for (i = 0; i < cnt; i++) {
+                    const mc_event_t *ex = (const mc_event_t *)(mc_evnt + (first + i) * MC_EVNT_BYTES);
+                    uint32_t p = ex->pos, ahead;
+                    float target;
+                    if (((ex->flags & MCE_F_LANE) >> 6) != l || ex->micro_us >= 0)
+                        continue;
+                    if (p >= 32u || (mc_early[l] & (1u << p)))
+                        continue;                       /* already scheduled */
+                    if ((mute >> l & 1u) || (solo && !(solo >> l & 1u)))
+                        continue;
+                    ahead = (p + len - pos) % len;    /* the grid ticks to its own tick */
+                    target = (float)ahead * period + (float)ex->micro_us * 1e-6f * (float)BRK_SR;
+                    if (target <= 0.0f)
+                        continue;                       /* its time has passed: it plays on the grid */
+                    {
+                        float g2 = (float)(L->level > 100u ? 100u : L->level) * 0.01f * (float)ex->velocity * (1.0f / 127.0f);
+                        uint32_t gate2 = (uint32_t)ex->gate < 100u ? (uint32_t)ex->gate : 100u;
+                        if (!mc_pend_push(l, (int32_t)(target + 0.5f), ex->slice, g2, (uint8_t)gate2,
+                                          (uint8_t)((L->flags & MCL_REV) != 0u)))
+                            continue;                   /* no room: it plays on the grid */
+                        mc_early[l] |= 1u << p;
+                        mc_n[l]++;
+                        mc_hitc[l]++;
+                    }
+                }
+            }
             const mc_event_t *ev = mc_event_at(mc_cur, l, pos);
             if (ev) {
                 if ((mute >> l & 1u) || (solo && !(solo >> l & 1u)))
                     continue;                   /* (muted: the cycle counts on) */
+                if (mc_early[l] & (1u << pos)) {    /* it was heard early, before its grid tick */
+                    mc_early[l] &= ~(1u << pos);
+                    continue;
+                }
                 {
                     float g = (float)(L->level > 100u ? 100u : L->level) * 0.01f * (float)ev->velocity * (1.0f / 127.0f);
                     uint32_t gate = (uint32_t)ev->gate < 100u ? (uint32_t)ev->gate : 100u;
@@ -1772,7 +1844,7 @@ void brk_render(float *out, uint32_t n)
                 clk_left -= 1.0f;
             }
             if (mc_cur >= 0 && steps_total) {   /* the scene's lanes: on the master tick */
-                uint32_t sub = (uint32_t)(step_age * tick_k), t, l;
+                uint32_t sub = (uint32_t)(step_age * tick_k), t, l, k;
                 t = (steps_total - 1u) * MC_TICKS + (sub < MC_TICKS ? sub : MC_TICKS - 1u);
                 if (t != mc_last_t) {
                     mc_last_t = t;
@@ -1787,12 +1859,17 @@ void brk_render(float *out, uint32_t n)
                             mc_lane_hit(b, l, mr_slice[l], (mr_flags[l] & MCL_REV) != 0u, mr_gain[l], mr_gate[l], 0.0f, sl);
                         }
                     }
-                    if (ml_count[l]) {                 /* a hit that waits (the event's late micro-timing) */
-                        ml_left[l] -= 1.0f;
-                        if (ml_left[l] <= 0.0f) {
-                            ml_left[l] += ml_len[l];
-                            ml_count[l]--;
-                            mc_lane_hit(b, l, ml_slice[l], ml_rev[l], ml_gain[l], ml_gate[l], 0.0f, sl);
+                    if (mc_pend_n[l]) {             /* the hits that wait (the events' micro-timing) */
+                        for (k = 0; k < MC_PEND; k++) {
+                            mc_pend_t *q = &mc_pend[l][k];
+                            if (!q->used)
+                                continue;
+                            q->left--;
+                            if (q->left < 0) {
+                                q->used = 0u;
+                                mc_pend_n[l]--;
+                                mc_lane_hit(b, l, (int32_t)q->slice, q->rev, q->gain, q->gate, 0.0f, sl);
+                            }
                         }
                     }
                 }

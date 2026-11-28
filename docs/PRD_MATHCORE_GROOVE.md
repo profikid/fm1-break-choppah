@@ -4,8 +4,8 @@
 **Parent:** [PRD_MATHCORE.md](PRD_MATHCORE.md)  
 **Related product:** Choppah Hub — Audio & Groove Intelligence  
 **Repository:** `profikid/fm1-break-choppah`  
-**Status:** the format, the reference player, the export and the firmware's layering are **built** (27 Nov 2026).
-The rest — the per-event timbre, the early events, the Hub's analysis filling the groove — is still to come.
+**Status:** the format, the reference player, the export and the firmware's layering and micro-timing are **built**
+(28 Nov 2026). The rest — the per-event timbre and the Hub's analysis filling the groove — is still to come.
 
 **What is built**
 
@@ -14,13 +14,17 @@ The rest — the per-event timbre, the early events, the Hub's analysis filling 
 | The container: `GRUV` (the context, the swing, the scene map), `EVNT` (the events, ten bytes each), `GROO` (a break's own groove) | `app/site/chpk.js` (vendored into the hub) |
 | The reference player: the lanes sound together, a lane with events plays them instead of its pattern | `app/site/mathcore.js` (vendored into the hub) |
 | The export: a break → a scene, with the loss report and the capabilities | `app/site/mathcore.js` (`sceneFromBreak`, `exportLoss`) |
-| The firmware: the chunk reader, a voice pool a lane, the events' velocity, slice, gate and late | `app/dsp/brk.c`, `app/app.c` |
+| The firmware: the chunk reader, a voice pool a lane, the events' velocity, slice, gate and micro-timing (early and late) | `app/dsp/brk.c`, `app/app.c` |
 | The capabilities: the status says what the device can do | `brk_mc_caps()`, `app/ui/main.c` |
 | The Hub: the break → scene action, and the scene sets and the packs carry the groove | `choppah-hub`: `public/hub/sample.html`, `src/mathcore.js`, `src/mcp.js` |
 
-**What is not, yet:** the per-event timbre and the early events (the render's block is the resolution, and the
-capability byte says so), the Hub's analysis writing the groove into `GROO`, and the voices' budget measured on
-the real FM-1.
+**What is not, yet:** the per-event timbre, the Hub's analysis writing the groove into `GROO`, and the voices'
+budget measured on the real FM-1.
+
+**The timing resolution:** the sample (1/44100 s, 22.7 µs). The render counts the waiting hits one sample at a
+time, so an event's micro-timing lands on the sample it belongs to — the render's block is not the resolution
+(what the earlier drafts said). The device says so in its capability byte (`MC_CAPS_EARLY`) and in its status
+(`mc_res`, in microseconds).
 
 ---
 
@@ -238,6 +242,14 @@ For faithful playback, the detected absolute event time is authoritative. Swing 
 - Define safe behaviour for tempo changes, transport jumps, scene transitions and loop wrap.
 
 A candidate representation is signed Q16 master ticks, but the final representation must be selected after measuring range, precision, conversion cost and memory on the target device. Sample-domain offsets may be preferable for playback once events enter the render block.
+
+**How the firmware does it (28 Nov 2026).** The offsets are in the sample domain: the event's micro-timing is a
+signed number of microseconds, and the engine turns it into a number of samples at the tempo it plays. A lane keeps
+a small queue of hits that wait (four a lane); the render counts each of them down one sample at a time, so a hit
+lands on the sample it belongs to — the resolution is the sample, not the render's block. An early event is
+scheduled before its own grid tick (the lane's events are looked at whole, so an event is known before its tick
+comes); a late event is scheduled at its tick. Nothing is allocated: the queue is a fixed array, and the countdown
+is the render's own loop.
 
 ### 6.3 Swing controls
 
