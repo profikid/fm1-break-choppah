@@ -2420,6 +2420,38 @@ static void test_mc_play(void)
         mc_run(BLOCK * 8u, 0, 0);
         brk_mc_groove(0, 0, 0, 0);
     }
+    /* bounded late-event queue (MG-005): a fifth late hit falls back to immediate playback, not silence */
+    {
+        static const uint8_t gruv[MC_GRUV_BYTES + 4u] = {
+            1u, 12u, 50u, 0u, 0u, 0u, 1u, 0u, 11u, 5u, 0u, 0u
+        };
+        static const uint8_t evnt[5u * MC_EVNT_BYTES] = {
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u,
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u,
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u,
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u,
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u
+        };
+        float peak = 0.0f;
+        mc_scene_init(&mc_sc[11], 1u);
+        mc_sc[11].lane[0].flags = MCL_ON;
+        mc_sc[11].lane[0].role = ROLE_KICK;
+        mc_sc[11].lane[0].hits = 0u;
+        mc_sc[11].lane[0].len = 8u;
+        mc_sc[11].lane[0].rate = MCR_8;
+        mc_sc[11].lane[0].level = 100u;
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(11);
+        brk_mc_next(11);
+        brk_play(1);
+        mc_run(128u, &peak, 0);   /* 128 samples is before the requested +5 ms offset (~220 samples) */
+        CHECK(peak > 0.05f, "late-event queue full: the fifth event falls back to immediate sound (%.3f)", peak);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_groove(0, 0, 0, 0);
+    }
     /* the per-event timbre (MG-006): the event's own brightness, a lowpass on its voice */
     {
         static const uint8_t gruv[MC_GRUV_BYTES + 4u] = { 1u, 12u, 50u, 0u, 0u, 0u, 1u, 0u, 9u, 1u, 0u, 0u };
