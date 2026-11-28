@@ -2370,6 +2370,88 @@ static void test_mc_play(void)
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
+    /* same-position groove events (MG-004/005): every record must survive, including multiple early events */
+    {
+        static const uint8_t gruv[MC_GRUV_BYTES + 4u] = {
+            1u, 12u, 50u, 0u, 0u, 0u, 1u, 0u, 10u, 2u, 0u, 0u
+        };
+        static uint8_t evnt[2u * MC_EVNT_BYTES] = {
+            0u, 127u, 0u, 0u, 0u, 0u, 0u, 100u, 0u, 0u,
+            0u, 80u,  0u, 0u, 0u, 4u, 0u, 100u, 0u, 0u
+        };
+        brk_status_t before, after;
+        uint32_t first_count;
+        mc_scene_init(&mc_sc[10], 1u);
+        mc_sc[10].lane[0].flags = MCL_ON;
+        mc_sc[10].lane[0].role = ROLE_KICK;
+        mc_sc[10].lane[0].hits = 0u;   /* the EVNT records are the entire lane for this scene */
+        mc_sc[10].lane[0].len = 8u;
+        mc_sc[10].lane[0].rate = MCR_8;
+        mc_sc[10].lane[0].level = 100u;
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_mc_start(10);
+        brk_mc_next(10);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_status(&before);
+        brk_mc_start(10);
+        brk_play(1);
+        mc_run_counting(2u * sl, 0);
+        brk_status(&after);
+        first_count = (uint8_t)(after.mc_hits[0] - before.mc_hits[0]);
+        CHECK(first_count == 2u, "same lane and position: both on-grid event records are played (%u)", first_count);
+
+        /* Both early events share one grid position. Tracking only a position bit used to collapse them to one. */
+        evnt[2] = 0x78u; evnt[3] = 0xECu; evnt[8] = 1u;   /* -5000 us, position 1 */
+        evnt[12] = 0x48u; evnt[13] = 0xE3u; evnt[18] = 1u; /* -7344 us, same position */
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_status(&before);
+        brk_mc_start(10);
+        brk_play(1);
+        mc_run_counting(4u * sl, 0);
+        brk_status(&after);
+        first_count = (uint8_t)(after.mc_hits[0] - before.mc_hits[0]);
+        CHECK(first_count == 2u, "same lane and position: both early event records are scheduled (%u)", first_count);
+        CHECK((brk_mc_caps() & MC_CAPS_ARTICULATION) == 0u,
+              "device does not advertise articulation before the renderer implements it");
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_groove(0, 0, 0, 0);
+    }
+    /* bounded late-event queue (MG-005): a fifth late hit falls back to immediate playback, not silence */
+    {
+        static const uint8_t gruv[MC_GRUV_BYTES + 4u] = {
+            1u, 12u, 50u, 0u, 0u, 0u, 1u, 0u, 11u, 5u, 0u, 0u
+        };
+        static const uint8_t evnt[5u * MC_EVNT_BYTES] = {
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u,
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u,
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u,
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u,
+            0u, 127u, 0x88u, 0x13u, 0u, 0u, 0u, 100u, 0u, 0u
+        };
+        float peak = 0.0f;
+        mc_scene_init(&mc_sc[11], 1u);
+        mc_sc[11].lane[0].flags = MCL_ON;
+        mc_sc[11].lane[0].role = ROLE_KICK;
+        mc_sc[11].lane[0].hits = 0u;
+        mc_sc[11].lane[0].len = 8u;
+        mc_sc[11].lane[0].rate = MCR_8;
+        mc_sc[11].lane[0].level = 100u;
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(11);
+        brk_mc_next(11);
+        brk_play(1);
+        mc_run(128u, &peak, 0);   /* 128 samples is before the requested +5 ms offset (~220 samples) */
+        CHECK(peak > 0.05f, "late-event queue full: the fifth event falls back to immediate sound (%.3f)", peak);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_groove(0, 0, 0, 0);
+    }
     /* the per-event timbre (MG-006): the event's own brightness, a lowpass on its voice */
     {
         static const uint8_t gruv[MC_GRUV_BYTES + 4u] = { 1u, 12u, 50u, 0u, 0u, 0u, 1u, 0u, 9u, 1u, 0u, 0u };

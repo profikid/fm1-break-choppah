@@ -122,6 +122,42 @@ console.log("mathcore: app.c's presets, names, rates, modes, MATH; brk.c's hash;
   assert.ok(before < on, "and it is early: " + before + " < " + on);
 }
 
+/* the export uses the same swung grid as the analysis and preserves accent/gate metadata */
+{
+  const rate = 1000, pcm = new Float32Array(400);
+  const slices = [0, 175, 300], roles = [0, 1];
+  const groove = [
+    { velocity: 100, flags: 0, micro_us: 0, timbre: 100, grid_pos: 0, grid_swing: 66 },
+    { velocity: 72, flags: MC.MCE_F_ACCENT, micro_us: -32767, timbre: 210, gate: 74, grid_pos: 2, grid_swing: 66 },
+  ];
+  const r = MC.sceneFromBreak(pcm, rate, { slices, roles, bpm: 120, bars: 2, swing: 66, groove });
+  const e = r.events.find((event) => event.slice === 1);
+  assert.ok(e, "the second slice is exported");
+  assert.equal(e.pos, 2, "175 ms is nearer swung step 2 than straight-grid step 1");
+  assert.equal(e.micro_us, -32767, "the measured micro-offset remains relative to the swung grid");
+  assert.equal(e.flags & MC.MCE_F_ACCENT, MC.MCE_F_ACCENT, "accent articulation is preserved");
+  assert.equal(e.gate, 74, "an explicit event gate is preserved");
+  assert.equal(r.gruv.swing, 66, "the swing template is stored once in GRUV");
+  const loss = MC.exportLoss(r.events, MC.SCENE_CAPS, "scene");
+  assert.ok(loss.dropped.some((item) => /ghost\/accent markers/.test(item)),
+    "the current device capability report identifies the unsupported articulation markers");
+}
+
+/* event identity is not event content: two identical records at the same lane/position both play */
+{
+  const sc = MC.factoryScenes();
+  const evs = [
+    { flags: 0, velocity: 96, micro_us: -2500, pitch: 0, slice: 4, timbre: 80, gate: 100, pos: 0, lane: 0 },
+    { flags: 0, velocity: 48, micro_us: -2500, pitch: 0, slice: 4, timbre: 80, gate: 100, pos: 0, lane: 0 },
+  ];
+  const p = new MC.Player(sc, r16, {}, { bpm: 120, events: { 1: evs } });
+  p.start(1);
+  p.step(0);
+  const hits = p.tick(0).filter((h) => h.lane === 0);
+  assert.equal(hits.length, 2, "two identical same-position event records remain two hits");
+  assert.deepEqual(hits.map((h) => h.gain.toFixed(2)), ["0.76", "0.38"], "each record keeps its own velocity");
+}
+ 
 /* readable scenes (the MCP server's) */
 {
   const s = MC.factoryScenes();

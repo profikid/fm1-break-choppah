@@ -8,7 +8,7 @@ and §15 for the revision to a played instrument (the same evening)
 
 ---
 
-> **Groove fidelity and Choppah Hub export:** see [PRD_MATHCORE_GROOVE.md](PRD_MATHCORE_GROOVE.md) for the proposed event-based groove layer, exact timing, per-hit dynamics, articulations, timbre, polyphonic playback, export profiles and implementation roadmap. This is a proposed extension; it is not yet implemented.
+> **Groove fidelity and Choppah Hub export:** see [PRD_MATHCORE_GROOVE.md](PRD_MATHCORE_GROOVE.md) for the event-based groove layer, exact timing, per-hit dynamics, articulations, timbre, polyphonic playback, export profiles and implementation roadmap. The implementation is partial: GRUV/EVNT playback, velocity, microtiming and timbre exist; same-position event handling is being fixed in firmware PR #14; articulation flags are not yet rendered; and the real-device voice/CPU/memory budget is outstanding. Do not treat the full groove-fidelity target as released.
 
 ## 1. Purpose
 
