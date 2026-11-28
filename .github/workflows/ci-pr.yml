@@ -1,0 +1,79 @@
+# SPDX-License-Identifier: MPL-2.0
+# Pull-request validation only. Deliberately has no id-token permission and no beta deployment steps:
+# untrusted PR code must never receive the OIDC authority used by the main-branch beta publisher.
+name: Pull request build and test
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  EMSDK_VERSION: 3.1.74
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Pillow with raqm (the build's fonts)
+        run: |
+          raqm() { /usr/bin/python3 -c 'from PIL import features; raise SystemExit(not features.check("raqm"))' 2>/dev/null; }
+          raqm || /usr/bin/python3 -m pip install -q --user --break-system-packages Pillow
+          raqm || { sudo apt-get update -qq && sudo apt-get install -y -qq libfribidi0; }
+          raqm && /usr/bin/python3 -c 'import PIL; print("Pillow", PIL.__version__, "with raqm")'
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.jieli
+            ~/fw-AC79_AIoT_SDK
+          key: jieli-${{ runner.os }}-${{ hashFiles('scripts/bootstrap.sh') }}
+
+      - name: fm1-base, JieLi toolchain and AC79 SDK files
+        env:
+          PYTHON: /usr/bin/python3
+          BOOTSTRAP_USB: 0
+        run: sh scripts/bootstrap.sh
+
+      - uses: actions/cache@v4
+        id: emsdk
+        with:
+          path: ~/emsdk
+          key: emsdk-${{ env.EMSDK_VERSION }}-${{ runner.os }}
+
+      - name: Emscripten ${{ env.EMSDK_VERSION }}
+        run: |
+          if [ "${{ steps.emsdk.outputs.cache-hit }}" != true ]; then
+            git clone -q --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+            "$HOME/emsdk/emsdk" install "$EMSDK_VERSION"
+            "$HOME/emsdk/emsdk" activate "$EMSDK_VERSION"
+            rm -rf "$HOME/emsdk/downloads"
+          fi
+          . "$HOME/emsdk/emsdk_env.sh" >/dev/null 2>&1
+          echo "$EMSDK" >> "$GITHUB_PATH"
+          echo "$EMSDK/upstream/emscripten" >> "$GITHUB_PATH"
+          emcc --version | head -1
+
+      - name: Engine tests
+        run: ./build.sh test
+
+      - name: Pack file and the builder's ears (node)
+        run: node tests/chpk.test.mjs && node tests/beats.test.mjs && node tests/fm1link.test.mjs && node tests/breakcut.test.mjs && node tests/mathcore.test.mjs
+
+      - name: Firmware and emulator
+        env:
+          PYTHON: /usr/bin/python3
+        run: |
+          set -euo pipefail
+          ./build.sh
+          ./build.sh --web
