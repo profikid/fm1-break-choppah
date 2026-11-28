@@ -1440,6 +1440,7 @@ BRK_COLD void brk_ly_voices(uint32_t loops, uint32_t shots)
     p_ly_nv = loops | shots << 4;
 }
 BRK_COLD void brk_ly_gain(float loops, float shots) { p_ly_lg = loops; p_ly_sg = shots; }
+BRK_COLD void brk_ly_stop(void) { p_ly_stop = 1u; }
 BRK_COLD void brk_ly_clear(void)
 {
     uint32_t i;
