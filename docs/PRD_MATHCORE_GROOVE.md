@@ -33,6 +33,12 @@ time, so an event's micro-timing lands on the sample it belongs to — the rende
 (what the earlier drafts said). The device says so in its capability byte (`MC_CAPS_EARLY`) and in its status
 (`mc_res`, in microseconds).
 
+**What `GROO` is for (28 Nov 2026).** The per-slice groove — the loudness, the ghost, the time against the
+grid, the brightness — is the Hub's record of the analysis: it travels with the pack's file, so the groove is
+not only in the Hub's database. The device does not read it: the slice's own audio already carries its loudness
+and its brightness, and the slice's position is the record of its timing, so the device's copy would count them
+twice. The device gets the groove through `EVNT` — the events, which carry the same character per hit.
+
 **The Hub's analysis (28 Nov 2026).** The groove is *heard*, not assumed: the slices are where the slicer cut
 them, but the hit's own time is found by the sharpest rise of the energy in the slice, its loudness is the
 attack's, and a hit far below the others is a ghost. The grid is the break's 16ths at its tempo, swung as the
@@ -315,6 +321,15 @@ break's slot carries it (`SSET`), so the device's steps — and with them the la
 was played, and the events' micro-timing is measured *against that grid*: the device applies the swing once (to
 the grid) and the micro-timing on top of it (the same grid, the same reference), never twice. The browser's
 player honours the same swing (the `GRUV`'s), so the reference and the device agree.
+
+**Who owns the swing (28 Nov 2026).** The break's own swing — the slot's `SSET` byte — is what the device plays:
+the steps, the lanes' grid and the chop points all swing together, because the grid *is* the transport's ticks.
+The `GRUV`'s swing is the *record* of the grid the groove was measured against (the browser's player honours
+it). The Hub writes both from one detection, so they agree; a scene plays its groove as measured when it plays
+with the break the groove came from (the device's model: a scene re-chops the break that plays). Changing the
+swing in the editor alone would move the browser's playback and not the device's, so the editor shows the swing
+and does not offer to change it: making the lanes' grid follow a per-scene swing would mean the master-tick
+timeline stops being the scheduling backbone, which is not worth it for a device with a 5.8 ms block.
 
 **What is not, yet:** the swing is *heard* and *carried*, not edited: the "apply the swing" and "straighten it"
 transformations over the events' micro-timing, and the per-role swing.
