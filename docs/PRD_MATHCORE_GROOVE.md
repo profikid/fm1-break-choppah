@@ -4,9 +4,12 @@
 **Parent:** [PRD_MATHCORE.md](PRD_MATHCORE.md)  
 **Related product:** Choppah Hub — Audio & Groove Intelligence  
 **Repository:** `profikid/fm1-break-choppah`  
-**Status:** the format, the reference player, the export, the firmware's layering, micro-timing and timbre and
-the Hub's analysis of the groove are **built** (28 Nov 2026). What is left is the voices' budget measured on the
-real FM-1.
+**Implementation status (28 Nov 2026): partial.** The ten-byte GRUV/EVNT/GROO container, reference player,
+scene export, cross-lane firmware playback, velocity, slice, gate, signed micro-timing, pitch and timbre paths exist.
+This does **not** mean the full target in this PRD is implemented. Same-lane duplicate event handling is being fixed
+in firmware PR #14; articulation/ghost/accent flags are not yet rendered; the device currently has two voices per
+lane; full Hub event provenance and lossless round-trip remain incomplete; and real-FM-1 voice/CPU/memory headroom
+has not been measured.
 
 **What is built**
 
@@ -19,7 +22,8 @@ real FM-1.
 | The capabilities: the status says what the device can do | `brk_mc_caps()`, `app/ui/main.c` |
 | The Hub: the break → scene action, the scene sets and the packs carry the groove, and the analysis measures it | `choppah-hub`: `public/hub/sample.html`, `public/hub/groove.js`, `src/mathcore.js`, `src/mcp.js` |
 
-**What is not, yet:** the voices' budget measured on the real FM-1.
+**Not yet complete:** articulation and ghost/accent playback; higher same-lane polyphony; full event-level
+editing/provenance round-trip; complete Full/Scene/Hybrid export parity; and measured hardware voice/CPU/memory budget.
 
 **The timing resolution:** the sample (1/44100 s, 22.7 µs). The render counts the waiting hits one sample at a
 time, so an event's micro-timing lands on the sample it belongs to — the render's block is not the resolution
@@ -34,6 +38,17 @@ no micro-timing. The measurement is a slice a slice (`public/hub/groove.js` in t
 the pack's file, and the export rides on it.
 
 ---
+
+## 0.1 Audited implementation boundaries
+
+The following distinctions are intentional:
+
+- **Implemented subset:** the current firmware can play multiple role lanes together, and each EVNT record supplies velocity, slice, gate, signed microtiming, pitch and timbre. The browser reference player also consumes event records.
+- **Fixed in firmware PR #14 (pending CI/review):** the firmware now iterates all records for a lane/position and tracks early scheduling by event-record index. The old implementation returned only the first matching record and collapsed multiple early events at the same position.
+- **Not advertised after PR #14:** articulation capability. The renderer does not yet interpret the event ghost/accent/articulation flags, so the capability bit is removed rather than making a false promise.
+- **Bounded playback:** the current firmware has a two-voice pool per lane and a four-entry pending microtiming queue per lane. This is not unlimited same-lane polyphony. Any increase needs target-device measurements.
+- **Not equivalent:** lane-level procedural variation, accent masks and a two-voice lane pool do not equal an editable, source-faithful event timeline with independent articulation and timbre provenance.
+- **Not hardware-certified:** host tests and a green firmware build do not establish actual FM-1 timing, CPU, memory, or audible overlap under worst-case load.
 
 ## 1. Purpose
 
@@ -54,7 +69,9 @@ The existing MATHCORE scene/lane system remains the performance and arrangement 
 
 **Core principle:** the event timeline is the source of truth; scenes and lanes are musical controls and transformations over that timeline.
 
-This specification is a proposed extension. It does not claim that any of the changes below have been implemented.
+The requirements below define the complete target. The implementation is partial: use the status table above
+and the roadmap in §17 as the source of truth for what exists. Do not treat the presence of the container or a
+reference player as proof that every requirement below is implemented.
 
 ## 2. Product goals
 
