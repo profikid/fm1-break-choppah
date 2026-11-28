@@ -1116,7 +1116,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
             mr_flags[l] = fl;
             mr_gate[l] = gate;
             mr_pitch[l] = pt;
-            mr_count[l] = rat > 1u ? (rat > 4u ? 3u : rat - 1u) : 0u;
+            mr_count[l] = rat > 1u ? (rat > 8u ? 7u : rat - 1u) : 0u;
             mr_hold[l] = mr_count[l] ? t + r : 0u;
             if (mr_count[l]) {
                 mr_len[l] = (float)r * (1.0f / (float)MC_TICKS) * sl / (float)(mr_count[l] + 1u);
