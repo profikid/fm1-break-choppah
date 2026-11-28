@@ -2030,7 +2030,7 @@ static void test_mc_lanes(void)
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
-    /* bounded: every lane every 1/32T with ratchets 4: the hits counted stay what they should */
+    /* bounded: every lane every 1/32T with ratchets 8: the hits counted stay what they should */
     {
         mc_scene_init(&mc_sc[2], 1u);
         for (l = 0; l < MC_LANES; l++) {
