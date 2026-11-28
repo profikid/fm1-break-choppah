@@ -118,12 +118,9 @@ S
 up "$O/b1.bin" 1
 [ -f "$O/b2.bin" ] && up "$O/b2.bin" 2
 cat <<S
-expect ly_on 0
-key b0 down
-wait 60
-key b0 up
-wait 2300
-expect ly_on 0
+expect ly_nl 2
+expect ly_ns 3
+expect ly_shots 0
 tap HOME
 wait 200
 press ARP

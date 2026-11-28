@@ -74,6 +74,14 @@ jobs:
       - name: Engine tests
         run: ./build.sh test
 
+      - name: Layer host acceptance
+        run: ./build.sh --host && tests/layer.sh
+
+      - name: Screen reader audit
+        run: |
+          git clone --depth 1 https://github.com/charlesvestal/fm1-reader ../fm1-reader
+          tools/sr_audit.sh
+
       - name: Pack file and the builder's ears (node)
         run: node tests/chpk.test.mjs && node tests/beats.test.mjs && node tests/fm1link.test.mjs && node tests/breakcut.test.mjs && node tests/mathcore.test.mjs
 
