@@ -24,8 +24,8 @@ events, ten bytes each) and `GROO` (a break's own groove, the Hub's record) — 
 (`CHK_GRUV`/`CHK_EVNT` in app.c → `brk_mc_groove`). A lane with events plays *them* instead of its pattern, each
 with its own velocity, slice, gate, micro-timing (early and late, to the sample), timbre and pitch; the lanes have
 voices of their own (two a lane) and sound together. `brk_mc_caps()` says what the device can do (the hub asks
-before exporting) and the status carries the resolution (the sample, 23 µs). The browser is the reference: `app/site/mathcore.js` is
-vendored into the hub (`npm run vendor` there), and it plays what the device plays. Two decisions are settled: the
+before exporting) and the status carries the resolution (the sample, 23 µs). The browser is the reference:
+`app/site/mathcore.js` is vendored into the hub (`npm run vendor` there), and it plays what the device plays. Two decisions are settled: the
 break's own swing (the slot's `SSET` byte) is what the device plays, and `GROO` stays the Hub's record (the device
 gets the groove through `EVNT`). The budget is measured: `tests/engine/bench.c` (the render's cost) and the build's
 RAM line (a voice is 124 B).
