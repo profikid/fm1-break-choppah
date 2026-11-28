@@ -271,6 +271,16 @@ Support:
 
 The Hub should export both the detected event offsets and any inferred swing profile. The device must not double-apply them.
 
+**What is there (28 Nov 2026).** The Hub *hears* the swing: the grid that fits the break's hits best, kept only
+when it explains them much better than the straight grid (50 straight .. 75, the device's own scale). The
+break's slot carries it (`SSET`), so the device's steps — and with them the lanes' grid — swing the way the break
+was played, and the events' micro-timing is measured *against that grid*: the device applies the swing once (to
+the grid) and the micro-timing on top of it (the same grid, the same reference), never twice. The browser's
+player honours the same swing (the `GRUV`'s), so the reference and the device agree.
+
+**What is not, yet:** the swing is *heard* and *carried*, not edited: the "apply the swing" and "straighten it"
+transformations over the events' micro-timing, and the per-role swing.
+
 ## 7. Dynamics and velocity
 
 Replace the assumption that a lane's single level and binary accent mask are enough for faithful groove playback.
