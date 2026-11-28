@@ -115,8 +115,8 @@ expect ly_on 1
 tap PLAY
 wait 100
 S
-up "$O/b1.bin" 1 >> "$O/s.txt"
-[ -f "$O/b2.bin" ] && up "$O/b2.bin" 2 >> "$O/s.txt"
+up "$O/b1.bin" 1
+[ -f "$O/b2.bin" ] && up "$O/b2.bin" 2
 cat <<S
 expect ly_on 0
 key b0 down
