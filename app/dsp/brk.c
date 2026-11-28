@@ -1738,7 +1738,7 @@ static float ly_sample(int playing, float sl, float half, float tape)
 static void ly_status(void)
 {
     uint32_t i, wl, v;
-    ly_st.on = ly_st.pend = 0u;
+    ly_st.on = ly_st.pend = ly_st.busy = 0u;
     for (i = 0; i < BRK_LY_LOOPS; i++) {
         uint32_t ws = ly_win(i, &wl);
         float a = ly_src[i].d ? (float)ly_src[i].len / (float)ly_src[i].bars : 1.0f;
