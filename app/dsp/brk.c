@@ -914,12 +914,9 @@ static void mc_lane_hit(const brk_break_t *b, uint32_t l, int32_t s, uint32_t re
     pitq = pitch != 0.0f ? brk_exp2f(pitch * (1.0f / 12.0f)) : 1.0f;   /* the pitch, as a speed factor */
     if (s < 0 || (uint32_t)s >= b->nslices)
         return;
-    if (late > 0.0f) {                          /* later than now: it waits (the lane's own slot) */
-        if (!mc_pend_push(l, (int32_t)(late * (float)BRK_SR + 0.5f), (uint8_t)s, g, (uint8_t)gate,
-                                 (uint8_t)(rev != 0u), timbre, pitch))
-            return;                             /* no room: it plays now */
-        return;
-    }
+    if (late > 0.0f && mc_pend_push(l, (int32_t)(late * (float)BRK_SR + 0.5f), (uint8_t)s, g,
+                                         (uint8_t)gate, (uint8_t)(rev != 0u), timbre, pitch))
+        return;                                 /* queued: it plays at its sample; full: fall through and play now */
     voice_start_in(mv[l], &mcur[l], b, s, rev, -1.0f, g);
     n = &mv[l][mcur[l]];
     n->tb_a = timbre_a(timbre);                 /* the brightness, on the voice that plays it */
