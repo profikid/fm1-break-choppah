@@ -841,7 +841,7 @@ uint8_t brk_mc_caps(void)
 {
     return (uint8_t)(MC_CAPS_VELOCITY | MC_CAPS_MICRO | MC_CAPS_LAYERING | MC_CAPS_EARLY | MC_CAPS_TIMBRE);
 }
-/* the event of a lane at a position, or null: the GRUV's scene map, then the EVNT's records */
+/* bounded GRUV scene-map lookup; returns only event ranges proven to fit the supplied EVNT chunk */
 static uint32_t mc_scene_evs(int32_t scene, uint32_t *first)
 {
     const uint8_t *g = mc_gruv;
