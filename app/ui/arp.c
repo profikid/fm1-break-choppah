@@ -37,10 +37,11 @@ static void ly_say_shot(uint32_t i)
     char n[24] = {'S', '0', ' ', 0};
     if (i >= BRK_LY_SHOTS)
         return;
-    n[1] = (char)('1' + i / 10u);
-    if (i >= 9u) {
+    if (i < 9u)
+        n[1] = (char)('1' + i);
+    else {
         n[1] = '1';
-        n[2] = (char)('0' + (i + 1u) % 10u);
+        n[2] = (char)('0' + (i - 9u));
         n[3] = ' ';
         n[4] = 0;
     }
