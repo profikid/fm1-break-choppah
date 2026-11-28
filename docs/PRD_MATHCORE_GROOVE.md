@@ -30,8 +30,7 @@ time, so an event's micro-timing lands on the sample it belongs to — the rende
 them, but the hit's own time is found by the sharpest rise of the energy in the slice, its loudness is the
 attack's, and a hit far below the others is a ghost. The grid is the break's 16ths at its tempo, swung as the
 break is swung — the swing and the micro-timing are separate things, and a hit that falls on the swung grid has
-no micro-timing. The measurement is a slice a slice (`public/hub/groove.js` in the hub): it writes `GROO` into
-the pack's file, and the export rides on it.
+no micro-timing. The measurement is a slice at a time (`public/hub/groove.js` in the hub): it writes velocity, flags, microtiming and timbre into `GROO`. The analyser also returns an ephemeral `grid_pos` and `grid_swing` pair for the export; those two fields are not additional bytes in the `GROO` v1 format.
 
 ---
 
@@ -40,7 +39,7 @@ the pack's file, and the export rides on it.
 The following distinctions are intentional:
 
 - **Implemented subset:** the current firmware can play multiple role lanes together, and each EVNT record supplies velocity, slice, gate, signed microtiming, pitch and timbre. The browser reference player also consumes event records.
-- **Fixed in firmware PR #14 (pending CI/review):** the firmware now iterates all records for a lane/position and tracks early scheduling by event-record index. The old implementation returned only the first matching record and collapsed multiple early events at the same position.
+- **Fixed in draft firmware PR #14 (host CI green, not merged):** the firmware now iterates all records for a lane/position, tracks early scheduling by event-record index, validates GRUV/EVNT ranges and falls back when the late-event queue is full. The old implementation returned only the first matching record and collapsed multiple early events at the same position.
 - **Not advertised after PR #14:** articulation capability. The renderer does not yet interpret the event ghost/accent/articulation flags, so the capability bit is removed rather than making a false promise.
 - **Bounded playback:** the current firmware has a two-voice pool per lane and a four-entry pending microtiming queue per lane. This is not unlimited same-lane polyphony. Any increase needs target-device measurements.
 - **Not equivalent:** lane-level procedural variation, accent masks and a two-voice lane pool do not equal an editable, source-faithful event timeline with independent articulation and timbre provenance.
