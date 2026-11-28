@@ -47,6 +47,9 @@ assert.throws(() => MC.readScenes(new Uint8Array(1604)), /MCS5/);
 const odd = MC.cloneScenes(f); odd[0].lane[0].len = 99; odd[0].lane[0].prob = 300; odd[0].bars = 3;
 const back = MC.readScenes(MC.writeScenes(odd));
 assert.equal(back[0].lane[0].len, 32); assert.equal(back[0].lane[0].prob, 100, "out of range: clamped as the FM-1 reads it");
+const eight = MC.cloneScenes(f);
+eight[0].lane[0].ratchet = 8;
+assert.equal(MC.readScenes(MC.writeScenes(eight))[0].lane[0].ratchet, 8, "8x ratchet round-trips in the device scene format");
 
 /* the Slice Map: a kick, a snare, a hat, heard as the engine hears them */
 const rate = 22050, n = 4096, pcm = new Float32Array(n * 3);
