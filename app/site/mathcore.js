@@ -16,6 +16,7 @@ export const RATES = ["1/32", "1/16", "1/8", "1/4", "1/32T", "1/16T", "1/8T"], R
 export const MODES = ["FIXED", "ROUND", "RANDOM", "ALT", "ACCENT"];
 export const LF = { ON: 1, REV: 2, FREE: 4, SWELL: 8 };          /* a lane's flags */
 export const SF = { BREAK: 1, ONCE: 2 };                          /* a scene's: RUN ON (into the break), ONCE (a fill) */
+export const MCE_F_GHOST = 1, MCE_F_ACCENT = 2;                   /* a groove event's flags (the ghost, the accent) */
 /* app.c MC_NAME: a name is its index (append only) */
 export const NAMES = ["", "ROLLER", "AMEN", "SNARE ROLLER", "SNARES", "MATH 5/7", "FILL", "TRIPLET ROLL",
   "SNARE RUSH", "CHOP FILL", "RISER", "DROP", "STEPPER", "DOUBLE", "7/8 BOUNCE", "BREAKDOWN", "TRIPLET ROLLER",
@@ -394,9 +395,14 @@ export function sceneFromBreak(pcm, rate, o = {}) {
       const micro = Math.round((at - pos * sixteenth) * 1e6);
       const st = stats[i];
       const vel = Math.max(1, Math.min(127, Math.round(127 * st.peak / loudest)));
+      /* the measured groove (the hub's analysis): the hit's own time, its loudness, its ghost, its
+         brightness. Without it, the slice's own cut and its peak stand in */
+      const g = o.groove && o.groove[i] ? o.groove[i] : null;
       L.hits |= 1 << pos;
-      events.push({ flags: r << 6, velocity: vel, micro_us: Math.max(-32767, Math.min(32767, micro)),
-        pitch: 0, slice: i, timbre: st.bright, gate: 100, pos, lane: r });
+      events.push({ flags: (r << 6) | (g && g.flags & 1 ? MCE_F_GHOST : 0),
+        velocity: g ? Math.max(1, Math.min(127, g.velocity)) : vel,
+        micro_us: g ? Math.max(-32767, Math.min(32767, g.micro_us)) : Math.max(-32767, Math.min(32767, micro)),
+        pitch: 0, slice: i, timbre: g ? Math.max(0, Math.min(255, g.timbre)) : st.bright, gate: 100, pos, lane: r });
     }
     lanes.push(L);
   }

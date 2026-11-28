@@ -174,3 +174,31 @@ console.log("mathcore: readable scenes, patches and the chain");
   const full = MC.exportLoss(r.events, MC.FULL_CAPS, "full");
   assert.equal(full.dropped.length, 0, "the Full Groove profile drops nothing: " + full.dropped.join(", "));
 }
+
+/* the export with the measured groove (the hub's analysis): the hit's own time, loudness, ghost and
+   brightness ride on the event, not the slice's cut */
+{
+  const rate = 22050, len = rate * 2;
+  const pcm = new Float32Array(len);
+  const put = (at, secs, f, amp) => {
+    const s0 = Math.round(at * rate), n = Math.round(secs * rate);
+    for (let i = 0; i < n && s0 + i < len; i++) pcm[s0 + i] += Math.sin(2 * Math.PI * f * i / rate) * amp * Math.exp(-i / (n / 4));
+  };
+  put(0.0, 0.12, 55, 1.0);
+  put(0.5, 0.10, 900, 0.7);
+  const slices = slicePoints(pcm, 16, true);
+  const roles = MC.autoRoles(pcm, slices, rate);
+  const first = MC.sceneFromBreak(pcm, rate, { slices, roles, bpm: 120, bars: 2, swing: 56 });
+  const groove = slices.map((_, i) => ({ velocity: 20 + i * 3, flags: 0, micro_us: -1000 - i, timbre: 200 - i }));
+  groove[first.events[0].slice].flags = MC.MCE_F_GHOST;   /* the first hit was a ghost */
+  const r = MC.sceneFromBreak(pcm, rate, { slices, roles, bpm: 120, bars: 2, swing: 56, groove });
+  assert.ok(r.events.length >= 2, "the break's hits become events: " + r.events.length);
+  for (const e of r.events) {
+    const g = groove[e.slice];
+    assert.equal(e.velocity, g.velocity, `the event's velocity is the measured one (${e.velocity})`);
+    assert.equal(e.micro_us, g.micro_us, `the event's micro-timing is the measured one (${e.micro_us})`);
+    assert.equal(e.timbre, g.timbre, `the event's timbre is the measured one (${e.timbre})`);
+    assert.equal(e.flags & MC.MCE_F_GHOST, g.flags & MC.MCE_F_GHOST, "the ghost is on the event");
+  }
+  assert.ok(r.events.some((e) => e.flags & MC.MCE_F_GHOST), "a ghost among them");
+}
