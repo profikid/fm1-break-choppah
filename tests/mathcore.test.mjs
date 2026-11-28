@@ -122,6 +122,24 @@ console.log("mathcore: app.c's presets, names, rates, modes, MATH; brk.c's hash;
   assert.ok(before < on, "and it is early: " + before + " < " + on);
 }
 
+/* the export uses the same swung grid as the analysis and preserves accent/gate metadata */
+{
+  const rate = 1000, pcm = new Float32Array(400);
+  const slices = [0, 175, 300], roles = [0, 1];
+  const groove = [
+    { velocity: 100, flags: 0, micro_us: 0, timbre: 100, grid_pos: 0, grid_swing: 66 },
+    { velocity: 72, flags: MC.MCE_F_ACCENT, micro_us: -32767, timbre: 210, gate: 74, grid_pos: 2, grid_swing: 66 },
+  ];
+  const r = MC.sceneFromBreak(pcm, rate, { slices, roles, bpm: 120, bars: 2, swing: 66, groove });
+  const e = r.events.find((event) => event.slice === 1);
+  assert.ok(e, "the second slice is exported");
+  assert.equal(e.pos, 2, "175 ms is nearer swung step 2 than straight-grid step 1");
+  assert.equal(e.micro_us, -32767, "the measured micro-offset remains relative to the swung grid");
+  assert.equal(e.flags & MC.MCE_F_ACCENT, MC.MCE_F_ACCENT, "accent articulation is preserved");
+  assert.equal(e.gate, 74, "an explicit event gate is preserved");
+  assert.equal(r.gruv.swing, 66, "the swing template is stored once in GRUV");
+}
+
 /* event identity is not event content: two identical records at the same lane/position both play */
 {
   const sc = MC.factoryScenes();
