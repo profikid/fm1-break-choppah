@@ -30,7 +30,11 @@ time, so an event's micro-timing lands on the sample it belongs to — the rende
 them, but the hit's own time is found by the sharpest rise of the energy in the slice, its loudness is the
 attack's, and a hit far below the others is a ghost. The grid is the break's 16ths at its tempo, swung as the
 break is swung — the swing and the micro-timing are separate things, and a hit that falls on the swung grid has
-no micro-timing. The measurement is a slice at a time (`public/hub/groove.js` in the hub): it writes velocity, flags, microtiming and timbre into `GROO`. The analyser also returns an ephemeral `grid_pos` and `grid_swing` pair for the export; those two fields are not additional bytes in the `GROO` v1 format.
+no micro-timing. The measurement is a slice at a time (`public/hub/groove.js` in the hub): it writes velocity,
+flags, microtiming and timbre into `GROO`. The analyser also returns an ephemeral `grid_pos` and `grid_swing`
+pair for the export; those two fields are not additional bytes in the `GROO` v1 format. The pack made in the hub
+carries the **MATHCORE scene** of its first break too (`SCNE`, `GRUV`, `EVNT`) — so the device plays the groove
+with the pack, as scene A, and not only the break's audio.
 
 ---
 
