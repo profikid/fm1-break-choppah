@@ -357,7 +357,10 @@ export function exportLoss(events, caps = SCENE_CAPS, profile = "scene") {
   if (events.length) {
     if (has("velocity")) kept.push("the per-event velocity"); else dropped.push("the per-event velocity (the lanes have one level)");
     if (has("micro")) kept.push("the micro-timing"); else dropped.push("the micro-timing (the events are on the grid)");
-    if (has("articulation")) kept.push("the articulation (the ghosts are events)"); else dropped.push("the articulation (the ghosts are plain hits)");
+    if (events.some((e) => e.flags & (MCE_F_GHOST | MCE_F_ACCENT))) {
+      if (has("articulation")) kept.push("the ghost/accent markers");
+      else dropped.push("the ghost/accent markers (velocity still plays, but the device ignores these flags)");
+    }
     if (has("timbre")) kept.push("the timbre"); else dropped.push("the timbre (one pitch and one filter a lane)");
     if (has("layering")) kept.push("the lanes together"); else dropped.push("the lanes together (one hit at a time)");
     if (has("early")) kept.push("the early events"); else dropped.push("the early events (everything lands on the grid or later)");
