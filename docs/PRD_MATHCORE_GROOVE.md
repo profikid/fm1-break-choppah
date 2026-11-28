@@ -19,7 +19,7 @@ This does **not** mean the full target in this PRD is implemented. Same-lane dup
 | The capabilities: the status says what the device can do | `brk_mc_caps()`, `app/ui/main.c` |
 | The Hub: the break → scene action, the scene sets and the packs carry the groove, the analysis measures it, and the analysed events become the device's groove | `choppah-hub`: `public/hub/sample.html`, `public/hub/groove.js`, `src/groove.js`, `src/mathcore.js`, `src/mcp.js` |
 
-**Not yet complete:** device-side interpretation/display of ghost/accent flags (velocity still carries the audible dynamics); higher same-lane polyphony; complete event-level provenance round-trip; per-event gate analysis (the exporter defaults to 100% unless explicitly edited); complete Full/Scene/Hybrid export parity; and measured hardware voice/CPU/memory budget.
+**Not yet complete:** device-side interpretation/display of ghost/accent flags (velocity still carries the audible dynamics); higher same-lane polyphony; complete event-level provenance round-trip; per-event gate analysis (the exporter defaults to 100% unless explicitly edited); and complete Full/Scene/Hybrid export parity. The **budget** is measured on the host and in the build (below); the FM-1's own clock is still the last word.
 
 **The analysis reaches the device (28 Nov 2026).** The Hub's Audio Intelligence reads a track for its groove (every
 hit: its role, its loudness, its time against the grid, its ghosts — the source coordinates never quantized), and
@@ -27,6 +27,17 @@ those events become the device's groove: each one lands on the break's slice and
 and becomes an event the FM-1 plays (its velocity, its micro-timing, its ghost, its accent). Two events at the same
 grid position are two events (a flam's grace note and its main hit), and the device plays both. The scene set is
 saved in the library, and the pack carries the scene (`SCNE`, `GRUV`, `EVNT`) so the groove travels with the break.
+
+**The budget (28 Nov 2026).** The build says: the image 579,724 B (1,092 more than before the groove), the RAM
+`.data+.bss` 97,068 B of 98,304 (384 more), the pool 312,872 B of 344,064. A voice is **124 B**, so the sixteen the
+device holds are 1,984 B and **nine more would fit** in what is left — four lanes with two voices each more is
+1 KB, which fits, but leaves almost nothing.
+
+The render, on the host (`tests/engine/bench.c`, the best of three runs): **5.4 µs a block** (256 samples) for the
+break's own voice alone, and the four lanes with their events add **about 1%** — the layering is cheap, because a
+lane's voice plays a slice and not the whole break. The groove's own work (the queue that waits, the timbre's
+pole, the pitch) is **+10%** on top of that. The FM-1 is slower than the host by an unknown factor, so the
+absolute margin is still the device's to say: the block is 5.8 ms of audio and the render has to finish inside it.
 
 **The timing resolution:** the sample (1/44100 s, 22.7 µs). The render counts the waiting hits one sample at a
 time, so an event's micro-timing lands on the sample it belongs to — the render's block is not the resolution
