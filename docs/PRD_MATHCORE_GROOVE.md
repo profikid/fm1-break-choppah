@@ -4,8 +4,9 @@
 **Parent:** [PRD_MATHCORE.md](PRD_MATHCORE.md)  
 **Related product:** Choppah Hub — Audio & Groove Intelligence  
 **Repository:** `profikid/fm1-break-choppah`  
-**Status:** the format, the reference player, the export and the firmware's layering, micro-timing and timbre are
-**built** (28 Nov 2026). The rest — the Hub's analysis filling the groove — is still to come.
+**Status:** the format, the reference player, the export, the firmware's layering, micro-timing and timbre and
+the Hub's analysis of the groove are **built** (28 Nov 2026). What is left is the voices' budget measured on the
+real FM-1.
 
 **What is built**
 
@@ -16,15 +17,21 @@
 | The export: a break → a scene, with the loss report and the capabilities | `app/site/mathcore.js` (`sceneFromBreak`, `exportLoss`) |
 | The firmware: the chunk reader, a voice pool a lane, the events' velocity, slice, gate, micro-timing (early and late), timbre and pitch | `app/dsp/brk.c`, `app/app.c` |
 | The capabilities: the status says what the device can do | `brk_mc_caps()`, `app/ui/main.c` |
-| The Hub: the break → scene action, and the scene sets and the packs carry the groove | `choppah-hub`: `public/hub/sample.html`, `src/mathcore.js`, `src/mcp.js` |
+| The Hub: the break → scene action, the scene sets and the packs carry the groove, and the analysis measures it | `choppah-hub`: `public/hub/sample.html`, `public/hub/groove.js`, `src/mathcore.js`, `src/mcp.js` |
 
-**What is not, yet:** the Hub's analysis writing the groove into `GROO`, and the voices' budget measured on the
-real FM-1.
+**What is not, yet:** the voices' budget measured on the real FM-1.
 
 **The timing resolution:** the sample (1/44100 s, 22.7 µs). The render counts the waiting hits one sample at a
 time, so an event's micro-timing lands on the sample it belongs to — the render's block is not the resolution
 (what the earlier drafts said). The device says so in its capability byte (`MC_CAPS_EARLY`) and in its status
 (`mc_res`, in microseconds).
+
+**The Hub's analysis (28 Nov 2026).** The groove is *heard*, not assumed: the slices are where the slicer cut
+them, but the hit's own time is found by the sharpest rise of the energy in the slice, its loudness is the
+attack's, and a hit far below the others is a ghost. The grid is the break's 16ths at its tempo, swung as the
+break is swung — the swing and the micro-timing are separate things, and a hit that falls on the swung grid has
+no micro-timing. The measurement is a slice a slice (`public/hub/groove.js` in the hub): it writes `GROO` into
+the pack's file, and the export rides on it.
 
 ---
 
