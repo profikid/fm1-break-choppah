@@ -18,6 +18,18 @@ break's own voice (`chop_hit`: no voices of their own, nothing laid over the loo
 slice in the loop's place (`drum_slice`). Nothing is synthesised: the kick and snare/hat engines are gone (their
 settings bytes reserved).
 
+**The groove-event layer** (docs/PRD_MATHCORE_GROOVE.md, the spec; the hub's side is `profikid/choppah-hub`): the
+pack's file carries the groove beside the scenes — `GRUV` (the context, the swing, the scene map), `EVNT` (the
+events, ten bytes each) and `GROO` (a break's own groove, the Hub's record) — and the device reads the first two
+(`CHK_GRUV`/`CHK_EVNT` in app.c → `brk_mc_groove`). A lane with events plays *them* instead of its pattern, each
+with its own velocity, slice, gate, micro-timing (early and late, to the sample), timbre and pitch; the lanes have
+voices of their own (two a lane) and sound together. `brk_mc_caps()` says what the device can do (the hub asks
+before exporting) and the status carries the resolution (the sample, 23 µs). The browser is the reference: `app/site/mathcore.js` is
+vendored into the hub (`npm run vendor` there), and it plays what the device plays. Two decisions are settled: the
+break's own swing (the slot's `SSET` byte) is what the device plays, and `GROO` stays the Hub's record (the device
+gets the groove through `EVNT`). The budget is measured: `tests/engine/bench.c` (the render's cost) and the build's
+RAM line (a voice is 124 B).
+
 ## Hard rules
 
 - `app/dsp/` stays platform-free: no `plat_*`, no fm1-base headers, no libc beyond `<stdint.h>`. It must build with
