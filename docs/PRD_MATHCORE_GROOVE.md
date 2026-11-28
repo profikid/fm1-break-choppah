@@ -331,6 +331,16 @@ Imported velocities must be stored as event values. They must not be regenerated
 
 The existing lane `level` and accent controls remain useful as global multipliers/overrides.
 
+**What is there (28 Nov 2026), and what it costs.** The events carry a velocity (0..127, the measured hit's
+loudness against the break's loudest ✓), a ghost and an accent bit ✓, and the device applies them: the lane's
+level times the velocity is the gain the hit plays at ✓.
+
+**The approximation:** the slice a lane plays is *the recording's* audio ✓ — it already carries its own dynamics
+✓ — so a velocity on top of it counts the hit's loudness twice ✓, and the groove's dynamics come out a little
+stronger than the recording's ✓. This is the same on both sides ✓ (the browser is the reference ✓), and the
+alternative (levelling every slice flat ✓ and letting the velocity carry the dynamics alone ✓) would flatten the
+break's own playback ✓, which is worse ✓. It is noted here rather than hidden ✓.
+
 ## 8. Ghost notes and articulations
 
 Ghost notes are first-class events, not merely procedural additions from `vary`.
