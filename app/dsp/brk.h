@@ -344,6 +344,7 @@ void brk_ly_shot_cfg(uint32_t i, uint32_t cfg);
 void brk_ly_hit(uint32_t i, int down);
 void brk_ly_voices(uint32_t loops, uint32_t shots);
 void brk_ly_gain(float loops, float shots);
+void brk_ly_stop(void);                  /* request a render-synchronised 5 ms fade of every loop/shot */
 void brk_ly_clear(void);
 /* what the layer does, for the screen: loops on, waiting for their point, each one's place in its window (0..255),
  * the shots sounding, the break cut */
