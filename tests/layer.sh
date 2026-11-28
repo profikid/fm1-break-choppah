@@ -92,6 +92,15 @@ wait 30
 expect ly_lat 1
 wait 2300
 expect ly_on 1
+# LY-054: SAVE while a loop and a one-shot are active; fade both out, write, then restore the loop.
+key w0 down
+wait 30
+key w0 up
+wait 20
+tap SAVE
+wait 100
+expect ly_shots 0
+expect ly_on 1
 shot layer_loop.png
 peakreset
 wait 400
