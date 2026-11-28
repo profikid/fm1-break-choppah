@@ -1744,6 +1744,8 @@ static void ly_status(void)
         float a = ly_src[i].d ? (float)ly_src[i].len / (float)ly_src[i].bars : 1.0f;
         ly_st.on |= (uint8_t)((ly_l[i].on && ly_src[i].d) << i);
         ly_st.pend |= (uint8_t)(ly_l[i].pend << i);
+        if (ly_l[i].amp > 0.0001f)
+            ly_st.busy = 1u;
         ly_st.ph[i] = (uint8_t)brk_clampf((ly_l[i].pos / a - (float)ws) / (float)wl * 256.0f, 0.0f, 255.0f);
     }
     ly_st.shots = 0u;
