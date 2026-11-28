@@ -61,6 +61,8 @@ typedef struct {
     float f1, f2, fa1, fa2, fa3, fk;     /* LO-PASS / HI-PASS: a TPT state-variable filter */
     float fq, fstep, fph, fhold;         /* CRUNCH: levels, the rate's step, phase, held; RING: fstep, fph, fq = mix */
     float fg;                            /* DRIVE: gain */
+    float tb_a, tb_y;                    /* the event's timbre: a lowpass's coefficient and its state (0: none) */
+    float pitq;                          /* the lane's own pitch (the event's too): its speed factor (1: the transport's) */
 } voice_t;
 
 static voice_t v[2];
@@ -216,8 +218,8 @@ static int mcur[MC_LANES];
 #define MC_PEND 4u                        /* the hits a lane can have waiting (a lane's early events, its late) */
 typedef struct {
     int32_t left;                         /* the samples still to wait */
-    float gain;
-    uint8_t slice, gate, rev, used;
+    float gain, pitch;                    /* its level; its pitch, in semitones */
+    uint8_t slice, gate, rev, timbre, used;
 } mc_pend_t;
 static mc_pend_t mc_pend[MC_LANES][MC_PEND];
 static uint8_t mc_pend_n[MC_LANES];       /* the hits waiting, a lane (the loop skips the lanes without) */
@@ -313,6 +315,18 @@ static void voice_fx(voice_t *n, const brk_break_t *b, int32_t s)
     }
 }
 
+/* the event's timbre: a lowpass (the browser's brightness: 400 Hz at 0, 16 kHz at 255). One pole: the device's
+   answer to the browser's biquad, and it costs two flops a sample */
+static float timbre_a(uint8_t t)
+{
+    float hz, x;
+    if (!t)
+        return 0.0f;
+    hz = 400.0f * brk_exp2f((float)t * 5.321928f / 255.0f);  /* 40^(t/255) */
+    x = 6.28318531f * hz / (float)BRK_SR;                     /* 2*pi*hz/sr */
+    return 1.0f - brk_exp2f(-x * 1.4426950f);                /* 1 - exp(-x) */
+}
+
 /* the voice's sample through its slice effect (the ECHO and VERB throws are taken from it after) */
 static inline float voice_fx_run(voice_t *o, float x)
 {
@@ -347,7 +361,12 @@ static inline float voice_fx_run(voice_t *o, float x)
     default:
         break;
     }
-    return x * o->lvl;
+    x *= o->lvl;
+    if (o->tb_a > 0.0f) {                /* the event's timbre: the brightness, after the slice's own effect */
+        o->tb_y += o->tb_a * (x - o->tb_y);
+        x = o->tb_y;
+    }
+    return x;
 }
 
 /* a voice of the pair pv (pc: the one playing) starts slice s; the other fades out */
@@ -378,6 +397,9 @@ static void voice_start_in(voice_t *pv, int *pc, const brk_break_t *b, int32_t s
     n->g_pos[0] = n->g_pos[1] = n->pos;  /* the grains start on the hit (the second at full: the attack whole) */
     n->g_age = 0.0f;
     n->gate_left = -1.0f;
+    n->tb_a = 0.0f;                       /* the timbre is the event's: none until it says so */
+    n->tb_y = 0.0f;
+    n->pitq = 1.0f;                       /* the pitch, too: the transport's until the hit says otherwise */
     voice_fx(n, b, s);
     n->active = 1;
     if (pv == v)
@@ -804,11 +826,12 @@ void brk_mc_groove(const uint8_t *gruv, uint32_t gruv_len, const uint8_t *evnt, 
     mc_evnt = evnt;
     mc_evnt_len = evnt_len;
 }
-/* what the device can do: the velocity, the micro-timing (early and late), the articulation and the layering.
-   The timbre is not (the pitch is the step's, and the voice's filter is the slice's) */
+/* what the device can do: the velocity, the micro-timing (early and late), the articulation, the layering and the
+   per-event timbre (the brightness, a lowpass on the voice) */
 uint8_t brk_mc_caps(void)
 {
-    return (uint8_t)(MC_CAPS_VELOCITY | MC_CAPS_MICRO | MC_CAPS_ARTICULATION | MC_CAPS_LAYERING | MC_CAPS_EARLY);
+    return (uint8_t)(MC_CAPS_VELOCITY | MC_CAPS_MICRO | MC_CAPS_ARTICULATION | MC_CAPS_LAYERING |
+                     MC_CAPS_EARLY | MC_CAPS_TIMBRE);
 }
 /* the event of a lane at a position, or null: the GRUV's scene map, then the EVNT's records */
 static uint32_t mc_scene_evs(int32_t scene, uint32_t *first)
@@ -843,7 +866,8 @@ static const mc_event_t *mc_event_at(int32_t scene, uint32_t lane, uint32_t pos)
     return 0;
 }
 /* a hit that waits (the event's micro-timing): the countdown is in samples, the render counts one a sample */
-static int mc_pend_push(uint32_t l, int32_t samples, uint8_t slice, float gain, uint8_t gate, uint8_t rev)
+static int mc_pend_push(uint32_t l, int32_t samples, uint8_t slice, float gain, uint8_t gate, uint8_t rev,
+                        uint8_t timbre, float pitch)
 {
     uint32_t k;
     for (k = 0; k < MC_PEND; k++) {
@@ -855,6 +879,8 @@ static int mc_pend_push(uint32_t l, int32_t samples, uint8_t slice, float gain, 
             q->gain = gain;
             q->gate = gate;
             q->rev = rev;
+            q->timbre = timbre;
+            q->pitch = pitch;
             mc_pend_n[l]++;
             return 1;
         }
@@ -863,20 +889,27 @@ static int mc_pend_push(uint32_t l, int32_t samples, uint8_t slice, float gain, 
 }
 
 /* a lane's hit: on its own voice (the lanes sound together, MG-001). The late waits: the countdown is in
-   samples, so it lands on the sample it belongs to */
-static void mc_lane_hit(const brk_break_t *b, uint32_t l, int32_t s, uint32_t rev, float g, uint32_t gate, float late, float sl)
+   samples, so it lands on the sample it belongs to. The timbre is the event's own (its brightness) */
+static void mc_lane_hit(const brk_break_t *b, uint32_t l, int32_t s, uint32_t rev, float g, uint32_t gate, float late,
+                        float pitch, uint8_t timbre, float sl)
 {
     voice_t *n;
+    float pitq;
     (void)sl;
+    pitq = pitch != 0.0f ? brk_exp2f(pitch * (1.0f / 12.0f)) : 1.0f;   /* the pitch, as a speed factor */
     if (s < 0 || (uint32_t)s >= b->nslices)
         return;
     if (late > 0.0f) {                          /* later than now: it waits (the lane's own slot) */
-        if (!mc_pend_push(l, (int32_t)(late * (float)BRK_SR + 0.5f), (uint8_t)s, g, (uint8_t)gate, (uint8_t)(rev != 0u)))
+        if (!mc_pend_push(l, (int32_t)(late * (float)BRK_SR + 0.5f), (uint8_t)s, g, (uint8_t)gate,
+                                 (uint8_t)(rev != 0u), timbre, pitch))
             return;                             /* no room: it plays now */
         return;
     }
     voice_start_in(mv[l], &mcur[l], b, s, rev, -1.0f, g);
     n = &mv[l][mcur[l]];
+    n->tb_a = timbre_a(timbre);                 /* the brightness, on the voice that plays it */
+    n->tb_y = 0.0f;
+    n->pitq = pitq;                             /* and its pitch (the lane's, the event's too) */
     last_slice = s;                       /* the screen's slice: the scene's hits are on their own voices */
     mc_last_slice = s;
     status.mc_slice[l] = (int8_t)s;
@@ -952,8 +985,9 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
                     {
                         float g2 = (float)(L->level > 100u ? 100u : L->level) * 0.01f * (float)ex->velocity * (1.0f / 127.0f);
                         uint32_t gate2 = (uint32_t)ex->gate < 100u ? (uint32_t)ex->gate : 100u;
+                        float p2 = (float)L->pitch + (float)ex->pitch;
                         if (!mc_pend_push(l, (int32_t)(target + 0.5f), ex->slice, g2, (uint8_t)gate2,
-                                          (uint8_t)((L->flags & MCL_REV) != 0u)))
+                                          (uint8_t)((L->flags & MCL_REV) != 0u), ex->timbre, p2))
                             continue;                   /* no room: it plays on the grid */
                         mc_early[l] |= 1u << p;
                         mc_n[l]++;
@@ -975,7 +1009,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
                     mc_n[l]++;
                     mc_hitc[l]++;
                     mc_lane_hit(b, l, (int32_t)ev->slice, (L->flags & MCL_REV) != 0u, g, gate,
-                                (float)ev->micro_us * 1e-6f, sl);
+                                (float)ev->micro_us * 1e-6f, (float)L->pitch + (float)ev->pitch, ev->timbre, sl);
                 }
                 continue;                       /* the events are the lane's hits */
             }
@@ -1056,7 +1090,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
         mc_hitc[l]++;                    /* (each lane's event counts; each lane's own voice plays it) */
         {   /* the hit: on this lane's voice (the lanes sound together, MG-001) */
             uint32_t gate = (uint32_t)(sc->lane[l].gate ? sc->lane[l].gate : 100u);
-            mc_lane_hit(b, l, s, (fl & MCL_REV) != 0u, g, gate, late, sl);
+            mc_lane_hit(b, l, s, (fl & MCL_REV) != 0u, g, gate, late, pt, 0u, sl);
             /* its roll: the other hits, evenly inside it (this lane's voice) */
             mr_flags[l] = fl;
             mr_gate[l] = gate;
@@ -1856,7 +1890,8 @@ void brk_render(float *out, uint32_t n)
                         if (mr_left[l] <= 0.0f) {
                             mr_left[l] += mr_len[l];
                             mr_count[l]--;
-                            mc_lane_hit(b, l, mr_slice[l], (mr_flags[l] & MCL_REV) != 0u, mr_gain[l], mr_gate[l], 0.0f, sl);
+                            mc_lane_hit(b, l, mr_slice[l], (mr_flags[l] & MCL_REV) != 0u, mr_gain[l], mr_gate[l], 0.0f,
+                                        mr_pitch[l], 0u, sl);
                         }
                     }
                     if (mc_pend_n[l]) {             /* the hits that wait (the events' micro-timing) */
@@ -1868,7 +1903,7 @@ void brk_render(float *out, uint32_t n)
                             if (q->left < 0) {
                                 q->used = 0u;
                                 mc_pend_n[l]--;
-                                mc_lane_hit(b, l, (int32_t)q->slice, q->rev, q->gain, q->gate, 0.0f, sl);
+                                mc_lane_hit(b, l, (int32_t)q->slice, q->rev, q->gain, q->gate, 0.0f, q->pitch, q->timbre, sl);
                             }
                         }
                     }
@@ -1953,8 +1988,17 @@ void brk_render(float *out, uint32_t n)
         {   /* the scenes' voices: the lanes sound together (MG-001) */
             uint32_t l2, k2;
             for (l2 = 0; l2 < MC_LANES; l2++)
-                for (k2 = 0; k2 < MC_LANE_VOICES; k2++)
-                    voice_tick(b, &mv[l2][k2], inc, pf, &acc, &ea, &va);
+                for (k2 = 0; k2 < MC_LANE_VOICES; k2++) {
+                    voice_t *o = &mv[l2][k2];
+                    float vi = inc, vp = pf;
+                    if (o->pitq != 1.0f) {        /* the lane's own pitch (the event's, too) */
+                        if (keep)
+                            vp *= o->pitq;         /* KEEP LENGTH: the pitch is the grains' */
+                        else
+                            vi *= o->pitq;         /* SPEED: the pitch is the speed */
+                    }
+                    voice_tick(b, o, vi, vp, &acc, &ea, &va);
+                }
         }
         if (lv[0].active | lv[1].active) {   /* the layer: the tempo, HALF, REVERSE's speed, the tape, its own pitch */
             float lpf = brk_exp2f((p_pitch + K1->pitch) * (1.0f / 12.0f)), linc = ratio * half * tape;

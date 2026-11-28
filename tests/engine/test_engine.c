@@ -2370,6 +2370,109 @@ static void test_mc_play(void)
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
+    /* the per-event timbre (MG-006): the event's own brightness, a lowpass on its voice */
+    {
+        static const uint8_t gruv[MC_GRUV_BYTES + 4u] = { 1u, 12u, 50u, 0u, 0u, 0u, 1u, 0u, 9u, 1u, 0u, 0u };
+        static uint8_t evnt[MC_EVNT_BYTES] = { 0u, 110u, 0u, 0u, 0u, 3u, 128u, 100u, 1u, 0u };
+        static float buf[65536];
+        float bright = 0.0f, dark = 0.0f;
+        uint32_t n = 65536u, i, m;
+        mc_scene_init(&mc_sc[9], 1u);
+        mc_sc[9].lane[0].flags = MCL_ON;
+        mc_sc[9].lane[0].role = ROLE_KICK;
+        mc_sc[9].lane[0].hits = 2u;
+        mc_sc[9].lane[0].len = 8u;
+        mc_sc[9].lane[0].rate = MCR_8;
+        mc_sc[9].lane[0].level = 100u;
+        evnt[6] = 0u;                         /* the timbre: none */
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_mc_start(9);
+        brk_mc_next(9);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(9);
+        brk_play(1);
+        for (i = 0; i < n; i += BLOCK) {
+            m = n - i > BLOCK ? BLOCK : n - i;
+            brk_render(buf + i, m);
+        }
+        for (i = 1; i < n; i++)              /* the brightness: the energy of the differences */
+            bright += fabsf(buf[i] - buf[i - 1]);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        evnt[6] = 200u;                      /* the timbre: dark */
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_mc_start(9);
+        brk_play(1);
+        for (i = 0; i < n; i += BLOCK) {
+            m = n - i > BLOCK ? BLOCK : n - i;
+            brk_render(buf + i, m);
+        }
+        for (i = 1; i < n; i++)
+            dark += fabsf(buf[i] - buf[i - 1]);
+        CHECK(bright > 0.0f && dark > 0.0f, "the event is heard (%.3f, %.3f)", bright, dark);
+        CHECK(dark < bright * 0.8f, "the timbre darkens it (%.3f < %.3f)", dark, bright);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
+    /* the pitch (MG-007): the lane's own, and the event's on top of it */
+    {
+        static const uint8_t gruv[MC_GRUV_BYTES + 4u] = { 1u, 12u, 50u, 0u, 0u, 0u, 1u, 0u, 9u, 1u, 0u, 0u };
+        static uint8_t evnt[MC_EVNT_BYTES] = { 0u, 110u, 0u, 0u, 0u, 3u, 128u, 100u, 1u, 0u };
+        static float buf[65536];
+        uint32_t n = 65536u, i, m, z0 = 0u, z1 = 0u, z2 = 0u;
+        mc_scene_init(&mc_sc[9], 1u);
+        mc_sc[9].lane[0].flags = MCL_ON;
+        mc_sc[9].lane[0].role = ROLE_KICK;
+        mc_sc[9].lane[0].hits = 2u;
+        mc_sc[9].lane[0].len = 8u;
+        mc_sc[9].lane[0].rate = MCR_8;
+        mc_sc[9].lane[0].level = 100u;
+        evnt[4] = 0u;                         /* the event's pitch: none */
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_mc_start(9);
+        brk_mc_next(9);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        brk_mc_start(9);
+        brk_play(1);
+        for (i = 0; i < n; i += BLOCK) {
+            m = n - i > BLOCK ? BLOCK : n - i;
+            brk_render(buf + i, m);
+        }
+        for (i = 1; i < n; i++)
+            if ((buf[i] > 0.0f) != (buf[i - 1] > 0.0f) && fabsf(buf[i]) > 0.01f)
+                z0++;
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        mc_sc[9].lane[0].pitch = 12;          /* the lane's own pitch: an octave up */
+        brk_mc_start(9);
+        brk_play(1);
+        for (i = 0; i < n; i += BLOCK) {
+            m = n - i > BLOCK ? BLOCK : n - i;
+            brk_render(buf + i, m);
+        }
+        for (i = 1; i < n; i++)
+            if ((buf[i] > 0.0f) != (buf[i - 1] > 0.0f) && fabsf(buf[i]) > 0.01f)
+                z1++;
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+        mc_sc[9].lane[0].pitch = 0;
+        evnt[4] = 12;                         /* the event's own pitch, on top of the lane's */
+        brk_mc_groove(gruv, sizeof gruv, evnt, sizeof evnt);
+        brk_mc_start(9);
+        brk_play(1);
+        for (i = 0; i < n; i += BLOCK) {
+            m = n - i > BLOCK ? BLOCK : n - i;
+            brk_render(buf + i, m);
+        }
+        for (i = 1; i < n; i++)
+            if ((buf[i] > 0.0f) != (buf[i - 1] > 0.0f) && fabsf(buf[i]) > 0.01f)
+                z2++;
+        CHECK(z0 > 0u && z1 > z0 && z2 > z0, "the pitch is heard (%u, %u, %u)", z0, z1, z2);
+        brk_play(0);
+        mc_run(BLOCK * 8u, 0, 0);
+    }
     /* a triplet roll: a snare lane at 1/8 with ratchet x3 under hats at 1/16T: 24 snare hits a bar, the hats
      * between never cutting it short; SWELL climbs without speeding up */
     {

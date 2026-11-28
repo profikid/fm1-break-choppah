@@ -4,8 +4,8 @@
 **Parent:** [PRD_MATHCORE.md](PRD_MATHCORE.md)  
 **Related product:** Choppah Hub — Audio & Groove Intelligence  
 **Repository:** `profikid/fm1-break-choppah`  
-**Status:** the format, the reference player, the export and the firmware's layering and micro-timing are **built**
-(28 Nov 2026). The rest — the per-event timbre and the Hub's analysis filling the groove — is still to come.
+**Status:** the format, the reference player, the export and the firmware's layering, micro-timing and timbre are
+**built** (28 Nov 2026). The rest — the Hub's analysis filling the groove — is still to come.
 
 **What is built**
 
@@ -14,12 +14,12 @@
 | The container: `GRUV` (the context, the swing, the scene map), `EVNT` (the events, ten bytes each), `GROO` (a break's own groove) | `app/site/chpk.js` (vendored into the hub) |
 | The reference player: the lanes sound together, a lane with events plays them instead of its pattern | `app/site/mathcore.js` (vendored into the hub) |
 | The export: a break → a scene, with the loss report and the capabilities | `app/site/mathcore.js` (`sceneFromBreak`, `exportLoss`) |
-| The firmware: the chunk reader, a voice pool a lane, the events' velocity, slice, gate and micro-timing (early and late) | `app/dsp/brk.c`, `app/app.c` |
+| The firmware: the chunk reader, a voice pool a lane, the events' velocity, slice, gate, micro-timing (early and late), timbre and pitch | `app/dsp/brk.c`, `app/app.c` |
 | The capabilities: the status says what the device can do | `brk_mc_caps()`, `app/ui/main.c` |
 | The Hub: the break → scene action, and the scene sets and the packs carry the groove | `choppah-hub`: `public/hub/sample.html`, `src/mathcore.js`, `src/mcp.js` |
 
-**What is not, yet:** the per-event timbre, the Hub's analysis writing the groove into `GROO`, and the voices'
-budget measured on the real FM-1.
+**What is not, yet:** the Hub's analysis writing the groove into `GROO`, and the voices' budget measured on the
+real FM-1.
 
 **The timing resolution:** the sample (1/44100 s, 22.7 µs). The render counts the waiting hits one sample at a
 time, so an event's micro-timing lands on the sample it belongs to — the render's block is not the resolution
@@ -336,6 +336,13 @@ Where supported by firmware, allow per-event overrides for:
 - Source slice or alternative source selection.
 
 The initial firmware implementation should prioritize pitch, gain, gate, filter and source selection. More expensive effects should be added only after render-time measurements.
+
+**What the firmware does (28 Nov 2026).** The event's **timbre** is its brightness, and the device has it: a
+lowpass on the voice, after the slice's own effect (400 Hz at 0, 16 kHz at 255 — the browser's mapping, so the
+reference and the device agree on what a timbre means). It is one pole, not the browser's biquad: two flops a
+sample, no new state a voice cannot afford. The event's **pitch** is applied too, on top of the lane's own (each
+voice carries its own pitch — the lane's, and the event's on top of it). The timbre does not reach the delay and
+the verb: the throws are taken before the lowpass.
 
 ## 10. Polyphonic event playback
 
