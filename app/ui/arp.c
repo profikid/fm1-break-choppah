@@ -21,6 +21,34 @@ static uint32_t arp_wk, arp_bk;          /* the white and black keys ARP took do
 static int arp_here(void) { return ui.page == PG_ARP || arp_mom; }
 static int ly_loopkeys(void) { return ly_nl != 0u; }   /* black keys 1-4 are the loops */
 
+/* LY-030: the physical key identity is part of every spoken layer announcement.
+ * Keep the same compact wording on key-down, latch/hold transitions and shot triggers. */
+static void ly_say_loop(uint32_t i, const char *state)
+{
+    char n[24] = {'L', '0', ' ', 0};
+    if (i >= BRK_LY_LOOPS)
+        return;
+    n[1] = (char)('1' + i);
+    text_cat(n, lyL[i].name);
+    app_say(n, state);
+}
+static void ly_say_shot(uint32_t i)
+{
+    char n[24] = {'S', '0', ' ', 0};
+    if (i >= BRK_LY_SHOTS)
+        return;
+    if (i < 9u)
+        n[1] = (char)('1' + i);
+    else {
+        n[1] = '1';
+        n[2] = (char)('0' + (i - 9u));
+        n[3] = ' ';
+        n[4] = 0;
+    }
+    text_cat(n, lyS[i].name);
+    app_say(n, "");
+}
+
 static void pfx_say(uint32_t i)
 {
     char n[8] = "PAD ";
@@ -99,7 +127,7 @@ static void ly_loop_key(uint32_t i, int down, uint32_t btn, uint32_t now)
             ly_lat &= (uint8_t)~b;
             brk_ly_want(i, 0, LYQ_NOW);
         }
-        app_say(lyL[i].name, ly_lat & b ? "ON" : "OFF");
+        ly_say_loop(i, ly_lat & b ? "ON" : "OFF");
         ui.redraw |= RG_BLOCKS | RG_FOOT;
         return;
     }
@@ -107,7 +135,7 @@ static void ly_loop_key(uint32_t i, int down, uint32_t btn, uint32_t now)
     if (lk_mode[i] == 1u) {              /* a tap: latched, or let go, at its point */
         ly_lat ^= b;
         brk_ly_want(i, ly_lat & b, mq.lset[i].quant);
-        app_say(lyL[i].name, ly_lat & b ? "LATCHED" : "OFF");
+        ly_say_loop(i, ly_lat & b ? "LATCHED" : "OFF");
     } else if (lk_mode[i] == 2u) {       /* held: off as it is let go */
         ly_lat &= (uint8_t)~b;
         brk_ly_want(i, 0, LYQ_NOW);
@@ -122,7 +150,7 @@ static void ly_frame(uint32_t now)       /* every input: a loop key held long en
         if (lk_mode[i] == 1u && now - lk_t[i] >= hold) {
             lk_mode[i] = 2u;
             brk_ly_want(i, 1, LYQ_NOW);  /* (in phase, at once) */
-            app_say(lyL[i].name, "HELD");
+            ly_say_loop(i, "HELD");
         }
     {                                    /* the latches as the engine has them (AUTO at PLAY, every loop off at STOP,
                                           * a voice given to another loop): each once its change is in */
@@ -158,7 +186,7 @@ static void arp_keys(uint32_t *kdn, uint32_t *kup, uint32_t btn, uint32_t now)
         if (arp_si != i)
             ly_part = 0u;
         arp_si = (uint8_t)i;
-        app_say(lyS[i].name, "");
+        ly_say_shot(i);
         ui.redraw |= RG_BLOCKS | RG_FOOT;
     }
     for (i = 0; i < NPFX; i++) {

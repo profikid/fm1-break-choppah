@@ -2030,7 +2030,7 @@ static void test_mc_lanes(void)
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }
-    /* bounded: every lane every 1/32T with ratchets 4: the hits counted stay what they should */
+    /* bounded: every lane every 1/32T with ratchets 8: the hits counted stay what they should */
     {
         mc_scene_init(&mc_sc[2], 1u);
         for (l = 0; l < MC_LANES; l++) {
@@ -2038,7 +2038,7 @@ static void test_mc_lanes(void)
             mc_sc[2].lane[l].rate = MCR_32T;
             mc_sc[2].lane[l].hits = 0xFFFFFFFFu;
             mc_sc[2].lane[l].len = 32u;
-            mc_sc[2].lane[l].ratchet = 4u;
+            mc_sc[2].lane[l].ratchet = 8u;
             mc_sc[2].lane[l].role = ROLE_KICK;
         }
         brk_mc_start(2);
@@ -2047,7 +2047,7 @@ static void test_mc_lanes(void)
         brk_play(1);
         mc_run(16u * sl, &po, &pl);
         mc_count();
-        CHECK(pl < 4.0f && pl > 0.1f, "dense: four lanes of 1/32T x4 ratchets stay bounded (%.3f)", pl);
+        CHECK(pl < 4.0f && pl > 0.1f, "dense: four lanes of 1/32T x8 ratchets stay bounded (%.3f)", pl);
         brk_play(0);
         mc_run(BLOCK * 8u, 0, 0);
     }

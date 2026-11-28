@@ -158,7 +158,7 @@ typedef struct {
 } ly_shot_t;
 static ly_src_t ly_src[BRK_LY_LOOPS];
 static adpcm_state_t ly_ck[LY_NCK];
-static volatile uint32_t p_ly_gen, p_lcfg[BRK_LY_LOOPS], p_lwant[BRK_LY_LOOPS], p_scfg[BRK_LY_SHOTS];
+static volatile uint32_t p_ly_gen, p_ly_stop, p_lcfg[BRK_LY_LOOPS], p_lwant[BRK_LY_LOOPS], p_scfg[BRK_LY_SHOTS];
 static volatile uint32_t p_ly_nv = 1u | 3u << 4;   /* loop voices | shot voices << 4: GLOBAL's LAYER (the fallback) */
 static volatile float p_ly_lg = 1.0f, p_ly_sg = 1.0f;
 static uint32_t ly_gen_seen, lwant_seen[BRK_LY_LOOPS];
@@ -1116,7 +1116,7 @@ static void mc_tick(const brk_break_t *b, uint32_t t, float sl)
             mr_flags[l] = fl;
             mr_gate[l] = gate;
             mr_pitch[l] = pt;
-            mr_count[l] = rat > 1u ? (rat > 4u ? 3u : rat - 1u) : 0u;
+            mr_count[l] = rat > 1u ? (rat > 8u ? 7u : rat - 1u) : 0u;
             mr_hold[l] = mr_count[l] ? t + r : 0u;
             if (mr_count[l]) {
                 mr_len[l] = (float)r * (1.0f / (float)MC_TICKS) * sl / (float)(mr_count[l] + 1u);
@@ -1440,6 +1440,7 @@ BRK_COLD void brk_ly_voices(uint32_t loops, uint32_t shots)
     p_ly_nv = loops | shots << 4;
 }
 BRK_COLD void brk_ly_gain(float loops, float shots) { p_ly_lg = loops; p_ly_sg = shots; }
+BRK_COLD void brk_ly_stop(void) { p_ly_stop = 1u; }
 BRK_COLD void brk_ly_clear(void)
 {
     uint32_t i;
@@ -1519,6 +1520,20 @@ static void ly_start_shot(uint32_t s)
 static void ly_block(int playing)
 {
     uint32_t i, v, nlv = p_ly_nv & 15u, nsv = p_ly_nv >> 4;
+    if (p_ly_stop) {                      /* flash write requested: stop new triggers, then let the render fade */
+        p_ly_stop = 0u;
+        sq_r = sq_w;
+        for (i = 0; i < BRK_LY_LOOPS; i++) {
+            ly_l[i].on = ly_l[i].pon = ly_l[i].pend = 0u;
+        }
+        for (v = 0; v < BRK_LY_SV; v++) {
+            sh_pend[v].shot = -1;
+            if (ly_s[v].shot >= 0) {
+                ly_s[v].held = 0u;
+                ly_s[v].rel = 1u;
+            }
+        }
+    }
     if (p_ly_gen != ly_gen_seen) {       /* new sources: every voice from its mark again */
         ly_gen_seen = p_ly_gen;
         for (v = 0; v < BRK_LY_LV; v++)
@@ -1723,18 +1738,22 @@ static float ly_sample(int playing, float sl, float half, float tape)
 static void ly_status(void)
 {
     uint32_t i, wl, v;
-    ly_st.on = ly_st.pend = 0u;
+    ly_st.on = ly_st.pend = ly_st.busy = 0u;
     for (i = 0; i < BRK_LY_LOOPS; i++) {
         uint32_t ws = ly_win(i, &wl);
         float a = ly_src[i].d ? (float)ly_src[i].len / (float)ly_src[i].bars : 1.0f;
         ly_st.on |= (uint8_t)((ly_l[i].on && ly_src[i].d) << i);
         ly_st.pend |= (uint8_t)(ly_l[i].pend << i);
+        if (ly_l[i].amp > 0.0001f)
+            ly_st.busy = 1u;
         ly_st.ph[i] = (uint8_t)brk_clampf((ly_l[i].pos / a - (float)ws) / (float)wl * 256.0f, 0.0f, 255.0f);
     }
     ly_st.shots = 0u;
     for (v = 0; v < BRK_LY_SV; v++)
-        if (ly_s[v].shot >= 0)
+        if (ly_s[v].shot >= 0) {
             ly_st.shots |= (uint16_t)(1u << ly_s[v].shot);
+            ly_st.busy = 1u;
+        }
     ly_st.cut = ly_cut < 0.5f;
 }
 

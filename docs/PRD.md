@@ -188,6 +188,8 @@ To make room (the flash was full: 132 B free), **Bluetooth audio out (A2DP) was 
 
 POLYMATH is the central new feature direction. It is a multi-lane event sequencer where every lane triggers or manipulates sample playback. It does not generate sound.
 
+**CHOPPAH 1.8 scope:** a 4/4 master transport with independent polymetric lane cycles. Odd time signatures and additive beat groupings are explicitly deferred (R-007); lane cycle lengths must not be marketed as time-signature support.
+
 ### 6.1 Lane model
 
 A lane is a stream of timed sample events. A lane may reference the active break's slices or a defined region of the same loaded sample. The first implementation should use one active break bank / decoded sample context and multiple event lanes; independent full-length sample decks are not assumed.
@@ -216,7 +218,7 @@ Each lane has:
 | R-004 | Pattern rotation | P1 | Rotate events without rewriting their relative order |
 | R-005 | Per-lane clock division and multiplication | P0 | Ratios such as 1/2, 1, 2, 3 and supported tuplets remain stable |
 | R-006 | Polyrhythm ratios | P0 | Support 3:2, 2:3, 3:4, 4:3, 5:4, 4:5, 7:4 and user-defined integer ratios within bounds |
-| R-007 | Odd meters and asymmetric groupings | P0 | Support groupings such as 5/8, 7/8, 9/8, 7/4 and additive groupings |
+| R-007 | Odd meters and asymmetric groupings | P2 (deferred beyond 1.8) | Future version: add a versioned time-signature and additive-grouping model. CHOPPAH 1.8 remains a 4/4 master transport; 5/7/11/13 lane cycles are polymeter, not 5/8 or 7/8 meter support. Do not claim odd-meter support in 1.8. |
 | R-008 | Per-lane reset modes | P1 | Free-running, reset on bar, reset on pattern start |
 | R-009 | Visual phase feedback | P0 | Screen shows each lane's progress and next event position |
 | R-010 | External clock compatibility | P0 | Polymetric lanes remain phase-stable when following MIDI clock |
@@ -235,7 +237,7 @@ A 7-event cycle over a 16-step reference is a polymetric relationship, not a req
 | R-021 | Select a fixed slice, rotate through slices or choose from a defined slice set | P0 | Selection is deterministic when probability is disabled |
 | R-022 | Per-event probability | P0 | Same seed and pattern reproduce the same result |
 | R-023 | Per-event velocity / level | P0 | Scales sample voice level only |
-| R-024 | Ratchets and retriggers | P0 | 2×, 3×, 4×, 6×, 8× and supported tuplets |
+| R-024 | Ratchets and retriggers | P0 | 2×, 3×, 4×, 6× and 8× lane ratchets; firmware PR #16 extends the lane scheduler and scene format to 8×. Dense host fixture and exact-head CI must pass; physical maximum-density timing/CPU acceptance remains a release gate. |
 | R-025 | Burst / roll events | P1 | Bounded event density; no scheduler overflow |
 | R-026 | Conditional events / every-N-cycle triggers | P1 | Conditions repeat deterministically |
 | R-027 | Skip, repeat, reverse and neighbour-slice operations | P1 | Operations apply to sample events only |
@@ -528,7 +530,7 @@ Do not use a static 16-step grid as the underlying timing model. A 16-key grid c
 | M0 — Product cleanup | Remove synth drum UI from the active product flow; document deprecated code | No synth drum lanes or voices exposed |
 | M1 — Sample player | Break library, playback, slices, pads, pitch, reverse and fades | Sample playback and slice acceptance tests pass |
 | M2 — Sample sequencer | Variable-length sample-event lanes, sample-accurate scheduler | Different lane lengths run stably against one clock |
-| M3 — POLYMATH core | Ratios, phase, odd groupings, polymeter, visual phase | 3:2, 5:4, 7-event and 16-event cycles stay aligned to master clock |
+| M3 — POLYMATH core | Ratios, phase, polymeter and visual phase; odd/additive meter deferred (R-007) | 3:2, 5:4, 7-event and 16-event cycles stay aligned to the 4/4 master clock |
 | M4 — Generators | Euclidean, clave templates, odd-meter templates, break mutation | Generated patterns are editable and deterministic |
 | M5 — Performance | Sample-only pads, stutter, rolls, freeze, scrub, tape stop and fills | All performance actions work without audio glitches |
 | M6 — FX and modulation | Sample FX chain and modulation refinement | CPU / memory budgets and soak tests pass |

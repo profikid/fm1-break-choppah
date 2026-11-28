@@ -200,7 +200,7 @@ typedef struct {
     uint8_t rate;                        /* MCR_* */
     uint8_t phase;                       /* the cycle starts this many events in */
     uint8_t prob;                        /* 0..100 %: the chance an event plays (deterministic: the seed) */
-    uint8_t ratchet;                     /* 1..4 hits an event */
+    uint8_t ratchet;                     /* 1..8 hits an event */
     int8_t pitch;                        /* -12..+12 semitones (as speed) */
     uint8_t flags;                       /* MCL_* */
     uint8_t mode;                        /* MCM_* */
@@ -344,11 +344,12 @@ void brk_ly_shot_cfg(uint32_t i, uint32_t cfg);
 void brk_ly_hit(uint32_t i, int down);
 void brk_ly_voices(uint32_t loops, uint32_t shots);
 void brk_ly_gain(float loops, float shots);
+void brk_ly_stop(void);                  /* request a render-synchronised 5 ms fade of every loop/shot */
 void brk_ly_clear(void);
 /* what the layer does, for the screen: loops on, waiting for their point, each one's place in its window (0..255),
  * the shots sounding, the break cut */
 typedef struct {
-    uint8_t on, pend, cut, rsv;
+    uint8_t on, pend, cut, busy;             /* busy: any layer voice still sounding / fading */
     uint8_t ph[BRK_LY_LOOPS];
     uint16_t shots, rsv2;
 } brk_ly_status_t;

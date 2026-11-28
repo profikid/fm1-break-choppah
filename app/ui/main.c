@@ -508,9 +508,15 @@ static void input(void)
     if (bdn & 1u << B_SAVE && btn & 1u << B_SEL)   /* SEL + SAVE: undo (again: redo) */
         undo_swap();
     else if (bdn & 1u << B_SAVE) {
-        app_say("SAVE", plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 &&
-                        plat_store_save(OBJ_PAT, &pats, sizeof pats) == 0 && mc_save() == 0 ? "DONE" : "FAILED");
-        set_dirty = 0u;
+        uint8_t resume = 0u;
+        int quiet = layer_quiet_before_flash(&resume);
+        int saved = quiet && plat_store_save(OBJ_SETTINGS, &set, sizeof set) == 0 &&
+                    plat_store_save(OBJ_PAT, &pats, sizeof pats) == 0 && mc_save() == 0;
+        if (quiet)
+            layer_resume_after_flash(resume);
+        app_say("SAVE", saved ? "DONE" : quiet ? "FAILED" : "LAYER BUSY");
+        if (saved)
+            set_dirty = 0u;
     }
     /* OCT- / OCT+: pitch in semitones, repeating faster while held; both: back to 0 */
     if ((btn & (1u << B_OCTDN | 1u << B_OCTUP)) == (1u << B_OCTDN | 1u << B_OCTUP)) {
@@ -1534,9 +1540,15 @@ int app_sysex(const uint8_t *p, uint32_t n)
         return 1;
     }
     if (cmd == 2u || cmd == 6u) {        /* BEGIN, DELETE: room made, the bank's breaks gone */
+        uint8_t resume = 0u;
         cu_size = cmd == 2u ? rd32(u) : 1u;
         cu_bank = bank;
-        brk_ly_clear();                  /* (the layer reads the flash about to be erased) */
+        if (!layer_quiet_before_flash(&resume)) {
+            app_warn("LAYER BUSY", "FLASH NOT WRITTEN");
+            cu_reply(p[3], 1u, 0, 0u);
+            return 1;
+        }
+        brk_ly_clear();                  /* sources are now quiet before their flash sectors are erased */
         if (cu_size < 16u + 168u && cmd == 2u)
             code = 2u;
         for (i = 0; !code && i < (cu_size + 4095u) / 4096u; i++)

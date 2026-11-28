@@ -1609,6 +1609,36 @@ void app_panic(void)
 }
 
 /* ----------------------------------------------------------------------- UI --- */
+/* LY-054: flash operations must not race the layer's flash-backed decoders.
+ * Ask the audio render to release every layer voice, wait for the actual 5 ms fades to finish,
+ * and remember only the loops that were active so SAVE can resume them after the write. */
+static void layer_resume_after_flash(uint8_t loops)
+{
+    uint32_t i;
+    for (i = 0; i < BRK_LY_LOOPS; i++)
+        if (loops & (1u << i))
+            brk_ly_want(i, 1, 0u);       /* LYQ_NOW: restore the previously sounding loops */
+}
+static int layer_quiet_before_flash(uint8_t *resume)
+{
+    brk_ly_status_t st;
+    uint32_t start = plat_ms();
+    brk_ly_status(&st);
+    *resume = st.on;
+    brk_ly_stop();
+    do {
+#ifdef PLAT_HOST
+        float discard[128];              /* the host has no audio interrupt; advance the real render deterministically */
+        brk_render(discard, 128u);
+#endif
+        brk_ly_status(&st);
+        if (!st.busy)
+            return 1;
+    } while (plat_ms() - start < 30u);
+    layer_resume_after_flash(*resume);  /* timeout: abort the flash operation and restore playback */
+    return 0;
+}
+
 #include "ui/common.c"
 #include "ui/fx.c"
 #include "ui/pads.c"

@@ -92,6 +92,15 @@ wait 30
 expect ly_lat 1
 wait 2300
 expect ly_on 1
+# LY-054: SAVE while a loop and a one-shot are active; fade both out, write, then restore the loop.
+key w0 down
+wait 30
+key w0 up
+wait 20
+tap SAVE
+wait 100
+expect ly_shots 0
+expect ly_on 1
 shot layer_loop.png
 peakreset
 wait 400
@@ -102,6 +111,14 @@ expect ly_on 3
 key b1 up
 wait 100
 expect ly_on 1
+# LY-054: stop transport, then receive the same pack while its loop source is still resident.
+tap PLAY
+wait 100
+S
+up "$O/b1.bin" 1
+[ -f "$O/b2.bin" ] && up "$O/b2.bin" 2
+cat <<S
+expect ly_on 0
 key b0 down
 wait 60
 key b0 up

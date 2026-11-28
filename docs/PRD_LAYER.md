@@ -2,8 +2,7 @@
 
 **Feature PRD** · v0.1 · 26 Nov 2026 · Owner: Laurens (Sylverline)  
 **Parent PRDs:** [PRD.md](PRD.md) (ARP, B-55 effect pads) · [PRD_PACKS.md](PRD_PACKS.md) (§7 the overlay, §10 the hub)  
-**Status:** L2 (the firmware) built on main for 1.8, see §1.3; L1 on the hub (choppah.app) built, see §8.4; the
-builder's side (breaks.html) and L3 to do. Decisions in §1.2 (D1–D7); open questions in §10.
+**Status (28 Nov 2026): partial.** L1 Hub pack/library workflows exist; L2 firmware's loop/shot playback exists, and LY-030 key identity announcements are implemented in firmware PR #16. LY-030 still needs the screen-reader audit and device acceptance. **LY-054 fade-before-flash-write remains unimplemented and release-blocking.** L3 builder workflows remain incomplete. Do not describe the Layer as fully complete until the P0 acceptance rows pass.
 
 ---
 
@@ -46,10 +45,7 @@ and fire over the break without leaving HOME (LY-024).
 
 ### 1.3 As built (firmware 1.8, branch `layer`, 26 Nov 2026)
 
-Built: LY-001, 002, 005 (with D6's limits), 006, 007, 010, 011, 012, 013, 020, 023, 024, 030 (no reader words yet),
-036 (as below), 037, 038, 050–052, 060–062, D7. The image: 577,804 of 581,564 B (**3.7 KB left**); RAM .data+.bss
-95,692 of 98,304 B; `.ram_text` 17,284 of 32,768 B. Not yet: LY-003, 004, 014, 021, 022, 025, 035, 039–043, 054,
-063, the hub (§8), the screen reader's words.
+Built: LY-001, 002, 005 (with D6's limits), 006, 007, 010, 011, 012, 013, 020, 023, 024, 036 (as below), 037, 038, 050–052, 060–062, D7. LY-030's physical key identity speech was added in firmware PR #16; run `tools/sr_audit.sh` and device acceptance before marking it passed. **Not built: LY-054** (fade loops and shots out before SAVE / pack flash writes), plus LY-003, 004, 014, 021, 022, 025, 035, 039–043, 063 and remaining Hub/L3 work. The image/RAM figures below are the older 1.8 baseline, not evidence for the PR #16 build.
 
 | As built | |
 | --- | --- |
@@ -173,7 +169,7 @@ empty; the effect pads as B-55.
 
 | ID | Requirement | Pri | Acceptance |
 | --- | --- | --- | --- |
-| LY-030 | The page as drawn above; the screen reader speaks the shown key (`L1 BASS LATCHED`, `S3 BOMBACLOT`) | P0 | `tools/sr_audit.sh` clean; `tools/doc_shots.py` pictures; the control map's `PAGES` |
+| LY-030 | The page as drawn above; the screen reader speaks the shown key (`L1 BASS LATCHED`, `S3 BOMBACLOT`) | P0 | PR #16 adds the L1–L4 / S1–S16 prefixes to speech; pending `tools/sr_audit.sh`, device words bundle and physical FM-1 acceptance |
 
 ### 3.5 Effect pads and the layer
 

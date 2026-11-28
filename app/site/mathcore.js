@@ -113,7 +113,7 @@ export function writeScenes(scenes) {
       const a = o + LANE_BYTES * l;
       dv.setUint32(a, L.hits >>> 0, true); dv.setUint32(a + 4, L.accent >>> 0, true);
       b[a + 8] = u8(L.len, 1, EVENTS); b[a + 9] = u8(L.rate, 0, RATES.length - 1); b[a + 10] = u8(L.phase, 0, EVENTS - 1);
-      b[a + 11] = u8(L.prob, 0, 100); b[a + 12] = u8(L.ratchet, 1, 4); dv.setInt8(a + 13, u8(L.pitch, -12, 12)); b[a + 14] = u8(L.flags, 0, 15);
+      b[a + 11] = u8(L.prob, 0, 100); b[a + 12] = u8(L.ratchet, 1, 8); dv.setInt8(a + 13, u8(L.pitch, -12, 12)); b[a + 14] = u8(L.flags, 0, 15);
       b[a + 15] = u8(L.mode, 0, MODES.length - 1); b[a + 16] = u8(L.pick, 0, 31); b[a + 17] = u8(L.gate, 5, 100); b[a + 18] = u8(L.level, 0, 100);
       b[a + 19] = u8(L.role, 0, 3); b[a + 20] = u8(L.seed, 0, 255); dv.setInt8(a + 21, u8(L.rise, -24, 24)); b[a + 22] = u8(L.vary, 0, 100); b[a + 23] = L.rsv | 0;
     });
@@ -463,7 +463,7 @@ export function patchLane(L, p) {
   if (p.role !== undefined) L.role = pick(ROLES, p.role === "K" ? "KICK" : p.role === "S" ? "SNARE" : p.role === "H" ? "HAT" : p.role === "P" ? "PERC" : p.role, "role");
   if (p.rate !== undefined) L.rate = pick(RATES, p.rate, "rate");
   if (p.mode !== undefined) L.mode = pick(MODES, p.mode, "mode");
-  for (const [k, lo, hi] of [["phase", 0, 31], ["prob", 0, 100], ["ratchet", 1, 4], ["pitch", -12, 12], ["pick", 0, 31], ["gate", 5, 100],
+  for (const [k, lo, hi] of [["phase", 0, 31], ["prob", 0, 100], ["ratchet", 1, 8], ["pitch", -12, 12], ["pick", 0, 31], ["gate", 5, 100],
     ["level", 0, 100], ["seed", 0, 255], ["rise", -24, 24], ["vary", 0, 100]]) if (p[k] !== undefined) L[k] = range(p[k], lo, hi, k);
   return L;
 }
