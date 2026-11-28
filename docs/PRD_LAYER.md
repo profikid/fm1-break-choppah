@@ -212,7 +212,7 @@ break loads its pads, as it loads its theme and its scenes (PRD_PACKS principle 
 | LY-051 | In-phase entry: seek to the nearest ADPCM mark (every 4096 samples, as today) and decode on to the transport's position, within the block it starts in | P0 | Engine test: a held loop's first sample = the always-on loop's at that position |
 | LY-052 | **Shot voices** (`brk_shot`, platform-free, in `app/dsp/`): 4 voices reading ADPCM forward from flash, Hermite resampled to 44.1 kHz with pitch, a decay envelope, mode, choke; state ~64 B a voice in `.bss`, nothing in the pool | P0 | Engine test: a shot at +12 lasts half as long; a choke cuts within 5 ms |
 | LY-053 | **Render cost**: 2 loops + 4 shots + the full chain under 85 % (PO-002 measured first: one overlay on the device). If it isn't, the limits drop (1 loop voice, 3 shots) before anything ships | P0 | Measured on an FM-1 against 1.7 |
-| LY-054 | A flash write (SAVE, a pack arriving) fades loops and shots out first (PO-006) | P0 | |
+| LY-054 | A flash write (SAVE, a pack arriving) fades loops and shots out first (PO-006) | P0 | Firmware PR #16 adds render-synchronised stop, 5 ms release, busy acknowledgement and a 30 ms abort timeout; tests/layer.sh covers SAVE with active voices and pack arrival while a loop source is resident. Physical no-pop/no-corruption and flash-integrity acceptance still required. |
 | LY-055 | Code: ~6–9 KB of flash expected against ~19 KB left (1.7: 562 KB of 581.5). Measure the image line; if it doesn't fit, ask Laurens what leaves | P0 | `./build.sh` image line |
 
 ---
