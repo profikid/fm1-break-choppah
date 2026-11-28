@@ -158,7 +158,7 @@ typedef struct {
 } ly_shot_t;
 static ly_src_t ly_src[BRK_LY_LOOPS];
 static adpcm_state_t ly_ck[LY_NCK];
-static volatile uint32_t p_ly_gen, p_lcfg[BRK_LY_LOOPS], p_lwant[BRK_LY_LOOPS], p_scfg[BRK_LY_SHOTS];
+static volatile uint32_t p_ly_gen, p_ly_stop, p_lcfg[BRK_LY_LOOPS], p_lwant[BRK_LY_LOOPS], p_scfg[BRK_LY_SHOTS];
 static volatile uint32_t p_ly_nv = 1u | 3u << 4;   /* loop voices | shot voices << 4: GLOBAL's LAYER (the fallback) */
 static volatile float p_ly_lg = 1.0f, p_ly_sg = 1.0f;
 static uint32_t ly_gen_seen, lwant_seen[BRK_LY_LOOPS];
