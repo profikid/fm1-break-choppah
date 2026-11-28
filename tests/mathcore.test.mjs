@@ -138,6 +138,9 @@ console.log("mathcore: app.c's presets, names, rates, modes, MATH; brk.c's hash;
   assert.equal(e.flags & MC.MCE_F_ACCENT, MC.MCE_F_ACCENT, "accent articulation is preserved");
   assert.equal(e.gate, 74, "an explicit event gate is preserved");
   assert.equal(r.gruv.swing, 66, "the swing template is stored once in GRUV");
+  const loss = MC.exportLoss(r.events, MC.SCENE_CAPS, "scene");
+  assert.ok(loss.dropped.some((item) => /ghost\/accent markers/.test(item)),
+    "the current device capability report identifies the unsupported articulation markers");
 }
 
 /* event identity is not event content: two identical records at the same lane/position both play */
