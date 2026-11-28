@@ -1519,6 +1519,20 @@ static void ly_start_shot(uint32_t s)
 static void ly_block(int playing)
 {
     uint32_t i, v, nlv = p_ly_nv & 15u, nsv = p_ly_nv >> 4;
+    if (p_ly_stop) {                      /* flash write requested: stop new triggers, then let the render fade */
+        p_ly_stop = 0u;
+        sq_r = sq_w;
+        for (i = 0; i < BRK_LY_LOOPS; i++) {
+            ly_l[i].on = ly_l[i].pon = ly_l[i].pend = 0u;
+        }
+        for (v = 0; v < BRK_LY_SV; v++) {
+            sh_pend[v].shot = -1;
+            if (ly_s[v].shot >= 0) {
+                ly_s[v].held = 0u;
+                ly_s[v].rel = 1u;
+            }
+        }
+    }
     if (p_ly_gen != ly_gen_seen) {       /* new sources: every voice from its mark again */
         ly_gen_seen = p_ly_gen;
         for (v = 0; v < BRK_LY_LV; v++)
