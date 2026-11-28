@@ -375,7 +375,9 @@ export function sceneFromBreak(pcm, rate, o = {}) {
   if (!sl || sl.length < 2) throw new Error("the break: its slices");
   if (!roles) throw new Error("the break: its roles (the Slice Map)");
   const bpm = o.bpm || 120, bars = o.bars || 2, offset = o.offset || 0;
+  const swing = Math.max(50, Math.min(75, Number(o.swing) || 50));
   const sixteenth = 60 / bpm / 4, total = Math.min(EVENTS, bars * 4 * 16);   /* the 16ths in the phrase */
+  const gridAt = (k) => Math.floor(k / 2) * 2 * sixteenth + (k % 2 ? 2 * sixteenth * (1 - swing / 100) : 0);
   /* the slices of each role, with their loudness and brightness */
   const perRole = [[], [], [], []], stats = [];
   for (let i = 0; i < sl.length - 1; i++) {
@@ -394,23 +396,32 @@ export function sceneFromBreak(pcm, rate, o = {}) {
     for (const i of perRole[r]) {
       const at = (sl[i] - offset) / rate;                       /* the slice's time in the break */
       if (at < 0) continue;
-      const pos = Math.max(0, Math.min(total - 1, Math.round(at / sixteenth)));
-      const micro = Math.round((at - pos * sixteenth) * 1e6);
+      /* The event position is the nearest point on the *same swung grid* used by grooveOf. A straight-grid
+         round() here can put a late drag on the wrong side of the midpoint between two swung steps. */
+      const g = o.groove && o.groove[i] ? o.groove[i] : null;
+      let pos = -1, nearest = Infinity;
+      if (g && Number.isInteger(g.grid_pos) && g.grid_pos >= 0 && g.grid_pos < total &&
+          (g.grid_swing == null || g.grid_swing === swing)) pos = g.grid_pos;
+      if (pos < 0) for (let k = 0; k < total; k++) {
+        const d = Math.abs(at - gridAt(k));
+        if (d < nearest) { nearest = d; pos = k; }
+      }
+      pos = Math.max(0, Math.min(total - 1, pos));
+      const micro = Math.round((at - gridAt(pos)) * 1e6);
       const st = stats[i];
       const vel = Math.max(1, Math.min(127, Math.round(127 * st.peak / loudest)));
-      /* the measured groove (the hub's analysis): the hit's own time, its loudness, its ghost, its
-         brightness. Without it, the slice's own cut and its peak stand in */
-      const g = o.groove && o.groove[i] ? o.groove[i] : null;
+      /* The measured groove keeps both articulation bits: ghost and accent are not interchangeable. */
       L.hits |= 1 << pos;
-      events.push({ flags: (r << 6) | (g && g.flags & 1 ? MCE_F_GHOST : 0),
+      events.push({ flags: (r << 6) | (g ? (g.flags & (MCE_F_GHOST | MCE_F_ACCENT)) : 0),
         velocity: g ? Math.max(1, Math.min(127, g.velocity)) : vel,
         micro_us: g ? Math.max(-32767, Math.min(32767, g.micro_us)) : Math.max(-32767, Math.min(32767, micro)),
-        pitch: 0, slice: i, timbre: g ? Math.max(0, Math.min(255, g.timbre)) : st.bright, gate: 100, pos, lane: r });
+        pitch: 0, slice: i, timbre: g ? Math.max(0, Math.min(255, g.timbre)) : st.bright,
+        gate: g && Number.isFinite(g.gate) ? Math.max(1, Math.min(100, Math.round(g.gate))) : 100, pos, lane: r });
     }
     lanes.push(L);
   }
   const scene = { bars, flags: SF.BREAK, name: 0, rsv: 0, lane: lanes };
-  const gruv = { ticks_per_16th: TICKS, swing: o.swing || 50, flags: 0, bpm,
+  const gruv = { ticks_per_16th: TICKS, swing, flags: 0, bpm,
     scenes: events.length ? [{ scene: 0, events: events.length, first: 0 }] : [] };
   return { scene, events, gruv, lanes, roles, slices: sl };
 }
