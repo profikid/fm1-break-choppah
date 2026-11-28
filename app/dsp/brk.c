@@ -1750,8 +1750,10 @@ static void ly_status(void)
     }
     ly_st.shots = 0u;
     for (v = 0; v < BRK_LY_SV; v++)
-        if (ly_s[v].shot >= 0)
+        if (ly_s[v].shot >= 0) {
             ly_st.shots |= (uint16_t)(1u << ly_s[v].shot);
+            ly_st.busy = 1u;
+        }
     ly_st.cut = ly_cut < 0.5f;
 }
 
