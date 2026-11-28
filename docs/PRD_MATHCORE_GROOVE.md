@@ -1,15 +1,12 @@
 # MATHCORE Groove Fidelity & Choppah Hub Export
 
-**Feature PRD and implementation specification** · v1.0 · 27 Nov 2026  
+**Feature PRD and implementation specification** · v1.1 · 28 Nov 2026  
 **Parent:** [PRD_MATHCORE.md](PRD_MATHCORE.md)  
 **Related product:** Choppah Hub — Audio & Groove Intelligence  
 **Repository:** `profikid/fm1-break-choppah`  
 **Implementation status (28 Nov 2026): partial.** The ten-byte GRUV/EVNT/GROO container, reference player,
 scene export, cross-lane firmware playback, velocity, slice, gate, signed micro-timing, pitch and timbre paths exist.
-This does **not** mean the full target in this PRD is implemented. Same-lane duplicate event handling is being fixed
-in firmware PR #14; articulation/ghost/accent flags are not yet rendered; the device currently has two voices per
-lane; full Hub event provenance and lossless round-trip remain incomplete; and real-FM-1 voice/CPU/memory headroom
-has not been measured.
+This does **not** mean the full target in this PRD is implemented. Same-lane duplicate event handling, early-event identity, malformed chunk bounds and pending-queue saturation are fixed in draft firmware PR #14 and pass current-head host CI; the Hub duplicate-event reference-player and swung-grid export fixes are in draft PR #28. The Hub now carries the measured swung-grid index, preserves ghost/accent flags, allows gate editing, and aligns the event position and microtiming to the same swing template. Firmware still does not interpret ghost/accent flags, has two voices per lane and a four-entry pending queue; full Hub event provenance and lossless round-trip remain incomplete; real-FM-1 voice/CPU/memory headroom has not been measured.
 
 **What is built**
 
@@ -22,8 +19,7 @@ has not been measured.
 | The capabilities: the status says what the device can do | `brk_mc_caps()`, `app/ui/main.c` |
 | The Hub: the break → scene action, the scene sets and the packs carry the groove, and the analysis measures it | `choppah-hub`: `public/hub/sample.html`, `public/hub/groove.js`, `src/mathcore.js`, `src/mcp.js` |
 
-**Not yet complete:** articulation and ghost/accent playback; higher same-lane polyphony; full event-level
-editing/provenance round-trip; complete Full/Scene/Hybrid export parity; and measured hardware voice/CPU/memory budget.
+**Not yet complete:** device-side interpretation/display of ghost/accent flags (velocity still carries the audible dynamics); higher same-lane polyphony; complete event-level provenance round-trip; per-event gate analysis (the exporter defaults to 100% unless explicitly edited); complete Full/Scene/Hybrid export parity; and measured hardware voice/CPU/memory budget.
 
 **The timing resolution:** the sample (1/44100 s, 22.7 µs). The render counts the waiting hits one sample at a
 time, so an event's micro-timing lands on the sample it belongs to — the render's block is not the resolution
@@ -49,6 +45,21 @@ The following distinctions are intentional:
 - **Bounded playback:** the current firmware has a two-voice pool per lane and a four-entry pending microtiming queue per lane. This is not unlimited same-lane polyphony. Any increase needs target-device measurements.
 - **Not equivalent:** lane-level procedural variation, accent masks and a two-voice lane pool do not equal an editable, source-faithful event timeline with independent articulation and timbre provenance.
 - **Not hardware-certified:** host tests and a green firmware build do not establish actual FM-1 timing, CPU, memory, or audible overlap under worst-case load.
+
+
+
+## 0.2 Groove export implementation update — 28 Nov 2026
+
+The current draft implementation adds the following fidelity guarantees:
+
+- `grooveOf()` returns the nearest swung `grid_pos` and the `grid_swing` used to measure `micro_us`. This prevents a drag near the midpoint between swung steps from being assigned to a different straight-grid step.
+- The sample export passes the user's selected swing override into the analyser. The stored GRUV swing and the measured micro-offset therefore use the same template; swing is applied once by the player/scheduler.
+- `sceneFromBreak()` uses the measured grid position when its swing matches, otherwise recomputes the nearest swung position and micro-offset together.
+- Ghost and accent bits are both preserved in EVNT flags. The export-loss report only reports articulation loss when such markers are present and explains that current firmware still ignores those flags while velocity remains audible.
+- The MATHCORE event editor exposes independent ghost, accent and gate controls; gate round-trips through EVNT. Analysis does not yet infer gate, so an unedited event defaults to 100%.
+- Host regression fixtures cover a hit at 175 ms where the nearest swung step is step 2 but the nearest straight step is step 1, plus accent/gate round-trip and explicit capability-loss reporting.
+
+Active code review: firmware [PR #14](https://github.com/profikid/fm1-break-choppah/pull/14), Hub [PR #28](https://github.com/profikid/choppah-hub/pull/28). These remain draft/unmerged; host CI and physical FM-1 acceptance are tracked separately.
 
 ## 1. Purpose
 
