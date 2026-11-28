@@ -257,9 +257,12 @@ export class Player {
       /* the groove's events: this lane's hits, with their own velocity, time, pitch and timbre */
       const evs = this.evs(l);
       if (evs) {
-        for (const ev of evs) {
+        for (let ei = 0; ei < evs.length; ei++) {
+          const ev = evs[ei];
           if (ev.pos !== pos) continue;
-          const key = `${l}:${ev.pos}:${ev.slice}:${ev.micro_us}`;
+          /* Event identity is its position in this lane's scene list, not its musical values: two identical hits
+             are still two hits (e.g. a flam/drag with the same slice and micro offset). */
+          const key = `${l}:${this.cur}:${ei}`;
           if (this.said.has(key)) continue;
           this.said.add(key);
           let g = Math.min(100, L.level) * 0.01 * (ev.velocity == null ? 1 : ev.velocity / 127);
