@@ -821,6 +821,15 @@ static uint32_t bars_of(const mc_scene_t *sc)
 /* the groove-event layer: the context and the events, as the pack's chunks (the reader: app.c) */
 void brk_mc_groove(const uint8_t *gruv, uint32_t gruv_len, const uint8_t *evnt, uint32_t evnt_len)
 {
+    /* A malformed optional groove must degrade to the ordinary scene, never let the render read past a chunk. */
+    if (!gruv || gruv_len < MC_GRUV_BYTES || gruv[0] != 1u || !evnt ||
+        evnt_len % MC_EVNT_BYTES != 0u) {
+        mc_gruv = 0;
+        mc_gruv_len = 0u;
+        mc_evnt = 0;
+        mc_evnt_len = 0u;
+        return;
+    }
     mc_gruv = gruv;
     mc_gruv_len = gruv_len;
     mc_evnt = evnt;
@@ -838,14 +847,21 @@ static uint32_t mc_scene_evs(int32_t scene, uint32_t *first)
     const uint8_t *g = mc_gruv;
     uint32_t i, n;
     *first = 0u;
-    if (!g || g[0] != 1u || scene < 0)
+    if (!g || mc_gruv_len < MC_GRUV_BYTES || !mc_evnt || mc_evnt_len % MC_EVNT_BYTES != 0u ||
+        g[0] != 1u || scene < 0)
         return 0u;
     n = (uint32_t)g[6] | ((uint32_t)g[7] << 8);
+    if (n > (mc_gruv_len - MC_GRUV_BYTES) / 4u)
+        return 0u;
     for (i = 0; i < n; i++) {
         const uint8_t *m = g + MC_GRUV_BYTES + i * 4u;
         if (m[0] == (uint8_t)scene) {
-            *first = (uint32_t)m[2] | ((uint32_t)m[3] << 8);
-            return m[1];
+            uint32_t count = m[1], start = (uint32_t)m[2] | ((uint32_t)m[3] << 8);
+            uint32_t available = mc_evnt_len / MC_EVNT_BYTES;
+            if (start > available || count > available - start)
+                return 0u;
+            *first = start;
+            return count;
         }
     }
     return 0u;
