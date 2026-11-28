@@ -200,7 +200,7 @@ typedef struct {
     uint8_t rate;                        /* MCR_* */
     uint8_t phase;                       /* the cycle starts this many events in */
     uint8_t prob;                        /* 0..100 %: the chance an event plays (deterministic: the seed) */
-    uint8_t ratchet;                     /* 1..4 hits an event */
+    uint8_t ratchet;                     /* 1..8 hits an event */
     int8_t pitch;                        /* -12..+12 semitones (as speed) */
     uint8_t flags;                       /* MCL_* */
     uint8_t mode;                        /* MCM_* */
