@@ -2038,7 +2038,7 @@ static void test_mc_lanes(void)
             mc_sc[2].lane[l].rate = MCR_32T;
             mc_sc[2].lane[l].hits = 0xFFFFFFFFu;
             mc_sc[2].lane[l].len = 32u;
-            mc_sc[2].lane[l].ratchet = 4u;
+            mc_sc[2].lane[l].ratchet = 8u;
             mc_sc[2].lane[l].role = ROLE_KICK;
         }
         brk_mc_start(2);
