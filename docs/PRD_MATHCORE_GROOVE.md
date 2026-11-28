@@ -603,17 +603,17 @@ This is a proposed change map, not a claim that all paths or interfaces are alre
 
 | Milestone | Scope | Priority | Status |
 |---|---|---|---|
-| G0 | Audit current pack format, firmware render path, memory and timing budgets | P0 | Not started |
-| G1 | Define canonical Hub groove-event schema and compact device binary schema | P0 | Not started |
-| G2 | Implement browser event model, scheduler and deterministic fixtures | P0 | Not started |
-| G3 | Implement Full/Scene/Hybrid export with loss report | P0 | Not started |
-| G4 | Firmware event scheduler with high-resolution timing | P0 | Not started |
-| G5 | Bounded polyphonic sample voice pool | P0 | Not started |
-| G6 | Per-event velocity, ghost notes and articulations | P0 | Not started |
-| G7 | Swing editing and timing transformations | P1 | Not started |
-| G8 | Per-event timbre and source replacement | P1 | Not started |
-| G9 | Scene transformations over groove-event data | P1 | Not started |
-| G10 | Hub ↔ device round-trip and performance hardening | P1 | Not started |
+| G0 | Audit current pack format, firmware render path, memory and timing budgets | P0 | Partial: source/format reviewed; real-device budget not measured |
+| G1 | Define canonical Hub groove-event schema and compact device binary schema | P0 | Partial: GRUV/EVNT v1 exists; canonical IDs/provenance and complete validation remain |
+| G2 | Implement browser event model, scheduler and deterministic fixtures | P0 | Partial: reference player exists; duplicate-record identity fix and full timing fixtures pending merge/CI |
+| G3 | Implement Full/Scene/Hybrid export with loss report | P0 | Partial: Full/Scene paths exist; distinct Hybrid profile/parity not evidenced |
+| G4 | Firmware event scheduler with high-resolution timing | P0 | Partial: sample-countdown microtiming exists; duplicate same-position fix pending merge/CI |
+| G5 | Bounded polyphonic sample voice pool | P0 | Partial: two voices per lane; target-device saturation/polyphony budget not measured |
+| G6 | Per-event velocity, ghost notes and articulations | P0 | Partial: velocity is applied; ghost/accent/articulation flags are not rendered; articulation capability removed in PR #14 |
+| G7 | Swing editing and timing transformations | P1 | Partial: swing is measured/stored as context; independent edit/transform semantics not complete |
+| G8 | Per-event timbre and source replacement | P1 | Partial: timbre low-pass is applied; source replacement workflow not evidenced |
+| G9 | Scene transformations over groove-event data | P1 | Not evidenced |
+| G10 | Hub ↔ device round-trip and performance hardening | P1 | Partial: pack chunks round-trip; complete validation, device stress and lossless parity remain |
 
 ### Recommended implementation order
 
